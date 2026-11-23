@@ -33,11 +33,14 @@ export interface SegmentDef {
   /**
    * ring-hop core. pulse: marks breathe with the kick. charge: nothing here can end the run; every note is a flow note
    * that charges the drop. smash: the section opens with the drop's big press on its first beat (launch: the game takes
-   * that press itself). flip: gravity turns over on the section's first press. sling: its first press is a slingshot to a
-   * new planet. reverse: the orbit turns round at the section's start. speed: orbit speed (1 = a lap per 8 beats).
-   * twin: twin orbit, a mirrored second ball; one tap moves both.
+   * that press itself). bars: how each bar plays, repeated to fill the section; a bar is words joined by "+":
+   *   up | down | weave   ride the outside and hop outward / ride the inside and hop inward / flip on every press, bouncing between two rings
+   *   spin                the opening is a gap in a turning ring          twin   twin orbit: a mirrored second ball
+   *   sling               the bar's first press is a planet hop           turn   the orbit reverses at the bar line
+   *   fast | slow | normal   orbit speed from this bar on
+   * record: one of the passages worth recording by hand (Record Mode lists these first).
    */
-  core?: { pulse?: boolean; speed?: number; flip?: boolean; charge?: boolean; launch?: boolean; smash?: boolean; sling?: boolean; reverse?: boolean; twin?: boolean };
+  core?: { pulse?: boolean; charge?: boolean; launch?: boolean; smash?: boolean; bars?: string[]; record?: boolean };
   hazard?: string; // 'beam': hops clear a sweeping beam instead of a spike
   reverse?: boolean;
   /** the one sound this section's taps follow: arp, kick, snare or lead */

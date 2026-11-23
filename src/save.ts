@@ -29,10 +29,14 @@ export interface SaveData {
   core: number;
   /** the quick sync check has been done (or skipped) on this device */
   calibrated: boolean;
+  /** the output delay the device reported when it was last calibrated: a change means new headphones or speakers */
+  calLatency: number;
+  /** show the live sync overlay while playing */
+  syncOverlay: boolean;
 }
 
 const defaults = (): SaveData => ({
-  music: 0.8, sfx: 0.7, audioOffset: 0, visualOffset: 0, reducedMotion: false, hardcore: false, errorBar: true, level: 0, skin: 'cyan', badges: {}, practiced: {}, bests: {}, teachSeen: {}, core: 4, calibrated: false
+  music: 0.8, sfx: 0.7, audioOffset: 0, visualOffset: 0, reducedMotion: false, hardcore: false, errorBar: true, level: 0, skin: 'cyan', badges: {}, practiced: {}, bests: {}, teachSeen: {}, core: 4, calibrated: false, calLatency: -1, syncOverlay: false
 });
 
 function load(): SaveData {

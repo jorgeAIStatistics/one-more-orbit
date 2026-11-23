@@ -8,6 +8,8 @@ export interface HandBar { by: 'hand'; t: number[]; f?: number[] }
 export interface PressFile { _doc?: string; bars: Record<string, HandBar> }
 
 const TICKS = 48; // per bar
+/** tools/export-layers.ts turns this off to get the generated layers before the audit */
+export const auditSwitch = { on: true };
 const key = (id: string) => `omo_presses_${id}`;
 const store = new Map<string, PressFile>();
 const DOC = 'Notes recorded by hand in Record Mode. Per bar: t = survival presses, f = flow notes, as ticks inside the bar (12 per beat). The tools never overwrite this file.';
@@ -32,8 +34,15 @@ export function layerTicks(pack: LevelPack): { survival: number[]; flow: number[
   const hand = handBars(pack).bars;
   const auto = autoLayers(pack.chart.notes.map((n) => n.t / 12), accentBeats(pack));
   const isHand = (tick: number) => !!hand[String(Math.floor(tick / TICKS))];
-  const survival = auto.survival.map((b) => Math.round(b * 12)).filter((t) => !isHand(t));
-  const flow = auto.flow.map((b) => Math.round(b * 12)).filter((t) => !isHand(t));
+  let survival = auto.survival.map((b) => Math.round(b * 12)).filter((t) => !isHand(t));
+  let flow = auto.flow.map((b) => Math.round(b * 12)).filter((t) => !isHand(t));
+  if (auditSwitch.on && pack.audit) {
+    // the audio audit: presses that sat on a weak sound become flow notes, and the clear sound nearby becomes the press
+    const down = new Set(pack.audit.demote.filter((t) => !isHand(t)));
+    const up = new Set(pack.audit.promote.filter((t) => !isHand(t)));
+    flow = [...flow.filter((t) => !up.has(t)), ...survival.filter((t) => down.has(t))];
+    survival = [...survival.filter((t) => !down.has(t)), ...up];
+  }
   for (const [bar, b] of Object.entries(hand)) {
     for (const t of b.t) survival.push(Number(bar) * TICKS + t);
     for (const t of b.f ?? []) if (!b.t.includes(t)) flow.push(Number(bar) * TICKS + t);

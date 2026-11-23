@@ -6,7 +6,7 @@ import { orbColour } from '../game/extras';
 import type { Level } from '../game/level';
 import { PALETTES, type Palette, type RGB } from '../render/palettes';
 import { bestFor, save } from '../save';
-import { flightRho, type Course, type Feature } from './course';
+import { flightRho, smoothstep, type Course, type Feature } from './course';
 import type { GdRun } from './run';
 
 const TWO_PI = Math.PI * 2;
@@ -17,10 +17,13 @@ const WHITE: RGB = [255, 255, 255];
 const DANGER: RGB = [255, 64, 120]; // the edge of everything that ends the run
 const GOLD: RGB = [255, 214, 90]; // flow notes, flow, the smash
 const VIOLET: RGB = [190, 120, 255]; // gravity flip
-const CYAN: RGB = [0, 245, 255]; // speed portals, turns, slingshots
+const CYAN: RGB = [0, 245, 255]; // speed portals, turns, planet hops
+const FLOOR: RGB = [226, 234, 255]; // the rings you ride: one fixed colour, whatever the world behind is doing
+const HALO = 'rgba(3,5,14,0.62)'; // the dark edge under everything in the foreground
 const HINT: Record<Feature, string> = {
-  charge: 'TAP THE ROLL: CHARGE THE DROP', smash: 'THE DROP: HIT THE BIG GOLD MARK', flip: 'VIOLET: GRAVITY FLIP', sling: 'CYAN ARROWS: SLINGSHOT',
-  reverse: 'THE ORBIT TURNS ROUND', faster: 'SPEED UP', slower: 'SLOW DOWN', twin: 'TWIN ORBIT: ONE TAP MOVES BOTH'
+  charge: 'TAP THE ROLL: CHARGE THE DROP', smash: 'THE DROP: HIT THE BIG GOLD MARK', flip: 'VIOLET: GRAVITY FLIP', weave: 'WEAVE: BOUNCE BETWEEN THE TWO RINGS',
+  spin: 'SPIN GATE: THE GAP COMES ROUND TO THE MARK', sling: 'CYAN ARROWS: HOP TO THE NEXT PLANET', reverse: 'THE ORBIT TURNS ROUND', faster: 'SPEED UP', slower: 'SLOW DOWN',
+  twin: 'TWIN ORBIT: ONE TAP MOVES BOTH'
 };
 
 const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
@@ -38,7 +41,12 @@ interface Wave { r: number; v: number; life: number; max: number; col: RGB; w: n
 interface Platform {
   lv: number; side: number; fs: number; fe: number; cs: number; ce: number; note: number; tol: number; auto: boolean;
   smash: boolean; accent: boolean; sling: boolean; twin: 'a' | 'b' | 'both' | null; flipAt: number; flipTol: number; pulse: boolean;
+  /** the planet this ring belongs to; and, if it is entered through a spin gate, when, how wide and from which side */
+  planet: number; spinAt: number; spinTol: number; enterSide: number;
 }
+/** Things that fly past behind the course in a drop: shards thrown out from the centre, and ring fragments in orbit. */
+interface Debris { a: number; d: number; v: number; rot: number; spin: number; size: number; kind: number; hue: number }
+interface Frag { r: number; a: number; len: number; w: number; v: number }
 
 export class GdRenderer {
   private ctx: CanvasRenderingContext2D;
@@ -48,7 +56,18 @@ export class GdRenderer {
   private particles: Particle[] = [];
   private ripples: Ripple[] = [];
   private waves: Wave[] = [];
-  private trail: Array<{ beat: number; rho: number; off: number }> = [];
+  private trail: Array<{ beat: number; rho: number; off: number; pf: number }> = [];
+  private debris: Debris[] = [];
+  private frags: Frag[] = [];
+  private glitch = 0;
+  private bands: Array<[number, number, number]> = [];
+  private flipK = 0;
+  private burstK = 0;
+  private camX = 0;
+  private camY = 0;
+  private pf = 0;
+  private coreX = 0;
+  private coreY = 0;
   private eq = new Float32Array(EQ_BARS);
   private stars: Array<{ a: number; d: number; s: number }> = [];
   private starPhase = 0;
@@ -92,6 +111,8 @@ export class GdRenderer {
   constructor(private canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
     for (let i = 0; i < 90; i++) this.stars.push({ a: Math.random() * TWO_PI, d: Math.random(), s: 0.4 + Math.random() * 1.3 });
+    for (let i = 0; i < 34; i++) this.debris.push({ a: Math.random(), d: Math.random(), v: 0.25 + Math.random() * 0.5, rot: Math.random() * TWO_PI, spin: (Math.random() - 0.5) * 5, size: 5 + Math.random() * 13, kind: i % 3, hue: Math.random() });
+    for (let i = 0; i < 14; i++) this.frags.push({ r: 0.3 + Math.random() * 0.75, a: Math.random() * TWO_PI, len: 0.25 + Math.random() * 0.7, w: 2 + Math.random() * 6, v: (Math.random() < 0.5 ? -1 : 1) * (0.15 + Math.random() * 0.5) });
     this.resize();
   }
 
@@ -125,7 +146,7 @@ export class GdRenderer {
     this.ripples = [];
     this.waves = [];
     this.trail = [];
-    this.flash = this.strobe = this.punch = this.zoomKick = this.ringFlash = this.landPulse = this.shake = this.dark = this.drain = 0;
+    this.flash = this.strobe = this.punch = this.zoomKick = this.ringFlash = this.landPulse = this.shake = this.dark = this.drain = this.glitch = this.flipK = this.burstK = 0;
     this.dropAge = 99;
     this.dropFull = run.dropFull === true;
     this.dropPower = run.dropPower;
@@ -135,6 +156,9 @@ export class GdRenderer {
     this.twinV = c.twins.some(([a, z]) => beat >= a && beat < z) ? 1 : 0;
     this.cam = run.sim.rho(beat);
     this.camVel = 0;
+    this.sizes();
+    this.pf = this.planetOf(run, beat);
+    [this.camX, this.camY] = this.planetXY(this.pf);
     this.baseR = run.sim.side > 0 ? 1 : 1.5;
     this.flowV = run.sim.flow;
     this.inten = this.energyAt(beat);
@@ -157,6 +181,35 @@ export class GdRenderer {
     const g = c[0] * 0.3 + c[1] * 0.59 + c[2] * 0.11;
     const d = this.drain * 0.85;
     return `rgba(${lerp(c[0], g, d) | 0},${lerp(c[1], g, d) | 0},${lerp(c[2], g, d) | 0},${a})`;
+  }
+
+  private sizes(): number {
+    const m = Math.min(this.w, this.h * 0.94);
+    this.r0 = m * 0.27;
+    this.gap = this.r0 * 0.25;
+    this.rb = Math.max(5.5, this.r0 * 0.058);
+    return m;
+  }
+
+  /** Where a planet's core is in the world. Each planet hop goes on to the next: across on a wide screen, up on a tall one. */
+  private planetXY(pf: number): [number, number] {
+    const d = this.r0 * 2.75;
+    const at = (k: number): [number, number] => (this.w >= this.h ? [k * d, k % 2 ? -0.42 * d : 0] : [k % 2 ? 0.4 * d : 0, -k * d]);
+    const k = Math.floor(pf);
+    const f = pf - k;
+    if (f < 1e-6) return at(k);
+    const a = at(k);
+    const b = at(k + 1);
+    return [lerp(a[0], b[0], f), lerp(a[1], b[1], f)];
+  }
+
+  /** Which planet the ball is at; part-way between two while it flies a planet hop. */
+  private planetOf(run: GdRun, beat: number): number {
+    const sim = run.sim;
+    const last = run.course.presses[sim.ni - 1];
+    if (!last) return 0;
+    if (last.sling && sim.mode === 'flight' && sim.fl) return last.planet + smoothstep((beat - sim.fl.t0) / (sim.fl.t1 - sim.fl.t0));
+    return last.planetTo;
   }
 
   /** Screen radius of a ring level. The camera bumps on big hits and pulls right back as the drop goes off. */
@@ -231,6 +284,45 @@ export class GdRenderer {
       c.fillRect(0, 0, this.w, this.h);
       c.globalCompositeOperation = 'source-over';
     }
+    if (drive > 0.08) {
+      // chaos, all of it behind the course and all of it scaled by how big the drop was earned:
+      // ring fragments in orbit...
+      c.lineCap = 'round';
+      const shown = Math.round(this.frags.length * Math.min(1, drive * 1.4) * (calm ? 0.4 : 1));
+      for (let i = 0; i < shown; i++) {
+        const f = this.frags[i];
+        if (!calm) f.a += dt * f.v * (0.4 + drive * 0.9 + kick * drive * 1.5);
+        c.strokeStyle = this.col(i % 2 ? p.acc : p.ring, (0.1 + 0.2 * kick) * drive);
+        c.lineWidth = f.w * (1 + kick * drive);
+        c.beginPath(); c.arc(cx, cy, f.r * span, f.a, f.a + f.len); c.stroke();
+      }
+      c.lineCap = 'butt';
+      // ...and shards thrown out from the centre, repeated round it like a kaleidoscope, each second copy mirrored
+      const fold = calm ? 1 : drive > 0.55 ? 6 : 4;
+      const count = Math.round(this.debris.length * Math.min(1, drive * 1.5) * (calm ? 0.3 : 1));
+      for (let i = 0; i < count; i++) {
+        const o = this.debris[i];
+        o.d += dt * o.v * (calm ? 0.12 : 0.22 + drive * 0.5 + kick * drive * 1.4);
+        if (o.d > 1) { o.d -= 1; o.a = Math.random(); o.hue = Math.random(); }
+        o.rot += dt * o.spin * (calm ? 0.2 : 1);
+        const dist = o.d * o.d * span * 1.15;
+        const size = o.size * (0.35 + o.d * 1.9);
+        c.fillStyle = this.col(mix(p.ring, p.acc, o.hue), o.d * (1 - o.d) * 4 * (0.16 + 0.26 * drive));
+        for (let k = 0; k < fold; k++) {
+          const a = ((k % 2 ? 1 - o.a : o.a) + k) * (TWO_PI / fold);
+          const x = cx + Math.cos(a) * dist;
+          const y = cy + Math.sin(a) * dist;
+          const rot = (k % 2 ? -o.rot : o.rot) + a;
+          const ux = Math.cos(rot) * size;
+          const uy = Math.sin(rot) * size;
+          c.beginPath();
+          if (o.kind === 0) { c.moveTo(x + ux, y + uy); c.lineTo(x - uy * 0.6, y + ux * 0.6); c.lineTo(x + uy * 0.6, y - ux * 0.6); } // shard
+          else if (o.kind === 1) { c.moveTo(x + ux, y + uy); c.lineTo(x - uy * 0.5, y + ux * 0.5); c.lineTo(x - ux, y - uy); c.lineTo(x + uy * 0.5, y - ux * 0.5); } // diamond
+          else { c.moveTo(x + ux * 1.6, y + uy * 1.6); c.lineTo(x - uy * 0.16, y + ux * 0.16); c.lineTo(x - ux * 1.6, y - uy * 1.6); c.lineTo(x + uy * 0.16, y - ux * 0.16); } // splinter
+          c.fill();
+        }
+      }
+    }
     if ((inten > 0.55 || drive > 0.05) && !calm) {
       // the groove: rings drifting outward, more of them and brighter in the drop
       const a = Math.max(clamp((inten - 0.55) / 0.45, 0, 1), drive);
@@ -259,6 +351,13 @@ export class GdRenderer {
         c.fillRect(x, y, s.s, s.s);
       }
     }
+    if (this.flipK > 0.02 && !calm) {
+      // colour flip on the kick: for a moment the whole backdrop swings to its opposite
+      c.globalCompositeOperation = 'difference';
+      c.fillStyle = this.col(mix(p.acc, WHITE, 0.25), this.flipK * 0.6 * drive);
+      c.fillRect(0, 0, this.w, this.h);
+      c.globalCompositeOperation = 'source-over';
+    }
     if (dark > 0.01) { c.fillStyle = `rgba(0,0,0,${dark})`; c.fillRect(0, 0, this.w, this.h); }
   }
 
@@ -279,9 +378,9 @@ export class GdRenderer {
         const v = this.eq[i];
         if (v < 0.12) continue;
         const a = (i / EQ_BARS) * TWO_PI - Math.PI / 2 + Math.PI / EQ_BARS;
-        const far = rc * 1.2 + v * len + v * (0.25 + kick) * drive * span;
+        const far = rc * 1.2 + v * len + v * (0.25 + kick + this.burstK * 1.3) * drive * span; // on the kick they burst right to the edges
         c.lineWidth = 2 + v * 5 * drive;
-        c.strokeStyle = this.col(mix(pal.ring, pal.acc, v), (0.05 + 0.2 * v * kick) * drive);
+        c.strokeStyle = this.col(mix(pal.ring, pal.acc, v), (0.05 + 0.2 * v * kick + 0.18 * this.burstK) * drive);
         c.beginPath(); c.moveTo(Math.cos(a) * rc * 1.2, Math.sin(a) * rc * 1.2); c.lineTo(Math.cos(a) * far, Math.sin(a) * far); c.stroke();
       }
       c.globalCompositeOperation = 'source-over';
@@ -401,10 +500,32 @@ export class GdRenderer {
     if (drop) c.setLineDash([]);
     c.globalAlpha = alpha;
     if (!plain) {
-      // ceiling: the ring above, closed until its opening. Hazard colours: touching it ends the run.
-      if (pl.ce - pl.cs > 0.06 && pl.ce > lo && pl.cs < hi) {
+      if (!Number.isNaN(pl.spinAt)) {
+        // spin gate: a turning ring between you and the next ring, with one gap. It comes round against the orbit
+        // and its gap is over the mark exactly on the beat, so you can watch the two close on each other.
+        const ahead = pl.spinAt - beat;
+        if (ahead > -0.05 && ahead < 1.7) { // only the gate you are about to meet: one turning ring at a time, never a stack
+          const rs = r - pl.enterSide * rb * 1.2;
+          const g = ang(pl.spinAt) + (ang(pl.spinAt) - ang(beat)) * 0.75;
+          const hw = Math.abs(ang(pl.spinAt + pl.spinTol) - ang(pl.spinAt)) + (rb * 1.5) / rs;
+          c.globalAlpha = alpha * clamp((1.7 - ahead) / 0.45, 0, 1) * 0.9;
+          c.lineCap = 'butt';
+          c.beginPath(); c.arc(0, 0, rs, g + hw, g - hw + TWO_PI);
+          c.strokeStyle = HALO; c.lineWidth = 7.5; c.stroke();
+          c.strokeStyle = rgba(DANGER); c.lineWidth = 3.6; c.stroke();
+          c.strokeStyle = '#ffffff'; c.lineWidth = 1.4; c.stroke();
+          // the gap's two lips, so the opening itself is easy to follow
+          c.fillStyle = '#ffffff';
+          for (const e of [g - hw, g + hw]) { c.beginPath(); c.arc(Math.cos(e) * rs, Math.sin(e) * rs, 3.4, 0, TWO_PI); c.fill(); }
+          c.globalAlpha = alpha;
+        }
+      } else if (pl.ce - pl.cs > 0.06 && pl.ce > lo && pl.cs < hi) {
+        // ceiling: the ring above, closed until its opening. Hazard colours: touching it ends the run.
         arc(pl.cs, pl.ce);
         c.lineCap = 'butt';
+        c.strokeStyle = HALO;
+        c.lineWidth = 10;
+        c.stroke();
         c.strokeStyle = rgba(DANGER);
         c.lineWidth = 5;
         c.stroke();
@@ -416,8 +537,8 @@ export class GdRenderer {
       if (!Number.isNaN(pl.flipAt)) {
         arc(pl.flipAt - pl.flipTol * 0.85, pl.fs);
         c.lineCap = 'round';
-        c.strokeStyle = rgba(VIOLET, 0.35);
-        c.lineWidth = 12;
+        c.strokeStyle = HALO;
+        c.lineWidth = 13;
         c.stroke();
         c.strokeStyle = rgba(VIOLET);
         c.lineWidth = 5;
@@ -429,12 +550,16 @@ export class GdRenderer {
     if (fe > lo && pl.fs < hi) {
       c.lineCap = 'round';
       arc(pl.fs, fe);
-      if (drop || pulse > 0.05 || lit > 0.05) {
-        c.strokeStyle = this.col(pal.ring, (drop ? 0.22 + pulse * 0.2 : pulse * 0.35) + lit * 0.3);
-        c.lineWidth = (drop ? 11 : 9) + lit * 5;
+      // a dark edge first, then the ring in its one fixed colour: the world behind never tints what you ride
+      c.strokeStyle = HALO;
+      c.lineWidth = (drop ? 11.5 : 10) + (pulse + lit) * 3;
+      c.stroke();
+      if (pulse > 0.05 || lit > 0.05) {
+        c.strokeStyle = `rgba(255,255,255,${Math.min(0.5, pulse * 0.25 + lit * 0.3)})`;
+        c.lineWidth = 8 + lit * 4;
         c.stroke();
       }
-      c.strokeStyle = this.col(mix(pal.ring, WHITE, drop ? 0.55 : 0.3));
+      c.strokeStyle = rgba(FLOOR);
       c.lineWidth = drop ? 4.5 : 3.5;
       c.stroke();
       if (!plain && !Number.isNaN(pl.note) && pl.note > lo && pl.note < hi) {
@@ -444,9 +569,14 @@ export class GdRenderer {
         const bigness = pl.smash ? 2.3 : pl.accent ? 1.6 : 1;
         const len = rb * (1.15 + pulse * 0.5) * bigness;
         const gold = pl.auto || pl.smash;
+        const wide = (gold ? 6.5 : pl.accent ? 5 : 3.5) + pulse * 2.5;
+        c.beginPath(); c.moveTo(Math.cos(a) * (r - len), Math.sin(a) * (r - len)); c.lineTo(Math.cos(a) * (r + len), Math.sin(a) * (r + len));
+        c.strokeStyle = HALO;
+        c.lineWidth = wide + 5;
+        c.stroke();
         c.strokeStyle = gold ? rgba(GOLD) : '#ffffff';
-        c.lineWidth = (gold ? 6.5 : pl.accent ? 5 : 3.5) + pulse * 2.5;
-        c.beginPath(); c.moveTo(Math.cos(a) * (r - len), Math.sin(a) * (r - len)); c.lineTo(Math.cos(a) * (r + len), Math.sin(a) * (r + len)); c.stroke();
+        c.lineWidth = wide;
+        c.stroke();
         const ahead = pl.note - beat;
         if ((pl.accent || pl.smash) && ahead > 0 && ahead < 2.5) {
           c.strokeStyle = gold ? rgba(GOLD, 0.95 - ahead * 0.25) : `rgba(255,255,255,${0.95 - ahead * 0.25})`;
@@ -488,22 +618,31 @@ export class GdRenderer {
     const sim = run.sim;
     const { r0, rb } = this;
     const ang = (b: number) => -Math.PI / 2 + course.angle(b);
+    // each ring is drawn round its own planet; `at` moves the origin there and back
+    const [hx, hy] = this.planetXY(this.pf);
+    const origin = (pf: number): [number, number] => { const [x, y] = this.planetXY(pf); return [x - this.camX, y - this.camY]; };
     for (const pl of this.plats) {
       if (twin ? pl.twin === null : false) continue;
+      if (Math.min(pl.cs, pl.fs) - beat > AHEAD || beat > pl.fe + 0.5) continue;
       const mine = twin ? pl.twin === 'b' || pl.twin === 'both' : pl.twin !== 'b';
+      const [ox, oy] = origin(pl.planet);
+      c.translate(ox, oy);
       this.drawPlatform(pl, course, beat, pal, kick, dropStyle, !mine, time);
+      c.translate(-ox, -oy);
     }
+    const [bx0, by0] = [hx - this.camX, hy - this.camY]; // the ball's own planet
     if (!twin) {
       // where the next hops go: a faint dotted path from each note to its landing
       for (let k = sim.ni; k < Math.min(course.presses.length, sim.ni + 3); k++) {
         const p = course.presses[k];
         if (p.beat - beat > AHEAD - 0.4) break;
-        const n = Math.max(3, Math.round((p.land - p.beat) * 8));
-        c.fillStyle = rgba(WHITE, k === sim.ni ? 0.5 : 0.25);
+        const n = Math.max(3, Math.round((p.land - p.beat) * (p.sling ? 14 : 8)));
+        c.fillStyle = p.sling ? rgba(CYAN, 0.8) : rgba(WHITE, k === sim.ni ? 0.5 : 0.25);
         for (let i = 1; i < n; i++) {
           const b = p.beat + ((p.land - p.beat) * i) / n;
           const r = this.rad(flightRho(p, b)) + (p.kind === 'flip' ? p.side * rb * (1 - (2 * i) / n) : p.side * rb);
-          c.beginPath(); c.arc(Math.cos(ang(b)) * r, Math.sin(ang(b)) * r, 1.6, 0, TWO_PI); c.fill();
+          const [ox, oy] = origin(p.sling ? p.planet + smoothstep(i / n) : p.planet); // a planet hop's path crosses to the next planet
+          c.beginPath(); c.arc(ox + Math.cos(ang(b)) * r, oy + Math.sin(ang(b)) * r, p.sling ? 2.2 : 1.6, 0, TWO_PI); c.fill();
         }
       }
       // speed portals and turns: cyan signs across the ball's path
@@ -512,6 +651,7 @@ export class GdRenderer {
         const d = sp.beat - beat;
         if (d > AHEAD || d < -0.4) continue;
         c.save();
+        c.translate(bx0, by0);
         c.rotate(ang(sp.beat) + Math.PI / 2);
         c.globalAlpha = clamp((AHEAD - d) / 0.6, 0, 1) * clamp(1 + d / 0.4, 0, 1);
         c.strokeStyle = rgba(CYAN);
@@ -529,15 +669,17 @@ export class GdRenderer {
         if (d > AHEAD || d < -0.4) continue;
         const a = ang(tb);
         c.globalAlpha = clamp((AHEAD - d) / 0.6, 0, 1) * clamp(1 + d / 0.4, 0, 1);
-        c.strokeStyle = rgba(CYAN);
-        c.lineWidth = 3.5;
         c.lineCap = 'round';
         // a wall across the path with a U-turn arrow in front of it
-        c.beginPath(); c.moveTo(Math.cos(a) * (rr - rb * 3), Math.sin(a) * (rr - rb * 3)); c.lineTo(Math.cos(a) * (rr + rb * 3), Math.sin(a) * (rr + rb * 3)); c.stroke();
+        c.translate(bx0, by0);
+        c.beginPath(); c.moveTo(Math.cos(a) * (rr - rb * 3), Math.sin(a) * (rr - rb * 3)); c.lineTo(Math.cos(a) * (rr + rb * 3), Math.sin(a) * (rr + rb * 3));
+        c.strokeStyle = HALO; c.lineWidth = 8; c.stroke();
+        c.strokeStyle = rgba(CYAN); c.lineWidth = 3.5; c.stroke();
         const back = course.angle(tb - 0.1) < course.angle(tb) ? -1 : 1;
         const ac = a + (back * rb * 2.6) / rr;
         c.lineWidth = 2.5;
         c.beginPath(); c.arc(Math.cos(ac) * rr, Math.sin(ac) * rr, rb * 1.3, a + Math.PI / 2 * back, a + Math.PI / 2 * back + Math.PI * 1.2 * back, back < 0); c.stroke();
+        c.translate(-bx0, -by0);
         c.globalAlpha = 1;
       }
       c.lineCap = 'butt';
@@ -550,10 +692,13 @@ export class GdRenderer {
       if (d < -0.25 || sim.noteUsed(f.beat)) continue;
       if (twin ? !(f.twin === 'b' || f.twin === 'both') : f.twin === 'b') continue;
       const r = this.rad(f.rho) + f.side * rb;
-      const x = Math.cos(ang(f.beat)) * r;
-      const y = Math.sin(ang(f.beat)) * r;
+      const [ox, oy] = origin(f.planet);
+      const x = ox + Math.cos(ang(f.beat)) * r;
+      const y = oy + Math.sin(ang(f.beat)) * r;
       c.globalAlpha = clamp((AHEAD - d) / 0.6, 0, 1) * clamp(1 + d / 0.25, 0, 1);
       const big = f.air ? 1 : 0.8;
+      c.fillStyle = HALO;
+      c.beginPath(); c.arc(x, y, rb * 1.35 * big, 0, TWO_PI); c.fill();
       c.strokeStyle = rgba(GOLD);
       c.lineWidth = Math.max(1.5, rb * 0.3);
       c.beginPath(); c.arc(x, y, rb * 0.95 * big, 0, TWO_PI); c.stroke();
@@ -575,17 +720,24 @@ export class GdRenderer {
       const u = i / n;
       const ra = this.rad(p0.rho) + p0.off;
       const rz = this.rad(p1.rho) + p1.off;
+      const [x0, y0] = origin(p0.pf);
+      const [x1, y1] = origin(p1.pf);
       c.strokeStyle = rgba(skin, u * u * 0.55);
       c.lineWidth = rb * 1.7 * u;
-      c.beginPath(); c.moveTo(Math.cos(ang(p0.beat)) * ra, Math.sin(ang(p0.beat)) * ra); c.lineTo(Math.cos(ang(p1.beat)) * rz, Math.sin(ang(p1.beat)) * rz); c.stroke();
+      c.beginPath(); c.moveTo(x0 + Math.cos(ang(p0.beat)) * ra, y0 + Math.sin(ang(p0.beat)) * ra); c.lineTo(x1 + Math.cos(ang(p1.beat)) * rz, y1 + Math.sin(ang(p1.beat)) * rz); c.stroke();
     }
     c.lineCap = 'butt';
     const vr = dt > 0 && this.ball.r ? (br - this.ball.r) / dt : 0;
     const stretch = sim.mode !== 'ground' ? clamp(Math.abs(vr) / (r0 * 4), 0, 0.2) : 0;
-    this.drawBall(Math.cos(a) * br, Math.sin(a) * br, rb, skin, a, 1 + stretch - 0.3 * this.landPulse, 1 - stretch * 0.5 + 0.22 * this.landPulse);
+    const x = bx0 + Math.cos(a) * br;
+    const y = by0 + Math.sin(a) * br;
+    // a dark halo, so the ball reads against anything
+    c.fillStyle = 'rgba(3,5,14,0.5)';
+    c.beginPath(); c.arc(x, y, rb * 2.1, 0, TWO_PI); c.fill();
+    this.drawBall(x, y, rb, skin, a, 1 + stretch - 0.3 * this.landPulse, 1 - stretch * 0.5 + 0.22 * this.landPulse);
     if (!twin) {
-      this.ball.x = Math.cos(a) * br;
-      this.ball.y = Math.sin(a) * br;
+      this.ball.x = x;
+      this.ball.y = y;
       this.ball.r = br;
     }
   }
@@ -599,11 +751,8 @@ export class GdRenderer {
     const sim = run.sim;
     const t = run.viewTime;
     const beat = t / level.spb;
-    const m = Math.min(this.w, this.h * 0.94);
+    const m = this.sizes();
     const span = Math.max(this.w, this.h) * 0.75;
-    this.r0 = m * 0.27;
-    this.gap = this.r0 * 0.25;
-    this.rb = Math.max(5.5, this.r0 * 0.058);
     const { r0, rb } = this;
     const skin = orbColour(save.skin);
     const calm = save.reducedMotion;
@@ -635,7 +784,8 @@ export class GdRenderer {
     const groove = kick * inten * inten;
     // drive: nothing in the verse, everything in a drop that was earned. It scales every effect behind the course.
     this.world += ((afterDrop ? 1 : 0) - this.world) * Math.min(1, dt * 6);
-    const hot = clamp((this.inten - 0.45) / 0.4, 0, 1);
+    // a section the level calls a drop is always loud enough to go off, however sparse its kick
+    const hot = Math.max(clamp((this.inten - 0.45) / 0.4, 0, 1), seg.label === 'DROP' ? 0.8 : 0);
     const drive = this.world * hot * (0.4 + 0.6 * this.dropPower) * (0.75 + 0.25 * this.flowV) * (1 - this.drain * 0.6);
     this.dark += ((seg.blackout ? 0.45 : 0) - this.dark) * Math.min(1, dt * 4);
 
@@ -683,13 +833,14 @@ export class GdRenderer {
           this.zoomKick = calm ? 0 : pw;
           this.strobe = calm ? 0 : pw;
           const rr = this.ball.r || r0;
+          if (!calm) { this.burstK = 1; this.flipK = pw; }
           for (let k = 0; k < 3; k++) this.wave(rr * (0.4 + k * 0.5), k === 1 ? WHITE : pal.acc, r0 * (5 + k * 1.5) * (0.5 + pw), 10 - k * 2, 0.75, 0.7 + k * 0.12);
           const n = Math.round(150 * pw * (calm ? 0.3 : 1));
           for (let i = 0; i < n; i++) {
             const a = (i / n) * TWO_PI + Math.random() * 0.1;
             const from = rr * (0.7 + (i % 3) * 0.28);
             const sp = r0 * (1.5 + Math.random() * 4) * (0.5 + pw);
-            this.particles.push({ x: Math.cos(a) * from, y: Math.sin(a) * from, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0, max: 0.5 + Math.random() * 0.6, col: i % 3 === 0 ? WHITE : i % 3 === 1 ? pal.acc : pal.ring, size: 2 + Math.random() * 3.5, back: i % 2 === 0 });
+            this.particles.push({ x: this.coreX + Math.cos(a) * from, y: this.coreY + Math.sin(a) * from, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0, max: 0.5 + Math.random() * 0.6, col: i % 3 === 0 ? WHITE : i % 3 === 1 ? pal.acc : pal.ring, size: 2 + Math.random() * 3.5, back: i % 2 === 0 });
           }
         }
       } else if (ev.kind === 'crash') {
@@ -708,28 +859,56 @@ export class GdRenderer {
         for (let i = 0; i < n && this.particles.length < 420; i++) {
           const a = Math.random() * TWO_PI;
           const sp = r0 * (1.2 + Math.random() * 2.2) * (0.6 + drive);
-          this.particles.push({ x: Math.cos(a) * m * 0.06, y: Math.sin(a) * m * 0.06, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0, max: 0.35 + Math.random() * 0.4, col: pal.acc, size: 1.5 + Math.random() * 2.5, back: true });
+          this.particles.push({ x: this.coreX + Math.cos(a) * m * 0.06, y: this.coreY + Math.sin(a) * m * 0.06, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0, max: 0.35 + Math.random() * 0.4, col: pal.acc, size: 1.5 + Math.random() * 2.5, back: true });
         }
-        this.punch = Math.max(this.punch, 0.22 * drive);
+        this.punch = Math.max(this.punch, 0.3 * drive);
+        this.burstK = 1; // the equalizer bursts to the edges
+        if (drive > 0.35) this.flipK = Math.max(this.flipK, 0.8); // and the backdrop's colours flip
       }
       this.wave(m * 0.07, pal.acc, r0 * 3.5, 3, 0.28 * drive, 0.5);
     }
-    if (snare > 0.6 && this.snareWas <= 0.6 && drive > 0.35 && !calm) this.strobe = Math.max(this.strobe, 0.35 * drive);
+    if (snare > 0.6 && this.snareWas <= 0.6 && drive > 0.35 && !calm) {
+      this.strobe = Math.max(this.strobe, 0.35 * drive);
+      // glitch hit: for a tenth of a second a few bands of the backdrop tear sideways
+      this.glitch = 0.1;
+      this.bands = Array.from({ length: 4 }, () => [Math.random() * this.h, 14 + Math.random() * 46, (Math.random() - 0.5) * 90 * drive] as [number, number, number]);
+    }
     this.kickWas = kick;
     this.snareWas = snare;
 
     // spring camera: keeps the ball's ring at a steady radius; further out while it rides the inside, where the hops
     // go toward the core, and it starts moving there a couple of beats before the flip
     const rho = sim.rho(beat);
-    const om = 9;
-    this.camVel += (om * om * (rho - this.cam) - 2 * om * this.camVel) * dt;
-    this.cam += this.camVel * dt;
     const nextP = course.presses[sim.ni];
-    const inward = sim.sideAt(beat) < 0 || (!!nextP && nextP.kind === 'flip' && nextP.side > 0 && nextP.beat - beat < 2.5);
+    const lastP = course.presses[sim.ni - 1];
+    // in a weave the ball bounces between two rings on every press: the camera holds still between them
+    const weaving = sim.mode === 'flight' ? !!lastP?.weave : !!nextP?.weave && (!!lastP?.weave || nextP.beat - beat < 1.5);
+    const camT = weaving ? (sim.mode === 'flight' ? lastP!.camLv : nextP!.camLv) : rho;
+    const om = 9;
+    this.camVel += (om * om * (camT - this.cam) - 2 * om * this.camVel) * dt;
+    this.cam += this.camVel * dt;
+    const inward = !weaving && (sim.sideAt(beat) < 0 || (!!nextP && nextP.kind === 'flip' && !nextP.weave && nextP.side > 0 && nextP.beat - beat < 2.5));
+    // the camera follows the ball from planet to planet, and leans toward the next one before a planet hop
+    this.pf = this.planetOf(run, beat);
+    let [tx, ty] = this.planetXY(this.pf);
+    if (nextP?.sling && sim.mode !== 'flight' && nextP.beat - beat < 2.5) {
+      const [nx, ny] = this.planetXY(nextP.planetTo);
+      const lean = 0.32 * smooth((2.5 - (nextP.beat - beat)) / 2);
+      tx += (nx - tx) * lean;
+      ty += (ny - ty) * lean;
+    }
+    this.camX += (tx - this.camX) * Math.min(1, dt * 7);
+    this.camY += (ty - this.camY) * Math.min(1, dt * 7);
+    const [wx, wy] = this.planetXY(this.pf);
+    this.coreX = wx - this.camX;
+    this.coreY = wy - this.camY;
     this.baseR += ((inward ? 1.5 : 1) - wound * 0.1 - this.baseR) * Math.min(1, dt * 3.5);
     this.punch = Math.max(0, this.punch - dt / 0.45);
     this.zoomKick = Math.max(0, this.zoomKick - dt / 0.9) * (1 - Math.min(1, dt * 1.5));
     this.flash = Math.max(0, this.flash - dt / 0.18);
+    this.flipK = Math.max(0, this.flipK - dt / 0.11);
+    this.burstK = Math.max(0, this.burstK - dt / 0.16);
+    this.glitch = Math.max(0, this.glitch - dt);
     this.strobe = Math.max(0, this.strobe - dt / 0.12);
     this.ringFlash = Math.max(0, this.ringFlash - dt / 0.3);
     this.landPulse = Math.max(0, this.landPulse - dt / 0.12);
@@ -738,7 +917,7 @@ export class GdRenderer {
     const twinNow = course.twins.some(([a, z]) => beat >= a - 1 && beat < z + 0.25);
     this.twinV += ((twinNow ? 1 : 0) - this.twinV) * Math.min(1, dt * 5);
     if (run.state === 'playing') {
-      this.trail.push({ beat, rho, off: sim.sideAt(beat) * rb * (1 - 0.3 * this.landPulse) });
+      this.trail.push({ beat, rho, off: sim.sideAt(beat) * rb * (1 - 0.3 * this.landPulse), pf: this.pf });
       if (this.trail.length > 30) this.trail.shift();
     }
 
@@ -754,6 +933,17 @@ export class GdRenderer {
     if (this.dropPower >= 0.3 && this.dropAge < 1.2 && !calm) cx += Math.exp(-this.dropAge * 4) * Math.sin(this.dropAge * 10) * m * 0.045 * this.dropPower; // the launch swings the camera
     c.translate(cx, cy);
 
+    // the other planets nearby: a small glowing core each, so you can see where a planet hop is going
+    for (let k = Math.max(0, Math.floor(this.pf) - 1); k <= Math.floor(this.pf) + 2; k++) {
+      if (Math.abs(k - this.pf) < 0.5 || !this.plats.some((pl) => pl.planet === k)) continue;
+      const [px, py] = this.planetXY(k);
+      const g = c.createRadialGradient(px - this.camX, py - this.camY, 0, px - this.camX, py - this.camY, m * 0.09);
+      g.addColorStop(0, this.col(pal.ring, 0.55));
+      g.addColorStop(1, this.col(pal.ring, 0));
+      c.fillStyle = g;
+      c.beginPath(); c.arc(px - this.camX, py - this.camY, m * 0.09, 0, TWO_PI); c.fill();
+    }
+    c.translate(this.coreX, this.coreY);
     const chargeShown = afterDrop ? this.chargeV * clamp(1 - this.dropAge / 0.35, 0, 1) : course.charges.length && beat > course.charges[0][0] - 4 ? Math.max(this.chargeV, 0.006) : 0;
     this.core(pal, m * 0.045, m * 0.04 * (0.4 + 1.1 * inten) * (1 + wound * 0.7 + drive * 0.5), kick * (0.3 + 0.7 * inten), snare * inten, dt, this.flowV, chargeShown, drive, span);
 
@@ -767,14 +957,36 @@ export class GdRenderer {
       c.lineWidth = wv.w * (1 - u * 0.6);
       c.beginPath(); c.arc(0, 0, wv.r, 0, TWO_PI); c.stroke();
     }
+    c.translate(-this.coreX, -this.coreY);
     this.drawParticles(dt, true);
+    if (this.glitch > 0 && !calm && this.canvas.width > 0 && this.canvas.height > 0) {
+      // the glitch tears only what has been drawn so far, which is all background
+      c.save();
+      c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      for (const [y, hgt, dx] of this.bands) {
+        const sy = Math.min(this.canvas.height - 2, Math.round(y * this.dpr));
+        const sh = Math.max(1, Math.min(this.canvas.height - sy, Math.round(hgt * this.dpr)));
+        try { c.drawImage(this.canvas, 0, sy, this.canvas.width, sh, dx, sy / this.dpr, this.w, sh / this.dpr); } catch { /* a canvas with no size yet: nothing to tear */ }
+      }
+      c.restore();
+    }
+    // a dark band under the play area, deeper the wilder the backdrop gets: the course always sits on a calm ground
+    const dim = c.createRadialGradient(this.coreX, this.coreY, r0 * 0.45, this.coreX, this.coreY, r0 * 2.9);
+    const deep = 0.14 + 0.34 * drive;
+    dim.addColorStop(0, 'rgba(2,3,10,0)');
+    dim.addColorStop(0.2, `rgba(2,3,10,${deep})`);
+    dim.addColorStop(0.7, `rgba(2,3,10,${deep})`);
+    dim.addColorStop(1, 'rgba(2,3,10,0)');
+    c.fillStyle = dim;
+    c.beginPath(); c.arc(this.coreX, this.coreY, r0 * 2.9, 0, TWO_PI); c.fill();
 
-    // ---- the course, on top of all of that: rings, marks, flow notes, the ball
+    // ---- the course, on top of all of that: rings, marks, flow notes, the ball. Nothing below here changes colour.
     const dropStyle = afterDrop && this.dropPower >= 0.3;
     this.drawSide(run, false, beat, pal, kick, dropStyle, now / 1000, skin, dt);
     if (this.twinV > 0.5) {
       // twin orbit: a second ball, mirrored left to right. One tap moves both; each mark is on one ball's ring or on both.
       c.save();
+      c.translate(2 * this.coreX, 0);
       c.scale(-1, 1);
       this.drawSide(run, true, beat, pal, kick, dropStyle, now / 1000, mix(skin, VIOLET, 0.6), dt);
       c.restore();
@@ -796,11 +1008,11 @@ export class GdRenderer {
       for (const hnt of this.hints) if (beat >= hnt[0] && beat <= hnt[1]) shown = hnt;
       if (shown) {
         const al = Math.min(1, (beat - Math.max(shown[0], run.startAt / level.spb - 4)) / 0.5, (shown[1] - beat) / 0.5);
-        this.text(shown[2], 0, -m * 0.045 * 1.2 - m * 0.04 * 1.5 - 30, clamp(m * 0.022, 10, 16), WHITE, clamp(al, 0, 1));
+        this.text(shown[2], this.coreX, this.coreY - m * 0.045 * 1.2 - m * 0.04 * 1.5 - 30, clamp(m * 0.022, 10, 16), WHITE, clamp(al, 0, 1));
       }
     }
-    if (run.state === 'resuming') this.text(String(Math.max(1, Math.ceil((run.resumeAt - now) / 400))), 0, m * 0.16, m * 0.06, WHITE, 1);
-    if (run.state === 'loading') this.text('LOADING', 0, m * 0.16, clamp(m * 0.024, 11, 17), WHITE, 0.8);
+    if (run.state === 'resuming') this.text(String(Math.max(1, Math.ceil((run.resumeAt - now) / 400))), this.coreX, this.coreY + m * 0.16, m * 0.06, WHITE, 1);
+    if (run.state === 'loading') this.text('LOADING', this.coreX, this.coreY + m * 0.16, clamp(m * 0.024, 11, 17), WHITE, 0.8);
     c.restore();
   }
 
@@ -879,6 +1091,8 @@ function platforms(c: Course, level: Level): Platform[] {
     out.push({
       lv, side, fs, fe, cs, ce, note: p ? p.beat : NaN, tol: p ? p.tol : 0, auto: !!p && p.auto, smash: !!p && p.smash, accent: !!p && p.accent, sling: !!p && p.sling,
       twin: p ? p.twin : inTwin ? 'both' : null,
+      planet: p ? p.planet : prev ? prev.planetTo : 0,
+      spinAt: prev && prev.spin ? prev.beat : NaN, spinTol: prev ? prev.tol : 0, enterSide: prev ? prev.side : 1,
       flipAt: prev && prev.kind === 'flip' ? prev.beat : NaN, flipTol: prev ? prev.tol : 0,
       pulse: !!level.segAt(((p ? p.beat : c.end) + 1e-6) * c.spb).core?.pulse
     });

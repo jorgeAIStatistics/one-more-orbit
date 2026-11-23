@@ -224,3 +224,12 @@ button { font: inherit; }
 .rec-cell.now { box-shadow: 0 0 0 2px #fff; }
 #record .pad { padding: 16px; font-size: 18px; }
 #recExport { width: 100%; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.18); background: rgba(0, 0, 0, 0.35); color: #cfe; font: 11px ui-monospace, monospace; }
+
+/* ---------- sync check ---------- */
+.sync-box { width: 100%; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 14px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); font-size: 12.5px; line-height: 1.4; color: #dfe6ff; text-align: left; }
+.sync-box b { font-size: 10px; letter-spacing: 0.14em; color: var(--cyan); }
+.sync-box .row { margin: 2px 0 0; justify-content: flex-start; gap: 6px; flex-wrap: wrap; }
+.sync-box .pill { padding: 6px 12px; font-size: 12px; }
+.sync-box .pill.fix { border-color: var(--gold); color: var(--gold); background: rgba(255, 214, 90, 0.1); }
+.sync-overlay { position: absolute; left: 14px; bottom: calc(max(10px, env(safe-area-inset-bottom)) + 14px); padding: 6px 10px; border-radius: 10px; background: rgba(0, 0, 10, 0.6); font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: #cfe; white-space: pre; }
+.pill.warn { border-color: var(--gold); color: var(--gold); background: rgba(255, 214, 90, 0.1); }

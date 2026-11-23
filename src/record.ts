@@ -43,7 +43,7 @@ export function initRecord(deps: { pack: () => LevelPack; show: (screen: 'menu' 
       const o = document.createElement('option');
       o.value = String(i);
       const sec = Math.round(s.t0);
-      o.textContent = `${s.label} · bars ${s.bar0 + 1}–${s.bar0 + s.bars} · ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+      o.textContent = `${s.core?.record ? '★ record candidate · ' : ''}${s.label} · bars ${s.bar0 + 1}–${s.bar0 + s.bars} · ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
       sel.appendChild(o);
     });
     sel.value = String(segIdx);
@@ -218,7 +218,8 @@ export function initRecord(deps: { pack: () => LevelPack; show: (screen: 'menu' 
   function open(): void {
     level = new Level(deps.pack().level, deps.pack().audio, deps.pack().chart);
     const lab = deps.pack().level.lab;
-    segs = level.segments.filter((s) => !lab || (s.beat0 >= lab[0] && s.beat1 <= lab[1]));
+    // the passages worth recording by hand (the hook and the drop phrases) come first
+    segs = level.segments.filter((s) => !lab || (s.beat0 >= lab[0] && s.beat1 <= lab[1])).sort((a, b) => Number(!!b.core?.record) - Number(!!a.core?.record) || a.index - b.index);
     segIdx = Math.min(segIdx, segs.length - 1);
     renderControls();
     renderGrid();
@@ -241,6 +242,18 @@ export function initRecord(deps: { pack: () => LevelPack; show: (screen: 'menu' 
     dirty = true;
     renderGrid();
     status('This section is back to the generated notes. Save to keep that.');
+  });
+  /** Same music, same pattern: copies this section's notes, bar for bar, to every other section that shares its motif. */
+  $('recCopy').addEventListener('click', () => {
+    if (tr) return;
+    const s = seg();
+    const twins = level.segments.filter((o) => o.index !== s.index && !!s.motif && o.motif === s.motif);
+    if (!twins.length) { status('No other section shares this one\'s music, so there is nothing to copy to.'); return; }
+    for (const o of twins) for (let k = 0; k < Math.min(s.bars, o.bars); k++) setBar(deps.pack(), o.bar0 + k, barNotes(s.bar0 + k));
+    for (let k = 0; k < s.bars; k++) setBar(deps.pack(), s.bar0 + k, barNotes(s.bar0 + k));
+    dirty = true;
+    renderGrid();
+    status(`Copied to ${twins.length} matching section${twins.length === 1 ? '' : 's'} (${twins.map((o) => `bars ${o.bar0 + 1}–${o.bar0 + o.bars}`).join(', ')}). Save to keep it.`);
   });
   $('recSave').addEventListener('click', () => {
     void saveBars(deps.pack()).then((where) => {

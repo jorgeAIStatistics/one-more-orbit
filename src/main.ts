@@ -71,6 +71,9 @@ function renderMenu(): void {
     ? 'Not played yet'
     : `Best ${b.cleared ? 100 : b.pct}% · ${b.attempts} attempt${b.attempts === 1 ? '' : 's'}${b.cleared ? ' · CLEARED' : ''}`;
   $('practiceBtn').classList.toggle('on', practice);
+  const needSync = !save.calibrated || deviceChanged;
+  $('syncBtn').classList.toggle('warn', needSync);
+  $('syncBtn').textContent = !save.calibrated ? 'Sync check needed · 10 s' : deviceChanged ? 'Audio changed: sync check · 10 s' : 'Sync check · 10 s';
   $('fromBtn').classList.toggle('on', fromBuild);
   $('fromBtn').classList.toggle('hidden', buildStart() < 0);
   $('botBtn').classList.toggle('on', botMode);
@@ -84,7 +87,9 @@ function startRun(from = -1, quick = false): void {
   if (!levelOpen(levelIdx)) return;
   audio.ensure();
   audio.setVolumes(save.music, save.sfx);
-  if (!botMode && !save.calibrated && from < 0 && !quick) { openCalib(true); return; } // first run: a quick sync check
+  checkDevice();
+  // first run, or the audio output has changed since the last check: the sync check comes first
+  if (!botMode && (!save.calibrated || deviceChanged) && from < 0 && !quick) { openCalib(true); return; }
   if (practice && !botMode && !save.practiced[pack.level.id]) { save.practiced[pack.level.id] = true; persist(); }
   run?.stop();
   const partial = from < 0 && fromBuild && buildStart() >= 0;
@@ -106,6 +111,73 @@ function startRun(from = -1, quick = false): void {
   show('play');
   void run.start().then(() => { if (run && run.state === 'error') { alert(`Could not start the level: ${run.error}`); show('menu'); } });
 }
+
+// ------------------------------------------------------------------ sync check
+// Every tap that meets a note is logged as milliseconds early or late, across attempts. If the taps centre well
+// away from zero, that is audio or display delay, not the chart, and one tap on the fix corrects the offset.
+const sync = { press: [] as number[], flow: [] as number[], seenPress: 0, seenFlow: 0, of: null as Run | null, last: NaN };
+/** the audio output changed since the last calibration (new headphones or speakers) */
+let deviceChanged = false;
+function harvest(r: Run): void {
+  if (sync.of !== r) { sync.of = r; sync.seenPress = sync.seenFlow = 0; }
+  if (r.opts.bot) return;
+  const o = r.sim.offsets;
+  while (sync.seenPress < o.press.length) { sync.last = o.press[sync.seenPress++] * 1000; sync.press.push(sync.last); }
+  while (sync.seenFlow < o.flow.length) { sync.last = o.flow[sync.seenFlow++] * 1000; sync.flow.push(sync.last); }
+  if (sync.press.length > 150) sync.press.splice(0, sync.press.length - 150);
+  if (sync.flow.length > 150) sync.flow.splice(0, sync.flow.length - 150);
+}
+function spread(a: number[]): { n: number; mean: number; sd: number } {
+  if (a.length < 3) return { n: a.length, mean: 0, sd: 0 };
+  const s = [...a].sort((x, y) => x - y);
+  const core = s.slice(Math.floor(s.length * 0.1), Math.ceil(s.length * 0.9)); // drop the wildest tenth at each end
+  const mean = core.reduce((p, v) => p + v, 0) / core.length;
+  return { n: a.length, mean, sd: Math.sqrt(core.reduce((p, v) => p + (v - mean) * (v - mean), 0) / core.length) };
+}
+const lateEarly = (ms: number) => (Math.abs(ms) < 3 ? 'on the beat' : `${Math.abs(Math.round(ms))} ms ${ms > 0 ? 'late' : 'early'}`);
+/** Fills a sync box: what the taps say, and a one-tap fix if they are consistently off. */
+function showSync(textId: string, fixId: string): void {
+  const p = spread(sync.press);
+  const f = spread(sync.flow);
+  const all = spread([...sync.press, ...sync.flow]);
+  const line = (name: string, x: { n: number; mean: number; sd: number }) => (x.n < 3 ? `${name}: not enough taps yet` : `${name}: ${lateEarly(x.mean)} on average, spread ±${Math.round(x.sd)} ms (${x.n} taps)`);
+  let verdict: string;
+  const fix = $(fixId);
+  fix.classList.add('hidden');
+  if (all.n < 12) verdict = 'Play a little more for a verdict.';
+  else if (all.sd > 60) verdict = `Your taps are spread too wide (±${Math.round(all.sd)} ms) to say where they centre.`;
+  else if (Math.abs(all.mean) < 15) verdict = 'In sync: your taps centre on the notes.';
+  else {
+    const next = Math.max(-200, Math.min(400, save.audioOffset + Math.round(all.mean)));
+    verdict = `Your taps are consistently ${lateEarly(all.mean)}. That is audio or display delay on this device, not the chart.`;
+    fix.textContent = `Fix it: set audio offset to ${fmtMs(next)}`;
+    fix.className = 'pill fix';
+    fix.onclick = () => {
+      save.audioOffset = next;
+      persist();
+      sync.press.length = sync.flow.length = 0;
+      $(textId).textContent = `Audio offset set to ${fmtMs(next)}. Play on and check again.`;
+      fix.classList.add('hidden');
+    };
+  }
+  $(textId).textContent = `${line('Survival presses', p)}\n${line('Flow notes', f)}\n${verdict} Audio offset now ${fmtMs(save.audioOffset)}.`;
+  $(textId).style.whiteSpace = 'pre-line';
+}
+function drawSyncOverlay(): void {
+  const el = $('syncOverlay');
+  const on = save.syncOverlay || /[?&]sync=1/.test(location.search);
+  el.classList.toggle('hidden', !on);
+  if (!on) return;
+  const p = spread(sync.press);
+  const f = spread(sync.flow);
+  const row = (x: { n: number; mean: number; sd: number }) => (x.n < 3 ? `      -      (${x.n})` : `${(x.mean >= 0 ? '+' : '') + x.mean.toFixed(0)} ms ±${x.sd.toFixed(0)} (${x.n})`);
+  el.textContent = `last  ${Number.isNaN(sync.last) ? '-' : (sync.last >= 0 ? '+' : '') + sync.last.toFixed(0) + ' ms'}\npress ${row(p)}\nflow  ${row(f)}\noffset ${fmtMs(save.audioOffset)}  (+ = late)`;
+}
+function checkDevice(): void {
+  const lat = audio.latency();
+  if (save.calLatency >= 0 && Math.abs(lat - save.calLatency) > 0.03) deviceChanged = true;
+}
+navigator.mediaDevices?.addEventListener?.('devicechange', () => { deviceChanged = true; if (screen === 'menu') renderMenu(); });
 
 let toastTimer = 0;
 function toast(text: string): void {
@@ -165,6 +237,8 @@ function onRunEnd(r: Run): void {
   const drop = `drop at ${Math.round(r.dropPower * 100)}% (charge ${Math.round(s.charge * 100)}%)`;
   console.log(`[one more orbit] ${r.opts.bot ? 'autoplay' : 'run'} cleared ${r.level.title}: ${s.onBeat}/${s.judged} taps on the beat, best streak ${s.bestStreak}, ${drop}. ${move}`);
   $('resNote').textContent = r.opts.bot ? `${move}. Autoplay ${drop}.` : r.dropFull ? 'Full drop: fully charged and in flow.' : r.dropFull === false ? `The drop played at ${Math.round(r.dropPower * 100)}%: you charged it to ${Math.round(s.charge * 100)}% in the roll. Tap the roll's notes and arrive in flow for the full one.` : '';
+  harvest(r);
+  showSync('resSyncText', 'resSyncFix');
   show('results');
 }
 
@@ -172,6 +246,8 @@ function onRunEnd(r: Run): void {
 let hudPct = -1;
 let hudSeg = '';
 function updateHud(r: Run): void {
+  harvest(r);
+  drawSyncOverlay();
   const pct = r.pct;
   if (pct !== hudPct) { hudPct = pct; $('pct').textContent = `${pct}%`; }
   $('progFill').style.transform = `scaleX(${r.progress.toFixed(4)})`;
@@ -210,6 +286,7 @@ window.addEventListener('keydown', (e) => {
 function pause(): void {
   if (!run || screen !== 'play' || run.state === 'failed' || run.state === 'done') return;
   run.pause();
+  showSync('pauseSyncText', 'pauseSyncFix');
   show('pause');
 }
 function resume(): void {
@@ -232,6 +309,7 @@ function renderSettings(): void {
   $('aoVal').textContent = fmtMs(save.audioOffset);
   $('voVal').textContent = fmtMs(save.visualOffset);
   $('setMotion').classList.toggle('on', save.reducedMotion);
+  $('setSync').classList.toggle('on', save.syncOverlay);
   const lat = Math.round(audio.latency() * 1000);
   $('setInfo').textContent = audio.ctx ? `This device reports ${lat} ms of output delay, already compensated.` : '';
 }
@@ -250,7 +328,7 @@ function nudge(key: 'audioOffset' | 'visualOffset', by: number): void {
   persist();
   renderSettings();
 }
-function toggle(key: 'reducedMotion'): void {
+function toggle(key: 'reducedMotion' | 'syncOverlay'): void {
   save[key] = !save[key];
   persist();
   renderSettings();
@@ -261,15 +339,16 @@ function toggle(key: 'reducedMotion'): void {
 // Visual: no sound; tap when the ball crosses the mark; the average becomes the visual offset.
 const CAL_PERIOD = 0.6;
 const CAL_NEED = 8;
-const cal = { mode: 'audio' as 'audio' | 'visual', running: false, clicks: [] as number[], taps: [] as number[], startPerf: 0, timer: 0, quick: false };
+const cal = { mode: 'audio' as 'audio' | 'visual', running: false, clicks: [] as number[], taps: [] as number[], startPerf: 0, timer: 0, quick: false, thenPlay: true, done: false };
 
 function renderCal(): void {
   $('calAudioTab').classList.toggle('on', cal.mode === 'audio');
   $('calVisualTab').classList.toggle('on', cal.mode === 'visual');
   $('calTabs').classList.toggle('hidden', cal.quick);
-  $('calClose').textContent = cal.quick ? 'Skip' : 'Done';
+  $('calClose').textContent = cal.quick ? (save.calibrated && !deviceChanged ? 'Cancel' : 'Skip (not recommended)') : 'Done';
+  $('calTitle').textContent = cal.quick ? 'SYNC CHECK' : 'CALIBRATION';
   $('calText').textContent = cal.quick
-    ? 'Quick sync check before your first run: tap along to the click 8 times. Go by what you hear.'
+    ? `${deviceChanged && save.calibrated ? 'Your audio output has changed. ' : ''}Tap along to the click 8 times, going by what you hear. It takes 10 seconds and lines the game up with your speakers or headphones. Do it again whenever you change them: Bluetooth adds 150 to 250 ms.`
     : cal.mode === 'audio'
     ? 'Press Start, then tap in time with the click, 8 times. Go by what you hear. Use the speakers or headphones you will play with.'
     : 'No sound here. Press Start, then tap each time the ball crosses the mark at the top of the ring.';
@@ -320,16 +399,19 @@ function calTap(t: number): void {
     if (sd > 40) $('calResult').textContent = `Taps were too uneven (±${Math.round(sd)} ms). Try again.`;
     else {
       const v = Math.max(-200, Math.min(400, Math.round(mean)));
-      if (cal.mode === 'audio') save.audioOffset = v; else save.visualOffset = v;
+      if (cal.mode === 'audio') { save.audioOffset = v; save.calLatency = audio.latency(); cal.done = true; sync.press.length = sync.flow.length = 0; } else save.visualOffset = v;
       persist();
       $('calResult').textContent = `${cal.mode === 'audio' ? 'Audio' : 'Visual'} offset set to ${fmtMs(v)} (your taps were within ±${Math.round(sd)} ms).`;
-      if (cal.quick) { $('calResult').textContent += ' Starting…'; window.setTimeout(() => { if (screen === 'calib' && cal.quick) closeCalib(); }, 1100); }
+      if (cal.quick) { if (cal.thenPlay) $('calResult').textContent += ' Starting…'; window.setTimeout(() => { if (screen === 'calib' && cal.quick) closeCalib(); }, 1200); }
     }
   }
   renderCal();
 }
-function openCalib(quick = false): void {
+/** quick: the 10-second sync check (first run, new audio output, or asked for). thenPlay: start the level when it is done. */
+function openCalib(quick = false, thenPlay = true): void {
   cal.quick = quick;
+  cal.thenPlay = thenPlay;
+  cal.done = false;
   if (quick) cal.mode = 'audio';
   cal.running = false;
   cal.taps = [];
@@ -343,11 +425,13 @@ function closeCalib(): void {
   clearTimeout(cal.timer);
   void audio.suspend().then(() => audio.resume()); // drops any clicks still queued
   if (cal.quick) {
-    // done or skipped: either way it is not asked again (Settings has the full calibration)
+    // done or skipped: either way it is not forced again until the audio output changes (the menu keeps the button)
     cal.quick = false;
     save.calibrated = true;
+    if (save.calLatency < 0 || cal.done) save.calLatency = audio.latency();
+    deviceChanged = false;
     persist();
-    window.setTimeout(() => startRun(), 250);
+    if (cal.thenPlay) window.setTimeout(() => startRun(), 250); else show('menu');
     return;
   }
   renderSettings();
@@ -381,6 +465,10 @@ $('aoPlus').addEventListener('click', () => nudge('audioOffset', 5));
 $('voMinus').addEventListener('click', () => nudge('visualOffset', -5));
 $('voPlus').addEventListener('click', () => nudge('visualOffset', 5));
 $('setMotion').addEventListener('click', () => toggle('reducedMotion'));
+$('setSync').addEventListener('click', () => toggle('syncOverlay'));
+$('syncBtn').addEventListener('click', () => { audio.ensure(); audio.setVolumes(save.music, save.sfx); openCalib(true, false); });
+$('resSyncCal').addEventListener('click', () => { run?.stop(); openCalib(true); });
+$('pauseSyncCal').addEventListener('click', () => { run?.stop(); run = null; openCalib(true); });
 $('calibBtn').addEventListener('click', () => openCalib());
 $('recordBtn').addEventListener('click', () => { run?.stop(); run = null; record.open(); });
 $('calAudioTab').addEventListener('click', () => { cal.mode = 'audio'; cal.running = false; cal.taps = []; $('calResult').textContent = ''; renderCal(); });
@@ -451,5 +539,5 @@ requestAnimationFrame(loop);
 
 // Hooks for tests and debugging; the game itself never reads these.
 Object.assign(window, {
-  __omo: { audio, save, get run() { return run; }, get screen() { return screen; }, tick, level: selectLevel, start: (bot: boolean, prac = false, from = -1, build = false) => { botMode = bot; practice = prac; fromBuild = build; startRun(from); } }
+  __omo: { audio, save, renderer, get run() { return run; }, get screen() { return screen; }, tick, level: selectLevel, start: (bot: boolean, prac = false, from = -1, build = false) => { botMode = bot; practice = prac; fromBuild = build; startRun(from); } }
 });

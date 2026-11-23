@@ -4,7 +4,7 @@ from _mk import seg, write
 def L(p, bg='stars', eq='bars', **k): return dict(palette=p, bg=bg, eq=eq, **k)
 
 # ---- 1. Heroes Tonight: the basics. Gates, doubles, one reverse, a speed jump and rocket at the drop. Circles only.
-write('heroes', dict(id='heroes', title='Heroes Tonight (feat. Johnning)', artist='Janji', release='NCS Release', hitsoundNote=68, scale=[8, 10, 0, 1, 3, 5, 7], difficulty='Easy', adds='The basics: ring hops, gold flow notes, charging the drop'), [
+write('heroes', dict(id='heroes', title='Heroes Tonight (feat. Johnning)', artist='Janji', release='NCS Release', hitsoundNote=68, scale=[8, 10, 0, 1, 3, 5, 7], difficulty='Easy', adds='Planet hop: slingshots from planet to planet'), [
   seg('calm', 4, 'INTRO', 16, 'arp', ['L=8'], L('dawn', zoom=[0.9, 1]), lead='snare', motif='calm', cycle=4, teach='TAP as the ball crosses each gate'),
   seg('calm2', 4, 'INTRO', 16, 'arp', ['L=8'], L('sky'), lead='snare', motif='calm', cycle=4),
   seg('build', 2, 'BUILD', 8, 'kick', ['B=@x...x...x...x...'], L('dusk', bg='tunnel', zoom=[1, 1.04]), warn='BUILD-UP'),
@@ -16,11 +16,11 @@ write('heroes', dict(id='heroes', title='Heroes Tonight (feat. Johnning)', artis
   seg('drop3', 4, 'DROP', 8, 'lead', ['L=16 flip', 'L=16', 'L=16 flip', 'L=16'], L('sky', bg='grid', eq='burst', rot=[0, 0.5]), lead='hook', motif='drop', cycle=4, pads=True, enter='pulse', warn='FLIP GATES', teach='FLIP GATE: tapping it turns the ball round'),
   seg('drop4', 4, 'DROP', 8, 'lead', ['L=16 acc', 'L=16', 'L=16', 'L=16'], L('hot', bg='tunnel', eq='burst', zoom=[1, 1.08]), lead='hook', motif='drop', cycle=4, pads=True, rocket=2, orbs=True, enter='pulse'),
   seg('outro', 4, 'END', 8, 'lead', ['L=@X...............', 'L=@x...............', 'L=@x...............', '-'], L('dawn', eq='wave', zoom=[1.08, 0.95]), lead='hook', enter='flash')],
-  core={'build': {'pulse': True}, 'build2': {'pulse': True, 'charge': True}, 'gap': {'charge': True}, 'count': {'charge': True}, 'drop1': {'smash': True}})
+  core={'calm': {'bars': ['up'], 'record': True}, 'calm2': {'bars': ['up', 'up', 'up+sling', 'up']}, 'build': {'bars': ['up+sling', 'up'], 'pulse': True}, 'build2': {'pulse': True, 'charge': True}, 'gap': {'charge': True}, 'count': {'charge': True}, 'drop1': {'bars': ['up', 'up+sling', 'up', 'up+sling'], 'smash': True, 'record': True}, 'drop2': {'bars': ['up+sling', 'up', 'up+sling', 'up']}, 'drop3': {'bars': ['up', 'up+sling', 'up+sling', 'up']}, 'drop4': {'bars': ['up+sling', 'up+sling', 'up', 'up+sling']}, 'outro': {'bars': ['up+sling', 'up', 'up', 'up']}})
 
 # ---- 3. Blank: adds moving gates and camera tilt, and combines ghost gates, spikes, inward jumps and shapes.
 TH = dict(lead='hook', motif='theme', cycle=8); ME = dict(lead='hook', motif='mel', cycle=8)
-write('blank', dict(id='blank', title='Blank', artist='Disfigure', release='NCS Release', hitsoundNote=74, scale=[2, 4, 6, 7, 9, 11, 1], difficulty='Hard', adds='Reversals and speed portals'), [
+write('blank', dict(id='blank', title='Blank', artist='Disfigure', release='NCS Release', hitsoundNote=74, scale=[2, 4, 6, 7, 9, 11, 1], difficulty='Hard', adds='Spin gates: openings that come round to you, with turns and speed changes'), [
   seg('verse', 4, 'VERSE', 8, 'arp', ['L=8'], L('ice', eq='wave', zoom=[0.9, 1]), lead='snare', motif='verse', cycle=4),
   seg('verse2', 4, 'VERSE', 8, 'arp', ['L=8 flip', 'L=8', 'L=8 portal', 'L=8'], L('ice', bg='grid', eq='wave'), lead='snare', motif='verse', cycle=4, shape='ellipse', warn='PORTALS', teach='PORTAL: tap it to jump across the ring'),
   seg('theme', 8, 'THEME', 8, 'lead', ['L=16 acc', 'L=16', 'L=16', 'L=16', 'L=16', 'L=16', 'L=16', 'L=16'], L('void', bg='tunnel', eq='bars'), shape='square', rocket=2, enter='pulse', warn='THE THEME', **TH),
@@ -32,11 +32,11 @@ write('blank', dict(id='blank', title='Blank', artist='Disfigure', release='NCS 
   seg('mel', 8, 'DROP', 8, 'lead', ['L=16 acc', 'L=16', 'L=16', 'L=16', 'L=16', 'L=16', 'L=16', 'L=16'], L('ice', bg='tunnel', eq='burst', zoom=[1, 1.06]), shape='ellipse', rocket=2, sling=[-1, 0.25], enter='pulse', warn='SLINGSHOT', **ME),
   seg('mel2', 8, 'DROP', 8, 'lead', ['L=16 flip', 'L=16', 'L=16 portal', 'L=16', 'L=16 flip', 'L=16', 'L=16 portal', 'L=16'], L('hot', bg='tunnel', eq='burst', rot=[0, 1], flip=True), shape='circle', enter='pulse', warn='FLIPS AND PORTALS', **ME),
   seg('end', 1, 'END', 8, 'kick', ['B=@X...............'], L('ice', eq='wave'), rocket=6, enter='flash')],
-  core={'verse2': {'reverse': True}, 'theme': {'sling': True}, 'theme2': {'speed': 1.25}, 'spikes': {'pulse': True, 'flip': True}, 'rush': {'pulse': True, 'charge': True}, 'heavy': {'smash': True, 'speed': 0.8}, 'heavy2': {'speed': 0.8, 'flip': True}, 'mel': {'sling': True, 'reverse': True, 'speed': 1.25}, 'mel2': {'flip': True, 'speed': 1.25}})
+  core={'verse': {'bars': ['up', 'up', 'down', 'up+sling']}, 'verse2': {'bars': ['turn+up', 'weave', 'up', 'down']}, 'theme': {'bars': ['spin', 'spin', 'up', 'up+sling', 'spin', 'weave', 'spin', 'down'], 'record': True}, 'theme2': {'bars': ['fast+spin', 'spin', 'weave', 'up', 'turn+spin', 'spin', 'down', 'normal+up']}, 'spikes': {'bars': ['up', 'weave', 'spin', 'spin'], 'pulse': True}, 'rush': {'pulse': True, 'charge': True}, 'heavy': {'bars': ['slow+spin', 'spin', 'turn+spin', 'spin'], 'smash': True, 'record': True}, 'heavy2': {'bars': ['spin', 'weave', 'spin+sling', 'down']}, 'mel': {'bars': ['fast+spin', 'weave', 'spin', 'up+sling', 'turn+spin', 'down', 'spin', 'weave'], 'record': True}, 'mel2': {'bars': ['spin', 'spin', 'weave', 'down', 'up+sling', 'spin', 'turn+spin', 'normal+up']}, 'end': {'bars': ['up']}})
 
 # ---- 4. Invincible: everything, on swung 16ths. The drop is the densest, fastest-changing stretch in the game.
 DR = dict(motif='drop', cycle=4, enter='pulse')
-write('invincible', dict(id='invincible', title='Invincible', artist='DEAF KEV', release='NCS Release', hitsoundNote=65, scale=[0, 1, 3, 5, 7, 8, 10], swing=True, difficulty='Insane', adds='Twin orbit: one tap moves two mirrored balls, plus everything before'), [
+write('invincible', dict(id='invincible', title='Invincible', artist='DEAF KEV', release='NCS Release', hitsoundNote=65, scale=[0, 1, 3, 5, 7, 8, 10], swing=True, difficulty='Insane', adds='Twin orbit: one tap moves two mirrored balls, plus every mode before'), [
   seg('groove', 4, 'GROOVE', 4, 'kick', ['B=8'], L('toxic', bg='grid', zoom=[0.9, 1]), motif='groove', cycle=4),
   seg('groove2', 4, 'GROOVE', 4, 'kick', ['B=8 flip', 'B=8', 'B=8 portal', 'B=8'], L('toxic', bg='grid', rot=[0, 0.25]), motif='groove', cycle=4, shape='ellipse', warn='FLIPS AND PORTALS'),
   seg('break', 4, 'BREAK', 4, 'snare', ['L=@.....xxx.....xxx', 'L=@.....xxx......x.', 'L=@.....xxx.....xxx', 'L=@x...xxxx....x...'], L('void', eq='wave'), lead='snare', jump='in', warn='SWUNG TRIPLES'),
@@ -49,5 +49,5 @@ write('invincible', dict(id='invincible', title='Invincible', artist='DEAF KEV',
   seg('drop5', 4, 'DROP', 4, 'kick', ['B=16 flip', 'B=16 portal', 'B=16 flip', 'B=16 portal'], L('toxic', bg='grid', eq='burst', rot=[0, -1]), shape='square', rocket=4, sling=[1, 0.3], warn='EVERYTHING', **DR),
   seg('drop6', 4, 'DROP', 4, 'kick', ['B=16 acc', 'B=16', 'B=16', 'B=16'], L('hot', bg='tunnel', eq='burst', zoom=[1, 1.1], flip=True), shape='circle', sling=[-1, -0.3], **DR),
   seg('end', 1, 'END', 8, 'kick', ['B=@X...............'], L('toxic', eq='wave'), rocket=6, enter='flash')],
-  core={'groove2': {'reverse': True}, 'break': {'twin': True}, 'build': {'pulse': True, 'charge': True}, 'roll': {'pulse': True, 'charge': True}, 'drop1': {'smash': True}, 'drop2': {'flip': True}, 'drop3': {'flip': True, 'speed': 1.25}, 'drop4': {'sling': True, 'twin': True}, 'drop5': {'twin': True, 'reverse': True}, 'drop6': {'twin': True, 'flip': True}})
+  core={'groove': {'bars': ['up', 'weave', 'up', 'down']}, 'groove2': {'bars': ['turn+up', 'spin', 'up+sling', 'weave']}, 'break': {'bars': ['twin', 'twin', 'twin+weave', 'twin+spin'], 'record': True}, 'build': {'pulse': True, 'charge': True}, 'roll': {'pulse': True, 'charge': True}, 'drop1': {'bars': ['up', 'weave', 'spin', 'up+sling'], 'smash': True, 'record': True}, 'drop2': {'bars': ['twin', 'twin+weave', 'twin', 'twin+spin']}, 'drop3': {'bars': ['fast+down', 'weave', 'turn+spin', 'normal+up']}, 'drop4': {'bars': ['twin', 'twin+weave', 'twin+spin', 'twin'], 'record': True}, 'drop5': {'bars': ['turn+twin', 'twin+weave', 'down', 'twin']}, 'drop6': {'bars': ['twin+spin', 'twin+weave', 'twin', 'twin']}, 'end': {'bars': ['up']}})
 

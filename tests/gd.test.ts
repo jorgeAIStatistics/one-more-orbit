@@ -37,7 +37,7 @@ for (const pack of PACKS.filter((p) => SLICE.includes(p.level.id))) {
       const s = run(course.taps);
       const secs = (course.end - course.start) * course.spb;
       const kinds = (k: string) => course.presses.filter((p) => (p as unknown as Record<string, unknown>)[k]).length;
-      console.log(`LEVEL ${id}: ${secs.toFixed(0)} s at ${pack.audio.bpm} BPM, drop at ${(course.dropBeat * course.spb).toFixed(1)} s; ${course.presses.length} survival presses (${(course.presses.length / secs).toFixed(2)}/s; ${kinds('smash')} smash, ${kinds('accent')} accents, ${course.presses.filter((p) => p.kind === 'flip').length} flips, ${kinds('sling')} slingshots, ${course.presses.filter((p) => p.twin).length} in twin orbit), ${course.flow.length} flow notes (${course.chargeNotes} charge); turns ${course.turns.length}, speed changes ${course.portals.length}`);
+      console.log(`LEVEL ${id}: ${secs.toFixed(0)} s at ${pack.audio.bpm} BPM, drop at ${(course.dropBeat * course.spb).toFixed(1)} s; ${course.presses.length} survival presses (${(course.presses.length / secs).toFixed(2)}/s; ${kinds('smash')} smash, ${kinds('accent')} accents, ${kinds('sling')} planet hops, ${kinds('weave')} weave, ${course.presses.filter((p) => p.kind === 'flip' && !p.weave).length} other flips, ${kinds('spin')} spin gates, ${course.presses.filter((p) => p.twin).length} twin), ${course.flow.length} flow notes (${course.chargeNotes} charge); turns ${course.turns.length}, speed changes ${course.portals.length}, planets ${course.presses[course.presses.length - 1].planetTo + 1}`);
       expect(s.crashed, `${s.crashKind} at ${s.crashBeat}`).toBe(false);
       expect(s.onBeat).toBe(course.taps.length);
       expect(s.flow).toBe(1);
@@ -147,6 +147,30 @@ for (const pack of PACKS.filter((p) => SLICE.includes(p.level.id))) {
       expect(sim.judged).toBe(0);
       sim.advance(cp + 6);
       expect(sim.crashed).toBe(true); // nobody tapped after the handover
+    });
+
+    it('variety: no mode runs longer than 8 bars, sections mix several kinds of bar, and the level\'s own mode stars in its drop', () => {
+      const playable = (n: number) => !course.inCharge(n * 4) && n * 4 < course.end - 4;
+      let run = 0;
+      let worst = 0;
+      course.bars.forEach((b, n) => {
+        run = n > 0 && playable(n) && playable(n - 1) && course.bars[n - 1].token === b.token ? run + 1 : 1;
+        worst = Math.max(worst, run);
+      });
+      expect(worst).toBeLessThanOrEqual(8);
+      const kindsOf = (s: { bar0: number; bars: number }) => new Set(course.bars.slice(s.bar0, s.bar0 + s.bars).map((b) => b.token)).size;
+      const first = id === 'heroes';
+      for (const s of level.segments) {
+        if (s.core?.charge || s.bars < 4 || s.label === 'INTRO' || s.label === 'END') continue;
+        expect(kindsOf(s), `section ${s.id}`).toBeGreaterThanOrEqual(first ? 2 : 3);
+      }
+      const star = { heroes: 'sling', skyhigh: 'weave', blank: 'spin', invincible: 'twin' }[id] as 'sling' | 'weave' | 'spin' | 'twin';
+      const has = (p: (typeof course.presses)[number]) => (star === 'twin' ? !!p.twin : p[star]);
+      const inDrop = course.presses.filter((p) => p.beat >= course.dropBeat && has(p)).length;
+      const before = course.presses.filter((p) => p.beat < course.dropBeat && has(p)).length;
+      expect(before, 'introduced before the drop').toBeGreaterThanOrEqual(1);
+      expect(inDrop, 'stars in the drop').toBeGreaterThanOrEqual(8);
+      if (id !== 'invincible') expect(course.presses.some((p) => p.twin)).toBe(false); // the twin orbit stays in the last level
     });
 
     it('same music, same pattern: sections sharing a motif have the same presses and flow notes', () => {

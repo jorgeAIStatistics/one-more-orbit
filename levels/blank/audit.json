@@ -1,0 +1,110 @@
+{
+ "_doc": "Written by tools/audit.py: survival presses that sat on a weak or buried sound, and where they were moved. demote/promote are ticks (12 per beat) applied to generated bars only; hand-recorded bars ignore this file.",
+ "onsetVsGridMs": {
+  "mean": -2.4,
+  "sd": 20.0,
+  "n": 135
+ },
+ "moved": [
+  {
+   "section": "theme",
+   "from": 57.75,
+   "to": 57.5,
+   "was": 0.69,
+   "now": 1.05
+  },
+  {
+   "section": "theme2",
+   "from": 89.75,
+   "to": 89.5,
+   "was": 0.69,
+   "now": 1.05
+  },
+  {
+   "section": "mel",
+   "from": 174.75,
+   "to": 175.0,
+   "was": 0.67,
+   "now": 1.17
+  },
+  {
+   "section": "mel2",
+   "from": 206.75,
+   "to": 207.0,
+   "was": 0.67,
+   "now": 1.17
+  },
+  {
+   "section": "mel",
+   "from": 190.75,
+   "to": 190.5,
+   "was": 0.65,
+   "now": 1.5
+  },
+  {
+   "section": "mel2",
+   "from": 222.75,
+   "to": 222.5,
+   "was": 0.65,
+   "now": 1.5
+  },
+  {
+   "section": "mel",
+   "from": 191.75,
+   "to": 191.5,
+   "was": 0.63,
+   "now": 1.46
+  }
+ ],
+ "demoted": [],
+ "weak": [
+  {
+   "section": "theme",
+   "beat": 34.25,
+   "was": 0.72
+  },
+  {
+   "section": "theme2",
+   "beat": 66.25,
+   "was": 0.72
+  },
+  {
+   "section": "theme",
+   "beat": 41.75,
+   "was": 0.71
+  },
+  {
+   "section": "theme2",
+   "beat": 73.75,
+   "was": 0.71
+  },
+  {
+   "section": "mel",
+   "beat": 166.25,
+   "was": 0.73
+  },
+  {
+   "section": "mel2",
+   "beat": 198.25,
+   "was": 0.73
+  }
+ ],
+ "demote": [
+  693,
+  1077,
+  2097,
+  2289,
+  2301,
+  2481,
+  2673
+ ],
+ "promote": [
+  690,
+  1074,
+  2100,
+  2286,
+  2298,
+  2484,
+  2670
+ ]
+}

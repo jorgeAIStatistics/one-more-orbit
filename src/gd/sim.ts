@@ -62,6 +62,8 @@ export class Sim {
   judged = 0;
   /** how charged the drop is, 0..1 */
   charge = 0;
+  /** every tap that met a note, as seconds off it (negative = early): the raw material of the sync check */
+  offsets = { press: [] as number[], flow: [] as number[] };
   /** results of presses the simulation made by itself (buffered taps, launches, the run-in): the run reads and empties this */
   out: TapResult[] = [];
 
@@ -128,6 +130,7 @@ export class Sim {
   /** A survival press: on the note builds flow, off it costs a notch. */
   private judge(err: number): boolean {
     this.judged++;
+    this.offsets.press.push(err);
     const ok = Math.abs(err) <= FLOW_S + 1e-9;
     if (ok) this.gain(); else this.off();
     return ok;
@@ -146,6 +149,7 @@ export class Sim {
     const err = (t - f.beat) * this.c.spb;
     const ok = Math.abs(err) <= FLOW_S + 1e-9;
     this.judged++;
+    this.offsets.flow.push(err);
     if (ok) this.gain();
     if (f.charge) this.charge = Math.min(1, this.charge + 1 / Math.max(1, 0.75 * this.c.chargeNotes)); // three in four fills it
     return { kind: 'spark', err, flow: ok, pitch: f.pitch, charge: f.charge };

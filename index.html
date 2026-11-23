@@ -17,6 +17,7 @@
       <div class="hud-right"><button id="pauseBtn" class="icon" type="button" aria-label="Pause">❚❚</button></div>
     </div>
     <div id="toast" class="toast" aria-live="polite"></div>
+    <div id="syncOverlay" class="sync-overlay hidden"></div>
     <div class="progress" aria-hidden="true"><div id="progFill"></div><i id="bestMark"></i><i id="dropMark"></i></div>
   </div>
 
@@ -36,12 +37,14 @@
         <button id="botBtn" class="pill toggle" type="button">Watch autoplay</button>
       </div>
       <div class="row">
-        <button id="settingsBtn" class="pill" type="button">Settings &amp; sync</button>
+        <button id="syncBtn" class="pill" type="button">Sync check · 10 s</button>
+        <button id="settingsBtn" class="pill" type="button">Settings</button>
         <button id="extrasBtn" class="pill" type="button">Orbs &amp; badges</button>
         <button id="creditsBtn" class="pill" type="button">Music credits</button>
         <button id="recordBtn" class="pill" type="button">Record mode</button>
       </div>
       <p class="hint">One button: tap anywhere, or press any key. White marks must be hit (a little off still clears). Gold notes are optional: on the beat they build flow, and in the roll they charge the drop. R restarts, Esc pauses.</p>
+      <p class="hint dim">Changed headphones or speakers? Run the sync check again: Bluetooth adds 150 to 250 ms.</p>
     </div>
   </section>
 
@@ -54,6 +57,7 @@
         <button id="pauseSettingsBtn" class="pill" type="button">Settings</button>
         <button id="pauseQuitBtn" class="pill" type="button">Quit</button>
       </div>
+      <div class="sync-box"><span id="pauseSyncText"></span><div class="row"><button id="pauseSyncFix" class="pill hidden" type="button"></button><button id="pauseSyncCal" class="pill" type="button">Sync check · 10 s</button></div></div>
     </div>
   </section>
 
@@ -68,6 +72,7 @@
         <div><b id="resStreak">0</b><small>Best streak</small></div>
       </div>
       <div id="resNote" class="sub"></div>
+      <div class="sync-box"><b>SYNC CHECK</b><span id="resSyncText"></span><div class="row"><button id="resSyncFix" class="pill hidden" type="button"></button><button id="resSyncCal" class="pill" type="button">Recalibrate · 10 s</button></div></div>
       <div id="resUnlocks" class="unlocks"></div>
       <button id="retryBtn" class="primary" type="button">PLAY AGAIN (R)</button>
       <div class="row"><button id="resMenuBtn" class="pill" type="button">Menu</button></div>
@@ -86,6 +91,7 @@
       <button id="calibBtn" class="primary small" type="button">CALIBRATE BY TAPPING</button>
       <div class="row wrap">
         <button id="setMotion" class="pill toggle" type="button">Reduced motion</button>
+        <button id="setSync" class="pill toggle" type="button">Sync overlay</button>
       </div>
       <div id="setInfo" class="sub"></div>
       <div class="row"><button id="settingsClose" class="pill" type="button">Done</button></div>
@@ -94,7 +100,7 @@
 
   <section id="calib" class="screen hidden">
     <div class="card wide calib-card">
-      <h2>CALIBRATION</h2>
+      <h2 id="calTitle">CALIBRATION</h2>
       <div id="calTabs" class="row">
         <button id="calAudioTab" class="pill toggle on" type="button">1 · Audio</button>
         <button id="calVisualTab" class="pill toggle" type="button">2 · Visual</button>
@@ -123,6 +129,7 @@
         <button id="recPlay" class="pill" type="button">Play this section</button>
       </div>
       <div class="row wrap">
+        <button id="recCopy" class="pill" type="button">Copy to matching sections</button>
         <button id="recAuto" class="pill" type="button">Back to generated</button>
         <button id="recSave" class="pill" type="button">Save</button>
         <button id="recClose" class="pill" type="button">Done</button>
