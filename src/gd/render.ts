@@ -5,13 +5,13 @@ import { audio } from '../audio/audio';
 import { orbColour } from '../game/extras';
 import type { Level } from '../game/level';
 import { PALETTES, type Palette, type RGB } from '../render/palettes';
-import { bestFor, save } from '../save';
-import { flightRho, smoothstep, type Course, type Feature } from './course';
+import { bestFor, save, starsFor } from '../save';
+import { LIFT, flightRho, smoothstep, type Course, type Feature, type Star } from './course';
 import type { GdRun } from './run';
 
 const TWO_PI = Math.PI * 2;
 const EQ_BARS = 48;
-const AHEAD = 3; // beats of course drawn ahead of the ball
+
 const LOOK = 2; // beats before an opening that the ring above shows as a ceiling
 const WHITE: RGB = [255, 255, 255];
 const DANGER: RGB = [255, 64, 120]; // the edge of everything that ends the run
@@ -19,11 +19,14 @@ const GOLD: RGB = [255, 214, 90]; // flow notes, flow, the smash
 const VIOLET: RGB = [190, 120, 255]; // gravity flip
 const CYAN: RGB = [0, 245, 255]; // speed portals, turns, planet hops
 const FLOOR: RGB = [226, 234, 255]; // the rings you ride: one fixed colour, whatever the world behind is doing
+const STAR: RGB = [255, 244, 200]; // star trails: pale gold, between the white you must hit and the gold you may
 const HALO = 'rgba(3,5,14,0.62)'; // the dark edge under everything in the foreground
 const HINT: Record<Feature, string> = {
   charge: 'TAP THE ROLL: CHARGE THE DROP', smash: 'THE DROP: HIT THE BIG GOLD MARK', flip: 'VIOLET: GRAVITY FLIP', weave: 'WEAVE: BOUNCE BETWEEN THE TWO RINGS',
-  spin: 'SPIN GATE: THE GAP COMES ROUND TO THE MARK', sling: 'CYAN ARROWS: TAP TO HOP PLANETS, THEN A BREATHER', reverse: 'THE ORBIT TURNS ROUND', faster: 'SPEED UP', slower: 'SLOW DOWN',
-  twin: 'TWIN ORBIT: ONE TAP MOVES BOTH'
+  spin: 'SPIN GATE: THE GAP COMES ROUND TO THE MARK', sling: 'CYAN ARROWS: TAP AND HOLD TO RIDE TO THE NEXT PLANET', reverse: 'THE ORBIT TURNS ROUND', faster: 'SPEED UP', slower: 'SLOW DOWN',
+  twin: 'TWIN ORBIT: ONE TAP MOVES BOTH',
+  rail: 'GOLD RAIL: TAP AND HOLD THROUGH THE HOP', line: 'GOLD LINE: HOLD TO FLOAT ALONG IT',
+  tether: 'RED TETHER: HOLD ON. LET GO EARLY AND THE RUN ENDS'
 };
 
 const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
@@ -64,6 +67,17 @@ export class GdRenderer {
   private flipK = 0;
   private burstK = 0;
   private camX = 0;
+  private camVX = 0;
+  private camVY = 0;
+  // The camera's bumps as the course feels them. `punch` and `zoomKick` jump the moment a hit lands (the backdrop uses
+  // them like that); these follow within a few frames, so the rings and the ball swell and settle instead of jumping.
+  private punchS = 0;
+  private zoomS = 0;
+  // how far the ball has lifted off its ring, 0..1: it floats while the button is held and settles when it is let go
+  /** beats of course drawn ahead of the ball (a B-side shows less) */
+  private ahead = 3;
+  private lift = 0;
+  private liftV = 0;
   private camY = 0;
   private pf = 0;
   private coreX = 0;
@@ -133,6 +147,7 @@ export class GdRenderer {
     const level = run.level;
     const c = run.course;
     this.plats = platforms(c, level);
+    this.ahead = level.file.side?.ahead ?? level.file.rules?.ahead ?? 3;
     // hints: the first mark, the first gold note, and each mechanic the first time the level uses it
     this.hints = [];
     const first = c.presses[0];
@@ -147,6 +162,8 @@ export class GdRenderer {
     this.waves = [];
     this.trail = [];
     this.flash = this.strobe = this.punch = this.zoomKick = this.ringFlash = this.landPulse = this.shake = this.dark = this.drain = this.glitch = this.flipK = this.burstK = 0;
+    this.punchS = this.zoomS = 0;
+    this.lift = this.liftV = 0;
     this.dropAge = 99;
     this.dropFull = run.dropFull === true;
     this.dropPower = run.dropPower;
@@ -159,6 +176,7 @@ export class GdRenderer {
     this.sizes();
     this.pf = this.planetOf(run, beat);
     [this.camX, this.camY] = this.planetXY(this.pf);
+    this.camVX = this.camVY = 0;
     this.baseR = run.sim.side > 0 ? 1 : 1.5;
     this.flowV = run.sim.flow;
     this.inten = this.energyAt(beat);
@@ -212,9 +230,16 @@ export class GdRenderer {
     return last.planetTo;
   }
 
+  /** Where the ball is, in ring levels: the simulation's path, plus the float of a held button. */
+  private ballRho(sim: GdRun['sim'], beat: number): number {
+    const rho = sim.rho(beat);
+    if (sim.mode === 'flight') return rho + sim.sideAt(beat) * LIFT * this.lift;
+    return sim.lv + sim.side * Math.max(Math.abs(rho - sim.lv), LIFT * this.lift);
+  }
+
   /** Screen radius of a ring level. The camera bumps on big hits and pulls right back as the drop goes off. */
   private rad(lv: number): number {
-    return (this.r0 * this.baseR + (lv - this.cam) * this.gap) * (1 + this.punch * 0.05) * (1 - this.zoomKick * 0.2);
+    return (this.r0 * this.baseR + (lv - this.cam) * this.gap) * (1 + this.punchS * 0.05) * (1 - this.zoomS * 0.2);
   }
 
   private burst(x: number, y: number, n: number, col: RGB, speed: number, size = 1, back = false): void {
@@ -443,6 +468,29 @@ export class GdRenderer {
     c.restore();
   }
 
+  /** A five-pointed star, upright: a dark edge, an outline, and a filling that grows with `fill` (0..1). */
+  private star(x: number, y: number, R: number, col: RGB, fill: number, turn: number): void {
+    if (R <= 0.5) return;
+    const c = this.ctx;
+    const path = (rr: number) => {
+      c.beginPath();
+      for (let k = 0; k < 10; k++) {
+        const a = -Math.PI / 2 + turn + (k * Math.PI) / 5;
+        const d = k % 2 ? rr * 0.47 : rr;
+        if (k === 0) c.moveTo(x + Math.cos(a) * d, y + Math.sin(a) * d); else c.lineTo(x + Math.cos(a) * d, y + Math.sin(a) * d);
+      }
+      c.closePath();
+    };
+    c.lineJoin = 'round';
+    path(R);
+    c.fillStyle = 'rgba(3,5,14,0.55)';
+    c.fill();
+    c.strokeStyle = HALO; c.lineWidth = Math.max(4, R * 0.34); c.stroke();
+    if (fill > 0.02) { path(R * (0.25 + 0.75 * fill)); c.fillStyle = rgba(col, 0.9); c.fill(); path(R); }
+    c.strokeStyle = rgba(col); c.lineWidth = Math.max(1.6, R * 0.14); c.stroke();
+    c.lineJoin = 'miter';
+  }
+
   private text(s: string, x: number, y: number, size: number, col: RGB, alpha: number): void {
     if (alpha <= 0.01) return;
     const c = this.ctx;
@@ -478,13 +526,13 @@ export class GdRenderer {
   private drawPlatform(pl: Platform, c0: Course, beat: number, pal: Palette, kick: number, drop: boolean, plain: boolean, time: number): void {
     const c = this.ctx;
     const start = Math.min(pl.cs, pl.fs);
-    if (start - beat > AHEAD || beat > pl.fe + 0.5) return;
+    if (start - beat > this.ahead || beat > pl.fe + 0.5) return;
     const r = this.rad(pl.lv);
     if (r < this.r0 * 0.5 || r > Math.hypot(this.w, this.h) / 2 + 40) return; // inside the core's meter, or off the screen
-    const alpha = clamp((AHEAD - (start - beat)) / 0.6, 0, 1) * clamp(1 - (beat - pl.fe - 0.1) / 0.4, 0, 1) * (plain ? 0.55 : 1);
+    const alpha = clamp((this.ahead - (start - beat)) / 0.6, 0, 1) * clamp(1 - (beat - pl.fe - 0.1) / 0.4, 0, 1) * (plain ? 0.55 : 1);
     if (alpha <= 0.01) return;
     const lo = beat - 1;
-    const hi = beat + AHEAD;
+    const hi = beat + this.ahead;
     const ang = (b: number) => -Math.PI / 2 + c0.angle(b);
     const arc = (b0: number, b1: number) => { c.beginPath(); this.arcPath(c0, r, Math.max(b0, lo), Math.min(b1, hi)); };
     const { rb } = this;
@@ -623,13 +671,31 @@ export class GdRenderer {
     // each ring is drawn round its own planet; `at` moves the origin there and back
     const [hx, hy] = this.planetXY(this.pf);
     const origin = (pf: number): [number, number] => { const [x, y] = this.planetXY(pf); return [x - this.camX, y - this.camY]; };
+    // the star trail in view: still whole, and close enough to see
+    const trail = run.finale ? undefined : course.stars.find((st) => sim.stars[st.i] === 0 && st.a - beat <= this.ahead && beat <= st.b + 0.15);
     for (const pl of this.plats) {
       if (twin ? pl.twin === null : false) continue;
-      if (Math.min(pl.cs, pl.fs) - beat > AHEAD || beat > pl.fe + 0.5) continue;
+      if (Math.min(pl.cs, pl.fs) - beat > this.ahead || beat > pl.fe + 0.5) continue;
       const mine = twin ? pl.twin === 'b' || pl.twin === 'both' : pl.twin !== 'b';
       const [ox, oy] = origin(pl.planet);
       c.translate(ox, oy);
       this.drawPlatform(pl, course, beat, pal, kick, dropStyle, !mine, time);
+      if (trail && mine) {
+        // the star trail: a dotted line under the ring you ride, from where it starts to the star
+        const b0 = Math.max(pl.fs, trail.a, beat);
+        const b1 = Math.min(Number.isNaN(pl.note) ? pl.fe : pl.note, trail.b, beat + this.ahead);
+        if (b1 - b0 > 0.08) {
+          c.beginPath();
+          this.arcPath(course, this.rad(pl.lv) - pl.side * rb * 1.05, b0, b1);
+          c.setLineDash([0.01, rb * 1.15]);
+          c.lineCap = 'round';
+          c.lineWidth = rb * 0.42;
+          c.strokeStyle = rgba(STAR, 0.85 * clamp((this.ahead - (b0 - beat)) / 0.6, 0, 1));
+          c.stroke();
+          c.setLineDash([]);
+          c.lineCap = 'butt';
+        }
+      }
       c.translate(-ox, -oy);
     }
     const [bx0, by0] = [hx - this.camX, hy - this.camY]; // the ball's own planet
@@ -637,7 +703,7 @@ export class GdRenderer {
       // where the next hops go: a faint dotted path from each note to its landing
       for (let k = sim.ni; k < Math.min(course.presses.length, sim.ni + 3); k++) {
         const p = course.presses[k];
-        if (p.beat - beat > AHEAD - 0.4) break;
+        if (p.beat - beat > this.ahead - 0.4) break;
         const n = Math.max(3, Math.round((p.land - p.beat) * (p.sling ? 14 : 8)));
         c.fillStyle = p.sling ? rgba(CYAN, 0.8) : rgba(WHITE, k === sim.ni ? 0.5 : 0.25);
         for (let i = 1; i < n; i++) {
@@ -670,11 +736,11 @@ export class GdRenderer {
       const rr = this.rad(this.cam);
       for (const sp of course.portals) {
         const d = sp.beat - beat;
-        if (d > AHEAD || d < -0.4) continue;
+        if (d > this.ahead || d < -0.4) continue;
         c.save();
         c.translate(bx0, by0);
         c.rotate(ang(sp.beat) + Math.PI / 2);
-        c.globalAlpha = clamp((AHEAD - d) / 0.6, 0, 1) * clamp(1 + d / 0.4, 0, 1);
+        c.globalAlpha = clamp((this.ahead - d) / 0.6, 0, 1) * clamp(1 + d / 0.4, 0, 1);
         c.strokeStyle = rgba(CYAN);
         c.lineWidth = 3;
         c.lineCap = 'round';
@@ -687,9 +753,9 @@ export class GdRenderer {
       }
       for (const tb of course.turns) {
         const d = tb - beat;
-        if (d > AHEAD || d < -0.4) continue;
+        if (d > this.ahead || d < -0.4) continue;
         const a = ang(tb);
-        c.globalAlpha = clamp((AHEAD - d) / 0.6, 0, 1) * clamp(1 + d / 0.4, 0, 1);
+        c.globalAlpha = clamp((this.ahead - d) / 0.6, 0, 1) * clamp(1 + d / 0.4, 0, 1);
         c.lineCap = 'round';
         // a wall across the path with a U-turn arrow in front of it
         c.translate(bx0, by0);
@@ -706,17 +772,73 @@ export class GdRenderer {
       c.lineCap = 'butt';
       c.globalAlpha = 1;
     }
+    // holds: gold rails through long hops and gold lines above the ring. What is left of each is drawn from the ball
+    // onward, it brightens while you are holding on it, and a white bar marks where to let go.
+    for (const h of course.holds) {
+      if (h.a - beat > this.ahead) break;
+      if (h.b < beat - 0.05 || (twin && !h.twin)) continue;
+      const at = (t: number): [number, number] => {
+        const u = clamp((t - h.a) / (h.b - h.a), 0, 1) * (h.path.length - 1);
+        const k = Math.min(h.path.length - 2, Math.floor(u));
+        const p0 = h.path[k];
+        const p1 = h.path[k + 1];
+        const f = u - k;
+        const r = this.rad(lerp(p0.rho, p1.rho, f)) + lerp(p0.side, p1.side, f) * rb;
+        const [ox, oy] = origin(lerp(p0.planet, p1.planet, f));
+        return [ox + Math.cos(ang(t)) * r, oy + Math.sin(ang(t)) * r];
+      };
+      const from = Math.max(h.a, beat);
+      const to = Math.min(h.b, beat + this.ahead);
+      if (to - from < 0.02) continue;
+      const on = sim.down && beat >= h.a - 0.1;
+      const show = clamp((this.ahead - (h.a - beat)) / 0.6, 0, 1);
+      const n = Math.max(2, Math.ceil((to - from) * 10));
+      c.lineCap = 'round';
+      c.lineJoin = 'round';
+      c.beginPath();
+      for (let k = 0; k <= n; k++) { const [x, y] = at(from + ((to - from) * k) / n); if (k === 0) c.moveTo(x, y); else c.lineTo(x, y); }
+      c.globalAlpha = show;
+      c.strokeStyle = HALO; c.lineWidth = rb * 2.9; c.stroke();
+      if (h.tether) {
+        // a tether is in the colours of everything that ends the run: let go of it and it does
+        c.strokeStyle = rgba(DANGER, on ? 0.75 : 0.5); c.lineWidth = rb * (on ? 2.5 + 0.5 * kick : 2.1); c.stroke();
+        c.strokeStyle = rgba(WHITE, 0.97); c.lineWidth = rb * (on ? 0.9 : 0.6); c.stroke();
+      } else {
+        c.strokeStyle = rgba(GOLD, on ? 0.5 : 0.24); c.lineWidth = rb * (on ? 2.5 + 0.5 * kick : 2); c.stroke();
+        c.strokeStyle = rgba(on ? WHITE : GOLD, 0.95); c.lineWidth = rb * (on ? 0.7 : 0.5); c.stroke();
+      }
+      // gold along it
+      for (const tk of h.ticks) {
+        if (tk < beat - 0.02 || tk > beat + this.ahead || sim.tickGone(tk) || Math.abs(tk - h.b) < 1e-6) continue;
+        const [x, y] = at(tk);
+        c.fillStyle = HALO; c.beginPath(); c.arc(x, y, rb * 0.75, 0, TWO_PI); c.fill();
+        c.fillStyle = rgba(GOLD); c.beginPath(); c.arc(x, y, rb * 0.5, 0, TWO_PI); c.fill();
+      }
+      // the end: let go here
+      if (h.b <= beat + this.ahead) {
+        const [x, y] = at(h.b);
+        const [x0, y0] = at(h.b - 0.05);
+        const len = Math.hypot(x - x0, y - y0) || 1;
+        const nx = (-(y - y0) / len) * rb * 1.5;
+        const ny = ((x - x0) / len) * rb * 1.5;
+        c.beginPath(); c.moveTo(x - nx, y - ny); c.lineTo(x + nx, y + ny);
+        c.strokeStyle = HALO; c.lineWidth = 7; c.stroke();
+        c.strokeStyle = rgba(WHITE); c.lineWidth = 3.5; c.stroke();
+      }
+      c.globalAlpha = 1;
+      c.lineCap = 'butt';
+    }
     // flow notes: optional taps, on the ring or in mid-flight. Gold, and smaller than the white marks you must hit.
     for (const f of course.flow) {
       const d = f.beat - beat;
-      if (d > AHEAD) break;
+      if (d > this.ahead) break;
       if (d < -0.25 || sim.noteUsed(f.beat)) continue;
       if (twin ? !(f.twin === 'b' || f.twin === 'both') : f.twin === 'b') continue;
       const r = this.rad(f.rho) + f.side * rb;
       const [ox, oy] = origin(f.planet);
       const x = ox + Math.cos(ang(f.beat)) * r;
       const y = oy + Math.sin(ang(f.beat)) * r;
-      c.globalAlpha = clamp((AHEAD - d) / 0.6, 0, 1) * clamp(1 + d / 0.25, 0, 1);
+      c.globalAlpha = clamp((this.ahead - d) / 0.6, 0, 1) * clamp(1 + d / 0.25, 0, 1);
       const big = f.air ? 1 : 0.8;
       c.fillStyle = HALO;
       c.beginPath(); c.arc(x, y, rb * 1.35 * big, 0, TWO_PI); c.fill();
@@ -725,12 +847,53 @@ export class GdRenderer {
       c.beginPath(); c.arc(x, y, rb * 0.95 * big, 0, TWO_PI); c.stroke();
       c.fillStyle = rgba(f.charge ? WHITE : GOLD, 0.95);
       c.beginPath(); c.arc(x, y, rb * 0.4 * big, 0, TWO_PI); c.fill();
+      if (trail && f.beat >= trail.a - 1e-6 && f.beat <= trail.b + 1e-6) {
+        // part of the star trail: ringed in white
+        c.strokeStyle = rgba(STAR, 0.9);
+        c.lineWidth = Math.max(1.2, rb * 0.2);
+        c.beginPath(); c.arc(x, y, rb * 1.7 * big, 0, TWO_PI); c.stroke();
+      }
+      c.globalAlpha = 1;
+    }
+    // the star itself, on the last piece of gold of its trail; a small one marks where the trail starts
+    if (!twin) for (const st of course.stars) {
+      const state = sim.stars[st.i];
+      const kept = starsFor(run.level.id)[st.i];
+      const spot = (w: Star['at'], b: number): [number, number] => {
+        const [ox, oy] = origin(w.planet);
+        const r = this.rad(w.rho) + w.side * rb;
+        return [ox + Math.cos(ang(b)) * r, oy + Math.sin(ang(b)) * r];
+      };
+      if (state === -1) {
+        // lost: it greys, shrinks and is gone
+        const age = (beat - sim.starBeat[st.i]) * course.spb;
+        if (age < 0 || age > 0.5 || st.b - beat > this.ahead) continue;
+        const [x, y] = spot(st.at, st.b);
+        c.globalAlpha = 1 - age / 0.5;
+        this.star(x, y + age * rb * 6, rb * 2.3 * (1 - age), [150, 156, 176], 0, age * 3);
+        c.globalAlpha = 1;
+        continue;
+      }
+      if (state !== 0 || st.a - beat > this.ahead || beat > st.b + 0.15) continue;
+      const show = clamp((this.ahead - (st.a - beat)) / 0.6, 0, 1);
+      const beatPulse = Math.exp(-(((beat % 1) + 1) % 1) * 4);
+      if (beat < st.a) {
+        const [x, y] = spot(st.from, st.a);
+        c.globalAlpha = show;
+        this.star(x, y, rb * (1.9 + 0.25 * beatPulse), kept ? WHITE : STAR, 0, 0);
+      }
+      if (st.b - beat <= this.ahead) {
+        const [x, y] = spot(st.at, st.b);
+        c.globalAlpha = clamp((this.ahead - (st.b - beat)) / 0.6, 0, 1) * (kept ? 0.6 : 1);
+        this.star(x, y, rb * (2.5 + 0.3 * beatPulse), kept ? WHITE : GOLD, clamp((beat - st.a) / (st.b - st.a), 0, 1), 0);
+      }
       c.globalAlpha = 1;
     }
     // the ball: its place round the core is a pure function of the clock, so it moves exactly as smoothly as the clock does
     if (run.state === 'failed') return;
-    const rho = sim.rho(beat);
-    const off = sim.sideAt(beat) * rb * (1 - 0.3 * this.landPulse);
+    const rho = this.ballRho(sim, beat);
+    const squash = 4 * this.landPulse * (1 - this.landPulse); // a landing presses the ball down and lets it up again, from rest
+    const off = sim.sideAt(beat) * rb * (1 - 0.3 * squash);
     // at the finish the ball launches straight out through every ring and off the screen
     const away = run.finale ? Math.pow(Math.min(1.4, run.finaleAge / 0.9), 2.2) * this.r0 * 7 : 0;
     if (away > Math.hypot(this.w, this.h)) return;
@@ -755,10 +918,11 @@ export class GdRenderer {
     const stretch = sim.mode !== 'ground' ? clamp(Math.abs(vr) / (r0 * 4), 0, 0.2) : 0;
     const x = bx0 + Math.cos(a) * br;
     const y = by0 + Math.sin(a) * br;
+    this.ballXY = [x, y];
     // a dark halo, so the ball reads against anything
     c.fillStyle = 'rgba(3,5,14,0.5)';
     c.beginPath(); c.arc(x, y, rb * 2.1, 0, TWO_PI); c.fill();
-    this.drawBall(x, y, rb, skin, a, 1 + stretch - 0.3 * this.landPulse, 1 - stretch * 0.5 + 0.22 * this.landPulse);
+    this.drawBall(x, y, rb, skin, a, 1 + stretch - 0.3 * squash, 1 - stretch * 0.5 + 0.22 * squash);
     if (!twin) {
       this.ball.x = x;
       this.ball.y = y;
@@ -814,11 +978,31 @@ export class GdRenderer {
     // the finish: everything behind the course goes off at full strength, whatever came before
     const fin = run.finale ? run.finaleAge : -1;
     if (fin >= 0) drive = Math.max(drive, clamp(1 - (fin - 3) / 1, 0.4, 1));
-    this.dark += ((seg.blackout ? 0.45 : 0) - this.dark) * Math.min(1, dt * 4);
+    // a B-side is the night side of its planet: the same scene, with the lights down
+    this.dark += (Math.max(seg.blackout ? 0.45 : 0, level.file.side ? 0.3 : 0) - this.dark) * Math.min(1, dt * 4);
 
     // what just happened
     const loud = drive > 0.15 || wound > 0.05;
     for (const ev of run.events) {
+      if (ev.kind === 'tick') { this.burst(this.ball.x, this.ball.y, 4, GOLD, r0 * 0.5, 0.7); continue; }
+      if (ev.kind === 'star') {
+        // a star collected: two gold rings off the ball's ring and a shower of sparks
+        this.wave(this.ball.r || r0, GOLD, r0 * 3.4, 5, 0.75, 0.6);
+        this.wave((this.ball.r || r0) * 0.8, WHITE, r0 * 2.4, 3, 0.5, 0.5);
+        this.burst(this.ball.x, this.ball.y, 34, GOLD, r0 * 1.8, 1.2);
+        this.burst(this.ball.x, this.ball.y, 14, WHITE, r0 * 1.1);
+        this.ringFlash = 1;
+        this.punch = Math.max(this.punch, calm ? 0.2 : 0.5);
+        continue;
+      }
+      if (ev.kind === 'starlost') { this.burst(this.ball.x, this.ball.y, 8, [150, 156, 176], r0 * 0.6, 0.8); continue; }
+      if (ev.kind === 'release' && ev.flow) { this.ripples.push({ x: this.ball.x, y: this.ball.y, age: 0, col: GOLD }); this.burst(this.ball.x, this.ball.y, 7, GOLD, r0 * 0.7, 0.8); continue; }
+      if (ev.kind === 'held' && ev.full) {
+        // a hold collected in full: a gold ring off the ball's ring
+        this.wave(this.ball.r || r0, GOLD, r0 * 2.6, 3, 0.5, 0.4);
+        this.burst(this.ball.x, this.ball.y, 12, GOLD, r0 * 1.1);
+        continue;
+      }
       if (ev.kind === 'hop' || ev.kind === 'flip' || ev.kind === 'spark') {
         if (ev.kind !== 'spark' || ev.flow) this.ripples.push({ x: this.ball.x, y: this.ball.y, age: 0, col: ev.flow ? GOLD : [170, 180, 200] });
         if (ev.flow) this.burst(this.ball.x, this.ball.y, ev.kind === 'spark' ? 7 : 5, GOLD, r0 * 0.7, 0.8); // small sparkles: on the note
@@ -939,21 +1123,37 @@ export class GdRenderer {
     // the camera follows the ball from planet to planet, and leans toward the next one before a planet hop
     this.pf = this.planetOf(run, beat);
     // camera first: in a planet hop the camera reaches the next planet well before the ball, so everything there is in view on landing
-    const hop = lastP?.sling && sim.mode === 'flight' && sim.fl ? lastP.planet + smoothstep(Math.min(1, ((beat - sim.fl.t0) / (sim.fl.t1 - sim.fl.t0)) * 2.4)) : this.pf;
+    // It is one continuous move: a lean toward the next planet over the two beats before the hop (whatever the ball is
+    // doing then, and held if the tap comes late), carried straight on into the crossing when the ball takes off.
+    const LEAN = 0.32;
+    const slinging = !!lastP?.sling && sim.mode === 'flight' && !!sim.fl;
+    // the next planet hop coming up, even if another press comes before it
+    let slingP: typeof nextP | undefined = undefined as typeof nextP | undefined;
+    for (let i = sim.ni; i < course.presses.length && course.presses[i].beat - beat < 2.5; i++) if (course.presses[i].sling) { slingP = course.presses[i]; break; }
+    const hop = slinging ? lastP!.planet + LEAN + (1 - LEAN) * smoothstep(Math.min(1, ((beat - sim.fl!.t0) / (sim.fl!.t1 - sim.fl!.t0)) * 2.4)) : this.pf;
     let [tx, ty] = this.planetXY(hop);
-    if (nextP?.sling && sim.mode !== 'flight' && nextP.beat - beat < 2.5) {
-      const [nx, ny] = this.planetXY(nextP.planetTo);
-      const lean = 0.32 * smooth((2.5 - (nextP.beat - beat)) / 2);
+    if (!slinging && slingP) {
+      const [nx, ny] = this.planetXY(slingP.planetTo);
+      const lean = LEAN * smoothstep((2.5 - (slingP.beat - beat)) / 2);
       tx += (nx - tx) * lean;
       ty += (ny - ty) * lean;
     }
-    this.camX += (tx - this.camX) * Math.min(1, dt * 9);
-    this.camY += (ty - this.camY) * Math.min(1, dt * 9);
+    // a spring, like the zoom: the camera picks up speed and settles, it never changes pace in a single frame
+    const ok = 11;
+    this.camVX += (ok * ok * (tx - this.camX) - 2 * ok * this.camVX) * dt;
+    this.camVY += (ok * ok * (ty - this.camY) - 2 * ok * this.camVY) * dt;
+    this.camX += this.camVX * dt;
+    this.camY += this.camVY * dt;
     const [wx, wy] = this.planetXY(this.pf);
     this.coreX = wx - this.camX;
     this.coreY = wy - this.camY;
     this.baseR += ((inward ? 1.5 : 1) - wound * 0.1 - this.baseR) * Math.min(1, dt * 3.5);
     this.punch = Math.max(0, this.punch - dt / 0.45);
+    this.punchS += (this.punch - this.punchS) * Math.min(1, dt / 0.06);
+    const up = sim.down && sim.mode !== 'flight' && run.state === 'playing' && !run.finale ? 1 : 0;
+    this.liftV += (18 * 18 * (up - this.lift) - 2 * 18 * this.liftV) * Math.min(dt, 0.03);
+    this.lift = clamp(this.lift + this.liftV * Math.min(dt, 0.03), 0, 1.05);
+    this.zoomS += (this.zoomKick - this.zoomS) * Math.min(1, dt / 0.09);
     this.zoomKick = Math.max(0, this.zoomKick - dt / 0.9) * (1 - Math.min(1, dt * 1.5));
     this.flash = Math.max(0, this.flash - dt / 0.18);
     this.flipK = Math.max(0, this.flipK - dt / 0.11);
@@ -967,7 +1167,7 @@ export class GdRenderer {
     const twinNow = course.twins.some(([a, z]) => beat >= a - 1 && beat < z + 0.25);
     this.twinV += ((twinNow ? 1 : 0) - this.twinV) * Math.min(1, dt * 5);
     if (run.state === 'playing') {
-      this.trail.push({ beat, rho, off: sim.sideAt(beat) * rb * (1 - 0.3 * this.landPulse), pf: this.pf, away: run.finale ? Math.pow(Math.min(1.4, run.finaleAge / 0.9), 2.2) * r0 * 7 : 0 });
+      this.trail.push({ beat, rho: this.ballRho(sim, beat), off: sim.sideAt(beat) * rb * (1 - 0.3 * 4 * this.landPulse * (1 - this.landPulse)), pf: this.pf, away: run.finale ? Math.pow(Math.min(1.4, run.finaleAge / 0.9), 2.2) * r0 * 7 : 0 });
       if (this.trail.length > 30) this.trail.shift();
     }
 
@@ -979,7 +1179,8 @@ export class GdRenderer {
     c.save();
     let cx = this.w / 2;
     let cy = this.h * 0.52;
-    if (this.shake > 0) { cx += (Math.random() - 0.5) * 10 * this.shake; cy += (Math.random() - 0.5) * 10 * this.shake; }
+    // the drop shakes the picture: a quick sway that dies away, not a new random place every frame
+    if (this.shake > 0) { const sh = 4 * this.shake * (1 - this.shake) * 5; cx += Math.sin(now * 0.031) * sh; cy += Math.sin(now * 0.026 + 1) * sh; }
     if (this.dropPower >= 0.3 && this.dropAge < 1.2 && !calm) cx += Math.exp(-this.dropAge * 4) * Math.sin(this.dropAge * 10) * m * 0.045 * this.dropPower; // the launch swings the camera
     c.translate(cx, cy);
 
@@ -1056,12 +1257,18 @@ export class GdRenderer {
     this.drawParticles(dt, false);
 
     // short hints near the core, out of the ball's way: the latest one that applies
-    if (run.state !== 'loading' && (!bestFor(level.id).cleared || run.opts.practice)) {
+    // a star trail coming up says so, until that star has been kept
+    const ahead = course.stars.find((st) => sim.stars[st.i] === 0 && beat >= st.a - 5 && beat <= st.a + 1 && !starsFor(level.id)[st.i]);
+    if (run.state !== 'loading' && (!bestFor(level.id).cleared || run.opts.practice || ahead)) {
       let shown: [number, number, string] | null = null;
-      for (const hnt of this.hints) if (beat >= hnt[0] && beat <= hnt[1]) shown = hnt;
+      // (a B-side explains nothing: whoever found it has cleared the level it is the night side of)
+      if ((!bestFor(level.id).cleared || run.opts.practice) && !level.file.side) for (const hnt of this.hints) if (beat >= hnt[0] && beat <= hnt[1]) shown = hnt;
+      if (ahead && !run.opts.tutorial) shown = [ahead.a - 5, ahead.a + 1, 'STAR TRAIL: ALL THE GOLD, NO EXTRA TAPS'];
       if (shown) {
         const al = Math.min(1, (beat - Math.max(shown[0], run.startAt / level.spb - 4)) / 0.5, (shown[1] - beat) / 0.5);
-        this.text(shown[2], this.coreX, this.coreY - m * 0.045 * 1.2 - m * 0.04 * 1.5 - 30, clamp(m * 0.022, 10, 16), WHITE, clamp(al, 0, 1));
+        // the star trail's line sits under the three stars at the top of the screen, clear of the course
+        const star = !!ahead && shown[2].startsWith('STAR');
+        this.text(shown[2], star ? 0 : this.coreX, star ? this.h * 0.185 - this.h * 0.52 : this.coreY - m * 0.045 * 1.2 - m * 0.04 * 1.5 - 30, clamp(m * 0.022, 10, 16), star ? STAR : WHITE, clamp(al, 0, 1));
       }
     }
     if (run.state === 'resuming') this.text(String(Math.max(1, Math.ceil((run.resumeAt - now) / 400))), this.coreX, this.coreY + m * 0.16, m * 0.06, WHITE, 1);
@@ -1072,8 +1279,12 @@ export class GdRenderer {
   /** The menus choose the idle scene's palette (the focused level's) and where its centre sits (fractions of the screen). */
   idlePal = 'deep';
   idleAt: [number, number] = [0.5, 0.5];
+  /** Where the ball was last drawn, in screen pixels. Read by the smoothness check (tools/smooth-check.mjs). */
+  ballXY: [number, number] = [0, 0];
   /** Size of the menu scene, 1 = its usual size; the title screen fits it between the wordmark and the call to start. */
   idleScale = 1;
+  /** backdrop only: no core, rings or ball */
+  idleBare = false;
   private idleS = 1;
   private idleX = 0.5;
   private idleY = 0.5;
@@ -1097,6 +1308,7 @@ export class GdRenderer {
     const pulse = Math.max(steady * (bass > 0.05 ? 0.3 : 1), Math.min(1, bass * 1.3));
     this.background(pal, now / 1000, dt, 0.5, pulse * 0.25, 0, 0, 0);
     const m = Math.min(this.w, this.h) * this.idleS;
+    if (this.idleBare) return; // the world map draws its own planets over the backdrop
     c.save();
     c.translate(this.w * this.idleX, this.h * this.idleY);
     this.core(pal, m * 0.06, m * 0.07, pulse, pulse * 0.5, dt, -1, 0, 0, 0);

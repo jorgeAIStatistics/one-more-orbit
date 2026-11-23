@@ -1,6 +1,6 @@
 // Dev helper for screenshots: stages each screen of the game with sample progress, music muted, nothing saved.
 // In the dev server's page:  await import('/tools/stage-shots.js');  await __stage('levels')
-// Names: title, levels, final, entry, play, twin, tutorial, pause, quit, finale, clear, settings, orbs, badges, sync.
+// Names: title, levels, final, moon, hidden, gate, entry, play, twin, tutorial, pause, quit, finale, clear, settings, orbs, badges, quests, sync.
 Storage.prototype.setItem = function () {};
 Object.defineProperty(document, 'hidden', { get: () => false });
 const o = window.__omo;
@@ -14,12 +14,15 @@ window.addEventListener('unhandledrejection', (e) => window.__errs.push('rej ' +
 const drive = () => { clearInterval(window.__drv); window.__drv = setInterval(() => { try { o.tick(performance.now()); } catch (e) { window.__errs.push(String((e && e.stack) || e).slice(0, 300)); } }, 12); };
 drive();
 const st = document.createElement('style');
-st.textContent = '.screen,.finale,.card,.card *,.track i{transition:none!important}';
+st.textContent = '.screen,.finale,.node,.node *,.meter i,.track i{transition:none!important}';
 document.head.appendChild(st);
 const demo = (open) => {
   o.save.unlockAll = open;
   o.save.bests = { heroes: { score: 0, accuracy: 0, pct: 100, grade: '', cleared: true, attempts: 14, prac: 100 }, skyhigh: { score: 0, accuracy: 0, pct: 64, grade: '', cleared: false, attempts: 9, prac: 82 } };
+  o.save.bests['heroes-b'] = { score: 0, accuracy: 0, pct: 41, grade: '', cleared: false, attempts: 6 };
   o.save.badges = { clear_heroes: true, few_tries: true, in_flow: true, full_drop: true };
+  o.save.stars = { heroes: [true, true, true], skyhigh: [true, true, false] };
+  o.save.quests = { heroes_drop: true, heroes_holds: true, skyhigh_beat: true };
   o.save.skin = 'cyan';
 };
 let feed = 0;
@@ -38,7 +41,8 @@ const feeder = (late) => {
   }, 3);
 };
 const until = async (f, max = 30000) => { const t0 = performance.now(); while (!f() && performance.now() - t0 < max) await wait(40); };
-const focus = async (i) => { o.show('levels'); o.level(i); await wait(60); $('cards').children[i].scrollIntoView({ inline: 'center', block: 'nearest' }); await wait(350); };
+const focus = async (i) => { o.show('levels'); o.level(i); await wait(350); };
+const place = async (id) => { o.run && o.run.stop(); o.show('levels'); o.select(id); o.show('levels'); await wait(350); };
 const beat = () => o.run.time / o.run.level.spb;
 window.__stage = async (name) => {
   clearInterval(feed);
@@ -49,6 +53,10 @@ window.__stage = async (name) => {
   if (name === 'title') { o.run && o.run.stop(); o.show('title'); await wait(500); }
   else if (name === 'levels') await focus(1);
   else if (name === 'final') { demo(true); await focus(3); }
+  else if (name === 'moon') await place('heroes-b');
+  else if (name === 'hidden') await place('skyhigh-b');
+  else if (name === 'gate') { o.save.stars = { heroes: [true, true, true], skyhigh: [true, true, true], blank: [true, true, true] }; await place('gate'); }
+  else if (name === 'quests') { o.show('levels'); o.quests(); await wait(300); }
   else if (name === 'entry') { await focus(1); o.start(false); await until(() => o.run.state === 'playing'); await wait(1300); $('titleCard').style.cssText = 'animation:none;opacity:1'; freeze = true; }
   else if (name === 'play') { await focus(0); o.start(true, false, (68 * 60) / 128); await until(() => beat() >= 72.6); freeze = true; }
   else if (name === 'twin') { demo(true); await focus(3); o.start(true, false, (80 * 60) / 100); await until(() => beat() >= 85.4); freeze = true; }
