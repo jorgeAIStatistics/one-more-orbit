@@ -1,36 +1,38 @@
-// Shapes of the level files in /levels and of the runtime objects built from them.
+// Shapes of the level files in /levels and of the runtime objects built from them. One button: every note is a tap.
 
-export type Hand = 'L' | 'R' | 'A'; // cyan-left, pink-right, either
-export type Side = 'L' | 'R';
-export type Mode = 'tap' | 'hold' | 'colour' | 'dodge' | 'spinner' | 'dual';
-export type Difficulty = 'normal' | 'hard' | 'insane';
 export type Judge = 'perfect' | 'great' | 'good' | 'miss';
 export type Ramp = [number, number];
+export type Shape = 'circle' | 'ellipse' | 'square';
 
 export interface Look {
   palette: string;
+  bg?: 'stars' | 'tunnel' | 'grid';
+  eq?: 'bars' | 'wave' | 'burst';
   zoom?: Ramp;
   rot?: Ramp;
+  tilt?: Ramp;
   drain?: Ramp;
   vignette?: Ramp;
-  ring?: Ramp;
+  flip?: boolean;
 }
 
 export interface SegmentDef {
   id: string;
   bars: number;
   label: string;
-  mode: Mode;
-  lap: number;
-  dir?: number;
+  lap: number; // beats per trip round a ring: smaller is faster
+  shape?: Shape;
+  jump?: 'out' | 'in';
+  rocket?: number; // extra rings the ball launches through on entering this section
+  reverse?: boolean;
   revEvery?: number;
-  counter?: boolean;
+  warn?: string;
   teach?: string;
   enter?: string;
   blackout?: boolean;
   count?: boolean;
   look: Look;
-  gen?: unknown;
+  plan?: unknown;
 }
 
 export interface LevelFile {
@@ -54,30 +56,18 @@ export interface AudioMeta {
 
 export interface NoteDef {
   t: number; // ticks, 12 per beat, from bar 1
-  k: 't' | 'h' | 'z' | 's';
-  h?: Hand;
-  d?: number;
-  lane?: number;
-  n?: number;
-  a?: number; // 1 = accent: a big hit, drawn larger with an impact sound
+  k: 't' | 'j'; // tap gate, or spike hop (tap the pad, land half a beat later)
+  v?: 'b' | 'l'; // which voice it follows: bass/kick or lead (colour only)
+  a?: number; // 1 = accent: a big hit
+  g?: number; // ghost gate: 1 fades early, 2 fades late (teaching)
 }
 
 export interface ChartFile {
   level: string;
-  difficulty: Difficulty;
   stars: number;
-  /** beats per lap for each section, chosen by the chart tool so dense passages spread out */
-  laps?: Record<string, number>;
+  /** kick and snare strength per 16th note (digits 0-9), baked from the analysis for the visuals */
+  energy?: { kick: string; snare: string };
   notes: NoteDef[];
-}
-
-/** One stretch of constant ring speed and direction. */
-export interface OrbitPiece {
-  b0: number;
-  b1: number;
-  lap: number;
-  dir: number;
-  a0: number;
 }
 
 export interface Segment extends SegmentDef {
@@ -89,24 +79,35 @@ export interface Segment extends SegmentDef {
   t1: number;
 }
 
+/** One ring: the ball rides it from b0 until its last gate (the exit), then jumps to the next. */
+export interface Ring {
+  idx: number;
+  b0: number;
+  exitBeat: number;
+  a0: number;
+  dir: number;
+  lap: number;
+  lvl: number; // ring size as a power of the ring spacing; inward jumps lower it
+  seg: number;
+  shape: Shape;
+  first: number;
+  last: number;
+  reversed: boolean;
+}
+
 export interface RNote {
   i: number;
-  kind: 'tap' | 'hold' | 'haz' | 'spin';
-  hand: Hand;
+  kind: 'tap' | 'hop';
   t: number; // seconds of song time (0 = bar 1)
-  t1: number;
   beat: number;
-  beat1: number;
-  lane: number;
-  need: number;
   seg: number;
   ring: number;
+  angle: number;
+  exit: boolean;
   accent: boolean;
-  // judging state
-  headDone: boolean;
-  tailDone: boolean;
-  headJudge: Judge | null;
-  heldBy: Side | null;
-  got: number;
+  ghost: number;
+  voice: 'b' | 'l';
+  done: boolean;
+  judge: Judge | null;
   hitT: number;
 }

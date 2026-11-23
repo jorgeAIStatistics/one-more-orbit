@@ -1,21 +1,72 @@
-import type { AudioMeta, ChartFile, Hand, LevelFile, OrbitPiece, RNote, Segment } from './types';
+import type { AudioMeta, ChartFile, LevelFile, RNote, Ring, Segment, Shape } from './types';
 
 export const TICKS_PER_BEAT = 12;
 const TWO_PI = Math.PI * 2;
 
-/** A level's timeline: segments in seconds and beats, plus where each ball is on its ring at any beat. */
+// ---- orbit shapes. Each is a closed path; the ball moves along it at constant speed, so distance reads as time.
+function rawPoint(shape: Shape, a: number): [number, number] {
+  const c = Math.cos(a);
+  const s = Math.sin(a);
+  if (shape === 'ellipse') return [c * 1.16, s * 0.84];
+  if (shape === 'square') return [Math.sign(c) * Math.pow(Math.abs(c), 0.5) * 1.04, Math.sign(s) * Math.pow(Math.abs(s), 0.5) * 1.04];
+  return [c, s];
+}
+const TABLES = new Map<Shape, Float32Array>();
+function table(shape: Shape): Float32Array {
+  let t = TABLES.get(shape);
+  if (!t) {
+    // t[i] = raw angle at which i/N of the path's length has been travelled
+    const N = 720;
+    const cum = new Float32Array(N + 1);
+    let [px, py] = rawPoint(shape, 0);
+    for (let i = 1; i <= N; i++) {
+      const [x, y] = rawPoint(shape, (i / N) * TWO_PI);
+      cum[i] = cum[i - 1] + Math.hypot(x - px, y - py);
+      px = x; py = y;
+    }
+    t = new Float32Array(N + 1);
+    let j = 0;
+    for (let i = 0; i <= N; i++) {
+      const target = (i / N) * cum[N];
+      while (j < N && cum[j + 1] < target) j++;
+      const span = cum[j + 1] - cum[j] || 1;
+      t[i] = ((j + (target - cum[j]) / span) / N) * TWO_PI;
+    }
+    TABLES.set(shape, t);
+  }
+  return t;
+}
+/** Point on a unit-sized shape after travelling `angle / 2π` of the way round it. */
+export function shapePoint(shape: Shape, angle: number): [number, number] {
+  if (shape === 'circle') return [Math.cos(angle), Math.sin(angle)];
+  const t = table(shape);
+  const N = t.length - 1;
+  let u = (angle / TWO_PI) % 1;
+  if (u < 0) u += 1;
+  const f = u * N;
+  const i = Math.floor(f);
+  return rawPoint(shape, t[i] + (t[Math.min(N, i + 1)] - t[i]) * (f - i));
+}
+
+/**
+ * A level's timeline: sections, notes, and the chain of rings the ball jumps through.
+ * Notes close together share a ring (bursts of up to three); a ring's last gate is its exit.
+ */
 export class Level {
   readonly id: string;
   readonly title: string;
   readonly artist: string;
   readonly spb: number;
   readonly segments: Segment[] = [];
+  readonly notes: RNote[] = [];
+  readonly rings: Ring[] = [];
   readonly totalBeats: number;
-  readonly endTime: number; // song time at which the level is over
-  readonly dropTime: number; // song time of the main drop
-  private orbit: OrbitPiece[][] = [[], []];
+  readonly endTime: number;
+  readonly dropTime: number;
+  private kick = '';
+  private snare = '';
 
-  constructor(readonly file: LevelFile, readonly audio: AudioMeta, laps?: Record<string, number>) {
+  constructor(readonly file: LevelFile, readonly audio: AudioMeta, readonly chart: ChartFile) {
     this.id = file.id;
     this.title = file.title;
     this.artist = file.artist;
@@ -24,33 +75,68 @@ export class Level {
     file.segments.forEach((s, index) => {
       const beat0 = bar * 4;
       const beat1 = beat0 + s.bars * 4;
-      this.segments.push({ ...s, lap: laps?.[s.id] ?? s.lap, index, bar0: bar, beat0, beat1, t0: beat0 * this.spb, t1: beat1 * this.spb });
+      this.segments.push({ ...s, index, bar0: bar, beat0, beat1, t0: beat0 * this.spb, t1: beat1 * this.spb });
       bar += s.bars;
     });
     this.totalBeats = bar * 4;
     this.endTime = audio.length - audio.offset - 0.05;
     this.dropTime = audio.dropTime - audio.offset;
+    this.kick = chart.energy?.kick ?? '';
+    this.snare = chart.energy?.snare ?? '';
 
-    // Ring 0 is the main (cyan) ring; ring 1 is the outer (pink) ring used in dual orbit.
-    for (let ring = 0; ring < 2; ring++) {
-      let angle = -Math.PI / 2;
-      let dir = 1;
-      for (const s of this.segments) {
-        if (s.dir) dir = s.dir;
-        const step = s.revEvery ? s.revEvery * 4 : s.beat1 - s.beat0;
-        for (let b = s.beat0, k = 0; b < s.beat1 - 1e-6; b += step, k++) {
-          if (k > 0) dir = -dir;
-          const d = ring === 1 && s.counter ? -dir : dir;
-          const b1 = Math.min(s.beat1, b + step);
-          this.orbit[ring].push({ b0: b, b1, lap: s.lap, dir: d, a0: angle });
-          angle += (d * TWO_PI * (b1 - b)) / s.lap;
-        }
+    const defs = [...chart.notes].sort((a, b) => a.t - b.t);
+    defs.forEach((n, i) => {
+      const beat = n.t / TICKS_PER_BEAT;
+      const t = beat * this.spb;
+      this.notes.push({
+        i, kind: n.k === 'j' ? 'hop' : 'tap', t, beat, seg: this.segAt(t + 1e-6).index, ring: 0, angle: 0, exit: false,
+        accent: n.a === 1, ghost: n.g ?? 0, voice: n.v ?? 'l', done: false, judge: null, hitT: -1
+      });
+    });
+
+    let lastBeat = 0;
+    let lastAngle = -Math.PI / 2;
+    let dir = 1;
+    let lvl = 0;
+    let prevSeg = -1;
+    let flipKey = '';
+    let i = 0;
+    while (i < this.notes.length) {
+      const first = i;
+      let last = i;
+      while (last + 1 < this.notes.length && last - first < 2 && this.notes[last + 1].seg === this.notes[first].seg &&
+        this.notes[last + 1].beat - this.notes[last].beat <= 0.5001) last++;
+      const seg = this.segments[this.notes[first].seg];
+      const span = this.notes[last].beat - lastBeat;
+      let lap = seg.lap;
+      // a burst of 16ths gets a faster ring so its gates sit at least 22.5 degrees apart...
+      for (let k = first + 1; k <= last; k++) if (this.notes[k].beat - this.notes[k - 1].beat < 0.26 && lap > 4) lap = 4;
+      // ...but the ball must never lap a ring before its exit gate
+      while (span > lap * 0.875) lap *= 2;
+      let reversed = false;
+      if (seg.index !== prevSeg && seg.reverse) { dir = -dir; reversed = true; }
+      if (seg.revEvery) {
+        const key = `${seg.index}:${Math.floor((this.notes[first].beat - seg.beat0) / (seg.revEvery * 4))}`;
+        if (key !== flipKey) { if (flipKey.startsWith(`${seg.index}:`)) { dir = -dir; reversed = true; } flipKey = key; }
       }
+      const idx = this.rings.length;
+      if (idx > 0) lvl += (seg.jump === 'in' ? -1 : 1) + (seg.index !== prevSeg && seg.rocket ? seg.rocket : 0);
+      prevSeg = seg.index;
+      const ring: Ring = { idx, b0: lastBeat, exitBeat: this.notes[last].beat, a0: lastAngle, dir, lap, lvl, seg: seg.index, shape: seg.shape ?? 'circle', first, last, reversed };
+      for (let k = first; k <= last; k++) {
+        const n = this.notes[k];
+        n.ring = idx;
+        n.angle = ring.a0 + (dir * TWO_PI * (n.beat - ring.b0)) / lap;
+        n.exit = k === last;
+      }
+      this.rings.push(ring);
+      lastBeat = this.notes[last].beat;
+      lastAngle = this.notes[last].angle;
+      i = last + 1;
     }
-  }
-
-  timeOfBeat(beat: number): number {
-    return beat * this.spb;
+    // a last, empty ring to coast on after the final gate
+    const end = this.segments[this.segments.length - 1];
+    this.rings.push({ idx: this.rings.length, b0: lastBeat, exitBeat: Infinity, a0: lastAngle, dir, lap: 8, lvl: lvl + 1 + (end.rocket ?? 0), seg: end.index, shape: end.shape ?? 'circle', first: this.notes.length, last: this.notes.length - 1, reversed: false });
   }
 
   segAt(t: number): Segment {
@@ -59,58 +145,32 @@ export class Level {
     return segs[0];
   }
 
-  pieceAt(ring: number, beat: number): OrbitPiece {
-    const p = this.orbit[ring];
-    for (let i = p.length - 1; i >= 0; i--) if (beat >= p[i].b0) return p[i];
-    return p[0];
+  /** The ring the ball is on at `beat` (it leaves a ring at its exit gate whether or not the tap landed). */
+  ringAt(beat: number): Ring {
+    const r = this.rings;
+    let lo = 0;
+    let hi = r.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (beat > r[mid].exitBeat) lo = mid + 1; else hi = mid;
+    }
+    return r[lo];
   }
 
-  /** Angle of the ball on `ring` at `beat` (before bar 1 and after the end it keeps coasting). */
-  angleAt(ring: number, beat: number): number {
-    const p = this.orbit[ring];
-    let piece = p[0];
-    if (beat >= p[p.length - 1].b0) piece = p[p.length - 1];
-    else for (let i = p.length - 1; i >= 0; i--) if (beat >= p[i].b0) { piece = p[i]; break; }
-    return piece.a0 + (piece.dir * TWO_PI * (beat - piece.b0)) / piece.lap;
+  angleOn(ring: Ring, beat: number): number {
+    return ring.a0 + (ring.dir * TWO_PI * (beat - ring.b0)) / ring.lap;
   }
 
-  /** Beats where a ring changes direction (drawn as reverse markers). */
-  reversals(ring: number): number[] {
-    const out: number[] = [];
-    const p = this.orbit[ring];
-    for (let i = 1; i < p.length; i++) if (p[i].dir !== p[i - 1].dir) out.push(p[i].b0);
-    return out;
+  /** Baked kick / snare strength (0..1) at a song time, with a fast decay inside each 16th. */
+  energyAt(which: 'kick' | 'snare', t: number): number {
+    const s = which === 'kick' ? this.kick : this.snare;
+    if (!s || t < 0) return 0;
+    const step = this.spb / 4;
+    const i = Math.floor(t / step);
+    if (i >= s.length) return 0;
+    const cur = (s.charCodeAt(i) - 48) / 9;
+    const prev = i > 0 ? (s.charCodeAt(i - 1) - 48) / 9 : 0;
+    const f = (t - i * step) / step;
+    return Math.max(cur * Math.exp(-f * 2.2), prev * Math.exp(-(f + 1) * 2.2));
   }
-}
-
-export function buildNotes(level: Level, chart: ChartFile): RNote[] {
-  const notes: RNote[] = chart.notes.map((n, i) => {
-    const beat = n.t / TICKS_PER_BEAT;
-    const beat1 = (n.t + (n.d ?? 0)) / TICKS_PER_BEAT;
-    const t = beat * level.spb;
-    const seg = level.segAt(t + 1e-6);
-    const hand: Hand = n.h ?? 'A';
-    return {
-      i,
-      kind: n.k === 't' ? 'tap' : n.k === 'h' ? 'hold' : n.k === 'z' ? 'haz' : 'spin',
-      hand,
-      t,
-      t1: beat1 * level.spb,
-      beat,
-      beat1,
-      lane: n.lane ?? 0,
-      need: n.n ?? 0,
-      seg: seg.index,
-      ring: seg.mode === 'dual' && hand === 'R' ? 1 : 0,
-      accent: n.a === 1,
-      headDone: false,
-      tailDone: false,
-      headJudge: null,
-      heldBy: null,
-      got: 0,
-      hitT: -1
-    };
-  });
-  notes.sort((a, b) => a.t - b.t || a.i - b.i);
-  return notes;
 }

@@ -55,9 +55,8 @@ The original songs are not in the repo. `tools/tracks.json` points at them (`sou
 
 ## How charts follow the music
 
-- Cyan / left / inner follows low sounds (kick, bass). Pink / right / outer follows high sounds (lead, arpeggio, clap). White is the melody while it is the only voice.
-- Sections that share a `motif` name are one repeating figure. The tool finds, per voice, the 16th-note positions that are hit hard in most repeats: that is the motif. Weaker or occasional hits are ornaments.
-- Each bar's `plan` says how each voice is played (`beat`, `8`, `16`, `all`, `half`, `tail`, `off`, `hold`, or an explicit shape `@x.x.xxx.x.x.xxx.`), plus `stack`, `acc`, `solo`, `run=`, `minRun=`. A motif or shape note is only kept in a bar where the audio really has that sound.
+- The game has one button, so every note is a tap. Two voices are composed and merged: `B` follows low sounds (kick, bass), `L` follows high sounds (lead, arpeggio, clap). Gate colour shows the voice.
+- Sections that share a `motif` name are one repeating figure. Per voice, the 16th positions that are hit hard in most repeats are the motif; weaker or occasional hits are ornaments.
+- Each bar's `plan` says how each voice is played (`beat`, `8`, `16`, `all`, `half`, `tail`, `off`, or an explicit shape `@x.x.xxx.x.x.xxx.`) plus `stack` (accent on beat 1), `hop` (the bar's bass notes are spike hops), `ghost=B|L|BL` (those gates fade out; `late` for a teaching bar) and `run=`. A note is only kept where the audio really has that sound.
 - The result is `levels/<id>/sheet.json`. Hand-edit any bar and mark it `"by": "hand"`; the tool will not touch it again.
-- Dodge hazards land on kicks. The spinner covers the whole spinner section.
-- Ring speed per section is chosen from the densest gap so neighbouring gates stay at least 22.5 degrees apart (`lapFixed` in the layout keeps a section's own speed).
+- `lap` in the layout is the ring speed: smaller is faster (double-time), larger is slower (half-time).

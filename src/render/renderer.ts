@@ -1,17 +1,19 @@
+import { audio } from '../audio/audio';
+import type { JEvent } from '../game/engine';
+import { shapePoint } from '../game/level';
+import { HOP_BEATS, ORBIT_RATIO, WINDOW } from '../game/rules';
 import type { Run } from '../game/run';
-import type { RNote, Segment } from '../game/types';
-import { RELEASE_SCALE } from '../game/rules';
+import type { Ring, Segment } from '../game/types';
 import { save } from '../save';
 
 type RGB = [number, number, number];
 interface Palette { bg0: RGB; bg1: RGB; ring: RGB; acc: RGB }
 
-/** Section looks. Gate colours never change (cyan = left, pink = right, white = either): only the world around them does. */
+/** Section looks. Gate colours stay put (cyan = bass, pink = lead, gold = accent): only the world around them changes. */
 const PALETTES: Record<string, Palette> = {
   deep: { bg0: [10, 18, 52], bg1: [2, 4, 14], ring: [80, 130, 255], acc: [130, 190, 255] },
   ocean: { bg0: [6, 38, 60], bg1: [2, 8, 20], ring: [40, 210, 225], acc: [120, 255, 240] },
   violet: { bg0: [40, 16, 72], bg1: [8, 3, 22], ring: [176, 96, 255], acc: [220, 170, 255] },
-  split: { bg0: [16, 24, 58], bg1: [6, 4, 20], ring: [150, 165, 255], acc: [255, 255, 255] },
   dusk: { bg0: [58, 12, 30], bg1: [10, 2, 10], ring: [255, 128, 96], acc: [255, 190, 120] },
   neon: { bg0: [62, 10, 86], bg1: [10, 2, 30], ring: [255, 70, 210], acc: [255, 150, 240] },
   aqua: { bg0: [6, 60, 82], bg1: [2, 10, 26], ring: [0, 235, 255], acc: [160, 255, 250] },
@@ -19,14 +21,12 @@ const PALETTES: Record<string, Palette> = {
   hot: { bg0: [96, 16, 36], bg1: [34, 4, 44], ring: [255, 255, 255], acc: [255, 220, 240] }
 };
 const CYAN: RGB = [0, 245, 255];
-const PINK: RGB = [255, 42, 133];
-const WHITE: RGB = [255, 244, 214];
+const PINK: RGB = [255, 60, 150];
+const GOLD: RGB = [255, 226, 130];
 const RED: RGB = [255, 72, 60];
 const JUDGE_COL: Record<string, RGB> = { perfect: [255, 214, 90], great: [0, 245, 255], good: [196, 181, 253], miss: [255, 90, 120] };
 const TWO_PI = Math.PI * 2;
-const MODE_NAME: Record<string, string> = { tap: 'TAP', hold: 'HOLD', colour: 'TWO COLOURS', dodge: 'DODGE', spinner: 'SPIN', dual: 'DUAL ORBIT' };
-const R_IN = 0.58; // dual orbit: cyan ring
-const R_OUT = 1.02; // dual orbit: pink ring
+const EQ_BARS = 48;
 
 const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -47,12 +47,20 @@ export class Renderer {
   private flash = 0;
   private punch = 0;
   private shake = 0;
-  private lanePos = 0;
-  private spinPulse = 0;
-  private sideFlash = { L: 0, R: 0 };
   private drain = 0;
+  private tapPulse = 0;
+  private camLevel = 0;
+  private camBias = 0;
+  private flipAngle = 0;
+  private flipTarget = 0;
+  private ringIdx = -1;
+  private jumpT = 1;
+  private jumpFrom = 0;
+  private hopUntil = -1;
+  private kickWas = 0;
+  private eq = new Float32Array(EQ_BARS);
   private stars: Array<{ a: number; d: number; s: number }> = [];
-  private trails: Array<Array<{ x: number; y: number }>> = [[], []];
+  private trail: Array<{ x: number; y: number }> = [];
   private banner: { text: string; until: number } | null = null;
   private prevPal: Palette = PALETTES.deep;
   private curPalName = 'deep';
@@ -72,11 +80,16 @@ export class Renderer {
     this.canvas.height = Math.round(this.h * this.dpr);
   }
 
-  reset(): void {
+  reset(startLevel = 0): void {
     this.particles = [];
     this.shocks = [];
-    this.flash = this.punch = this.shake = this.lanePos = this.spinPulse = this.drain = 0;
-    this.trails = [[], []];
+    this.flash = this.punch = this.shake = this.drain = this.tapPulse = this.camBias = 0;
+    this.flipAngle = this.flipTarget = 0;
+    this.camLevel = startLevel;
+    this.ringIdx = -1;
+    this.jumpT = 1;
+    this.hopUntil = -1;
+    this.trail = [];
     this.banner = null;
     this.palSwitchT = -99;
   }
@@ -85,73 +98,104 @@ export class Renderer {
     // "colours draining" in the build-up: pull everything toward grey
     const g = c[0] * 0.3 + c[1] * 0.59 + c[2] * 0.11;
     const d = this.drain;
-    return `rgba(${(lerp(c[0], g, d)) | 0},${(lerp(c[1], g, d)) | 0},${(lerp(c[2], g, d)) | 0},${a})`;
+    return `rgba(${lerp(c[0], g, d) | 0},${lerp(c[1], g, d) | 0},${lerp(c[2], g, d) | 0},${a})`;
   }
 
   private burst(x: number, y: number, n: number, col: RGB, speed: number): void {
     if (save.reducedMotion) n = Math.ceil(n / 3);
-    for (let i = 0; i < n && this.particles.length < 260; i++) {
+    for (let i = 0; i < n && this.particles.length < 280; i++) {
       const a = Math.random() * TWO_PI;
       const v = speed * (0.3 + Math.random() * 0.7);
       this.particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0, max: 0.35 + Math.random() * 0.35, col, size: 1.5 + Math.random() * 2.5 });
     }
   }
 
-  /** Idle picture behind the menus. */
-  drawIdle(now: number): void {
-    const c = this.ctx;
-    c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    this.drain = 0;
-    this.background(PALETTES.deep, 0.15 + 0.1 * Math.sin(now / 900), 0, now / 1000, 0.3);
-    const cx = this.w / 2;
-    const cy = this.h * 0.47;
-    const R = Math.min(this.w, this.h) * 0.36;
-    c.lineWidth = 2;
-    c.strokeStyle = this.col(PALETTES.deep.ring, 0.25);
-    c.beginPath(); c.arc(cx, cy, R, 0, TWO_PI); c.stroke();
-    const a = now / 1400;
-    this.ball(cx + Math.cos(a) * R, cy + Math.sin(a) * R, R * 0.05, CYAN);
-  }
-
-  /** Ball crossing a gate at the top of a ring; used by the visual-offset calibration. */
-  drawMetronome(now: number, phase: number): void {
-    const c = this.ctx;
-    c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    this.drain = 0;
-    this.background(PALETTES.deep, 0.2, 0, now / 1000, 0.3);
-    const cx = this.w / 2;
-    const cy = this.h * 0.36;
-    const R = Math.min(this.w, this.h) * 0.2;
-    c.lineWidth = 3;
-    c.strokeStyle = this.col(PALETTES.deep.ring, 0.5);
-    c.beginPath(); c.arc(cx, cy, R, 0, TWO_PI); c.stroke();
-    this.gate(cx, cy, R, -Math.PI / 2, R * 0.3, WHITE, 1);
-    const a = -Math.PI / 2 + phase * TWO_PI;
-    this.ball(cx + Math.cos(a) * R, cy + Math.sin(a) * R, R * 0.1, CYAN);
-  }
-
-  private background(p: Palette, pulse: number, dark: number, time: number, energy: number): void {
+  private background(p: Palette, style: string, pulse: number, dark: number, time: number, energy: number): void {
     const c = this.ctx;
     const cx = this.w / 2;
     const cy = this.h * 0.47;
-    const g = c.createRadialGradient(cx, cy, 0, cx, cy, Math.max(this.w, this.h) * 0.75);
-    const k = 1 + pulse * 0.5;
+    const span = Math.max(this.w, this.h) * 0.75;
+    const g = c.createRadialGradient(cx, cy, 0, cx, cy, span);
+    const k = 1 + pulse * 0.55;
     g.addColorStop(0, this.col([p.bg0[0] * k, p.bg0[1] * k, p.bg0[2] * k]));
     g.addColorStop(1, this.col(p.bg1));
     c.fillStyle = g;
     c.fillRect(0, 0, this.w, this.h);
-    // stars drift outward faster when the music is intense
-    const span = Math.max(this.w, this.h) * 0.75;
+    const speed = save.reducedMotion ? 0.02 : 0.02 + energy * 0.16;
+    if (style === 'tunnel') {
+      // rings rushing outward: a tunnel that speeds up with the music
+      for (let i = 0; i < 8; i++) {
+        const f = (i / 8 + time * speed * 1.6) % 1;
+        c.lineWidth = 1 + f * 3;
+        c.strokeStyle = this.col(p.acc, (1 - f) * f * 0.5 * (0.5 + pulse));
+        c.beginPath(); c.arc(cx, cy, f * f * span, 0, TWO_PI); c.stroke();
+      }
+    } else if (style === 'grid') {
+      // spokes and rings turning slowly: a radar grid that flashes on the beat
+      const turn = time * 0.12;
+      c.lineWidth = 1;
+      c.strokeStyle = this.col(p.acc, 0.07 + pulse * 0.1);
+      c.beginPath();
+      for (let i = 0; i < 16; i++) { const a = turn + (i / 16) * TWO_PI; c.moveTo(cx, cy); c.lineTo(cx + Math.cos(a) * span, cy + Math.sin(a) * span); }
+      for (let i = 1; i <= 5; i++) { c.moveTo(cx + (i / 5) * span, cy); c.arc(cx, cy, (i / 5) * span, 0, TWO_PI); }
+      c.stroke();
+    }
     for (const s of this.stars) {
-      const d = (s.d + time * (0.01 + energy * 0.12) * s.s) % 1;
+      const d = (s.d + time * speed * 0.7 * s.s) % 1;
       const x = cx + Math.cos(s.a) * d * span;
       const y = cy + Math.sin(s.a) * d * span;
       c.fillStyle = this.col(p.acc, (0.15 + 0.5 * d) * (0.6 + pulse * 0.4));
-      const len = save.reducedMotion ? 0 : energy * 14 * d;
-      if (len > 2) { c.fillRect(x, y, Math.cos(s.a) * len || 1, Math.sin(s.a) * len || 1); c.fillRect(x, y, s.s, s.s); }
-      else c.fillRect(x, y, s.s, s.s);
+      const len = save.reducedMotion ? 0 : energy * 16 * d;
+      if (len > 2) c.fillRect(x, y, Math.cos(s.a) * len || 1, Math.sin(s.a) * len || 1);
+      c.fillRect(x, y, s.s, s.s);
     }
     if (dark > 0) { c.fillStyle = `rgba(0,0,0,${dark})`; c.fillRect(0, 0, this.w, this.h); }
+  }
+
+  /** Audio-reactive equalizer round the core. Uses the live spectrum; falls back to the baked kick/snare energy. */
+  private equalizer(style: string, pal: Palette, rc: number, len: number, kick: number, snare: number, dt: number): void {
+    const c = this.ctx;
+    const spec = audio.spectrum();
+    for (let i = 0; i < EQ_BARS; i++) {
+      const m = i < EQ_BARS / 2 ? i : EQ_BARS - 1 - i; // mirrored: bass at the top, treble at the bottom
+      let v: number;
+      if (spec) v = Math.pow(spec[2 + Math.floor(m * 1.7)] / 255, 1.5);
+      else v = kick * Math.exp(-m * 0.12) + snare * 0.7 * Math.exp(-Math.abs(m - 14) * 0.15);
+      this.eq[i] += (v - this.eq[i]) * Math.min(1, dt * (v > this.eq[i] ? 40 : 9));
+    }
+    const glow = c.createRadialGradient(0, 0, 0, 0, 0, rc * (1.1 + kick * 0.5));
+    glow.addColorStop(0, this.col(pal.ring, 0.55 + kick * 0.4));
+    glow.addColorStop(1, this.col(pal.ring, 0));
+    c.fillStyle = glow;
+    c.beginPath(); c.arc(0, 0, rc * (1.1 + kick * 0.5), 0, TWO_PI); c.fill();
+    if (style === 'wave') {
+      const wave = audio.waveform();
+      c.lineWidth = 2.5;
+      c.strokeStyle = this.col(pal.acc, 0.9);
+      c.shadowColor = this.col(pal.acc, 0.9);
+      c.shadowBlur = 8 + kick * 14;
+      c.beginPath();
+      const N = 96;
+      for (let i = 0; i <= N; i++) {
+        const a = (i / N) * TWO_PI - Math.PI / 2;
+        const s = wave ? (wave[(i % N) * 2] - 128) / 128 : Math.sin(a * 6) * kick * 0.4;
+        const r = rc * (1.25 + s * 0.9 + this.eq[Math.floor((i % N) / 2)] * 0.5);
+        if (i === 0) c.moveTo(Math.cos(a) * r, Math.sin(a) * r); else c.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      }
+      c.stroke();
+      c.shadowBlur = 0;
+      return;
+    }
+    c.lineCap = 'round';
+    c.lineWidth = Math.max(2, ((rc * TWO_PI) / EQ_BARS) * 0.5);
+    for (let i = 0; i < EQ_BARS; i++) {
+      const a = (i / EQ_BARS) * TWO_PI - Math.PI / 2 + Math.PI / EQ_BARS;
+      const v = this.eq[i];
+      const r1 = rc * 1.2 + v * len * (style === 'burst' ? 1.35 : 1);
+      c.strokeStyle = this.col(mix(pal.ring, pal.acc, v), 0.45 + v * 0.55);
+      c.beginPath(); c.moveTo(Math.cos(a) * rc * 1.12, Math.sin(a) * rc * 1.12); c.lineTo(Math.cos(a) * r1, Math.sin(a) * r1); c.stroke();
+    }
+    if (style === 'burst' && kick > 0.6 && this.kickWas <= 0.6) this.burst(0, 0, 14, pal.acc, rc * 9); // sparks fly off the core on every kick
   }
 
   private ball(x: number, y: number, r: number, col: RGB): void {
@@ -166,42 +210,56 @@ export class Renderer {
     c.beginPath(); c.arc(x, y, r * 1.25, 0, TWO_PI); c.stroke();
   }
 
-  private gate(cx: number, cy: number, r: number, ang: number, len: number, col: RGB, alpha: number, accent = false, hand = 'A'): void {
+  private ringPath(ring: Ring, rad: number): void {
     const c = this.ctx;
-    const ca = Math.cos(ang);
-    const sa = Math.sin(ang);
-    c.lineCap = 'round';
-    const lw = Math.max(4, Math.min(9, len * 0.26));
-    if (accent) {
-      // accent: a white halo behind the gate so big hits read from a distance
-      c.lineWidth = lw * 2.3;
-      c.strokeStyle = `rgba(255,255,255,${0.85 * alpha})`;
-      c.beginPath();
-      c.moveTo(cx + ca * (r - len / 2), cy + sa * (r - len / 2));
-      c.lineTo(cx + ca * (r + len / 2), cy + sa * (r + len / 2));
-      c.stroke();
-    }
-    c.lineWidth = lw;
-    c.strokeStyle = this.col(col, alpha);
-    c.shadowColor = this.col(col, alpha);
-    c.shadowBlur = 12;
     c.beginPath();
-    c.moveTo(cx + ca * (r - len / 2), cy + sa * (r - len / 2));
-    c.lineTo(cx + ca * (r + len / 2), cy + sa * (r + len / 2));
-    c.stroke();
-    c.shadowBlur = 0;
-    // shape as well as colour: cyan gates carry a dot on their inner end, pink gates a diamond on their outer end
-    if (hand === 'L') {
-      c.fillStyle = this.col(col, alpha);
-      c.beginPath(); c.arc(cx + ca * (r - len / 2), cy + sa * (r - len / 2), lw * 0.95, 0, TWO_PI); c.fill();
-    } else if (hand === 'R') {
-      c.save();
-      c.translate(cx + ca * (r + len / 2), cy + sa * (r + len / 2));
-      c.rotate(ang + Math.PI / 4);
-      c.fillStyle = this.col(col, alpha);
-      c.fillRect(-lw * 0.95, -lw * 0.95, lw * 1.9, lw * 1.9);
-      c.restore();
+    if (ring.shape === 'circle') { c.arc(0, 0, rad, 0, TWO_PI); return; }
+    for (let i = 0; i <= 96; i++) {
+      const [x, y] = shapePoint(ring.shape, (i / 96) * TWO_PI);
+      if (i === 0) c.moveTo(x * rad, y * rad); else c.lineTo(x * rad, y * rad);
     }
+  }
+
+  /** Idle picture behind the menus. */
+  drawIdle(now: number, dt = 0.016): void {
+    const c = this.ctx;
+    c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.drain = 0;
+    const beat = (now / 1000) * 2;
+    const pulse = Math.exp(-(beat % 1) * 4) * 0.5;
+    this.background(PALETTES.deep, 'stars', pulse * 0.4, 0, now / 1000, 0.25);
+    const m = Math.min(this.w, this.h);
+    c.save();
+    c.translate(this.w / 2, this.h * 0.47);
+    this.equalizer('bars', PALETTES.deep, m * 0.07, m * 0.06, pulse, pulse * 0.5, dt);
+    for (let k = 0; k < 3; k++) {
+      c.lineWidth = 2;
+      c.strokeStyle = this.col(PALETTES.deep.ring, 0.3 - k * 0.08);
+      c.beginPath(); c.arc(0, 0, m * 0.27 * Math.pow(ORBIT_RATIO, k), 0, TWO_PI); c.stroke();
+    }
+    const a = now / 1400;
+    this.ball(Math.cos(a) * m * 0.27, Math.sin(a) * m * 0.27, m * 0.017, CYAN);
+    c.restore();
+  }
+
+  /** Ball crossing a gate at the top of a ring; used by the visual-offset calibration. */
+  drawMetronome(now: number, phase: number): void {
+    const c = this.ctx;
+    c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.drain = 0;
+    this.background(PALETTES.deep, 'stars', 0.2, 0, now / 1000, 0.3);
+    const cx = this.w / 2;
+    const cy = this.h * 0.36;
+    const R = Math.min(this.w, this.h) * 0.2;
+    c.lineWidth = 3;
+    c.strokeStyle = this.col(PALETTES.deep.ring, 0.5);
+    c.beginPath(); c.arc(cx, cy, R, 0, TWO_PI); c.stroke();
+    c.lineCap = 'round';
+    c.lineWidth = 7;
+    c.strokeStyle = this.col(GOLD, 1);
+    c.beginPath(); c.moveTo(cx, cy - R * 0.85); c.lineTo(cx, cy - R * 1.15); c.stroke();
+    const a = -Math.PI / 2 + phase * TWO_PI;
+    this.ball(cx + Math.cos(a) * R, cy + Math.sin(a) * R, R * 0.1, CYAN);
   }
 
   draw(run: Run, now: number, dt: number): void {
@@ -213,13 +271,15 @@ export class Renderer {
     const u = clamp((t - seg.t0) / (seg.t1 - seg.t0), 0, 1);
     const look = seg.look;
     const rm = save.reducedMotion;
+    const m = Math.min(this.w, this.h);
+    const cx = this.w / 2;
+    const cy = this.h * 0.47;
+    const scr = (lvl: number) => m * 0.27 * Math.pow(ORBIT_RATIO, lvl - this.camLevel + this.camBias);
 
-    // --- react to what happened this frame
     for (const f of run.fx) {
       if (f.type === 'enter') this.onEnter(f.seg, now, run);
-      else if (f.type === 'judge') this.onJudge(run, f.ev.note, f.ev.judge, f.ev.kind);
-      else if (f.type === 'spin') this.spinPulse = 1;
-      else if (f.type === 'press') this.sideFlash[f.side] = 1;
+      else if (f.type === 'judge') this.onJudge(run, f.ev, scr);
+      else this.tapPulse = 1;
     }
     run.fx.length = 0;
 
@@ -230,65 +290,50 @@ export class Renderer {
     const pal: Palette = pt >= 1 ? target : { bg0: mix(this.prevPal.bg0, target.bg0, pt), bg1: mix(this.prevPal.bg1, target.bg1, pt), ring: mix(this.prevPal.ring, target.ring, pt), acc: mix(this.prevPal.acc, target.acc, pt) };
     this.drain = ramp(look.drain, u, 0);
     const vignette = ramp(look.vignette, u, 0);
-    const ringScale = ramp(look.ring, u, 1);
-    const zoom = ramp(look.zoom, u, 1) * (1 + this.punch);
-    const rot = rm ? 0 : ramp(look.rot, u, 0) * TWO_PI;
+    const inDrop = t >= level.dropTime && seg.label === 'DROP';
+    const energy = inDrop ? 1 : seg.label === 'BUILD' ? 0.6 : 0.3;
+    const kick = level.energyAt('kick', t);
+    const snare = level.energyAt('snare', t);
     const phase = beat - Math.floor(beat);
-    const inDrop = t >= level.dropTime;
-    const energy = seg.mode === 'spinner' ? 0.8 : inDrop ? 1 : seg.mode === 'dodge' || seg.id === 'rush' ? 0.6 : 0.3;
-    const pulse = t < 0 ? 0 : Math.exp(-phase * 5) * (0.35 + 0.65 * energy);
+    const pulse = t < 0 ? 0 : Math.max(Math.exp(-phase * 5) * (0.3 + 0.5 * energy), kick * 0.8);
 
-    // --- decay effects
+    // --- the ball's ring, the jump between rings, and the camera that follows it
+    const ring = level.ringAt(beat);
+    if (ring.idx !== this.ringIdx) {
+      const prev = this.ringIdx >= 0 ? level.rings[this.ringIdx] : ring;
+      if (this.ringIdx < 0) this.camLevel = ring.lvl;
+      this.jumpFrom = prev.lvl;
+      this.jumpT = this.ringIdx < 0 ? 1 : 0;
+      if (Math.abs(ring.lvl - prev.lvl) > 1.5 && !rm) { this.shake = Math.max(this.shake, 0.7); this.burst(0, 0, 60, pal.acc, scr(ring.lvl) * 4); } // rocket
+      this.ringIdx = ring.idx;
+    }
+    this.jumpT = Math.min(1, this.jumpT + dt / 0.16);
+    this.camLevel += (ring.lvl - this.camLevel) * Math.min(1, dt * 6.5);
+    this.camBias += ((seg.jump === 'in' ? 1.25 : 0) - this.camBias) * Math.min(1, dt * 3);
     this.flash = Math.max(0, this.flash - dt * 2.6);
     this.punch *= Math.exp(-dt * 7);
     this.shake = Math.max(0, this.shake - dt * 3);
-    this.spinPulse = Math.max(0, this.spinPulse - dt * 8);
-    this.sideFlash.L = Math.max(0, this.sideFlash.L - dt * 6);
-    this.sideFlash.R = Math.max(0, this.sideFlash.R - dt * 6);
-    const lane = run.engine.laneAt(run.time);
-    this.lanePos += (lane - this.lanePos) * Math.min(1, dt * 28);
+    this.tapPulse = Math.max(0, this.tapPulse - dt * 7);
+    this.flipAngle += (this.flipTarget - this.flipAngle) * Math.min(1, dt * 8);
+    const zoom = ramp(look.zoom, u, 1) * (1 + this.punch) * (1 + (rm ? 0 : kick * 0.022 * energy));
+    const rot = rm ? 0 : ramp(look.rot, u, 0) * TWO_PI + this.flipAngle;
+    const tilt = rm ? 0 : ramp(look.tilt, u, 0);
 
     c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    this.background(pal, pulse, seg.blackout ? 0.9 : 0, Math.max(0, t), energy);
+    this.background(pal, look.bg || 'stars', pulse, seg.blackout ? 0.9 : 0, Math.max(0, t), energy);
 
-    const cx = this.w / 2;
-    const cy = this.h * 0.47;
-    const R = Math.min(this.w, this.h) * 0.36;
     const sx = rm ? 0 : (Math.random() - 0.5) * this.shake * 14;
     const sy = rm ? 0 : (Math.random() - 0.5) * this.shake * 14;
-
     c.save();
     c.translate(cx + sx, cy + sy);
     c.rotate(rot);
-    c.scale(zoom, zoom);
+    c.scale(zoom, zoom * (1 - tilt));
 
-    // --- ring geometry for the current mode
-    const dual = seg.mode === 'dual';
-    const dodge = seg.mode === 'dodge';
-    const split = dual ? ease((t - seg.t0) / 0.35 + (level.segments[seg.index - 1]?.mode === 'dual' ? 1 : 0)) : 0;
-    const rInner = R * lerp(ringScale, R_IN, split);
-    const rOuter = R * lerp(ringScale, R_OUT, split);
-    const laneR = [R * 0.82, R * 1.0];
-    const radiusOf = (n: RNote): number => (dual || level.segments[n.seg].mode === 'dual' ? (n.ring === 1 ? rOuter : rInner) : R * ringScale);
-    const ringGlow = 0.5 + pulse * 0.5;
+    // --- equalizer round the core
+    if (!seg.blackout) this.equalizer(look.eq || 'bars', pal, m * (0.085 - this.camBias * 0.02), m * 0.075, kick, snare, dt);
+    this.kickWas = kick;
 
-    c.lineWidth = 2 + pulse * 2.5;
-    if (dodge) {
-      for (const lr of laneR) { c.strokeStyle = this.col(pal.ring, 0.3 * ringGlow + 0.1); c.beginPath(); c.arc(0, 0, lr, 0, TWO_PI); c.stroke(); }
-    } else {
-      c.strokeStyle = this.col(dual ? CYAN : pal.ring, 0.55 * ringGlow + 0.15);
-      c.shadowColor = this.col(dual ? CYAN : pal.ring, 0.8);
-      c.shadowBlur = 10 + pulse * 14;
-      c.beginPath(); c.arc(0, 0, rInner, 0, TWO_PI); c.stroke();
-      if (dual) {
-        c.strokeStyle = this.col(PINK, 0.55 * ringGlow + 0.15);
-        c.shadowColor = this.col(PINK, 0.8);
-        c.beginPath(); c.arc(0, 0, rOuter, 0, TWO_PI); c.stroke();
-      }
-      c.shadowBlur = 0;
-    }
-
-    // --- shockwaves (in the camera's space so they ride the zoom)
+    // --- shockwaves
     for (let i = this.shocks.length - 1; i >= 0; i--) {
       const s = this.shocks[i];
       s.r += (s.max - s.r) * Math.min(1, dt * 4.5);
@@ -299,117 +344,102 @@ export class Renderer {
       c.beginPath(); c.arc(0, 0, s.r, 0, TWO_PI); c.stroke();
     }
 
-    // --- reverse markers
-    for (let ring = 0; ring < (dual ? 2 : 1); ring++) {
-      for (const rb of level.reversals(ring)) {
-        const ahead = rb - beat;
-        if (ahead <= 0 || ahead > 3) continue;
-        const a = level.angleAt(ring, rb);
-        const rr = ring === 1 ? rOuter : dodge ? lerp(laneR[0], laneR[1], this.lanePos) : rInner;
-        c.fillStyle = this.col(WHITE, 0.8 * (1 - ahead / 3));
-        c.save();
-        c.translate(Math.cos(a) * rr, Math.sin(a) * rr);
-        c.rotate(a + Math.PI / 4);
-        c.fillRect(-5, -5, 10, 10);
-        c.restore();
+    // --- rings: the one the ball is on, the one it just left, and the next few it will jump to
+    const next = run.engine.nextNote();
+    const gateLen = m * 0.052;
+    for (let k = Math.max(0, ring.idx - 1); k <= Math.min(level.rings.length - 1, ring.idx + 3); k++) {
+      const r = level.rings[k];
+      const rad = scr(r.lvl) * (1 + (k === ring.idx ? pulse * 0.02 : 0));
+      if (rad > Math.max(this.w, this.h) * 0.8 || rad < m * 0.03) continue;
+      const d = k - ring.idx;
+      const ra = d < 0 ? 0.3 * (1 - this.jumpT) : d === 0 ? 1 : d === 1 ? 0.55 : d === 2 ? 0.3 : 0.14;
+      if (ra <= 0.01) continue;
+      c.lineWidth = d === 0 ? 2.5 + pulse * 2.5 : 1.5;
+      c.strokeStyle = this.col(pal.ring, ra * (0.45 + (d === 0 ? pulse * 0.4 : 0)));
+      c.shadowColor = this.col(pal.ring, 0.8);
+      c.shadowBlur = d === 0 ? 8 + pulse * 16 : 0;
+      this.ringPath(r, rad);
+      c.stroke();
+      c.shadowBlur = 0;
+      if (r.reversed && d > 0) {
+        // a reversed ring wears a spinning marker where the ball will land on it
+        const [mx, my] = shapePoint(r.shape, r.a0);
+        c.save(); c.translate(mx * rad, my * rad); c.rotate(now / 300);
+        c.fillStyle = this.col([255, 255, 255], ra); c.fillRect(-5, -5, 10, 10); c.restore();
       }
-    }
-
-    // --- notes
-    // Where a gate sits across the ring says which hand it is for, in every mode: cyan toward the centre, pink
-    // toward the outside (the sides the two rings take in dual orbit). White spans the ring.
-    const gateLen = R * (dual ? 0.15 : 0.2);
-    for (const n of run.notes) {
-      const nseg = level.segments[n.seg];
-      const lookBeats = Math.min(nseg.lap * 0.75, 6);
-      const lookSec = lookBeats * level.spb;
-      if (n.t - t > lookSec) break;
-      if (n.t1 < t - 0.3) continue;
-      const rem = clamp((n.t - t) / lookSec, 0, 1);
-      const appear = clamp((1 - rem) * 5, 0, 1);
-      if (n.kind === 'spin') continue;
-      if (n.kind === 'haz') {
-        if (t - n.t > 0.22) continue;
-        const a = level.angleAt(0, n.beat);
-        const half = (TWO_PI * 0.16) / nseg.lap;
-        const near = clamp(1 - (n.t - t) / level.spb, 0, 1);
-        const after = t > n.t ? clamp((t - n.t) / 0.22, 0, 1) : 0;
-        c.lineCap = 'butt';
-        c.lineWidth = R * 0.13 * (1 + (after > 0 ? (1 - after) * 0.6 : 0));
-        c.strokeStyle = this.col(RED, (0.25 + 0.7 * near) * appear * (1 - after));
-        c.shadowColor = this.col(RED, 0.9);
-        c.shadowBlur = near * 16;
-        c.beginPath(); c.arc(0, 0, laneR[n.lane], a - half, a + half); c.stroke();
-        c.shadowBlur = 0;
-        continue;
-      }
-      const col = n.hand === 'L' ? CYAN : n.hand === 'R' ? PINK : WHITE;
-      const twoRings = dual || nseg.mode === 'dual';
-      const sided = !twoRings && n.hand !== 'A';
-      const rr = radiusOf(n) + (sided ? (n.hand === 'L' ? -1 : 1) * R * 0.06 : 0);
-      const len = (sided ? gateLen * 0.62 : gateLen) * (n.accent ? 1.45 : 1);
-      if (n.kind === 'hold') {
-        if (n.tailDone && t - n.t1 > 0.05) continue;
-        const held = n.heldBy !== null;
-        const b0 = held ? Math.max(n.beat, beat) : n.beat;
-        const b1 = Math.min(n.beat1, beat + lookBeats);
-        if (b1 > b0) {
+      for (let i = r.first; i <= r.last; i++) {
+        const n = level.notes[i];
+        if (n.done) continue;
+        // ghost gates fade out before the ball arrives: the rhythm has to carry you
+        const ghost = n.ghost ? clamp((n.beat - beat - (n.ghost === 2 ? 0.35 : 1)) / 0.9, 0, 1) : 1;
+        const alpha = Math.pow(ra, 0.7) * ghost;
+        const [ux, uy] = shapePoint(r.shape, n.angle);
+        const hyp = Math.hypot(ux, uy) || 1;
+        const ox = ux / hyp;
+        const oy = uy / hyp;
+        const gx = ux * rad;
+        const gy = uy * rad;
+        const col = n.accent ? GOLD : n.voice === 'b' ? CYAN : PINK;
+        const len = gateLen * (n.accent ? 1.5 : 1) * (d === 0 ? 1 : 0.8);
+        if (alpha > 0.01) {
           c.lineCap = 'round';
-          c.lineWidth = R * (held ? 0.1 : 0.07);
-          c.strokeStyle = this.col(col, (held ? 0.85 : n.headDone && !held ? 0.2 : 0.5) * appear);
-          c.shadowColor = this.col(col, 0.9);
-          c.shadowBlur = held ? 18 : 0;
-          c.beginPath();
-          const steps = Math.max(2, Math.ceil((b1 - b0) * 8));
-          for (let i = 0; i <= steps; i++) {
-            const a = level.angleAt(n.ring, lerp(b0, b1, i / steps));
-            if (i === 0) c.moveTo(Math.cos(a) * rr, Math.sin(a) * rr); else c.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+          if (n.kind === 'hop') {
+            // spike hop: a launch pad (chevron) with spikes after it
+            for (const f of [0.3, 0.55, 0.8]) {
+              const [px, py] = shapePoint(r.shape, n.angle + (r.dir * TWO_PI * f * HOP_BEATS) / r.lap);
+              const ph = Math.hypot(px, py) || 1;
+              c.fillStyle = this.col(RED, alpha);
+              c.beginPath();
+              c.moveTo(px * rad + (px / ph) * len * 0.75, py * rad + (py / ph) * len * 0.75);
+              c.lineTo(px * rad - (py / ph) * len * 0.3, py * rad + (px / ph) * len * 0.3);
+              c.lineTo(px * rad + (py / ph) * len * 0.3, py * rad - (px / ph) * len * 0.3);
+              c.fill();
+            }
+            c.lineWidth = 4;
+            c.strokeStyle = this.col(GOLD, alpha);
+            c.beginPath();
+            c.moveTo(gx - oy * len * 0.45 - ox * len * 0.3, gy + ox * len * 0.45 - oy * len * 0.3);
+            c.lineTo(gx + ox * len * 0.4, gy + oy * len * 0.4);
+            c.lineTo(gx + oy * len * 0.45 - ox * len * 0.3, gy - ox * len * 0.45 - oy * len * 0.3);
+            c.stroke();
+          } else {
+            if (n.accent) {
+              c.lineWidth = 13;
+              c.strokeStyle = `rgba(255,255,255,${0.8 * alpha})`;
+              c.beginPath(); c.moveTo(gx - (ox * len) / 2, gy - (oy * len) / 2); c.lineTo(gx + (ox * len) / 2, gy + (oy * len) / 2); c.stroke();
+            }
+            c.lineWidth = 6;
+            c.strokeStyle = this.col(col, alpha);
+            c.shadowColor = this.col(col, alpha);
+            c.shadowBlur = 12;
+            c.beginPath(); c.moveTo(gx - (ox * len) / 2, gy - (oy * len) / 2); c.lineTo(gx + (ox * len) / 2, gy + (oy * len) / 2); c.stroke();
+            c.shadowBlur = 0;
           }
-          c.stroke();
-          c.shadowBlur = 0;
         }
-        if (n.beat1 <= beat + lookBeats && !n.tailDone) this.gate(0, 0, rr, level.angleAt(n.ring, n.beat1), len * 0.8, col, 0.9 * appear);
-        if (n.headDone) continue;
-      } else if (n.headDone) continue;
-      const a = level.angleAt(n.ring, n.beat);
-      const late = t > n.t ? clamp(1 - (t - n.t) / 0.12, 0, 1) : 1;
-      this.gate(0, 0, rr, a, len, col, appear * late, n.accent, n.hand);
-      // approach cue: an arc that closes in on the gate and lands on it exactly on the beat.
-      // Cyan cues come from inside the ring, pink and white from outside, so the two hands never cross.
-      if (rem > 0.001) {
-        const inward = n.hand === 'L';
-        const dist = R * 0.24 * rem;
-        const ar = rr + (inward ? -(len / 2 + dist) : len / 2 + dist);
-        if (ar > R * 0.1) {
-          const hw = Math.min(0.1, ((TWO_PI * 0.25) / nseg.lap) * 0.4);
-          c.lineCap = 'round';
-          c.lineWidth = n.accent ? 4 : 2.5;
-          c.strokeStyle = this.col(col, 0.9 * appear * late * (1 - rem * 0.55));
-          c.beginPath(); c.arc(0, 0, ar, a - hw, a + hw); c.stroke();
+        // approach circle on the very next gate: it closes on the gate exactly on the beat
+        if (n === next && t <= n.t) {
+          const rem = clamp((n.t - t) / (1.5 * level.spb), 0, 1);
+          c.lineWidth = 2.5;
+          c.strokeStyle = this.col(col, 0.85 * (1 - rem * 0.6) * (n.ghost ? ghost : 1));
+          c.beginPath(); c.arc(gx, gy, gateLen * (0.62 + 2.2 * rem), 0, TWO_PI); c.stroke();
         }
       }
     }
 
-    // --- balls and trails
-    const balls: Array<{ a: number; r: number; col: RGB }> = [];
-    if (dodge) balls.push({ a: level.angleAt(0, beat), r: lerp(laneR[0], laneR[1], this.lanePos), col: WHITE });
-    else {
-      balls.push({ a: level.angleAt(0, beat), r: rInner, col: CYAN });
-      if (dual) balls.push({ a: level.angleAt(1, beat), r: rOuter, col: PINK });
+    // --- ball: rides the ring's shape, slides between rings on a jump, arcs over spikes on a hop
+    const brad = lerp(scr(this.jumpFrom), scr(ring.lvl), ease(this.jumpT));
+    const [bx0, by0] = shapePoint(ring.shape, level.angleOn(ring, beat));
+    let hop = 1;
+    if (beat < this.hopUntil) hop = 1 + 0.2 * Math.sin(Math.PI * (1 - (this.hopUntil - beat) / HOP_BEATS));
+    const bx = bx0 * brad * hop;
+    const by = by0 * brad * hop;
+    this.trail.push({ x: bx, y: by });
+    if (this.trail.length > 12) this.trail.shift();
+    for (let k = 0; k < this.trail.length - 1; k++) {
+      c.fillStyle = this.col(CYAN, (k / this.trail.length) * 0.35);
+      c.beginPath(); c.arc(this.trail[k].x, this.trail[k].y, m * 0.016 * (k / this.trail.length), 0, TWO_PI); c.fill();
     }
-    balls.forEach((b, i) => {
-      const x = Math.cos(b.a) * b.r;
-      const y = Math.sin(b.a) * b.r;
-      const tr = this.trails[i];
-      tr.push({ x, y });
-      if (tr.length > 12) tr.shift();
-      for (let k = 0; k < tr.length - 1; k++) {
-        c.fillStyle = this.col(b.col, (k / tr.length) * 0.35);
-        c.beginPath(); c.arc(tr[k].x, tr[k].y, R * 0.045 * (k / tr.length), 0, TWO_PI); c.fill();
-      }
-      this.ball(x, y, R * 0.05 * (1 + pulse * 0.25), b.col);
-    });
-    if (!dual) this.trails[1].length = 0;
+    this.ball(bx, by, m * 0.018 * (1 + pulse * 0.2 + this.tapPulse * 0.35), CYAN);
 
     // --- particles
     for (let i = this.particles.length - 1; i >= 0; i--) {
@@ -420,86 +450,57 @@ export class Renderer {
       c.fillStyle = this.col(p.col, 1 - p.life / p.max);
       c.fillRect(p.x, p.y, p.size, p.size);
     }
-
-    // --- spinner meter
-    const spin = run.engine.activeSpinner(run.time);
-    if (spin) {
-      const frac = clamp(spin.got / Math.max(1, spin.need), 0, 1);
-      const sr = R * (0.36 + this.spinPulse * 0.03);
-      c.lineWidth = R * 0.07;
-      c.strokeStyle = 'rgba(255,255,255,0.14)';
-      c.beginPath(); c.arc(0, 0, sr, 0, TWO_PI); c.stroke();
-      c.strokeStyle = frac >= 1 ? 'rgba(255,214,90,1)' : 'rgba(255,255,255,0.95)';
-      c.shadowColor = '#ffffff'; c.shadowBlur = 10 + frac * 24;
-      c.beginPath(); c.arc(0, 0, sr, -Math.PI / 2, -Math.PI / 2 + frac * TWO_PI); c.stroke();
-      c.shadowBlur = 0;
-    }
     c.restore();
 
     // --- screen-space overlays
-    if (spin) this.text(spin.got >= spin.need ? 'CHARGED!' : 'SPIN!', cx, cy, R * 0.16, spin.got >= spin.need ? JUDGE_COL.perfect : [255, 255, 255], 1);
     if (vignette > 0) {
-      const g = c.createRadialGradient(cx, cy, Math.min(this.w, this.h) * lerp(0.75, 0.3, vignette), cx, cy, Math.max(this.w, this.h) * 0.75);
+      const g = c.createRadialGradient(cx, cy, m * lerp(0.75, 0.3, vignette), cx, cy, Math.max(this.w, this.h) * 0.75);
       g.addColorStop(0, 'rgba(0,0,0,0)');
       g.addColorStop(1, `rgba(0,0,0,${0.55 + 0.4 * vignette})`);
       c.fillStyle = g;
       c.fillRect(0, 0, this.w, this.h);
     }
-    for (const side of ['L', 'R'] as const) {
-      const f = this.sideFlash[side];
-      if (f <= 0) continue;
-      const x0 = side === 'L' ? 0 : this.w;
-      const g = c.createLinearGradient(x0, 0, side === 'L' ? this.w * 0.22 : this.w * 0.78, 0);
-      const cc = side === 'L' ? CYAN : PINK;
-      g.addColorStop(0, `rgba(${cc[0]},${cc[1]},${cc[2]},${0.22 * f})`);
-      g.addColorStop(1, 'rgba(0,0,0,0)');
-      c.fillStyle = g;
-      c.fillRect(side === 'L' ? 0 : this.w * 0.78, 0, this.w * 0.22, this.h);
-    }
     if (seg.count && t >= seg.t0) {
       const k = Math.floor((t - seg.t0) / level.spb);
       const f = (t - seg.t0) / level.spb - k;
       const label = ['3', '2', '1', ''][Math.min(3, k)];
-      if (label) this.text(label, cx, cy, R * (0.7 - 0.25 * f), [255, 255, 255], 1 - f * 0.8);
+      if (label) this.text(label, cx, cy, m * (0.26 - 0.09 * f), [255, 255, 255], 1 - f * 0.8);
     }
-    // heads-up before the game changes mode: label plus a pulsing frame in the next section's colour, two beats ahead
+    // heads-up before the world changes: label plus a pulsing frame in the next section's colour, two beats ahead
     const nextSeg = level.segments[seg.index + 1];
-    if (nextSeg && nextSeg.mode !== seg.mode && !seg.count && t >= 0 && nextSeg.t0 - t <= 2 * level.spb) {
-      const k = 1 - (nextSeg.t0 - t) / (2 * level.spb);
+    if (nextSeg && nextSeg.warn && !seg.count && t >= 0 && nextSeg.t0 - t <= 2 * level.spb) {
       const np = PALETTES[nextSeg.look.palette] || PALETTES.deep;
-      const beatPulse = Math.exp(-phase * 4);
-      const edge = 5 + 9 * beatPulse;
-      c.fillStyle = `rgba(${np.ring[0]},${np.ring[1]},${np.ring[2]},${0.35 + 0.5 * beatPulse})`;
+      const bp = Math.exp(-phase * 4);
+      const edge = 5 + 9 * bp;
+      c.fillStyle = `rgba(${np.ring[0]},${np.ring[1]},${np.ring[2]},${0.35 + 0.5 * bp})`;
       c.fillRect(0, 0, this.w, edge); c.fillRect(0, this.h - edge, this.w, edge); c.fillRect(0, 0, edge, this.h); c.fillRect(this.w - edge, 0, edge, this.h);
-      this.text(`NEXT  ${MODE_NAME[nextSeg.mode] || ''}`, cx, Math.max(104, cy - R * Math.min(zoom, 1.25) - 46), Math.max(15, Math.min(22, this.w * 0.05)) * (1 + 0.12 * beatPulse), [255, 255, 255], 0.55 + 0.45 * k);
+      this.text(`NEXT  ${nextSeg.warn}`, cx, Math.max(104, cy - m * 0.47), Math.max(15, Math.min(22, this.w * 0.05)) * (1 + 0.12 * bp), [255, 255, 255], 0.9);
     }
     if (this.flash > 0) { c.fillStyle = `rgba(255,255,255,${Math.min(rm ? 0.2 : 0.85, this.flash)})`; c.fillRect(0, 0, this.w, this.h); }
-    if (t < 0 && run.state === 'playing') this.text('GET READY', cx, cy, R * 0.13, [255, 255, 255], 0.9);
-    if (run.state === 'resuming') this.text(String(Math.max(1, Math.ceil((run.resumeAt - now) / 400))), cx, cy, R * 0.5, [255, 255, 255], 0.9);
-
-    // judgement word in the middle of the ring
+    const below = Math.min(this.h - 104, cy + m * 0.46);
+    if (t < run.startAt && run.state === 'playing') this.text('GET READY', cx, below, m * 0.05, [255, 255, 255], 0.9);
+    if (run.state === 'resuming') this.text(String(Math.max(1, Math.ceil((run.resumeAt - now) / 400))), cx, cy, m * 0.2, [255, 255, 255], 0.9);
     const lj = run.lastJudge;
-    if (lj && !spin && !seg.count && run.state === 'playing') {
+    if (lj && !seg.count && run.state === 'playing') {
       const age = (now - lj.at) / 1000;
       if (age < 0.5) {
         const al = 1 - age / 0.5;
-        const word = lj.wrongSide ? 'WRONG SIDE' : lj.judge.toUpperCase();
-        this.text(word, cx, cy - R * 0.04, R * (lj.judge === 'perfect' ? 0.15 : 0.12) * (1 + (1 - al) * 0.15), JUDGE_COL[lj.judge], al);
-        if (lj.err !== null && lj.judge !== 'perfect' && lj.judge !== 'miss') this.text(lj.err > 0 ? 'LATE' : 'EARLY', cx, cy + R * 0.12, R * 0.07, [255, 255, 255], al * 0.8);
+        this.text(lj.judge.toUpperCase(), cx, below, m * (lj.judge === 'perfect' ? 0.058 : 0.048) * (1 + (1 - al) * 0.15), JUDGE_COL[lj.judge], al);
+        if (lj.err !== null && lj.judge !== 'perfect') this.text(lj.err > 0 ? 'LATE' : 'EARLY', cx, below + m * 0.05, m * 0.03, [255, 255, 255], al * 0.8);
       }
     }
     if (this.banner && now < this.banner.until) {
       const al = clamp((this.banner.until - now) / 500, 0, 1);
       c.font = `800 ${Math.max(14, Math.min(20, this.w * 0.042))}px system-ui, sans-serif`;
       const tw = c.measureText(this.banner.text).width;
-      const by = Math.max(96, cy - R * zoom - 58);
+      const by2 = Math.max(100, cy - m * 0.47);
       c.fillStyle = `rgba(8,12,30,${0.8 * al})`;
       c.beginPath();
-      if (c.roundRect) c.roundRect(cx - tw / 2 - 16, by - 18, tw + 32, 36, 18); else c.rect(cx - tw / 2 - 16, by - 18, tw + 32, 36);
+      if (c.roundRect) c.roundRect(cx - tw / 2 - 16, by2 - 18, tw + 32, 36, 18); else c.rect(cx - tw / 2 - 16, by2 - 18, tw + 32, 36);
       c.fill();
       c.fillStyle = `rgba(255,255,255,${al})`;
       c.textAlign = 'center'; c.textBaseline = 'middle';
-      c.fillText(this.banner.text, cx, by);
+      c.fillText(this.banner.text, cx, by2);
     }
     if (save.errorBar) this.errorBar(run, now);
   }
@@ -519,7 +520,7 @@ export class Renderer {
   /** osu!-style hit-error bar: each tap leaves a tick, left = early, right = late. */
   private errorBar(run: Run, now: number): void {
     const c = this.ctx;
-    const w = run.engine.win;
+    const w = WINDOW;
     const bw = Math.min(this.w * 0.72, 340);
     const x0 = this.w / 2 - bw / 2;
     const y = this.h - 46;
@@ -553,53 +554,56 @@ export class Renderer {
   }
 
   private onEnter(seg: Segment, now: number, run: Run): void {
-    const R = Math.min(this.w, this.h) * 0.36;
-    if (seg.teach && !save.teachSeen[seg.mode]) this.banner = { text: seg.teach, until: now + 4200 };
+    const R = Math.min(this.w, this.h) * 0.27;
+    if (seg.teach && !save.teachSeen[seg.id]) this.banner = { text: seg.teach, until: now + 4200 };
     else if (seg.enter === 'drop') this.banner = { text: 'DROP   ×2 SCORE', until: now + 1600 };
+    if (seg.look.flip && !save.reducedMotion) this.flipTarget += Math.PI;
     const pal = PALETTES[seg.look.palette] || PALETTES.deep;
     if (seg.enter === 'drop') {
       // the release: everything the build-up wound up lets go on the first beat
       this.flash = 1;
       this.punch = save.reducedMotion ? 0 : -0.16;
       this.shake = 1;
-      for (let k = 0; k < 3; k++) this.shocks.push({ r: R * (0.2 + k * 0.25), max: R * (2.4 + k * 0.9), alpha: 0.95 - k * 0.2, col: k === 1 ? [255, 255, 255] : k === 0 ? CYAN : PINK, w: 6 - k });
-      this.burst(0, 0, 90, CYAN, R * 3);
-      this.burst(0, 0, 90, PINK, R * 3);
+      for (let k = 0; k < 3; k++) this.shocks.push({ r: R * (0.2 + k * 0.25), max: R * (2.6 + k * 0.9), alpha: 0.95 - k * 0.2, col: k === 1 ? [255, 255, 255] : k === 0 ? CYAN : PINK, w: 6 - k });
+      this.burst(0, 0, 90, CYAN, R * 4);
+      this.burst(0, 0, 90, PINK, R * 4);
     } else if (seg.enter === 'pulse') {
       this.flash = 0.35;
       this.punch = save.reducedMotion ? 0 : -0.06;
-      this.shocks.push({ r: R * 0.3, max: R * 2.2, alpha: 0.8, col: pal.ring, w: 4 });
-      this.burst(0, 0, 40, pal.acc, R * 2.2);
+      this.shocks.push({ r: R * 0.3, max: R * 2.4, alpha: 0.8, col: pal.ring, w: 4 });
+      this.burst(0, 0, 40, pal.acc, R * 3);
     } else if (seg.enter === 'flash') {
       this.flash = 0.8;
       this.shake = 0.6;
-      this.shocks.push({ r: R * 0.3, max: R * 3, alpha: 0.9, col: [255, 255, 255], w: 5 });
-      this.burst(0, 0, 80, pal.acc, R * 3);
+      this.shocks.push({ r: R * 0.3, max: R * 3.2, alpha: 0.9, col: [255, 255, 255], w: 5 });
+      this.burst(0, 0, 80, pal.acc, R * 4);
     } else if (run.time > 0.5) {
-      this.shocks.push({ r: R * 0.5, max: R * 1.6, alpha: 0.4, col: pal.ring, w: 2 });
+      this.shocks.push({ r: R * 0.5, max: R * 1.7, alpha: 0.4, col: pal.ring, w: 2 });
     }
   }
 
-  private onJudge(run: Run, n: RNote, judge: string, kind: string): void {
-    const level = run.level;
-    const R = Math.min(this.w, this.h) * 0.36;
-    if (judge === 'miss') { this.shake = Math.max(this.shake, 0.45); return; }
-    if (kind === 'spin') { this.burst(0, 0, 50, JUDGE_COL.perfect, R * 2.4); return; }
-    if (kind === 'haz') return;
-    const seg = level.segments[n.seg];
-    const rr = seg.mode === 'dual' ? (n.ring === 1 ? R * R_OUT : R * R_IN) : R;
-    const a = level.angleAt(n.ring, kind === 'tail' ? n.beat1 : n.beat);
-    const col = n.hand === 'L' ? CYAN : n.hand === 'R' ? PINK : WHITE;
-    const x = Math.cos(a) * rr;
-    const y = Math.sin(a) * rr;
-    this.burst(x, y, judge === 'perfect' ? 16 : 7, judge === 'perfect' ? JUDGE_COL.perfect : col, R * (judge === 'perfect' ? 1.5 : 0.9));
-    if (n.accent && kind !== 'tail') {
-      // big hits land harder: extra sparks, a wave off the ring and a short kick of the camera
-      this.burst(x, y, 26, col, R * 2.2);
-      this.shocks.push({ r: rr, max: rr * 1.5, alpha: 0.7, col, w: 4 });
-      this.flash = Math.max(this.flash, 0.16);
-      this.punch = save.reducedMotion ? this.punch : Math.min(this.punch, -0.035);
+  private onJudge(run: Run, ev: JEvent, scr: (lvl: number) => number): void {
+    const n = ev.note;
+    const ring = run.level.rings[n.ring];
+    const rad = scr(ring.lvl);
+    const [ux, uy] = shapePoint(ring.shape, n.angle);
+    const x = ux * rad;
+    const y = uy * rad;
+    if (ev.judge === 'miss') {
+      this.shake = Math.max(this.shake, 0.45);
+      this.burst(x, y, 10, RED, rad * 1.2);
+      return;
     }
-    if (judge === 'perfect') this.shocks.push({ r: rr * 0.98, max: rr * 1.1, alpha: 0.35, col, w: 2 });
+    const col = n.accent ? GOLD : n.voice === 'b' ? CYAN : PINK;
+    if (n.kind === 'hop') this.hopUntil = n.beat + HOP_BEATS;
+    this.burst(x, y, ev.judge === 'perfect' ? 16 : 7, ev.judge === 'perfect' ? JUDGE_COL.perfect : col, rad * (ev.judge === 'perfect' ? 1.6 : 1));
+    if (n.exit) this.shocks.push({ r: rad, max: rad * ORBIT_RATIO, alpha: 0.4, col, w: 2 }); // the jump to the next ring
+    if (n.accent) {
+      // big hits land harder: extra sparks, a wave off the ring and a short kick of the camera
+      this.burst(x, y, 26, col, rad * 2.4);
+      this.shocks.push({ r: rad, max: rad * 1.7, alpha: 0.7, col, w: 4 });
+      this.flash = Math.max(this.flash, 0.16);
+      if (!save.reducedMotion) { this.punch = Math.min(this.punch, -0.035); this.shake = Math.max(this.shake, 0.35); }
+    }
   }
 }

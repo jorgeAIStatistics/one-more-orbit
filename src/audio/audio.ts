@@ -26,6 +26,10 @@ export class AudioEngine {
   private master!: GainNode;
   private musicGain!: GainNode;
   private sfxGain!: GainNode;
+  private pre!: GainNode;
+  private analyser: AnalyserNode | null = null;
+  private freq = new Uint8Array(0);
+  private wave = new Uint8Array(0);
   private hits: Partial<Record<HitName, AudioBuffer>> = {};
   private tracks = new Map<string, Promise<LoadedTrack>>();
   private w0 = -Infinity;
@@ -56,6 +60,15 @@ export class AudioEngine {
       this.sfxGain = c.createGain();
       this.musicGain.connect(this.master);
       this.sfxGain.connect(this.master);
+      // the music passes through `pre` before its volume control, so the equalizer still sees it when muted
+      this.pre = c.createGain();
+      this.pre.connect(this.musicGain);
+      this.analyser = c.createAnalyser();
+      this.analyser.fftSize = 256;
+      this.analyser.smoothingTimeConstant = 0.72;
+      this.pre.connect(this.analyser);
+      this.freq = new Uint8Array(this.analyser.frequencyBinCount);
+      this.wave = new Uint8Array(this.analyser.fftSize);
       this.applyVolumes();
       this.buildHitsounds(72);
     }
@@ -180,7 +193,8 @@ export class AudioEngine {
     src.buffer = buffer;
     const g = c.createGain();
     src.connect(g);
-    g.connect(this.musicGain);
+    g.connect(this.pre);
+    if (offset > 0) { g.gain.setValueAtTime(0, when); g.gain.linearRampToValueAtTime(1, when + 0.05); } // starting mid-song: no click
     src.start(when, offset);
     let stopped = false;
     return {
@@ -195,6 +209,20 @@ export class AudioEngine {
         setTimeout(() => { try { g.disconnect(); } catch { /* ignore */ } }, (fade + 0.5) * 1000);
       }
     };
+  }
+
+  /** Live spectrum of the music (0..255 per bin), or null when there is no audio. */
+  spectrum(): Uint8Array | null {
+    if (!this.analyser || !this.running) return null;
+    this.analyser.getByteFrequencyData(this.freq);
+    return this.freq;
+  }
+
+  /** Live waveform of the music (128 = silence). */
+  waveform(): Uint8Array | null {
+    if (!this.analyser || !this.running) return null;
+    this.analyser.getByteTimeDomainData(this.wave);
+    return this.wave;
   }
 
   // ---------------------------------------------------------------- hitsounds

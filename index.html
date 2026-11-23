@@ -22,15 +22,16 @@
 
   <section id="menu" class="screen">
     <div class="shell">
-      <div class="eyebrow">VERTICAL SLICE · PLAYTEST BUILD</div>
+      <div class="eyebrow">ONE-BUTTON BUILD · PLAYTEST</div>
       <h1 class="logo">ONE MORE<br />ORBIT</h1>
       <div class="track">
-        <div class="track-name">Sky High</div>
-        <div class="track-meta">Elektronomia · 128 BPM · 1:20 · drop at 0:47</div>
+        <div id="trackName" class="track-name">Sky High</div>
+        <div id="trackMeta" class="track-meta"></div>
+        <div class="track-stats"><span id="levelRating" class="d-stars">★</span><span id="levelBest" class="d-best"></span></div>
       </div>
-      <div id="diffs" class="diffs"></div>
       <button id="playBtn" class="primary" type="button">PLAY</button>
       <div class="row">
+        <button id="practiceBtn" class="pill toggle" type="button">Practice: checkpoints</button>
         <button id="hardcoreBtn" class="pill toggle" type="button">Hardcore: one miss fails</button>
         <button id="botBtn" class="pill toggle" type="button">Watch autoplay</button>
       </div>
@@ -38,7 +39,7 @@
         <button id="settingsBtn" class="pill" type="button">Settings &amp; sync</button>
         <button id="creditsBtn" class="pill" type="button">Music credits</button>
       </div>
-      <p class="hint">Left half of the screen (or D / F) = cyan. Right half (or J / K) = pink. White gates take either. R restarts, Esc pauses.</p>
+      <p class="hint">One button: tap anywhere, or press any key, as the ball crosses each gate. R restarts, Esc pauses.</p>
       <p class="hint dim">Heroes Tonight, Blank and Invincible follow after this playtest.</p>
     </div>
   </section>
@@ -91,7 +92,6 @@
         <button id="setErrorBar" class="pill toggle" type="button">Hit-error bar</button>
         <button id="setMotion" class="pill toggle" type="button">Reduced motion</button>
         <button id="setHardcore" class="pill toggle" type="button">Hardcore</button>
-        <button id="setUnlock" class="pill toggle" type="button">Unlock all (playtest)</button>
       </div>
       <div id="setInfo" class="sub"></div>
       <div class="row"><button id="settingsClose" class="pill" type="button">Done</button></div>

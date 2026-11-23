@@ -1,13 +1,11 @@
 {
   "_doc": [
-      "Level layout. Segments play in order; 'bars' is each one's length, so pacing is tuned by changing bars here",
-      "(keep the total at the excerpt's bar count) and re-running: python tools/chart.py skyhigh",
-      "mode: tap | hold | colour | dodge | spinner | dual.  lap = beats per trip round the ring (the tool speeds it up where notes are dense; lapFixed keeps it).",
-      "look: palette name plus optional [from, to] ramps across the segment: zoom, rot (camera turns), drain (colour loss), vignette, ring (ring size).",
-      "plan: per difficulty (N/H/I), one pattern per bar, repeated across the segment. Vocabulary is documented at the top of tools/chart.py:",
-      "C= cyan voice, P= pink voice, W= white voice, each one of: beat 8 16 all half tail off hold - or @<16 steps> for an explicit shape;",
-      "flags: stack (both hands accent beat 1), acc, solo (one hand at a time); options: run=<max burst> minRun=<shortest hold run>.",
-      "motif / cycle: segments sharing a motif name are one repeating musical figure of `cycle` bars. cyan / pink / white: which measured layer the voice follows."
+      "Level layout for a one-button level. Segments play in order; 'bars' is each one's length (keep the total at the excerpt's bar count),",
+      "then re-run: python tools/chart.py skyhigh",
+      "lap = beats per trip round a ring (smaller = faster: double-time; larger = half-time).  shape: circle | ellipse | square.",
+      "jump: out (default) or in.  rocket: extra rings the ball launches through on entering.  reverse / revEvery: direction flips.",
+      "look: palette, bg (stars | tunnel | grid), eq (bars | wave | burst), optional [from, to] ramps: zoom, rot (turns), tilt, drain, vignette; flip.",
+      "warn: label shown two beats before the section.  teach: banner the first time.  plan: one pattern per bar (vocabulary at the top of tools/chart.py)."
   ],
   "id": "skyhigh",
   "title": "Sky High",
@@ -15,83 +13,33 @@
   "release": "NCS Release",
   "hitsoundNote": 72,
   "segments": [
-    {"id": "intro", "bars": 4, "label": "INTRO", "mode": "tap", "lap": 8, "teach": "TAP as the ball crosses each gate", "look": {"palette": "deep", "zoom": [0.9, 1]}, "white": "snare",
-      "plan": {
-        "N": ["-", "W=@x...x...x...x...", "W=@x...x...x.x.x...", "W=@x.x.x...x.x.x..."],
-        "H": ["-", "W=@x...x.x.x...x.x.", "W=@x.x.xxx.x.x.xxx.", "W=@x.xxx...x.xxx..."],
-        "I": ["-", "W=@x.x.xxx.x.x.xxx.", "W=@xxxxx...xxxxx...", "W=@x.xxxxx.x.xxxxx."]
-      } },
-    {"id": "intro2", "bars": 4, "label": "INTRO", "mode": "tap", "lap": 8, "dir": -1, "look": {"palette": "ocean"}, "white": "snare",
-      "plan": {
-        "N": ["W=@x.x.x...x.x.x...", "W=@x.x.x.x.x...x...", "W=@x.x.x...x.x.x.x.", "W=@X.......x...x..."],
-        "H": ["W=@x.x.xxx.x.x.xxx.", "W=@xxx.x.x.xxx.x.x.", "W=@x.xxx.xxx.xxx.x.", "W=@X...x...x.x.x..."],
-        "I": ["W=@xxxxx.x.xxxxx.x.", "W=@x.xxxxxxx.x.xxx.", "W=@xxxxxxx.xxxxxxx.", "W=@X.x.xxx.x...x..."]
-      } },
-    {"id": "runs", "bars": 4, "label": "VERSE", "mode": "hold", "lap": 8, "teach": "HOLD the long arcs, let go at the end", "look": {"palette": "violet"}, "white": "snare", "pink": "snare",
-      "plan": {
-        "N": ["W=@X.x.......x...x.", "W=@..[-----]...x.x.", "W=@x.[-----].x...x.", "W=@x.x.x.x...x.x.x."],
-        "H": ["P=@X.x.......xx..x.", "P=@..[-----]..xx.x. C=off", "P=@x.[-----].xx..x.", "P=@x.x.x.x...xxx.x. C=off"],
-        "I": ["P=@X.x.......xx..x.", "P=@..[-----].xxx.x. C=off", "P=@x.[-----].xx.xx.", "P=@x.x.x.x.x.xxx.x. C=off"]
-      } },
-    {"id": "colour", "bars": 4, "label": "VERSE", "mode": "colour", "lap": 8, "teach": "CYAN = tap LEFT   PINK = tap RIGHT", "look": {"palette": "split"}, "pink": "snare",
-      "plan": {
-        "N": ["P=@x...x...x...x...", "P=@x.......x....... C=off solo", "P=@x.x.x...x.x.x...", "P=@x...x...x....... C=off solo"],
-        "H": ["P=@x.xxx.x.x.xx..x.", "P=@x...x...x...x... C=off", "P=@x.xxx.x.x.xx..x.", "P=@x.x.x.x...x..... C=off"],
-        "I": ["P=@x.xxxxx.x.xx..x.", "P=@xxx.x.x.xxx.x.x. C=off", "P=@x.xxxxx.x.xx..x.", "P=@x.x.x.x.x.xxx... C=off"]
-      } },
-    {"id": "dodge", "bars": 4, "label": "BUILD", "mode": "dodge", "lap": 4, "teach": "DODGE the red blocks: tap to hop lanes", "look": {"palette": "dusk", "zoom": [1, 1.06]},
-      "plan": {
-        "N": ["grid=4 lanes=1100"],
-        "H": ["grid=8 lanes=1001"],
-        "I": ["grid=8 lanes=10"]
-      } },
-    {"id": "rush", "bars": 2, "label": "BUILD", "mode": "colour", "lap": 2, "look": {"palette": "dusk", "zoom": [1.06, 1.2], "drain": [0, 0.55], "vignette": [0, 0.5], "ring": [1, 0.84]}, "pink": "snare", "lapFixed": true,
-      "plan": {
-        "N": ["C=@x...x...x...x... P=@..x...x...x...x. solo"],
-        "H": ["C=@x...x...x...x... P=@..xx..x...xx..x."],
-        "I": ["C=@x.x.x.x.x.x.x.xx P=@x.xxx.x.x.xxx.x.", "C=@x.x.x.x.x.x.x.x. P=@x.xxx.x.x.xxx.x."]
-      } },
-    {"id": "spin", "bars": 2, "label": "BUILD", "mode": "spinner", "lap": 1, "teach": "SPIN! Tap as fast as you can", "look": {"palette": "dusk", "zoom": [1.2, 1.42], "drain": [0.55, 0.95], "vignette": [0.5, 0.9], "ring": [0.84, 0.64]}, "lapFixed": true, "rate": {"N": 5, "H": 7, "I": 9},
-      "plan": {
-        "N": ["spin"],
-        "H": ["spin"],
-        "I": ["spin"]
-      } },
-    {"id": "count", "bars": 1, "label": "READY", "mode": "colour", "lap": 2, "blackout": true, "count": true, "look": {"palette": "dusk", "zoom": [1.42, 1.5], "drain": [1, 1], "vignette": [0.9, 1], "ring": [0.64, 0.58]}, "pink": "snare", "lapFixed": true,
-      "plan": {
-        "N": ["C=@............x... P=@..............x."],
-        "H": ["C=@............X.x. P=@............X.x."],
-        "I": ["C=@............X.x. P=@............X.x."]
-      } },
-    {"id": "drop1", "bars": 4, "label": "DROP", "mode": "dual", "lap": 4, "enter": "drop", "look": {"palette": "neon", "zoom": [0.94, 1]}, "motif": "drop", "cycle": 4,
-      "plan": {
-        "N": ["C=8 stack solo", "C=8 solo", "C=8 solo", "C=beat P=8 solo"],
-        "H": ["C=16 stack run=3", "C=16 run=3", "C=16 run=3", "C=16 P=8 run=3"],
-        "I": ["C=16 P=16 stack", "C=16 P=16", "C=16 P=16", "C=16 P=16"]
-      } },
-    {"id": "drop2", "bars": 4, "label": "DROP", "mode": "dual", "lap": 4, "enter": "pulse", "look": {"palette": "aqua", "zoom": [1, 0.9]}, "motif": "drop", "cycle": 4,
-      "plan": {
-        "N": ["C=8 solo", "C=beat P=8 solo", "C=8 solo", "C=beat P=8 solo"],
-        "H": ["C=8 P=16 run=3", "C=8 P=16 run=3", "C=8 P=hold minRun=3 run=3", "C=8 P=hold minRun=3 run=3"],
-        "I": ["C=16 P=16", "C=16 P=16", "C=16 P=hold minRun=3", "C=16 P=hold minRun=3"]
-      } },
-    {"id": "drop3", "bars": 4, "label": "DROP", "mode": "dual", "lap": 4, "counter": true, "revEvery": 1, "enter": "pulse", "look": {"palette": "gold", "rot": [0, 1], "zoom": [0.9, 1]}, "motif": "drop", "cycle": 4,
-      "plan": {
-        "N": ["C=beat P=8 solo", "C=8 solo"],
-        "H": ["C=16 P=8 stack run=3", "C=8 P=16 run=3", "C=16 P=8 run=3", "C=8 P=16 run=3"],
-        "I": ["C=all P=16 stack", "C=all P=16", "C=all P=16", "C=all P=all"]
-      } },
-    {"id": "drop4", "bars": 4, "label": "DROP", "mode": "dual", "lap": 4, "counter": true, "enter": "pulse", "look": {"palette": "hot", "zoom": [1, 1.12]}, "motif": "drop", "cycle": 4,
-      "plan": {
-        "N": ["C=8 P=8 stack solo", "C=8 P=8 solo", "C=8 P=8 stack solo", "C=beat P=8 solo"],
-        "H": ["C=16 P=16 stack run=3", "C=16 P=16 run=3", "C=16 P=16 stack run=3", "C=16 P=16 run=3"],
-        "I": ["C=all P=all stack", "C=all P=all", "C=all P=all stack", "C=all P=all"]
-      } },
-    {"id": "outro", "bars": 1, "label": "END", "mode": "tap", "lap": 8, "enter": "flash", "look": {"palette": "deep", "zoom": [1.12, 0.95]}, "white": "snare",
-      "plan": {
-        "N": ["W=@X..............."],
-        "H": ["W=@X..............."],
-        "I": ["W=@X..............."]
-      } }
+    {"id": "intro", "bars": 4, "label": "INTRO", "lap": 8, "lead": "snare", "teach": "TAP as the ball crosses each gate", "look": {"palette": "deep", "bg": "stars", "eq": "bars", "zoom": [0.9, 1]},
+      "plan": ["-", "L=@x...x...x...x...", "L=@x...x...x.x.x...", "L=@x.x.x...x.x.x..."] },
+    {"id": "intro2", "bars": 4, "label": "INTRO", "lap": 8, "lead": "snare", "teach": "DOUBLES: two quick taps on one ring", "look": {"palette": "ocean", "bg": "stars", "eq": "bars"},
+      "plan": ["L=@x.x.x...x.x.x...", "L=@x.xx....x.xx....", "L=@x.xx..x.x.xx..x.", "L=@X.......x...x..."] },
+    {"id": "verse", "bars": 4, "label": "VERSE", "lap": 8, "lead": "snare", "shape": "ellipse", "reverse": true, "warn": "REVERSE", "teach": "REVERSE: the ball turns round", "look": {"palette": "violet", "bg": "tunnel", "eq": "wave"},
+      "plan": ["L=@X.x.......x...x.", "L=@..x...x.x...x.x.", "L=@x.x...x.x.xx..x.", "L=@x.x.x.x...x.x.x."] },
+    {"id": "ghost", "bars": 4, "label": "VERSE", "lap": 8, "lead": "snare", "shape": "ellipse", "warn": "GHOST GATES", "teach": "GHOST GATES fade out: keep the rhythm", "look": {"palette": "violet", "bg": "tunnel", "eq": "wave", "rot": [0, 0.25]},
+      "plan": ["L=@x...x...x...x...", "L=@x...x...x...x... B=off ghost=B late", "L=@x.x.x...x.x.x...", "L=@x...x...x....... B=off ghost=B"] },
+    {"id": "spikes", "bars": 4, "label": "BUILD", "lap": 4, "lead": "snare", "jump": "in", "warn": "SPIKES", "teach": "SPIKES: tap the pad to hop over", "look": {"palette": "dusk", "bg": "grid", "eq": "bars", "zoom": [1, 1.06]},
+      "plan": ["B=@....x.......x... hop", "B=@x...x...x....... hop", "B=@x...x...x...x... hop L=@..x...x...x.....", "B=@x...x...x...x.x. hop L=@..x...x...x....."] },
+    {"id": "rush", "bars": 2, "label": "BUILD", "lap": 2, "lead": "snare", "jump": "in", "warn": "DOUBLE TIME", "look": {"palette": "dusk", "bg": "grid", "eq": "bars", "zoom": [1.06, 1.18], "drain": [0, 0.5], "vignette": [0, 0.5]},
+      "plan": ["B=@x...x...x...x... L=@..xx..x...xx..x."] },
+    {"id": "roll", "bars": 2, "label": "BUILD", "lap": 2, "lead": "full", "jump": "in", "look": {"palette": "dusk", "bg": "grid", "eq": "bars", "zoom": [1.18, 1.4], "drain": [0.5, 0.95], "vignette": [0.5, 0.9]},
+      "plan": ["L=@x.x.x.x.x.x.x.x.", "L=@x.xxx.xxx.xxx.xx"] },
+    {"id": "count", "bars": 1, "label": "READY", "lap": 4, "blackout": true, "count": true, "jump": "in", "look": {"palette": "dusk", "bg": "stars", "eq": "bars", "zoom": [1.4, 1.5], "drain": [1, 1], "vignette": [0.9, 1]},
+      "plan": ["B=@............X.x."] },
+    {"id": "drop1", "bars": 4, "label": "DROP", "lap": 4, "motif": "drop", "cycle": 4, "shape": "square", "rocket": 4, "enter": "drop", "look": {"palette": "neon", "bg": "tunnel", "eq": "burst", "zoom": [0.94, 1]},
+      "plan": ["B=16 stack run=3", "B=16 run=3", "B=16 run=3", "B=16 L=8 run=3"] },
+    {"id": "drop2", "bars": 3, "label": "DROP", "lap": 4, "motif": "drop", "cycle": 4, "shape": "square", "enter": "pulse", "look": {"palette": "aqua", "bg": "tunnel", "eq": "burst"},
+      "plan": ["B=8 L=16 run=3", "B=8 L=16 run=3 ghost=B", "B=8 L=16 run=3 ghost=B"] },
+    {"id": "breath", "bars": 1, "label": "DROP", "lap": 8, "motif": "drop", "cycle": 4, "shape": "square", "jump": "in", "warn": "HALF TIME", "look": {"palette": "aqua", "bg": "stars", "eq": "wave", "zoom": [1, 1.1]},
+      "plan": ["B=@............x.x. L=@..x...x...x....."] },
+    {"id": "drop3", "bars": 4, "label": "DROP", "lap": 4, "motif": "drop", "cycle": 4, "shape": "square", "revEvery": 1, "rocket": 2, "enter": "pulse", "warn": "REVERSES", "look": {"palette": "gold", "bg": "grid", "eq": "burst", "rot": [0, 1]},
+      "plan": ["B=16 L=8 stack run=3", "B=8 L=16 run=3", "B=16 L=8 run=3", "B=8 L=16 run=3"] },
+    {"id": "drop4", "bars": 4, "label": "DROP", "lap": 4, "motif": "drop", "cycle": 4, "shape": "circle", "enter": "pulse", "look": {"palette": "hot", "bg": "tunnel", "eq": "burst", "zoom": [1, 1.12], "flip": true},
+      "plan": ["B=16 L=16 stack run=3", "B=16 L=16 run=3", "B=16 L=16 stack run=3", "B=@X.x.x.x.x.xxx.x. L=@..x...x..x.x...."] },
+    {"id": "outro", "bars": 1, "label": "END", "lap": 8, "rocket": 6, "enter": "flash", "look": {"palette": "deep", "bg": "stars", "eq": "wave", "zoom": [1.12, 0.95]},
+      "plan": ["B=@X..............."] }
   ]
 }
