@@ -27,6 +27,9 @@ export interface SegmentDef {
   /** slingshot: entering this section flies the ball to a new planet in this screen direction */
   sling?: [number, number];
   mini?: boolean; // mini mode: small, fast rings for the phrase
+  orbs?: boolean; // new core: fast notes in this section become jump orbs
+  pads?: boolean; // new core: long flat stretches get a launch pad on a strong beat
+  chain?: number; // new core: back-to-back hops allowed before a breath (default 3)
   hazard?: string; // 'beam': hops clear a sweeping beam instead of a spike
   reverse?: boolean;
   /** the one sound this section's taps follow: arp, kick, snare or lead */

@@ -6,6 +6,19 @@ A one-button rhythm game: a ball orbits a ring in time with the music, you tap a
 
 **Music licence.** The tracks are NCS releases and are here for private testing only. Releasing the game needs a game licence from NoCopyrightSounds (ncs.io). Credits and that note are in `levels/manifest.json` and shown in the game.
 
+## New core on the `gd-core` branch (Heroes Tonight slice)
+
+After the playtest of the four judged levels, the core is being rebuilt Geometry Dash style. On this branch:
+
+- **The ball moves by itself**, one lap of a ring per 8 beats; a ramp at the end of each lap carries it out to the next ring. **A tap hops**, and a hop lasts exactly one beat. There are no PERFECT/GREAT/GOOD judgements, no health and no grades: you clear a hazard or you crash, and a crash restarts at once (practice: from the last checkpoint). The HUD shows percent, best percent and attempts.
+- **Hazards come from the chart.** `src/gd/track.ts` turns the level's rhythm-first chart into a track: each take-off is a chart note with a spike in the middle of its arc; every flat stretch of a beat or more gets an overhead bar; rows of back-to-back hops take a breath every few hops (`chain` per section); sections flagged `pads` get a launch pad on a strong beat; sections flagged `orbs` turn notes half a beat after a take-off into jump orbs.
+- **Timing is forgiving by geometry**: about ±95 ms at 128 BPM per hop, a tap up to 150 ms before landing hops on landing, and hazards are drawn bigger than the part that kills.
+- **Movement** is a pure function of a smooth clock (`src/gd/clock.ts`) that is nudged by at most 0.5% toward the audio clock and never steps; collisions run in fixed 240 Hz steps (`src/gd/sim.ts`). After an autoplay run the results screen and the console show the frame-by-frame clock check.
+- **Picture** (`src/gd/render.ts`): hazards are always white with a pink edge on a dark track bed, pads cyan, orbs gold; only the world behind follows the music, through one intensity value from the measured energy of each bar.
+- `tests/gd.test.ts`: autoplay clears; every tap 80 ms early or late clears; random ±60 ms clears; 130 ms off crashes; doing nothing crashes; spam at 8, 10 and 12 taps a second crashes at once, and from any section start within two bars; a stray jump under any long bar crashes; the clock never steps.
+
+Only Heroes Tonight is built for this core (`SLICE` in `src/game/packs.ts`). The judged one-button game is unchanged on the `one-button` branch.
+
 ## Run it
 
 Needs Node 20 or newer.

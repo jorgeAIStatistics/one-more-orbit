@@ -21,6 +21,9 @@ export interface LevelPack {
   chart: ChartFile;
 }
 
+/** Levels built for the new (hop) core so far. The others wait for the playtest of this one. */
+export const SLICE = ['heroes'];
+
 export interface TrackCredit { id: string; title: string; artist: string; release: string; playable: boolean }
 export const manifest = manifestJson as { licenceNote: string; creditSuffix: string; tracks: TrackCredit[] };
 

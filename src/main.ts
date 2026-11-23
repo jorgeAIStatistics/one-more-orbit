@@ -1,16 +1,16 @@
 import './style.css';
 import { audio } from './audio/audio';
-import { errorStats } from './game/engine';
 import { BADGES, ORBS, earned } from './game/extras';
-import { PACKS, creditLine, manifest } from './game/packs';
-import { Run } from './game/run';
-import { Renderer } from './render/renderer';
+import { PACKS as ALL_PACKS, SLICE, creditLine, manifest } from './game/packs';
+import { GdRenderer as Renderer } from './gd/render';
+import { GdRun as Run } from './gd/run';
 import { bestFor, persist, save } from './save';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 type Screen = 'menu' | 'play' | 'pause' | 'results' | 'settings' | 'calib' | 'credits' | 'extras';
 
 const unlockAll = /[?&]unlock=1/.test(location.search); // testing aid
+const PACKS = ALL_PACKS.filter((p) => SLICE.includes(p.level.id));
 let levelIdx = Math.max(0, Math.min(PACKS.length - 1, save.level || 0));
 let pack = PACKS[levelIdx];
 /** The setlist is the difficulty curve: clearing a level unlocks the next. */
@@ -52,17 +52,16 @@ function renderMenu(): void {
   $('levelRating').textContent = `★ ${pack.chart.stars.toFixed(1)}`;
   $('levelBest').textContent = b.attempts === 0
     ? 'Not played yet'
-    : `Best ${b.grade || '-'} · ${b.accuracy.toFixed(2)}% · ${b.score} · reached ${b.pct}% · ${b.attempts} attempt${b.attempts === 1 ? '' : 's'}${b.cleared ? ' · CLEARED' : ''}`;
+    : `Best ${b.cleared ? 100 : b.pct}% · ${b.attempts} attempt${b.attempts === 1 ? '' : 's'}${b.cleared ? ' · CLEARED' : ''}`;
   $('practiceBtn').classList.toggle('on', practice);
-  $('hardcoreBtn').classList.toggle('on', save.hardcore);
   $('botBtn').classList.toggle('on', botMode);
   const play = $<HTMLButtonElement>('playBtn');
   play.disabled = !open;
   play.textContent = !open ? `CLEAR ${PACKS[levelIdx - 1].level.title.replace(/ \(.*/, '').toUpperCase()} TO UNLOCK` : botMode ? 'WATCH AUTOPLAY' : practice ? 'PRACTICE' : 'PLAY';
 }
 
-/** Starts an attempt. `from` is a song time: practice restarts from the last checkpoint. */
-function startRun(from = 0): void {
+/** Starts an attempt. `from` is a song time: practice restarts from the last checkpoint. `quick` shortens the run-in after a crash. */
+function startRun(from = 0, quick = false): void {
   if (!levelOpen(levelIdx)) return;
   if (practice && !botMode && !save.practiced[pack.level.id]) { save.practiced[pack.level.id] = true; persist(); }
   audio.ensure();
@@ -74,110 +73,84 @@ function startRun(from = 0): void {
     persist();
   }
   renderer.reset();
-  run = new Run(pack, { bot: botMode, practice: practice && !botMode, hardcore: save.hardcore && counted, startAt: from }, onRunEnd);
+  run = new Run(pack, { bot: botMode, practice: practice && !botMode, startAt: from, leadIn: from > 0 ? 1.5 : quick ? 0.7 : 1 }, onRunEnd);
+  const b = bestFor(pack.level.id);
   $('dropMark').style.left = `${(run.level.dropTime / run.level.endTime) * 100}%`;
+  $('bestMark').style.left = `${b.cleared ? 100 : b.pct}%`;
+  $('bestMark').classList.toggle('hidden', b.pct === 0 && !b.cleared);
+  $('bestPct').textContent = b.cleared ? 'CLEARED' : `BEST ${b.pct}%`;
+  $('attempt').textContent = botMode ? 'AUTOPLAY' : practice ? 'PRACTICE' : `ATTEMPT ${b.attempts}`;
+  hudPct = -1;
   show('play');
   void run.start().then(() => { if (run && run.state === 'error') { alert(`Could not start the level: ${run.error}`); show('menu'); } });
 }
 
-// ------------------------------------------------------------------ results
+let toastTimer = 0;
+function toast(text: string): void {
+  const el = $('toast');
+  el.textContent = text;
+  el.classList.remove('show');
+  void el.offsetWidth; // restart the animation
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => el.classList.remove('show'), 1600);
+}
+
+// ------------------------------------------------------------------ end of an attempt
+/** A crash restarts at once (practice: from the last checkpoint). Only a clear shows a results screen. */
 function onRunEnd(r: Run): void {
   if (r !== run) return;
-  const e = r.engine;
-  const failed = e.failed;
-  if (failed && r.opts.practice) {
-    // practice: back to the last checkpoint (the start of the section; the one before if you fell right at its start)
-    const seg = r.level.segAt(e.failT);
-    const cp = e.failT - seg.t0 < 1.2 && seg.index > 0 ? r.level.segments[seg.index - 1].t0 : seg.t0;
-    startRun(cp);
-    return;
-  }
-  const pct = failed ? Math.floor(r.progress * 100) : 100;
   const id = r.pack.level.id;
   const prev = bestFor(id);
   const counted = !r.opts.bot && !r.opts.practice;
+  if (r.state === 'failed') {
+    if (r.opts.practice) {
+      // back to the start of the section; the one before if you fell right at its start
+      const seg = r.level.segAt(r.crashTime);
+      startRun(r.crashTime - seg.t0 < 1.2 && seg.index > 0 ? r.level.segments[seg.index - 1].t0 : seg.t0);
+      return;
+    }
+    const pct = r.pct;
+    if (counted && pct > prev.pct) {
+      save.bests[id] = { ...prev, pct };
+      persist();
+      if (pct >= 2) toast(`NEW BEST ${pct}%`);
+    }
+    startRun(0, true);
+    return;
+  }
   const fresh: string[] = [];
-  const newBest = counted && !failed && e.score > prev.score;
   if (counted) {
-    const b = { ...prev };
-    b.pct = Math.max(b.pct, pct);
-    if (!failed) {
-      b.cleared = true;
-      if (e.score > b.score) { b.score = e.score; b.grade = e.grade; }
-      b.accuracy = Math.max(b.accuracy, e.accuracy);
-    }
-    save.bests[id] = b;
-    if (!failed) {
-      const cleared = PACKS.map((p) => p.level.id).filter((x) => bestFor(x).cleared);
-      for (const bid of earned(id, e.grade, e.counts.miss, !!r.opts.hardcore, !!save.practiced[id], cleared)) if (!save.badges[bid]) { save.badges[bid] = true; fresh.push(bid); }
-    }
+    save.bests[id] = { ...prev, pct: 100, cleared: true };
+    const cleared = ALL_PACKS.map((p) => p.level.id).filter((x) => bestFor(x).cleared);
+    // Grade, no-miss and hardcore badges belonged to the judged game; a clear here earns the clear badges only.
+    for (const bid of earned(id, 'B', 1, false, !!save.practiced[id], cleared)) if (!save.badges[bid]) { save.badges[bid] = true; fresh.push(bid); }
   }
   const news = fresh.map((bid) => BADGES.find((x) => x.id === bid)?.name || bid).map((n) => `Badge: ${n}`);
   for (const o of ORBS) if (o.needs && fresh.includes(o.needs)) news.push(`Orb: ${o.name}`);
-  if (counted && !failed && !prev.cleared && levelIdx + 1 < PACKS.length) news.push(`Level: ${PACKS[levelIdx + 1].level.title.replace(/ \(.*/, '')}`);
-  $('resUnlocks').textContent = news.length ? `Unlocked  ${news.join(' · ')}` : '';
-  for (const s of r.level.segments) if (s.teach && s.t1 < r.time) save.teachSeen[s.id] = true;
+  if (counted && !prev.cleared && levelIdx + 1 < PACKS.length) news.push(`Level: ${PACKS[levelIdx + 1].level.title.replace(/ \(.*/, '')}`);
   persist();
-  const grade = e.grade;
-  $('resTag').textContent = r.opts.bot ? 'AUTOPLAY · NOT SAVED' : r.opts.practice ? 'PRACTICE · NOT SAVED' : newBest ? '★ NEW BEST ★' : `ATTEMPT ${bestFor(id).attempts}`;
-  const g = $('resGrade');
-  g.textContent = grade;
-  g.className = `grade g-${grade}`;
-  $('resTitle').textContent = failed ? `FAILED AT ${pct}%` : 'LEVEL COMPLETE';
-  $('resSub').textContent = `${r.level.title}${r.opts.hardcore ? ' · HARDCORE' : ''}${failed ? ` · best ${Math.max(prev.pct, pct)}%` : ''}`;
-  $('resAcc').textContent = `${e.accuracy.toFixed(2)}%`;
-  $('resScore').textContent = String(e.score);
-  $('resCombo').textContent = String(e.maxCombo);
-  $('resP').textContent = String(e.counts.perfect);
-  $('resG').textContent = String(e.counts.great);
-  $('resO').textContent = String(e.counts.good);
-  $('resM').textContent = String(e.counts.miss);
-  // timeline: how far you got, every miss, the main drop
-  $('tlFill').style.transform = `scaleX(${pct / 100})`;
-  $('tlDrop').style.left = `${(r.level.dropTime / r.level.endTime) * 100}%`;
-  const marks = $('tlMarks');
-  marks.innerHTML = '';
-  for (const ev of e.log) {
-    if (ev.judge !== 'miss') continue;
-    const i = document.createElement('i');
-    i.style.left = `${Math.max(0, Math.min(100, (ev.t / r.level.endTime) * 100))}%`;
-    marks.appendChild(i);
-  }
-  if (failed) {
-    const i = document.createElement('i');
-    i.className = 'fail';
-    i.style.left = `${pct}%`;
-    marks.appendChild(i);
-  }
-  const st = errorStats(e.errs);
-  const mean = st.mean * 1000;
-  $('resTiming').textContent = st.n < 3 ? '' : Math.abs(mean) < 3
-    ? `Average timing: dead on the beat (spread ±${Math.round(st.sd * 1000)} ms)`
-    : `Average timing: ${Math.abs(Math.round(mean))} ms ${mean > 0 ? 'late' : 'early'} (spread ±${Math.round(st.sd * 1000)} ms)`;
-  const suggest = !r.opts.bot && st.n >= 20 && Math.abs(mean) >= 10 && st.sd * 1000 < 45;
-  $('resOffset').classList.toggle('hidden', !suggest);
-  if (suggest) {
-    const next = Math.max(-200, Math.min(400, save.audioOffset + Math.round(mean)));
-    $('resOffsetText').textContent = `You were ${Math.abs(Math.round(mean))} ms ${mean > 0 ? 'late' : 'early'} all run. Set audio offset to ${fmtMs(next)}?`;
-    $('resOffsetApply').onclick = () => { save.audioOffset = next; persist(); $('resOffset').classList.add('hidden'); };
-  }
+  $('resUnlocks').textContent = news.length ? `Unlocked  ${news.join(' · ')}` : '';
+  $('resTag').textContent = r.opts.bot ? 'AUTOPLAY · NOT SAVED' : r.opts.practice ? 'PRACTICE · NOT SAVED' : prev.cleared ? `ATTEMPT ${prev.attempts}` : '★ FIRST CLEAR ★';
+  $('resSub').textContent = r.level.title;
+  $('resAttempts').textContent = counted ? String(bestFor(id).attempts) : '–';
+  $('resJumps').textContent = String(r.sim.jumps);
+  $('resTime').textContent = fmtTime(r.level.endTime - r.startAt);
+  const sm = r.smoothness();
+  const line = `Movement check: ${sm.frames} frames, clock speed never more than ${sm.worstPct.toFixed(2)}% off (average ${sm.meanPct.toFixed(3)}%)`;
+  console.log(`[one more orbit] ${r.opts.bot ? 'autoplay' : 'run'} cleared ${r.level.title}. ${line}`);
+  $('resNote').textContent = r.opts.bot ? line : '';
   show('results');
 }
 
 // ------------------------------------------------------------------ HUD
-let hudScore = -1;
-let hudCombo = -1;
+let hudPct = -1;
 let hudSeg = '';
 function updateHud(r: Run): void {
-  const e = r.engine;
-  if (e.score !== hudScore) { hudScore = e.score; $('score').textContent = String(e.score); }
-  if (e.combo !== hudCombo) { hudCombo = e.combo; $('combo').textContent = String(e.combo); }
-  $('acc').textContent = `${e.accuracy.toFixed(2)}%`;
-  const hf = $('healthFill');
-  hf.style.transform = `scaleX(${Math.max(0, e.health) / 100})`;
-  hf.classList.toggle('low', e.health < 35);
+  const pct = r.pct;
+  if (pct !== hudPct) { hudPct = pct; $('pct').textContent = `${pct}%`; }
   $('progFill').style.transform = `scaleX(${r.progress.toFixed(4)})`;
-  const label = r.level.segAt(Math.max(0, r.time)).label + (r.opts.bot ? ' · AUTOPLAY' : r.opts.practice ? ' · PRACTICE' : r.opts.hardcore ? ' · HARDCORE' : '');
+  const label = r.level.segAt(Math.max(0, r.time)).label;
   if (label !== hudSeg) { hudSeg = label; $('section').textContent = label; }
 }
 
@@ -232,9 +205,7 @@ function renderSettings(): void {
   $<HTMLInputElement>('setSfx').value = String(save.sfx);
   $('aoVal').textContent = fmtMs(save.audioOffset);
   $('voVal').textContent = fmtMs(save.visualOffset);
-  $('setErrorBar').classList.toggle('on', save.errorBar);
   $('setMotion').classList.toggle('on', save.reducedMotion);
-  $('setHardcore').classList.toggle('on', save.hardcore);
   const lat = Math.round(audio.latency() * 1000);
   $('setInfo').textContent = audio.ctx ? `This device reports ${lat} ms of output delay, already compensated.` : '';
 }
@@ -253,7 +224,7 @@ function nudge(key: 'audioOffset' | 'visualOffset', by: number): void {
   persist();
   renderSettings();
 }
-function toggle(key: 'errorBar' | 'reducedMotion' | 'hardcore'): void {
+function toggle(key: 'reducedMotion'): void {
   save[key] = !save[key];
   persist();
   renderSettings();
@@ -261,7 +232,7 @@ function toggle(key: 'errorBar' | 'reducedMotion' | 'hardcore'): void {
 
 // ------------------------------------------------------------------ calibration
 // Audio: tap along to a click; the average distance between taps and clicks becomes the audio offset.
-// Visual: no sound; tap when the ball crosses the gate; the average becomes the visual offset.
+// Visual: no sound; tap when the ball crosses the mark; the average becomes the visual offset.
 const CAL_PERIOD = 0.6;
 const CAL_NEED = 14;
 const cal = { mode: 'audio' as 'audio' | 'visual', running: false, clicks: [] as number[], taps: [] as number[], startPerf: 0, timer: 0 };
@@ -271,7 +242,7 @@ function renderCal(): void {
   $('calVisualTab').classList.toggle('on', cal.mode === 'visual');
   $('calText').textContent = cal.mode === 'audio'
     ? 'Press Start, then tap in time with the click. Go by what you hear. Use the speakers or headphones you will play with.'
-    : 'No sound here. Press Start, then tap each time the ball crosses the gate at the top of the ring.';
+    : 'No sound here. Press Start, then tap each time the ball crosses the mark at the top of the ring.';
   const dots = $('calDots');
   dots.innerHTML = '';
   for (let i = 0; i < CAL_NEED; i++) { const d = document.createElement('i'); if (i < cal.taps.length) d.className = 'on'; dots.appendChild(d); }
@@ -344,7 +315,6 @@ function closeCalib(): void {
 // ------------------------------------------------------------------ wiring
 $('playBtn').addEventListener('click', () => startRun());
 $('practiceBtn').addEventListener('click', () => { practice = !practice; renderMenu(); });
-$('hardcoreBtn').addEventListener('click', () => { save.hardcore = !save.hardcore; persist(); renderMenu(); });
 $('botBtn').addEventListener('click', () => { botMode = !botMode; renderMenu(); });
 $('settingsBtn').addEventListener('click', () => openSettings('menu'));
 $('creditsBtn').addEventListener('click', () => show('credits'));
@@ -367,9 +337,7 @@ $('aoMinus').addEventListener('click', () => nudge('audioOffset', -5));
 $('aoPlus').addEventListener('click', () => nudge('audioOffset', 5));
 $('voMinus').addEventListener('click', () => nudge('visualOffset', -5));
 $('voPlus').addEventListener('click', () => nudge('visualOffset', 5));
-$('setErrorBar').addEventListener('click', () => toggle('errorBar'));
 $('setMotion').addEventListener('click', () => toggle('reducedMotion'));
-$('setHardcore').addEventListener('click', () => toggle('hardcore'));
 $('calibBtn').addEventListener('click', openCalib);
 $('calAudioTab').addEventListener('click', () => { cal.mode = 'audio'; cal.running = false; cal.taps = []; $('calResult').textContent = ''; renderCal(); });
 $('calVisualTab').addEventListener('click', () => { cal.mode = 'visual'; cal.running = false; cal.taps = []; $('calResult').textContent = ''; void audio.suspend().then(() => audio.resume()); renderCal(); });
@@ -429,5 +397,5 @@ requestAnimationFrame(loop);
 
 // Hooks for tests and debugging; the game itself never reads these.
 Object.assign(window, {
-  __omo: { audio, save, get run() { return run; }, tick, level: selectLevel, start: (bot: boolean, prac = false, from = 0) => { botMode = bot; practice = prac; startRun(from); } }
+  __omo: { audio, save, get run() { return run; }, get screen() { return screen; }, tick, level: selectLevel, start: (bot: boolean, prac = false, from = 0) => { botMode = bot; practice = prac; startRun(from); } }
 });

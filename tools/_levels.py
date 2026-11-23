@@ -8,13 +8,13 @@ write('heroes', dict(id='heroes', title='Heroes Tonight (feat. Johnning)', artis
   seg('calm', 4, 'INTRO', 16, 'arp', ['L=8'], L('dawn', zoom=[0.9, 1]), lead='snare', motif='calm', cycle=4, teach='TAP as the ball crosses each gate'),
   seg('calm2', 4, 'INTRO', 16, 'arp', ['L=8'], L('sky'), lead='snare', motif='calm', cycle=4),
   seg('build', 2, 'BUILD', 8, 'kick', ['B=@x...x...x...x...'], L('dusk', bg='tunnel', zoom=[1, 1.04]), warn='BUILD-UP'),
-  seg('build2', 4, 'BUILD', 4, 'kick', ['B=@x.x.x.x.x.x.x.x.'], L('dusk', bg='tunnel', zoom=[1.04, 1.16], drain=[0, 0.7], vignette=[0, 0.6]), warn='FASTER'),
+  seg('build2', 4, 'BUILD', 4, 'kick', ['B=@x.x.x.x.x.x.x.x.'], L('dusk', bg='tunnel', zoom=[1.04, 1.16], drain=[0, 0.7], vignette=[0, 0.6]), warn='FASTER', chain=7),
   seg('gap', 1, 'BUILD', 4, 'kick', ['B=@x.xx............'], L('dusk', bg='tunnel', zoom=[1.16, 1.2], drain=[0.7, 0.95], vignette=[0.6, 0.9])),
   seg('count', 1, 'READY', 8, 'kick', ['B=@............X...'], L('dusk', zoom=[1.2, 1.25], drain=[1, 1], vignette=[0.9, 1]), blackout=True, count=True),
-  seg('drop1', 4, 'DROP', 8, 'lead', ['L=16 acc', 'L=16', 'L=16', 'L=16'], L('dawn', bg='tunnel', eq='burst', zoom=[0.94, 1]), lead='hook', motif='drop', cycle=4, rocket=3, sling=[1, -0.3], enter='drop'),
-  seg('drop2', 4, 'DROP', 8, 'lead', ['L=16 acc', 'L=16', 'L=16', 'L=16'], L('gold', bg='tunnel', eq='burst'), lead='hook', motif='drop', cycle=4, enter='pulse'),
-  seg('drop3', 4, 'DROP', 8, 'lead', ['L=16 flip', 'L=16', 'L=16 flip', 'L=16'], L('sky', bg='grid', eq='burst', rot=[0, 0.5]), lead='hook', motif='drop', cycle=4, enter='pulse', warn='FLIP GATES', teach='FLIP GATE: tapping it turns the ball round'),
-  seg('drop4', 4, 'DROP', 8, 'lead', ['L=16 acc', 'L=16', 'L=16', 'L=16'], L('hot', bg='tunnel', eq='burst', zoom=[1, 1.08]), lead='hook', motif='drop', cycle=4, rocket=2, enter='pulse'),
+  seg('drop1', 4, 'DROP', 8, 'lead', ['L=16 acc', 'L=16', 'L=16', 'L=16'], L('dawn', bg='tunnel', eq='burst', zoom=[0.94, 1]), lead='hook', motif='drop', cycle=4, pads=True, rocket=3, sling=[1, -0.3], enter='drop'),
+  seg('drop2', 4, 'DROP', 8, 'lead', ['L=16 acc', 'L=16', 'L=16', 'L=16'], L('gold', bg='tunnel', eq='burst'), lead='hook', motif='drop', cycle=4, pads=True, enter='pulse'),
+  seg('drop3', 4, 'DROP', 8, 'lead', ['L=16 flip', 'L=16', 'L=16 flip', 'L=16'], L('sky', bg='grid', eq='burst', rot=[0, 0.5]), lead='hook', motif='drop', cycle=4, pads=True, enter='pulse', warn='FLIP GATES', teach='FLIP GATE: tapping it turns the ball round'),
+  seg('drop4', 4, 'DROP', 8, 'lead', ['L=16 acc', 'L=16', 'L=16', 'L=16'], L('hot', bg='tunnel', eq='burst', zoom=[1, 1.08]), lead='hook', motif='drop', cycle=4, pads=True, rocket=2, orbs=True, enter='pulse'),
   seg('outro', 4, 'END', 8, 'lead', ['L=@X...............', 'L=@x...............', 'L=@x...............', '-'], L('dawn', eq='wave', zoom=[1.08, 0.95]), lead='hook', enter='flash')])
 
 # ---- 3. Blank: adds moving gates and camera tilt, and combines ghost gates, spikes, inward jumps and shapes.
