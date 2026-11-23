@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <meta name="theme-color" content="#04061a" />
+  <meta name="theme-color" content="#05060f" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>ONE MORE ORBIT</title>
 </head>
@@ -12,110 +12,147 @@
 
   <div id="hud" class="hidden">
     <div class="hud-row">
-      <div class="hud-left"><div id="attempt">ATTEMPT 1</div><div id="section">INTRO</div></div>
-      <div class="hud-mid"><div id="pct">0%</div><small id="bestPct">BEST 0%</small></div>
-      <div class="hud-right"><button id="pauseBtn" class="icon" type="button" aria-label="Pause">❚❚</button></div>
+      <div class="hud-left"><div id="attempt"></div><div id="section"></div></div>
+      <div class="hud-mid"><div id="pct">0%</div><small id="bestPct"></small></div>
+      <div class="hud-right"><button id="pauseBtn" class="icon" type="button" data-icon="pause" aria-label="Pause"></button></div>
     </div>
+    <div id="titleCard" class="title-card" aria-hidden="true"><small id="tcLevel"></small><b id="tcSong"></b><span id="tcArtist"></span></div>
+    <div id="countIn" class="count-in" aria-hidden="true"></div>
+    <div id="tutor" class="tutor hidden"><p id="tutorText"></p><button id="tutorSkip" class="chip" type="button">Skip tutorial</button></div>
     <div id="toast" class="toast" aria-live="polite"></div>
+    <div id="finale" class="finale" aria-hidden="true"><b id="finaleTitle">LEVEL COMPLETE</b><div class="track"><i id="finaleFill"></i></div><span id="finaleNote"></span></div>
     <div id="syncOverlay" class="sync-overlay hidden"></div>
     <div class="progress" aria-hidden="true"><div id="progFill"></div><i id="bestMark"></i><i id="dropMark"></i></div>
   </div>
 
-  <section id="menu" class="screen">
-    <div class="shell">
-      <div id="menuTag" class="eyebrow">FEEL LAB</div>
-      <h1 class="logo">ONE MORE<br />ORBIT</h1>
-      <div class="track">
-        <div class="picker"><button id="levelPrev" class="icon" type="button" aria-label="Previous level">&lsaquo;</button><div><div id="levelNo" class="eyebrow"></div><div id="trackName" class="track-name">Sky High</div></div><button id="levelNext" class="icon" type="button" aria-label="Next level">&rsaquo;</button></div>
-        <div id="trackMeta" class="track-meta"></div>
-        <div class="track-stats"><span id="levelRating" class="d-stars">★</span><span id="levelBest" class="d-best"></span></div>
-      </div>
-      <button id="playBtn" class="primary" type="button">PLAY</button>
-      <div class="row">
-        <button id="practiceBtn" class="pill toggle" type="button">Practice: checkpoints</button>
-        <button id="fromBtn" class="pill toggle" type="button">Start at the build-up</button>
-        <button id="botBtn" class="pill toggle" type="button">Watch autoplay</button>
-      </div>
-      <div class="row">
-        <button id="syncBtn" class="pill" type="button">Sync check · 10 s</button>
-        <button id="settingsBtn" class="pill" type="button">Settings</button>
-        <button id="extrasBtn" class="pill" type="button">Orbs &amp; badges</button>
-        <button id="creditsBtn" class="pill" type="button">Music credits</button>
-        <button id="recordBtn" class="pill" type="button">Record mode</button>
-      </div>
-      <p class="hint">One button: tap anywhere, or press any key. White marks must be hit (a little off still clears). Gold notes are optional: on the beat they build flow, and in the roll they charge the drop. R restarts, Esc pauses.</p>
-      <p class="hint dim">Changed headphones or speakers? Run the sync check again: Bluetooth adds 150 to 250 ms.</p>
+  <section id="title" class="screen">
+    <div class="title-in">
+      <h1 class="mark" aria-label="One More Orbit"><small>ONE MORE</small><span class="word"><span class="o"><i></i></span><span>R</span><span>B</span><span>I</span><span>T</span></span></h1>
+      <p id="cta" class="cta">TAP TO START</p>
     </div>
   </section>
 
-  <section id="pause" class="screen dim-bg hidden">
-    <div class="card">
-      <h2>PAUSED</h2>
-      <button id="resumeBtn" class="primary" type="button">RESUME</button>
-      <div class="row">
-        <button id="pauseRestartBtn" class="pill" type="button">Restart (R)</button>
-        <button id="pauseSettingsBtn" class="pill" type="button">Settings</button>
-        <button id="pauseQuitBtn" class="pill" type="button">Quit</button>
-      </div>
-      <div class="sync-box"><span id="pauseSyncText"></span><div class="row"><button id="pauseSyncFix" class="pill hidden" type="button"></button><button id="pauseSyncCal" class="pill" type="button">Sync check · 10 s</button></div></div>
+  <section id="levels" class="screen">
+    <header class="topbar"><button id="lvBack" class="icon" type="button" data-icon="back" aria-label="Back to the title"></button><span class="label">CHOOSE A LEVEL</span><span class="icon ghost"></span></header>
+    <div class="carousel">
+      <button id="lvPrev" class="icon nav" type="button" data-icon="left" aria-label="Previous level"></button>
+      <div id="cards" class="cards"></div>
+      <button id="lvNext" class="icon nav" type="button" data-icon="right" aria-label="Next level"></button>
+    </div>
+    <div id="dots" class="dots" aria-hidden="true"></div>
+    <div class="foot">
+      <div class="actions"><button id="playBtn" class="btn primary" type="button">PLAY</button><button id="practiceBtn" class="btn secondary" type="button">PRACTICE</button></div>
+      <nav class="tabs" aria-label="More">
+        <button id="orbsBtn" class="tab" type="button" data-icon="orb"><span>Orbs</span></button>
+        <button id="badgesBtn" class="tab" type="button" data-icon="badge"><span>Badges</span></button>
+        <button id="settingsBtn" class="tab" type="button" data-icon="gear"><span>Settings</span></button>
+      </nav>
     </div>
   </section>
 
-  <section id="results" class="screen dim-bg hidden">
-    <div class="card">
-      <div id="resTag" class="eyebrow"></div>
-      <h2 id="resTitle">LEVEL COMPLETE</h2>
-      <div id="resSub" class="sub"></div>
-      <div class="stats">
-        <div><b id="resAttempts">0</b><small>Attempts</small></div>
-        <div><b id="resOnBeat">0%</b><small>On the beat</small></div>
-        <div><b id="resStreak">0</b><small>Best streak</small></div>
+  <section id="pause" class="screen veil">
+    <div class="panel narrow">
+      <h2 class="big-title">PAUSED</h2>
+      <button id="resumeBtn" class="btn primary" type="button">RESUME</button>
+      <div class="list">
+        <button id="pauseRestartBtn" class="btn secondary line" type="button" data-icon="restart">Restart</button>
+        <button id="pausePracticeBtn" class="btn secondary line" type="button" data-icon="flag">Practice from here</button>
+        <button id="pauseSkipBtn" class="btn secondary line" type="button" data-icon="skip">Practice the build-up and drop</button>
+        <button id="pauseSettingsBtn" class="btn secondary line" type="button" data-icon="gear">Settings</button>
+        <button id="pauseQuitBtn" class="btn secondary line" type="button" data-icon="exit">Quit</button>
       </div>
-      <div id="resNote" class="sub"></div>
-      <div class="sync-box"><b>SYNC CHECK</b><span id="resSyncText"></span><div class="row"><button id="resSyncFix" class="pill hidden" type="button"></button><button id="resSyncCal" class="pill" type="button">Recalibrate · 10 s</button></div></div>
-      <div id="resUnlocks" class="unlocks"></div>
-      <button id="retryBtn" class="primary" type="button">PLAY AGAIN (R)</button>
-      <div class="row"><button id="resMenuBtn" class="pill" type="button">Menu</button></div>
+      <div class="sync-box"><b>SYNC</b><span id="pauseSyncText"></span><div class="chips"><button id="pauseSyncFix" class="chip fix hidden" type="button"></button><button id="pauseSyncCal" class="chip" type="button">Sync check · 10 s</button></div></div>
     </div>
   </section>
 
-  <section id="settings" class="screen dim-bg hidden">
-    <div class="card wide">
-      <h2>SETTINGS &amp; SYNC</h2>
-      <label class="set"><span>Music volume</span><input id="setMusic" type="range" min="0" max="1" step="0.05" /></label>
-      <label class="set"><span>Hitsound volume</span><input id="setSfx" type="range" min="0" max="1" step="0.05" /></label>
-      <div class="set"><span>Audio offset<small>Raise it if your on-time taps don't build flow (Bluetooth, TV speakers)</small></span>
-        <div class="stepper"><button id="aoMinus" class="icon" type="button">−</button><b id="aoVal">0 ms</b><button id="aoPlus" class="icon" type="button">+</button></div></div>
+  <section id="results" class="screen veil">
+    <div class="panel wide results">
+      <div class="res-head">
+        <span id="resLevel" class="label"></span>
+        <div class="pct-big"><b id="resPct">100</b><i>%</i></div>
+        <span id="resCallout" class="callout hidden"></span>
+        <h2 id="resTitle">LEVEL COMPLETE</h2>
+      </div>
+      <div class="res-body">
+        <div class="track big"><i id="resFill"></i><u id="resDrop"><em>DROP</em></u><s id="resCrash" class="hidden"></s></div>
+        <div class="stats4">
+          <div><b id="resAttempts">0</b><span>Attempts</span></div>
+          <div><b id="resOnBeat">0%</b><span>On the beat</span></div>
+          <div><b id="resStreak">0</b><span>Best streak</span></div>
+          <div><b id="resCharge">0%</b><span>Drop charge</span></div>
+        </div>
+        <div id="resUnlocks" class="unlocks"></div>
+        <div class="sync-box"><b>SYNC</b><span id="resSyncText"></span><div class="chips"><button id="resSyncFix" class="chip fix hidden" type="button"></button><button id="resSyncCal" class="chip" type="button">Recalibrate · 10 s</button></div></div>
+        <p id="resNote" class="note"></p>
+        <div class="res-actions">
+          <button id="retryBtn" class="btn primary" type="button">RETRY</button>
+          <div class="two"><button id="nextBtn" class="btn secondary" type="button">NEXT LEVEL</button><button id="resLevelsBtn" class="btn secondary" type="button">LEVELS</button></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="settings" class="screen veil">
+    <div class="panel wide scroll">
+      <header class="topbar"><button id="settingsClose" class="icon" type="button" data-icon="back" aria-label="Back"></button><span class="label">SETTINGS</span><span class="icon ghost"></span></header>
+      <h3>Sound</h3>
+      <label class="set"><span>Music</span><input id="setMusic" type="range" min="0" max="1" step="0.05" /></label>
+      <label class="set"><span>Effects</span><input id="setSfx" type="range" min="0" max="1" step="0.05" /></label>
+      <label class="set"><span>Tap sounds</span><input id="setHit" type="range" min="0" max="1" step="0.05" /></label>
+      <h3>Sync</h3>
+      <div class="set"><span>Audio offset<small>Raise it if on-time taps read late (Bluetooth adds 150 to 250 ms)</small></span>
+        <div class="stepper"><button id="aoMinus" class="icon small" type="button" aria-label="Lower">−</button><b id="aoVal">0 ms</b><button id="aoPlus" class="icon small" type="button" aria-label="Raise">+</button></div></div>
       <div class="set"><span>Visual offset<small>Raise it if the ball looks behind the music</small></span>
-        <div class="stepper"><button id="voMinus" class="icon" type="button">−</button><b id="voVal">0 ms</b><button id="voPlus" class="icon" type="button">+</button></div></div>
-      <button id="calibBtn" class="primary small" type="button">CALIBRATE BY TAPPING</button>
-      <div class="row wrap">
-        <button id="setMotion" class="pill toggle" type="button">Reduced motion</button>
-        <button id="setSync" class="pill toggle" type="button">Sync overlay</button>
-      </div>
-      <div id="setInfo" class="sub"></div>
-      <div class="row"><button id="settingsClose" class="pill" type="button">Done</button></div>
+        <div class="stepper"><button id="voMinus" class="icon small" type="button" aria-label="Lower">−</button><b id="voVal">0 ms</b><button id="voPlus" class="icon small" type="button" aria-label="Raise">+</button></div></div>
+      <div class="two"><button id="syncBtn" class="btn secondary" type="button">Sync check · 10 s</button><button id="calibBtn" class="btn secondary" type="button">Full calibration</button></div>
+      <p id="setInfo" class="note"></p>
+      <h3>Display</h3>
+      <div class="two"><button id="setMotion" class="btn secondary toggle" type="button">Reduced motion</button><button id="setSync" class="btn secondary toggle" type="button">Sync overlay</button></div>
+      <h3>About</h3>
+      <p class="note">ONE MORE ORBIT. Music by the artists below, used here for private testing.</p>
+      <div id="creditList" class="credits"></div>
+      <p id="licenceNote" class="note"></p>
+      <h3>Playtest</h3>
+      <div class="two"><button id="setUnlock" class="btn secondary toggle" type="button">All levels open</button><button id="botBtn" class="btn secondary" type="button">Watch autoplay</button></div>
+      <button id="replayTutorial" class="btn secondary" type="button">Replay the tutorial</button>
+      <button id="recordBtn" class="btn secondary hidden" type="button">Record mode</button>
     </div>
   </section>
 
-  <section id="calib" class="screen hidden">
-    <div class="card wide calib-card">
-      <h2 id="calTitle">CALIBRATION</h2>
-      <div id="calTabs" class="row">
-        <button id="calAudioTab" class="pill toggle on" type="button">1 · Audio</button>
-        <button id="calVisualTab" class="pill toggle" type="button">2 · Visual</button>
+  <section id="calib" class="screen veil">
+    <div class="panel narrow">
+      <h2 id="calTitle" class="big-title">SYNC CHECK</h2>
+      <div id="calTabs" class="two">
+        <button id="calAudioTab" class="btn secondary toggle on" type="button">1 · Audio</button>
+        <button id="calVisualTab" class="btn secondary toggle" type="button">2 · Visual</button>
       </div>
-      <p id="calText" class="sub"></p>
-      <div id="calDots" class="dots"></div>
+      <p id="calText" class="note"></p>
+      <div id="calDots" class="cal-dots"></div>
       <div id="calResult" class="cal-result"></div>
       <button id="calPad" class="pad" type="button">TAP</button>
-      <div class="row"><button id="calStart" class="pill" type="button">Start</button><button id="calClose" class="pill" type="button">Done</button></div>
+      <div class="two"><button id="calStart" class="btn secondary" type="button">Start</button><button id="calClose" class="btn secondary" type="button">Done</button></div>
     </div>
   </section>
 
-  <section id="record" class="screen hidden">
-    <div class="card wide rec-card">
-      <h2>RECORD MODE</h2>
+  <section id="orbs" class="screen veil">
+    <div class="panel wide scroll">
+      <header class="topbar"><button id="orbsClose" class="icon" type="button" data-icon="back" aria-label="Back"></button><span class="label">ORBS</span><span class="icon ghost"></span></header>
+      <p class="note">Your ball's colour. Earn more by clearing levels and playing in flow.</p>
+      <div id="orbList" class="grid"></div>
+    </div>
+  </section>
+
+  <section id="badges" class="screen veil">
+    <div class="panel wide scroll">
+      <header class="topbar"><button id="badgesClose" class="icon" type="button" data-icon="back" aria-label="Back"></button><span class="label">BADGES</span><span class="icon ghost"></span></header>
+      <p id="badgeCount" class="note"></p>
+      <div id="badgeList" class="grid"></div>
+    </div>
+  </section>
+
+  <section id="record" class="screen veil">
+    <div class="panel wide scroll rec-card">
+      <h2 class="big-title">RECORD MODE</h2>
       <select id="recSection" aria-label="Section"></select>
       <div class="rec-opts"><span>Speed</span><div id="recSpeed" class="row"></div></div>
       <div class="rec-opts"><span>Snap to</span><div id="recGridPick" class="row"></div></div>
@@ -124,7 +161,7 @@
       <div id="recStatus" class="sub"></div>
       <button id="recPad" class="pad" type="button">TAP</button>
       <div class="row wrap">
-        <button id="recRecord" class="primary small" type="button">● RECORD</button>
+        <button id="recRecord" class="pill rec" type="button">● RECORD</button>
         <button id="recListen" class="pill" type="button">Listen with clicks</button>
         <button id="recPlay" class="pill" type="button">Play this section</button>
       </div>
@@ -135,25 +172,6 @@
         <button id="recClose" class="pill" type="button">Done</button>
       </div>
       <textarea id="recExport" class="hidden" rows="4" readonly aria-label="Recorded bars as JSON"></textarea>
-    </div>
-  </section>
-
-  <section id="extras" class="screen dim-bg hidden">
-    <div class="card wide">
-      <h2>ORBS</h2>
-      <div id="orbList" class="orbs"></div>
-      <h2>BADGES</h2>
-      <div id="badgeList" class="badges"></div>
-      <div class="row"><button id="extrasClose" class="pill" type="button">Done</button></div>
-    </div>
-  </section>
-
-  <section id="credits" class="screen dim-bg hidden">
-    <div class="card wide">
-      <h2>MUSIC</h2>
-      <div id="creditList"></div>
-      <p id="licenceNote" class="sub"></p>
-      <div class="row"><button id="creditsClose" class="pill" type="button">Done</button></div>
     </div>
   </section>
 

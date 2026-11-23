@@ -29,7 +29,7 @@
       "plan": ["B=@x...x...x...x... hop"] },
     {"id": "roll", "core": {"pulse": true, "charge": true}, "bars": 2, "label": "BUILD", "lap": 4, "follow": "kick", "jump": "in", "mini": true, "warn": "MINI MODE", "look": {"palette": "dusk", "bg": "grid", "eq": "bars", "zoom": [1.08, 1.22], "drain": [0.4, 1], "vignette": [0.4, 1]},
       "plan": ["B=@x.x.x.x.x.x.x.x.", "B=@x.x....xX......."] },
-    {"id": "drop1", "core": {"bars": ["up", "weave", "spin", "up+sling"], "smash": true, "record": true}, "bars": 4, "label": "DROP", "lap": 4, "follow": "kick", "shape": "square", "rocket": 5, "sling": [1, -0.3], "motif": "drop", "cycle": 4, "enter": "drop", "look": {"palette": "toxic", "bg": "tunnel", "eq": "burst", "zoom": [0.92, 1]},
+    {"id": "drop1", "core": {"bars": ["up", "weave", "up+sling", "spin"], "smash": true, "record": true}, "bars": 4, "label": "DROP", "lap": 4, "follow": "kick", "shape": "square", "rocket": 5, "sling": [1, -0.3], "motif": "drop", "cycle": 4, "enter": "drop", "look": {"palette": "toxic", "bg": "tunnel", "eq": "burst", "zoom": [0.92, 1]},
       "plan": ["B=16 acc", "B=16", "B=16", "B=16"] },
     {"id": "drop2", "core": {"bars": ["twin", "twin+weave", "twin", "twin+spin"]}, "bars": 4, "label": "DROP", "lap": 4, "follow": "kick", "shape": "square", "warn": "FLIP GATES", "motif": "drop", "cycle": 4, "enter": "pulse", "look": {"palette": "blood", "bg": "tunnel", "eq": "burst", "tilt": [0, 0.2]},
       "plan": ["B=16 flip", "B=16", "B=16 flip", "B=16"] },

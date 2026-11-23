@@ -1,115 +1,249 @@
 import './style.css';
 import { audio } from './audio/audio';
 import { BADGES, ORBS, earned } from './game/extras';
-import { PACKS as ALL_PACKS, SLICE, creditLine, manifest } from './game/packs';
-import { GdRenderer as Renderer } from './gd/render';
+import { PACKS as ALL_PACKS, SLICE, creditLine, manifest, type LevelPack } from './game/packs';
 import { refreshBars } from './gd/presses';
-import { GdRun as Run } from './gd/run';
+import { GdRenderer as Renderer } from './gd/render';
+import { GdRun as Run, TUTORIAL_BEATS } from './gd/run';
 import { initRecord } from './record';
 import { bestFor, persist, save } from './save';
+import { LEVEL_UI, icon, levelArt } from './ui/art';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-type Screen = 'menu' | 'play' | 'pause' | 'results' | 'settings' | 'calib' | 'credits' | 'extras' | 'record';
+type Screen = 'title' | 'levels' | 'play' | 'pause' | 'results' | 'settings' | 'calib' | 'orbs' | 'badges' | 'record';
+const SCREENS: Screen[] = ['title', 'levels', 'pause', 'results', 'settings', 'calib', 'orbs', 'badges', 'record'];
 
-const unlockAll = /[?&]unlock=1/.test(location.search); // testing aid
 const PACKS = ALL_PACKS.filter((p) => SLICE.includes(p.level.id));
+const shortTitle = (p: LevelPack) => p.level.title.replace(/ \(.*/, '');
+/** Each level's own palette (its drop's), for the scene behind the menus. */
+const levelPalette = (p: LevelPack) => (p.level.segments.find((s) => s.core?.smash) ?? p.level.segments[0]).look.palette;
 let levelIdx = Math.max(0, Math.min(PACKS.length - 1, save.level || 0));
 let pack = PACKS[levelIdx];
-/** The setlist is the difficulty curve: clearing a level unlocks the next. */
-const PLAYTEST_OPEN = true; // playtest build: every level is open; set to false for the unlock chain
-const levelOpen = (i: number) => PLAYTEST_OPEN || unlockAll || i === 0 || bestFor(PACKS[i - 1].level.id).cleared;
-function selectLevel(i: number): void {
-  levelIdx = (i + PACKS.length) % PACKS.length;
-  pack = PACKS[levelIdx];
-  save.level = levelIdx;
-  persist();
-  renderMenu();
-}
+/** The setlist is the difficulty curve: clearing a level unlocks the next. (Playtest builds can open them all in Settings.) */
+const levelOpen = (i: number) => save.unlockAll || /[?&]unlock=1/.test(location.search) || i === 0 || bestFor(PACKS[i - 1].level.id).cleared;
+
 const renderer = new Renderer($<HTMLCanvasElement>('stage'));
-let screen: Screen = 'menu';
-let settingsFrom: Screen = 'menu';
+let screen: Screen = 'title';
+let settingsFrom: Screen = 'levels';
 let run: Run | null = null;
 let botMode = /[?&]bot=1/.test(location.search);
 let practice = false;
-/** start runs at the build-up (the first charge section) instead of the beginning; such runs are not saved */
-let fromBuild = false;
-function buildStart(): number {
-  const lab = pack.level.lab;
-  let beat = 0;
-  for (const s of pack.level.segments) {
-    if (s.core?.charge && (!lab || (beat >= lab[0] && beat < lab[1]))) return (beat * 60) / pack.audio.bpm;
-    beat += s.bars * 4;
-  }
-  return -1;
-}
 let lastFrame = performance.now();
+/** this visit to a level: the furthest any attempt got, and its flow, for the results screen */
+const session = { far: 0, newBest: false, onBeat: 0, judged: 0, streak: 0, drop: -1, attempts: 0 };
 
 /** Input events carry the time the tap happened; fall back to "now" on browsers that report something else. */
 const stamp = (e: Event) => (Math.abs(e.timeStamp - performance.now()) < 2000 ? e.timeStamp : performance.now());
 const fmtMs = (ms: number) => `${ms > 0 ? '+' : ''}${Math.round(ms)} ms`;
-const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
+const wide = () => window.innerWidth >= 900;
 
+for (const el of document.querySelectorAll<HTMLElement>('[data-icon]')) el.insertAdjacentHTML('afterbegin', icon(el.dataset.icon!));
+
+// ------------------------------------------------------------------ screens
 function show(s: Screen): void {
   screen = s;
-  for (const id of ['menu', 'pause', 'results', 'settings', 'calib', 'credits', 'extras', 'record']) $(id).classList.toggle('hidden', id !== s);
+  for (const id of SCREENS) $(id).classList.toggle('on', id === s);
   $('hud').classList.toggle('hidden', !(s === 'play' || s === 'pause'));
-  if (s === 'menu') renderMenu();
+  $('levels').classList.remove('launch');
+  // the scene behind the menus: beside the wordmark on a wide title screen, centred otherwise, in the focused level's colours
+  renderer.idleAt = s === 'title' && wide() ? [0.7, 0.5] : s === 'title' ? [0.5, 0.54] : [0.5, 0.46];
+  renderer.idlePal = s === 'title' ? 'deep' : levelPalette(pack);
+  if (s === 'levels') { renderCards(); queuePreview(); }
+  if (s === 'title' || s === 'play') audio.stopPreview(s === 'play' ? 0.9 : 0.4);
 }
 
-// ------------------------------------------------------------------ menu
-function renderMenu(): void {
-  const b = bestFor(pack.level.id);
+// ------------------------------------------------------------------ level select
+const cards = $('cards');
+function buildCards(): void {
+  cards.innerHTML = '';
+  $('dots').innerHTML = '';
+  PACKS.forEach((p, i) => {
+    const ui = LEVEL_UI[p.level.id] ?? { col: '#19e3ff', dots: 1 };
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.className = `card${i === PACKS.length - 1 ? ' final' : ''}`;
+    el.style.setProperty('--tint', ui.col);
+    el.dataset.i = String(i);
+    el.innerHTML = `<div class="art">${levelArt(p.level.id)}<span class="lvl">LEVEL ${i + 1}</span>${i === PACKS.length - 1 ? '<span class="tag">FINAL LEVEL</span>' : ''}<div class="lock hidden">${icon('lock')}<span></span></div></div>
+      <div class="info"><h2></h2><div class="by"></div>
+      <div class="diff">${Array.from({ length: 5 }, (_, k) => `<i class="${k < ui.dots ? 'on' : ''}"></i>`).join('')}<span></span></div>
+      <div class="adds"></div>
+      <div class="meter"><span>BEST</span><div><i></i></div><b></b></div>
+      <div class="meter p"><span>PRACTICE</span><div><i></i></div><b></b></div>
+      <div class="tries"></div></div>`;
+    el.querySelector('h2')!.textContent = shortTitle(p);
+    el.querySelector('.by')!.textContent = p.level.artist;
+    el.querySelector('.diff span')!.textContent = (p.level.difficulty ?? '').toUpperCase();
+    el.querySelector('.adds')!.textContent = p.level.adds ?? '';
+    el.addEventListener('click', () => { if (i === levelIdx) begin(false); else focusLevel(i, true); });
+    cards.appendChild(el);
+    $('dots').appendChild(document.createElement('i'));
+  });
+}
+function renderCards(): void {
+  [...cards.children].forEach((node, i) => {
+    const el = node as HTMLElement;
+    const p = PACKS[i];
+    const b = bestFor(p.level.id);
+    const open = levelOpen(i);
+    const best = b.cleared ? 100 : b.pct;
+    const prac = Math.max(b.prac ?? 0, 0);
+    el.classList.toggle('focus', i === levelIdx);
+    el.classList.toggle('locked', !open);
+    el.setAttribute('aria-label', `Level ${i + 1}, ${shortTitle(p)}, ${p.level.difficulty}${open ? `, best ${best} percent` : ', locked'}`);
+    const lock = el.querySelector<HTMLElement>('.lock')!;
+    lock.classList.toggle('hidden', open);
+    if (!open) lock.querySelector('span')!.textContent = `Clear ${shortTitle(PACKS[i - 1])} to unlock`;
+    const meters = el.querySelectorAll<HTMLElement>('.meter');
+    meters[0].querySelector<HTMLElement>('i')!.style.width = `${best}%`;
+    meters[0].querySelector('b')!.textContent = `${best}%`;
+    meters[1].querySelector<HTMLElement>('i')!.style.width = `${prac}%`;
+    meters[1].querySelector('b')!.textContent = `${prac}%`;
+    el.querySelector('.tries')!.innerHTML = b.attempts ? `<b>${b.attempts}</b> attempt${b.attempts === 1 ? '' : 's'}${b.cleared ? ' · <b>cleared</b>' : ''}` : 'Not played yet';
+    ($('dots').children[i] as HTMLElement).classList.toggle('on', i === levelIdx);
+  });
   const open = levelOpen(levelIdx);
-  $('levelNo').textContent = `LEVEL ${levelIdx + 1} OF ${PACKS.length}`;
-  $('trackName').textContent = (open ? '' : 'Locked: ') + pack.level.title;
-  const spb = 60 / pack.audio.bpm;
-  const lab = pack.level.lab;
-  $('menuTag').textContent = lab ? `FEEL LAB · ${fmtTime(lab[0] * spb)} TO ${fmtTime(lab[1] * spb)} OF THE SONG` : PLAYTEST_OPEN ? 'PLAYTEST BUILD · ALL FOUR LEVELS OPEN' : 'ONE MORE ORBIT';
-  $('trackMeta').textContent = `${pack.level.artist} · ${pack.audio.bpm} BPM · ${fmtTime(pack.audio.length - pack.audio.offset)} · drop at ${fmtTime(pack.audio.dropTime - pack.audio.offset)}`;
-  $('levelRating').textContent = `${(pack.level.difficulty ?? '').toUpperCase()}${pack.level.adds ? ` · ${pack.level.adds}` : ''}`;
-  $('levelBest').textContent = b.attempts === 0
-    ? 'Not played yet'
-    : `Best ${b.cleared ? 100 : b.pct}% · ${b.attempts} attempt${b.attempts === 1 ? '' : 's'}${b.cleared ? ' · CLEARED' : ''}`;
-  $('practiceBtn').classList.toggle('on', practice);
-  const needSync = !save.calibrated || deviceChanged;
-  $('syncBtn').classList.toggle('warn', needSync);
-  $('syncBtn').textContent = !save.calibrated ? 'Sync check needed · 10 s' : deviceChanged ? 'Audio changed: sync check · 10 s' : 'Sync check · 10 s';
-  $('fromBtn').classList.toggle('on', fromBuild);
-  $('fromBtn').classList.toggle('hidden', buildStart() < 0);
-  $('botBtn').classList.toggle('on', botMode);
-  const play = $<HTMLButtonElement>('playBtn');
-  play.disabled = !open;
-  play.textContent = !open ? `CLEAR ${PACKS[levelIdx - 1].level.title.replace(/ \(.*/, '').toUpperCase()} TO UNLOCK` : botMode ? 'WATCH AUTOPLAY' : practice ? 'PRACTICE' : 'PLAY';
+  $<HTMLButtonElement>('playBtn').disabled = !open;
+  $<HTMLButtonElement>('practiceBtn').disabled = !open;
+  $('playBtn').textContent = open ? 'PLAY' : 'LOCKED';
+}
+function focusLevel(i: number, scroll: boolean): void {
+  i = Math.max(0, Math.min(PACKS.length - 1, i));
+  const changed = i !== levelIdx;
+  levelIdx = i;
+  pack = PACKS[i];
+  if (changed) { save.level = i; persist(); }
+  renderCards();
+  renderer.idlePal = levelPalette(pack);
+  if (scroll) (cards.children[i] as HTMLElement).scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+  if (changed) queuePreview();
+}
+let scrollTick = 0;
+cards.addEventListener('scroll', () => {
+  cancelAnimationFrame(scrollTick);
+  scrollTick = requestAnimationFrame(() => {
+    const mid = cards.scrollLeft + cards.clientWidth / 2;
+    let best = levelIdx;
+    let dist = Infinity;
+    [...cards.children].forEach((n, i) => { const el = n as HTMLElement; const d = Math.abs(el.offsetLeft + el.offsetWidth / 2 - mid); if (d < dist) { dist = d; best = i; } });
+    if (best !== levelIdx) focusLevel(best, false);
+  });
+}, { passive: true });
+/** The focused level's song plays quietly from its drop: the preview. It needs one tap first (browsers hold audio until then). */
+let audioReady = false;
+let previewTimer = 0;
+function queuePreview(): void {
+  clearTimeout(previewTimer);
+  if (!audioReady || screen !== 'levels') return;
+  previewTimer = window.setTimeout(() => {
+    if (screen !== 'levels') return;
+    audio.setVolumes(save.music, save.sfx);
+    void audio.preview(pack.audio, pack.audio.dropTime - pack.audio.offset - (4 * 60) / pack.audio.bpm);
+  }, 320);
 }
 
-/** Starts an attempt. `from` is a song time (practice restarts from a checkpoint); `quick` shortens the run-in after a crash. */
+// ------------------------------------------------------------------ starting a level
+/** PLAY or PRACTICE from the level select: sync check on a first run, the tutorial before level 1, then the card opens into the level. */
+function begin(asPractice: boolean): void {
+  if (!levelOpen(levelIdx) || $('levels').classList.contains('launch')) return;
+  practice = asPractice;
+  botMode = false;
+  audio.ensure();
+  audio.setVolumes(save.music, save.sfx);
+  checkDevice();
+  if (!save.calibrated || deviceChanged) { openCalib(true, 'begin'); return; }
+  enter();
+}
+function enter(): void {
+  session.far = session.onBeat = session.judged = session.streak = session.attempts = 0;
+  session.newBest = false;
+  session.drop = -1;
+  if (screen === 'levels') {
+    // the chosen card zooms open over one beat while the preview fades into the level's own music
+    $('levels').classList.add('launch');
+    audio.stopPreview(0.9);
+    window.setTimeout(go, 430);
+  } else go();
+}
+function go(): void {
+  if (!save.tutorialDone && !botMode && pack.level.id === PACKS[0].level.id) startTutorial(); else startRun();
+}
+
+/** Starts an attempt. `from` is a song time (practice restarts from a checkpoint); `quick` is the instant restart after a crash. */
 function startRun(from = -1, quick = false): void {
   if (!levelOpen(levelIdx)) return;
   audio.ensure();
   audio.setVolumes(save.music, save.sfx);
-  checkDevice();
-  // first run, or the audio output has changed since the last check: the sync check comes first
-  if (!botMode && (!save.calibrated || deviceChanged) && from < 0 && !quick) { openCalib(true); return; }
+  audio.stopPreview(0.6);
   if (practice && !botMode && !save.practiced[pack.level.id]) { save.practiced[pack.level.id] = true; persist(); }
   run?.stop();
-  const partial = from < 0 && fromBuild && buildStart() >= 0;
-  if (partial) from = buildStart();
-  const counted = !botMode && !practice && !partial;
+  const counted = !botMode && !practice;
   if (counted) {
     save.bests[pack.level.id] = { ...bestFor(pack.level.id), attempts: bestFor(pack.level.id).attempts + 1 };
     persist();
   }
+  session.attempts++;
   renderer.reset();
-  run = new Run(pack, { bot: botMode, practice: practice && !botMode, partial, startAt: from >= 0 ? from : undefined, leadIn: from >= 0 ? 1.5 : quick ? 1.2 : 2 }, onRunEnd);
+  const spb = 60 / pack.audio.bpm;
+  // a fresh start plays the whole count-in bar under the title card; an instant restart cuts in for the last two counts
+  const opts = from >= 0 ? { startAt: from, leadIn: 1.5 } : quick ? { startAt: 2 * spb, leadIn: 0.3 } : { leadIn: 2.4 };
+  run = new Run(pack, { bot: botMode, practice: practice && !botMode, ...opts }, onRunEnd);
   const b = bestFor(pack.level.id);
   $('dropMark').style.left = `${((run.level.dropTime - run.t0) / (run.t1 - run.t0)) * 100}%`;
   $('bestMark').style.left = `${b.cleared ? 100 : b.pct}%`;
   $('bestMark').classList.toggle('hidden', b.pct === 0 && !b.cleared);
   $('bestPct').textContent = b.cleared ? 'CLEARED' : `BEST ${b.pct}%`;
-  $('attempt').textContent = botMode ? 'AUTOPLAY' : practice ? 'PRACTICE' : partial ? 'FROM THE BUILD-UP' : `ATTEMPT ${b.attempts}`;
-  hudPct = -1;
+  const label = $('attempt');
+  label.textContent = botMode ? 'AUTOPLAY' : practice ? 'PRACTICE' : `ATTEMPT ${b.attempts}`;
+  label.classList.remove('flash');
+  if (quick) { void label.offsetWidth; label.classList.add('flash'); }
+  const card = $('titleCard');
+  card.classList.remove('show');
+  if (from < 0 && !quick) {
+    $('tcLevel').textContent = `LEVEL ${levelIdx + 1} · ${(pack.level.difficulty ?? '').toUpperCase()}${practice ? ' · PRACTICE' : ''}`;
+    $('tcSong').textContent = shortTitle(pack);
+    $('tcArtist').textContent = pack.level.artist;
+    void card.offsetWidth;
+    card.classList.add('show');
+  }
+  $('tutor').classList.add('hidden');
+  $('finale').classList.remove('show');
+  hud.pct = -1;
+  hud.crashShown = false;
+  hud.count = '';
   show('play');
-  void run.start().then(() => { if (run && run.state === 'error') { alert(`Could not start the level: ${run.error}`); show('menu'); } });
+  void run.start().then(() => { if (run && run.state === 'error') { alert(`Could not start the level: ${run.error}`); show('levels'); } });
+}
+
+// ------------------------------------------------------------------ first run: the tutorial
+const LESSONS: Array<[number, string]> = [
+  [-9, 'The ball orbits <i>by itself</i>, in time with the music.'],
+  [2.6, 'TAP anywhere as it crosses a <i>white mark</i>. A little early or late still counts.'],
+  [12, '<b>Gold notes</b> are bonus taps. On the beat they build <b>flow</b>: the gold arc round the core.'],
+  [18.5, 'Miss a white mark and the run restarts at once. That is all there is to it.']
+];
+function startTutorial(): void {
+  run?.stop();
+  renderer.reset();
+  audio.stopPreview(0.6);
+  run = new Run(pack, { tutorial: true, leadIn: 1.8 }, endTutorial);
+  $('attempt').textContent = 'TUTORIAL';
+  $('bestPct').textContent = '';
+  $('bestMark').classList.add('hidden');
+  $('titleCard').classList.remove('show');
+  $('finale').classList.remove('show');
+  $('tutor').classList.remove('hidden');
+  hud.pct = -1;
+  hud.lesson = -1;
+  hud.count = '';
+  show('play');
+  void run.start();
+}
+function endTutorial(): void {
+  save.tutorialDone = true;
+  persist();
+  $('tutor').classList.add('hidden');
+  startRun();
 }
 
 // ------------------------------------------------------------------ sync check
@@ -120,7 +254,7 @@ const sync = { press: [] as number[], flow: [] as number[], seenPress: 0, seenFl
 let deviceChanged = false;
 function harvest(r: Run): void {
   if (sync.of !== r) { sync.of = r; sync.seenPress = sync.seenFlow = 0; }
-  if (r.opts.bot) return;
+  if (r.opts.bot || r.opts.tutorial) return;
   const o = r.sim.offsets;
   while (sync.seenPress < o.press.length) { sync.last = o.press[sync.seenPress++] * 1000; sync.press.push(sync.last); }
   while (sync.seenFlow < o.flow.length) { sync.last = o.flow[sync.seenFlow++] * 1000; sync.flow.push(sync.last); }
@@ -137,21 +271,18 @@ function spread(a: number[]): { n: number; mean: number; sd: number } {
 const lateEarly = (ms: number) => (Math.abs(ms) < 3 ? 'on the beat' : `${Math.abs(Math.round(ms))} ms ${ms > 0 ? 'late' : 'early'}`);
 /** Fills a sync box: what the taps say, and a one-tap fix if they are consistently off. */
 function showSync(textId: string, fixId: string): void {
-  const p = spread(sync.press);
-  const f = spread(sync.flow);
   const all = spread([...sync.press, ...sync.flow]);
-  const line = (name: string, x: { n: number; mean: number; sd: number }) => (x.n < 3 ? `${name}: not enough taps yet` : `${name}: ${lateEarly(x.mean)} on average, spread ±${Math.round(x.sd)} ms (${x.n} taps)`);
-  let verdict: string;
   const fix = $(fixId);
   fix.classList.add('hidden');
-  if (all.n < 12) verdict = 'Play a little more for a verdict.';
-  else if (all.sd > 60) verdict = `Your taps are spread too wide (±${Math.round(all.sd)} ms) to say where they centre.`;
-  else if (Math.abs(all.mean) < 15) verdict = 'In sync: your taps centre on the notes.';
+  let text: string;
+  if (all.n < 12) text = 'Your taps: not enough yet to say. Play a little more.';
+  else if (all.sd > 60) text = `Your taps are spread too wide (±${Math.round(all.sd)} ms) to say where they centre.`;
+  else if (Math.abs(all.mean) < 15) text = `In sync: your taps centre ${lateEarly(all.mean)} (±${Math.round(all.sd)} ms over ${all.n} taps).`;
   else {
     const next = Math.max(-200, Math.min(400, save.audioOffset + Math.round(all.mean)));
-    verdict = `Your taps are consistently ${lateEarly(all.mean)}. That is audio or display delay on this device, not the chart.`;
-    fix.textContent = `Fix it: set audio offset to ${fmtMs(next)}`;
-    fix.className = 'pill fix';
+    text = `Your taps are consistently ${lateEarly(all.mean)} (±${Math.round(all.sd)} ms over ${all.n} taps). That is audio or display delay, not the level.`;
+    fix.textContent = `Fix it: offset ${fmtMs(next)}`;
+    fix.classList.remove('hidden');
     fix.onclick = () => {
       save.audioOffset = next;
       persist();
@@ -160,108 +291,169 @@ function showSync(textId: string, fixId: string): void {
       fix.classList.add('hidden');
     };
   }
-  $(textId).textContent = `${line('Survival presses', p)}\n${line('Flow notes', f)}\n${verdict} Audio offset now ${fmtMs(save.audioOffset)}.`;
-  $(textId).style.whiteSpace = 'pre-line';
+  $(textId).textContent = `${text} Audio offset ${fmtMs(save.audioOffset)}.`;
 }
 function drawSyncOverlay(): void {
   const el = $('syncOverlay');
   const on = save.syncOverlay || /[?&]sync=1/.test(location.search);
   el.classList.toggle('hidden', !on);
   if (!on) return;
-  const p = spread(sync.press);
-  const f = spread(sync.flow);
   const row = (x: { n: number; mean: number; sd: number }) => (x.n < 3 ? `      -      (${x.n})` : `${(x.mean >= 0 ? '+' : '') + x.mean.toFixed(0)} ms ±${x.sd.toFixed(0)} (${x.n})`);
-  el.textContent = `last  ${Number.isNaN(sync.last) ? '-' : (sync.last >= 0 ? '+' : '') + sync.last.toFixed(0) + ' ms'}\npress ${row(p)}\nflow  ${row(f)}\noffset ${fmtMs(save.audioOffset)}  (+ = late)`;
+  el.textContent = `last  ${Number.isNaN(sync.last) ? '-' : (sync.last >= 0 ? '+' : '') + sync.last.toFixed(0) + ' ms'}\npress ${row(spread(sync.press))}\nflow  ${row(spread(sync.flow))}\noffset ${fmtMs(save.audioOffset)}  (+ = late)`;
 }
 function checkDevice(): void {
-  const lat = audio.latency();
-  if (save.calLatency >= 0 && Math.abs(lat - save.calLatency) > 0.03) deviceChanged = true;
+  if (save.calLatency >= 0 && Math.abs(audio.latency() - save.calLatency) > 0.03) deviceChanged = true;
 }
-navigator.mediaDevices?.addEventListener?.('devicechange', () => { deviceChanged = true; if (screen === 'menu') renderMenu(); });
+navigator.mediaDevices?.addEventListener?.('devicechange', () => { deviceChanged = true; });
 
+// ------------------------------------------------------------------ the end of an attempt
 let toastTimer = 0;
-function toast(text: string): void {
+function toast(text: string, gold = false): void {
   const el = $('toast');
   el.textContent = text;
-  el.classList.remove('show');
+  el.className = `toast${gold ? ' gold' : ''}`;
   void el.offsetWidth; // restart the animation
   el.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = window.setTimeout(() => el.classList.remove('show'), 1600);
+  toastTimer = window.setTimeout(() => el.classList.remove('show'), 1400);
 }
-
-// ------------------------------------------------------------------ end of an attempt
-/** A crash restarts at once (practice: from the last checkpoint). Only a clear shows a results screen. */
+function tally(r: Run): void {
+  session.onBeat += r.sim.onBeat;
+  session.judged += r.sim.judged;
+  session.streak = Math.max(session.streak, r.sim.bestStreak);
+  if (r.dropFull !== null && r.time > r.level.dropTime) session.drop = Math.max(session.drop, r.dropPower);
+}
+/** A crash restarts at once (practice: from the last checkpoint). Only a clear, or quitting, shows the results. */
 function onRunEnd(r: Run): void {
   if (r !== run) return;
+  harvest(r);
   const id = r.pack.level.id;
   const prev = bestFor(id);
-  const counted = !r.opts.bot && !r.opts.practice && !r.opts.partial;
+  const counted = !r.opts.bot && !r.opts.practice;
   if (r.state === 'failed') {
+    tally(r);
+    const pct = r.pct;
+    session.far = Math.max(session.far, pct);
     if (r.opts.practice) {
+      if (pct > (prev.prac ?? 0)) { save.bests[id] = { ...prev, prac: pct }; persist(); }
       // back to the start of the section; the one before if you fell right at its start
       const seg = r.level.segAt(r.crashTime);
       const cp = r.crashTime - seg.t0 < 1.2 && seg.index > 0 ? r.level.segments[seg.index - 1].t0 : seg.t0;
-      startRun(Math.max(cp, r.t0));
+      if (cp <= r.t0 + 0.01) startRun(-1, true); else startRun(cp);
       return;
     }
-    const pct = r.pct;
-    if (counted && pct > prev.pct) {
-      save.bests[id] = { ...prev, pct };
-      persist();
-      if (pct >= 2) toast(`NEW BEST ${pct}%`);
-    }
+    if (counted && pct > prev.pct) { save.bests[id] = { ...prev, pct }; persist(); session.newBest = true; }
     startRun(-1, true);
     return;
   }
-  const fresh: string[] = [];
-  if (counted) {
+  tally(r);
+  showResults(r, true);
+}
+
+/** reached: how far the run was when it was left (a stopped run no longer knows) */
+function showResults(r: Run, cleared: boolean, reached = r.pct): void {
+  const id = r.pack.level.id;
+  const prev = bestFor(id);
+  const counted = !r.opts.bot && !r.opts.practice;
+  const first = cleared && counted && !prev.cleared;
+  const unlocks: string[] = [];
+  if (cleared && counted) {
     save.bests[id] = { ...prev, pct: 100, cleared: true };
-    const cleared = ALL_PACKS.map((p) => p.level.id).filter((x) => bestFor(x).cleared);
-    // grade, no-miss and hardcore badges belonged to the judged game; a clear here earns the clear badges
-    for (const bid of earned(id, 'B', 1, false, !!save.practiced[id], cleared)) if (!save.badges[bid]) { save.badges[bid] = true; fresh.push(bid); }
+    const done = ALL_PACKS.map((p) => p.level.id).filter((x) => bestFor(x).cleared);
+    const onBeatPct = r.sim.judged ? (r.sim.onBeat / r.sim.judged) * 100 : 0;
+    const fresh = earned(id, { onBeatPct, dropPower: r.dropPower, bestStreak: r.sim.bestStreak, attempts: bestFor(id).attempts, practised: !!save.practiced[id] }, done).filter((b) => !save.badges[b]);
+    if (first && levelIdx + 1 < PACKS.length && !save.unlockAll) unlocks.push(`<div class="unlock">${icon('play')}<div>NEXT LEVEL UNLOCKED<small>${shortTitle(PACKS[levelIdx + 1])} · ${PACKS[levelIdx + 1].level.difficulty}</small></div></div>`);
+    for (const bid of fresh) {
+      save.badges[bid] = true;
+      const b = BADGES.find((x) => x.id === bid);
+      if (b) unlocks.push(`<div class="unlock">${icon('badge')}<div>BADGE: ${b.name.toUpperCase()}<small>${b.desc}</small></div></div>`);
+      for (const o of ORBS) if (o.needs === bid) unlocks.push(`<div class="unlock"><span class="dot" style="background:rgb(${o.rgb.join(',')})"></span><div>ORB: ${o.name.toUpperCase()}<small>Equip it under Orbs</small></div></div>`);
+    }
   }
+  if (cleared && r.opts.practice) save.bests[id] = { ...bestFor(id), prac: 100 };
   persist();
-  const s = r.sim;
-  const news = fresh.map((bid) => BADGES.find((x) => x.id === bid)?.name || bid).map((n) => `Badge: ${n}`);
-  for (const o of ORBS) if (o.needs && fresh.includes(o.needs)) news.push(`Orb: ${o.name}`);
-  $('resUnlocks').textContent = news.length ? `Unlocked  ${news.join(' · ')}` : '';
-  $('resTag').textContent = r.opts.bot ? 'AUTOPLAY · NOT SAVED' : r.opts.practice ? 'PRACTICE · NOT SAVED' : r.opts.partial ? 'FROM THE BUILD-UP · NOT SAVED' : prev.cleared ? `ATTEMPT ${prev.attempts}` : '★ FIRST CLEAR ★';
-  $('resTitle').textContent = r.pack.level.lab ? 'LAB COMPLETE' : 'LEVEL COMPLETE';
-  $('resSub').textContent = r.level.title;
-  $('resAttempts').textContent = counted ? String(bestFor(id).attempts) : '–';
-  $('resOnBeat').textContent = s.judged ? `${Math.round((s.onBeat / s.judged) * 100)}%` : '–';
-  $('resStreak').textContent = String(s.bestStreak);
+  const pct = cleared ? 100 : Math.max(session.far, reached);
+  $('results').querySelector('.results')!.classList.toggle('clear', cleared);
+  $('resLevel').textContent = `LEVEL ${levelIdx + 1} · ${shortTitle(r.pack)} · ${(r.pack.level.difficulty ?? '').toUpperCase()}${r.opts.bot ? ' · AUTOPLAY' : r.opts.practice ? ' · PRACTICE' : ''}`;
+  $('resPct').textContent = String(pct);
+  const callout = $('resCallout');
+  const says = first ? 'FIRST CLEAR' : !cleared && session.newBest ? 'NEW BEST' : '';
+  callout.textContent = says;
+  callout.classList.toggle('hidden', !says);
+  $('resTitle').textContent = cleared ? 'LEVEL COMPLETE' : `REACHED ${pct}%`;
+  $('resFill').style.transform = 'scaleX(0)';
+  window.setTimeout(() => { $('resFill').style.transform = `scaleX(${pct / 100})`; }, 60);
+  $('resDrop').style.left = `${((r.level.dropTime - r.t0) / (r.t1 - r.t0)) * 100}%`;
+  $('resCrash').classList.toggle('hidden', cleared);
+  $('resCrash').style.left = `${pct}%`;
+  $('resAttempts').textContent = counted ? String(bestFor(id).attempts) : String(session.attempts);
+  $('resOnBeat').textContent = session.judged ? `${Math.round((session.onBeat / session.judged) * 100)}%` : '–';
+  $('resStreak').textContent = String(session.streak);
+  $('resCharge').textContent = session.drop < 0 ? '–' : `${Math.round(session.drop * 100)}%`;
+  $('resUnlocks').innerHTML = unlocks.join('');
   const sm = r.smoothness();
-  const move = `Movement check: ${sm.frames} frames, clock speed never more than ${sm.worstPct.toFixed(2)}% off (average ${sm.meanPct.toFixed(3)}%)`;
-  const drop = `drop at ${Math.round(r.dropPower * 100)}% (charge ${Math.round(s.charge * 100)}%)`;
-  console.log(`[one more orbit] ${r.opts.bot ? 'autoplay' : 'run'} cleared ${r.level.title}: ${s.onBeat}/${s.judged} taps on the beat, best streak ${s.bestStreak}, ${drop}. ${move}`);
-  $('resNote').textContent = r.opts.bot ? `${move}. Autoplay ${drop}.` : r.dropFull ? 'Full drop: fully charged and in flow.' : r.dropFull === false ? `The drop played at ${Math.round(r.dropPower * 100)}%: you charged it to ${Math.round(s.charge * 100)}% in the roll. Tap the roll's notes and arrive in flow for the full one.` : '';
-  harvest(r);
+  $('resNote').textContent = r.opts.bot ? `Autoplay. Movement check: ${sm.frames} frames, clock speed never more than ${sm.worstPct.toFixed(2)}% off.` : cleared && r.dropFull === false ? `The drop played at ${Math.round(r.dropPower * 100)}%. Tap the roll's notes and arrive in flow for the full one.` : '';
+  console.log(`[one more orbit] ${r.opts.bot ? 'autoplay' : 'run'} ${cleared ? 'cleared' : 'left'} ${r.level.title}: ${r.sim.onBeat}/${r.sim.judged} taps on the beat, best streak ${r.sim.bestStreak}, drop at ${Math.round(r.dropPower * 100)}%. Movement check: ${sm.frames} frames, clock speed never more than ${sm.worstPct.toFixed(2)}% off (average ${sm.meanPct.toFixed(3)}%)`);
   showSync('resSyncText', 'resSyncFix');
+  const next = $<HTMLButtonElement>('nextBtn');
+  next.disabled = !(levelIdx + 1 < PACKS.length && levelOpen(levelIdx + 1));
+  next.style.opacity = next.disabled ? '0.4' : '1';
+  botMode = false;
   show('results');
 }
 
 // ------------------------------------------------------------------ HUD
-let hudPct = -1;
-let hudSeg = '';
+const hud = { pct: -1, seg: '', count: '', crashShown: false, lesson: -1, finale: false };
 function updateHud(r: Run): void {
   harvest(r);
   drawSyncOverlay();
   const pct = r.pct;
-  if (pct !== hudPct) { hudPct = pct; $('pct').textContent = `${pct}%`; }
+  if (pct !== hud.pct) { hud.pct = pct; $('pct').textContent = `${pct}%`; }
   $('progFill').style.transform = `scaleX(${r.progress.toFixed(4)})`;
   const label = r.level.segAt(Math.max(0, r.time)).label;
-  if (label !== hudSeg) { hudSeg = label; $('section').textContent = label; }
+  if (label !== hud.seg) { hud.seg = label; $('section').textContent = label; }
+  const beat = r.time / r.level.spb;
+  // 3, 2, 1 on the beats of the count-in bar: the first press is never a surprise
+  let n = '';
+  if (r.course.start === 0 && !r.opts.tutorial && r.startAt <= r.level.spb * 3.5 && r.state === 'playing') n = beat >= 1 && beat < 2 ? '3' : beat >= 2 && beat < 3 ? '2' : beat >= 3 && beat < 4 ? '1' : '';
+  if (n !== hud.count) {
+    hud.count = n;
+    const el = $('countIn');
+    el.classList.remove('pop');
+    if (n) { el.textContent = n; void el.offsetWidth; el.classList.add('pop'); }
+  }
+  if (r.state === 'failed' && !hud.crashShown) {
+    // the crash: how far you got, briefly; it restarts by itself, or at once on a tap
+    hud.crashShown = true;
+    const best = !r.opts.bot && !r.opts.practice && pct > bestFor(r.pack.level.id).pct;
+    toast(best && pct >= 2 ? `NEW BEST ${pct}%` : `${pct}%`, best);
+  }
+  if (r.finale !== hud.finale) {
+    hud.finale = r.finale;
+    $('finale').classList.toggle('show', r.finale);
+    if (r.finale) $('finaleNote').textContent = !r.opts.bot && !r.opts.practice && !bestFor(r.pack.level.id).cleared ? 'FIRST CLEAR' : '';
+  }
+  if (r.finale) $('finaleFill').style.transform = `scaleX(${r.progress.toFixed(3)})`;
+  if (r.opts.tutorial) {
+    let k = 0;
+    LESSONS.forEach(([b], i) => { if (beat >= b) k = i; });
+    if (k !== hud.lesson) { hud.lesson = k; $('tutorText').innerHTML = LESSONS[k][1]; }
+    $('progFill').style.transform = `scaleX(${Math.max(0, Math.min(1, beat / TUTORIAL_BEATS)).toFixed(3)})`;
+  }
 }
 
 // ------------------------------------------------------------------ input: one button
 function tap(t: number): void {
-  if (run && screen === 'play' && !run.opts.bot) run.tap(t);
+  if (!run || screen !== 'play') return;
+  if (run.state === 'failed') { run.skipWait(); return; } // tap to retry at once
+  if (!run.opts.bot) run.tap(t);
 }
-
 window.addEventListener('pointerdown', (e) => {
-  if (screen !== 'play' || (e.target as HTMLElement).closest('button')) return;
+  audioReady = true;
+  const btn = (e.target as HTMLElement).closest('button');
+  if (btn && screen !== 'play' && audio.ctx) audio.hit('tap', 0.5); // every button answers with a click
+  if (screen === 'title') { e.preventDefault(); audio.ensure(); audio.setVolumes(save.music, save.sfx); show('levels'); return; }
+  if (screen !== 'play' || btn) return;
   e.preventDefault();
   tap(stamp(e));
 }, { passive: false });
@@ -269,24 +461,32 @@ window.addEventListener('contextmenu', (e) => e.preventDefault());
 
 window.addEventListener('keydown', (e) => {
   if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
-  if (screen === 'calib') { if (e.code !== 'Escape') { e.preventDefault(); calTap(stamp(e)); } else closeCalib(); return; }
+  audioReady = true;
+  const back = e.code === 'Escape';
+  if (screen === 'calib') { if (!back) { e.preventDefault(); calTap(stamp(e)); } else closeCalib(); return; }
   if (screen === 'record') { if (record.key(e)) e.preventDefault(); return; }
-  if (e.code === 'KeyR' && (screen === 'play' || screen === 'pause' || screen === 'results')) { startRun(); return; }
-  if (e.code === 'Escape' || e.code === 'KeyP') {
-    if (screen === 'play') pause(); else if (screen === 'pause') resume(); else if (screen === 'settings') closeSettings(); else if (screen === 'credits' || screen === 'extras') show('menu');
+  if (screen === 'title') { e.preventDefault(); audio.ensure(); show('levels'); return; }
+  if (screen === 'levels') {
+    if (e.code === 'ArrowLeft') focusLevel(levelIdx - 1, true); else if (e.code === 'ArrowRight') focusLevel(levelIdx + 1, true);
+    else if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); begin(false); } else if (e.code === 'KeyP') begin(true); else if (back) show('title');
     return;
   }
   if (screen === 'play') {
-    if (e.code !== 'Tab') { e.preventDefault(); tap(stamp(e)); } // any key is the button
-  } else if (e.code === 'Space' || e.code === 'Enter') {
-    if (screen === 'menu' || screen === 'results') { e.preventDefault(); startRun(); } else if (screen === 'pause') resume();
+    if (back || e.code === 'KeyP') pause(); else if (e.code === 'KeyR' && !run?.opts.tutorial) startRun(-1, true); else if (e.code !== 'Tab') { e.preventDefault(); tap(stamp(e)); } // any key is the button
+    return;
   }
+  if (screen === 'pause') { if (back || e.code === 'Space' || e.code === 'Enter') resume(); else if (e.code === 'KeyR') startRun(-1, true); return; }
+  if (screen === 'results') { if (e.code === 'Enter' || e.code === 'Space' || e.code === 'KeyR') { e.preventDefault(); startRun(); } else if (back) toLevels(); return; }
+  if (back) { if (screen === 'settings') closeSettings(); else show('levels'); }
 });
 
 function pause(): void {
-  if (!run || screen !== 'play' || run.state === 'failed' || run.state === 'done') return;
+  if (!run || screen !== 'play' || run.state !== 'playing' || run.finale) return;
   run.pause();
   showSync('pauseSyncText', 'pauseSyncFix');
+  const tut = !!run.opts.tutorial;
+  for (const id of ['pauseRestartBtn', 'pausePracticeBtn', 'pauseSkipBtn']) $(id).classList.toggle('hidden', tut);
+  $('pauseSkipBtn').classList.toggle('hidden', tut || buildStart() < 0);
   show('pause');
 }
 function resume(): void {
@@ -294,24 +494,49 @@ function resume(): void {
   show('play');
   run.resume();
 }
-function quit(): void {
+function toLevels(): void {
   run?.stop();
   run = null;
-  show('menu');
+  botMode = false;
+  show('levels');
 }
-document.addEventListener('visibilitychange', () => { if (document.hidden) { pause(); record.halt(); } });
-window.addEventListener('resize', () => renderer.resize());
+/** Quitting shows what the visit came to (how far, flow, sync) before going back to the levels. */
+function quit(): void {
+  if (!run) { toLevels(); return; }
+  const r = run;
+  if (r.opts.tutorial) { r.stop(); run = null; show('levels'); return; }
+  tally(r);
+  const reached = r.pct;
+  r.stop();
+  if (session.far === 0 && reached === 0 && session.attempts <= 1) { toLevels(); return; }
+  showResults(r, false, reached);
+}
+/** Where the build-up before the drop begins (the first charge section), as a song time. */
+function buildStart(): number {
+  let beat = 0;
+  for (const s of pack.level.segments) {
+    if (s.core?.charge) return Math.max(0, beat - 8) * 60 / pack.audio.bpm; // two bars of run-up before it
+    beat += s.bars * 4;
+  }
+  return -1;
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) { pause(); record.halt(); audio.stopPreview(0.2); } else queuePreview(); });
+window.addEventListener('resize', () => { renderer.resize(); show(screen); });
 
 // ------------------------------------------------------------------ settings
 function renderSettings(): void {
   $<HTMLInputElement>('setMusic').value = String(save.music);
   $<HTMLInputElement>('setSfx').value = String(save.sfx);
+  $<HTMLInputElement>('setHit').value = String(save.hitVol);
   $('aoVal').textContent = fmtMs(save.audioOffset);
   $('voVal').textContent = fmtMs(save.visualOffset);
   $('setMotion').classList.toggle('on', save.reducedMotion);
   $('setSync').classList.toggle('on', save.syncOverlay);
+  $('setUnlock').classList.toggle('on', save.unlockAll);
+  $('syncBtn').textContent = !save.calibrated ? 'Sync check needed' : deviceChanged ? 'Audio changed: check' : 'Sync check · 10 s';
+  $('recordBtn').classList.toggle('hidden', !import.meta.env.DEV);
   const lat = Math.round(audio.latency() * 1000);
-  $('setInfo').textContent = audio.ctx ? `This device reports ${lat} ms of output delay, already compensated.` : '';
+  $('setInfo').textContent = `${audio.ctx ? `This device reports ${lat} ms of output delay, already allowed for. ` : ''}Changed headphones or speakers? Run the sync check again.`;
 }
 function openSettings(from: Screen): void {
   settingsFrom = from;
@@ -321,14 +546,14 @@ function openSettings(from: Screen): void {
 }
 function closeSettings(): void {
   persist();
-  show(settingsFrom === 'pause' ? 'pause' : 'menu');
+  show(settingsFrom === 'pause' ? 'pause' : 'levels');
 }
 function nudge(key: 'audioOffset' | 'visualOffset', by: number): void {
   save[key] = Math.max(-200, Math.min(400, save[key] + by));
   persist();
   renderSettings();
 }
-function toggle(key: 'reducedMotion' | 'syncOverlay'): void {
+function toggle(key: 'reducedMotion' | 'syncOverlay' | 'unlockAll'): void {
   save[key] = !save[key];
   persist();
   renderSettings();
@@ -339,16 +564,17 @@ function toggle(key: 'reducedMotion' | 'syncOverlay'): void {
 // Visual: no sound; tap when the ball crosses the mark; the average becomes the visual offset.
 const CAL_PERIOD = 0.6;
 const CAL_NEED = 8;
-const cal = { mode: 'audio' as 'audio' | 'visual', running: false, clicks: [] as number[], taps: [] as number[], startPerf: 0, timer: 0, quick: false, thenPlay: true, done: false };
+const cal = { mode: 'audio' as 'audio' | 'visual', running: false, clicks: [] as number[], taps: [] as number[], startPerf: 0, timer: 0, quick: false, then: 'back' as 'begin' | 'back', from: 'settings' as Screen, done: false };
 
 function renderCal(): void {
   $('calAudioTab').classList.toggle('on', cal.mode === 'audio');
   $('calVisualTab').classList.toggle('on', cal.mode === 'visual');
   $('calTabs').classList.toggle('hidden', cal.quick);
-  $('calClose').textContent = cal.quick ? (save.calibrated && !deviceChanged ? 'Cancel' : 'Skip (not recommended)') : 'Done';
+  $('calStart').classList.toggle('hidden', cal.quick && cal.running);
+  $('calClose').textContent = cal.quick ? (cal.then === 'begin' ? 'Skip (not recommended)' : 'Cancel') : 'Done';
   $('calTitle').textContent = cal.quick ? 'SYNC CHECK' : 'CALIBRATION';
   $('calText').textContent = cal.quick
-    ? `${deviceChanged && save.calibrated ? 'Your audio output has changed. ' : ''}Tap along to the click 8 times, going by what you hear. It takes 10 seconds and lines the game up with your speakers or headphones. Do it again whenever you change them: Bluetooth adds 150 to 250 ms.`
+    ? `${deviceChanged && save.calibrated ? 'Your audio output has changed. ' : ''}Tap along to the click 8 times, going by what you hear. It lines the game up with your speakers or headphones. Do it again whenever you change them: Bluetooth adds 150 to 250 ms.`
     : cal.mode === 'audio'
     ? 'Press Start, then tap in time with the click, 8 times. Go by what you hear. Use the speakers or headphones you will play with.'
     : 'No sound here. Press Start, then tap each time the ball crosses the mark at the top of the ring.';
@@ -359,6 +585,7 @@ function renderCal(): void {
 }
 function calStart(): void {
   audio.ensure();
+  audio.stopPreview(0.2);
   cal.running = true;
   cal.taps = [];
   cal.clicks = [];
@@ -402,15 +629,16 @@ function calTap(t: number): void {
       if (cal.mode === 'audio') { save.audioOffset = v; save.calLatency = audio.latency(); cal.done = true; sync.press.length = sync.flow.length = 0; } else save.visualOffset = v;
       persist();
       $('calResult').textContent = `${cal.mode === 'audio' ? 'Audio' : 'Visual'} offset set to ${fmtMs(v)} (your taps were within ±${Math.round(sd)} ms).`;
-      if (cal.quick) { if (cal.thenPlay) $('calResult').textContent += ' Starting…'; window.setTimeout(() => { if (screen === 'calib' && cal.quick) closeCalib(); }, 1200); }
+      if (cal.quick) window.setTimeout(() => { if (screen === 'calib' && cal.quick) closeCalib(); }, 1200);
     }
   }
   renderCal();
 }
-/** quick: the 10-second sync check (first run, new audio output, or asked for). thenPlay: start the level when it is done. */
-function openCalib(quick = false, thenPlay = true): void {
+/** quick: the 10-second sync check. then 'begin': it came up on the way into a level, which starts when it is done. */
+function openCalib(quick = false, then: 'begin' | 'back' = 'back'): void {
   cal.quick = quick;
-  cal.thenPlay = thenPlay;
+  cal.then = then;
+  cal.from = screen === 'calib' ? cal.from : screen;
   cal.done = false;
   if (quick) cal.mode = 'audio';
   cal.running = false;
@@ -425,94 +653,115 @@ function closeCalib(): void {
   clearTimeout(cal.timer);
   void audio.suspend().then(() => audio.resume()); // drops any clicks still queued
   if (cal.quick) {
-    // done or skipped: either way it is not forced again until the audio output changes (the menu keeps the button)
     cal.quick = false;
-    save.calibrated = true;
-    if (save.calLatency < 0 || cal.done) save.calLatency = audio.latency();
-    deviceChanged = false;
-    persist();
-    if (cal.thenPlay) window.setTimeout(() => startRun(), 250); else show('menu');
+    if (cal.then === 'begin' || cal.done) {
+      // done, or skipped on the way in: it is not forced again until the audio output changes
+      save.calibrated = true;
+      if (save.calLatency < 0 || cal.done) save.calLatency = audio.latency();
+      deviceChanged = false;
+      persist();
+    }
+    if (cal.then === 'begin') { show('levels'); window.setTimeout(enter, 60); return; }
+    if (cal.from === 'results' || cal.from === 'pause') { toLevels(); return; }
+    if (cal.from === 'settings') { renderSettings(); show('settings'); return; }
+    show('levels');
     return;
   }
   renderSettings();
   show('settings');
 }
 
+// ------------------------------------------------------------------ orbs and badges
+function renderOrbs(): void {
+  const list = $('orbList');
+  list.innerHTML = '';
+  for (const o of ORBS) {
+    const open = !o.needs || !!save.badges[o.needs];
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.className = `tile${save.skin === o.id ? ' on' : ''}${open ? '' : ' locked'}`;
+    el.style.setProperty('--c', `rgb(${o.rgb.join(',')})`);
+    el.innerHTML = `<span class="swatch"></span><b></b><small></small><span class="state">${save.skin === o.id ? `${icon('check')}EQUIPPED` : open ? '' : `${icon('lock')}LOCKED`}</span>`;
+    el.querySelector('b')!.textContent = o.name;
+    el.querySelector('small')!.textContent = open ? (save.skin === o.id ? 'Your ball right now' : 'Tap to equip') : o.how;
+    el.setAttribute('aria-label', `${o.name} orb${open ? '' : `, locked: ${o.how}`}`);
+    el.addEventListener('click', () => { if (!open) return; save.skin = o.id; persist(); renderOrbs(); });
+    list.appendChild(el);
+  }
+}
+function renderBadges(): void {
+  const list = $('badgeList');
+  list.innerHTML = '';
+  let got = 0;
+  for (const b of BADGES) {
+    const has = !!save.badges[b.id];
+    if (has) got++;
+    const el = document.createElement('div');
+    el.className = `tile${has ? ' got' : ' locked'}`;
+    el.innerHTML = `<span class="star">${icon('badge')}</span><b></b><small></small><span class="state">${has ? `${icon('check')}EARNED` : icon('lock')}</span>`;
+    el.querySelector('.star svg')!.setAttribute('style', 'width:100%;height:100%');
+    el.querySelector('b')!.textContent = b.name;
+    el.querySelector('small')!.textContent = b.desc;
+    list.appendChild(el);
+  }
+  $('badgeCount').textContent = `${got} of ${BADGES.length} earned. Each one says how to earn it.`;
+}
+
 // ------------------------------------------------------------------ wiring
-$('playBtn').addEventListener('click', () => startRun());
-$('practiceBtn').addEventListener('click', () => { practice = !practice; renderMenu(); });
-$('fromBtn').addEventListener('click', () => { fromBuild = !fromBuild; renderMenu(); });
-$('botBtn').addEventListener('click', () => { botMode = !botMode; renderMenu(); });
-$('settingsBtn').addEventListener('click', () => openSettings('menu'));
-$('creditsBtn').addEventListener('click', () => show('credits'));
-$('creditsClose').addEventListener('click', () => show('menu'));
-$('levelPrev').addEventListener('click', () => selectLevel(levelIdx - 1));
-$('levelNext').addEventListener('click', () => selectLevel(levelIdx + 1));
-$('extrasBtn').addEventListener('click', () => { renderExtras(); show('extras'); });
-$('extrasClose').addEventListener('click', () => show('menu'));
+$('lvBack').addEventListener('click', () => show('title'));
+$('lvPrev').addEventListener('click', () => focusLevel(levelIdx - 1, true));
+$('lvNext').addEventListener('click', () => focusLevel(levelIdx + 1, true));
+$('playBtn').addEventListener('click', () => begin(false));
+$('practiceBtn').addEventListener('click', () => begin(true));
+$('orbsBtn').addEventListener('click', () => { renderOrbs(); show('orbs'); });
+$('badgesBtn').addEventListener('click', () => { renderBadges(); show('badges'); });
+$('settingsBtn').addEventListener('click', () => openSettings('levels'));
+$('orbsClose').addEventListener('click', () => show('levels'));
+$('badgesClose').addEventListener('click', () => show('levels'));
 $('pauseBtn').addEventListener('click', pause);
 $('resumeBtn').addEventListener('click', resume);
-$('pauseRestartBtn').addEventListener('click', () => startRun());
+$('pauseRestartBtn').addEventListener('click', () => startRun(-1, true));
+$('pausePracticeBtn').addEventListener('click', () => { if (!run) return; const seg = run.level.segAt(Math.max(0, run.time)); practice = true; if (seg.t0 <= run.t0 + 0.01) startRun(); else startRun(seg.t0); });
+$('pauseSkipBtn').addEventListener('click', () => { practice = true; startRun(buildStart()); });
 $('pauseSettingsBtn').addEventListener('click', () => openSettings('pause'));
 $('pauseQuitBtn').addEventListener('click', quit);
-$('retryBtn').addEventListener('click', () => startRun());
-$('resMenuBtn').addEventListener('click', quit);
+$('pauseSyncCal').addEventListener('click', () => { run?.stop(); run = null; openCalib(true); });
+$('retryBtn').addEventListener('click', () => { session.far = 0; session.newBest = false; startRun(); });
+$('nextBtn').addEventListener('click', () => { if (levelIdx + 1 < PACKS.length && levelOpen(levelIdx + 1)) { run?.stop(); run = null; focusLevel(levelIdx + 1, false); show('levels'); focusLevel(levelIdx, true); } });
+$('resLevelsBtn').addEventListener('click', toLevels);
+$('resSyncCal').addEventListener('click', () => { run?.stop(); run = null; openCalib(true); });
+$('tutorSkip').addEventListener('click', () => { run?.stop(); endTutorial(); });
 $('settingsClose').addEventListener('click', closeSettings);
 $('setMusic').addEventListener('input', (e) => { save.music = Number((e.target as HTMLInputElement).value); audio.setVolumes(save.music, save.sfx); });
-$('setSfx').addEventListener('input', (e) => { save.sfx = Number((e.target as HTMLInputElement).value); audio.setVolumes(save.music, save.sfx); audio.hit('tap'); });
+$('setSfx').addEventListener('input', (e) => { save.sfx = Number((e.target as HTMLInputElement).value); audio.setVolumes(save.music, save.sfx); audio.hit('impact', 0.6); });
+$('setHit').addEventListener('input', (e) => { save.hitVol = Number((e.target as HTMLInputElement).value); audio.hit('hit', save.hitVol); });
 $('aoMinus').addEventListener('click', () => nudge('audioOffset', -5));
 $('aoPlus').addEventListener('click', () => nudge('audioOffset', 5));
 $('voMinus').addEventListener('click', () => nudge('visualOffset', -5));
 $('voPlus').addEventListener('click', () => nudge('visualOffset', 5));
 $('setMotion').addEventListener('click', () => toggle('reducedMotion'));
 $('setSync').addEventListener('click', () => toggle('syncOverlay'));
-$('syncBtn').addEventListener('click', () => { audio.ensure(); audio.setVolumes(save.music, save.sfx); openCalib(true, false); });
-$('resSyncCal').addEventListener('click', () => { run?.stop(); openCalib(true); });
-$('pauseSyncCal').addEventListener('click', () => { run?.stop(); run = null; openCalib(true); });
-$('calibBtn').addEventListener('click', () => openCalib());
-$('recordBtn').addEventListener('click', () => { run?.stop(); run = null; record.open(); });
+$('setUnlock').addEventListener('click', () => toggle('unlockAll'));
+$('syncBtn').addEventListener('click', () => { audio.ensure(); audio.setVolumes(save.music, save.sfx); openCalib(true); });
+$('calibBtn').addEventListener('click', () => openCalib(false));
+$('botBtn').addEventListener('click', () => { botMode = true; practice = false; session.far = session.onBeat = session.judged = session.streak = session.attempts = 0; session.drop = -1; startRun(); });
+$('replayTutorial').addEventListener('click', () => { save.tutorialDone = false; persist(); focusLevel(0, false); practice = false; botMode = false; audio.ensure(); startTutorial(); });
+$('recordBtn').addEventListener('click', () => { run?.stop(); run = null; audio.stopPreview(0.2); record.open(); });
 $('calAudioTab').addEventListener('click', () => { cal.mode = 'audio'; cal.running = false; cal.taps = []; $('calResult').textContent = ''; renderCal(); });
 $('calVisualTab').addEventListener('click', () => { cal.mode = 'visual'; cal.running = false; cal.taps = []; $('calResult').textContent = ''; void audio.suspend().then(() => audio.resume()); renderCal(); });
 $('calStart').addEventListener('click', calStart);
 $('calClose').addEventListener('click', closeCalib);
 $('calPad').addEventListener('pointerdown', (e) => { e.preventDefault(); calTap(stamp(e)); });
 
-function renderExtras(): void {
-  const orbs = $('orbList');
-  orbs.innerHTML = '';
-  for (const o of ORBS) {
-    const open = !o.needs || !!save.badges[o.needs];
-    const el = document.createElement('button');
-    el.type = 'button';
-    el.className = `orb${save.skin === o.id ? ' on' : ''}${open ? '' : ' locked'}`;
-    el.innerHTML = '<i></i><b></b><small></small>';
-    (el.querySelector('i') as HTMLElement).style.background = `rgb(${o.rgb.join(',')})`;
-    (el.querySelector('b') as HTMLElement).textContent = o.name;
-    (el.querySelector('small') as HTMLElement).textContent = open ? (save.skin === o.id ? 'Equipped' : 'Tap to equip') : o.how;
-    el.addEventListener('click', () => { if (!open) return; save.skin = o.id; persist(); renderExtras(); });
-    orbs.appendChild(el);
-  }
-  const badges = $('badgeList');
-  badges.innerHTML = '';
-  for (const b of BADGES) {
-    const el = document.createElement('div');
-    el.className = `badge${save.badges[b.id] ? ' on' : ''}`;
-    el.innerHTML = '<b></b><small></small>';
-    (el.querySelector('b') as HTMLElement).textContent = b.name;
-    (el.querySelector('small') as HTMLElement).textContent = b.desc;
-    badges.appendChild(el);
-  }
-}
-
 const record = initRecord({
   pack: () => pack,
-  show: (s) => show(s),
+  show: (s) => { if (s === 'record') show('record'); else { renderSettings(); show('settings'); } },
   play: (from) => { botMode = false; practice = true; startRun(from); }
 });
 for (const p of PACKS) void refreshBars(p);
 
-const list = $('creditList');
-for (const t of manifest.tracks) { const d = document.createElement('div'); d.className = 'credit'; d.textContent = creditLine(t); list.appendChild(d); }
+const credits = $('creditList');
+for (const t of manifest.tracks) { const d = document.createElement('div'); d.textContent = creditLine(t); credits.appendChild(d); }
 $('licenceNote').textContent = manifest.licenceNote;
 
 function tick(now: number): void {
@@ -525,6 +774,7 @@ function tick(now: number): void {
   } else if (screen === 'calib' && cal.mode === 'visual') {
     renderer.drawMetronome(now, cal.running ? Math.max(0, (now - cal.startPerf) / 1000 / CAL_PERIOD) % 1 : 0);
   } else {
+    audio.tick(now);
     renderer.drawIdle(now, dt);
     if (screen === 'record') record.tick(now);
   }
@@ -534,10 +784,19 @@ function loop(now: number): void {
   requestAnimationFrame(loop);
 }
 
-show('menu');
+buildCards();
+document.body.classList.add('boot');
+show('title');
+window.setTimeout(() => document.body.classList.remove('boot'), 400);
+requestAnimationFrame(() => (cards.children[levelIdx] as HTMLElement | undefined)?.scrollIntoView({ inline: 'center', block: 'nearest' }));
 requestAnimationFrame(loop);
 
 // Hooks for tests and debugging; the game itself never reads these.
 Object.assign(window, {
-  __omo: { audio, save, renderer, get run() { return run; }, get screen() { return screen; }, tick, level: selectLevel, start: (bot: boolean, prac = false, from = -1, build = false) => { botMode = bot; practice = prac; fromBuild = build; startRun(from); } }
+  __omo: {
+    audio, save, renderer, session, sync, get run() { return run; }, get screen() { return screen; }, tick, show,
+    level: (i: number) => focusLevel(i, false),
+    start: (bot: boolean, prac = false, from = -1) => { botMode = bot; practice = prac; startRun(from); },
+    tutorial: startTutorial, results: (cleared: boolean) => { if (run) showResults(run, cleared, run.pct); }, orbs: () => { renderOrbs(); show('orbs'); }, badges: () => { renderBadges(); show('badges'); }, settings: () => openSettings('levels')
+  }
 });

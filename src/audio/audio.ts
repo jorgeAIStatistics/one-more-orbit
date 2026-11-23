@@ -231,6 +231,44 @@ export class AudioEngine {
     };
   }
 
+  private previewToken = 0;
+  private previewEnd: ((fade: number) => void) | null = null;
+  /** Plays a stretch of a level's song quietly, looping: the level select's preview. A new call fades the old one out. */
+  async preview(meta: AudioMeta, from: number, gain = 0.75): Promise<void> {
+    const token = ++this.previewToken;
+    this.stopPreview(0.4, true);
+    if (!this.ensure()) return;
+    let track: LoadedTrack;
+    try { track = await this.loadTrack(meta); } catch { return; }
+    if (token !== this.previewToken) return;
+    await this.resume();
+    const c = this.ctx!;
+    const src = c.createBufferSource();
+    src.buffer = track.buffer;
+    src.loop = true;
+    src.loopStart = Math.max(0, meta.offset + track.shift + from);
+    src.loopEnd = Math.min(track.buffer.duration, src.loopStart + 15);
+    const g = c.createGain();
+    const now = c.currentTime;
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(gain, now + 0.7);
+    src.connect(g);
+    g.connect(this.pre);
+    src.start(now, src.loopStart);
+    this.previewEnd = (fade) => {
+      const t = c.currentTime;
+      try { g.gain.cancelScheduledValues(t); g.gain.setTargetAtTime(0, t, Math.max(0.02, fade / 3)); src.stop(t + fade + 0.15); } catch { /* already stopped */ }
+      setTimeout(() => { try { g.disconnect(); } catch { /* ignore */ } }, (fade + 0.6) * 1000);
+    };
+  }
+
+  /** Fades the preview out (the level's own music is about to take over, or the menus are closing). */
+  stopPreview(fade = 0.5, keepToken = false): void {
+    if (!keepToken) this.previewToken++;
+    this.previewEnd?.(fade);
+    this.previewEnd = null;
+  }
+
   private muffled = -1;
   /**
    * How muffled the music is, 0 (full mix) to 1 (deep low-pass, never silent). It closes slowly and opens

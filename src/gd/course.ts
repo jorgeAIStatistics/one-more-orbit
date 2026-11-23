@@ -19,8 +19,10 @@ export interface Press {
   smash: boolean;
   /** one of the phrase's big hits: an ordinary press, drawn and answered bigger */
   accent: boolean;
-  /** planet hop: this press slings the ball across to the next planet */
+  /** planet hop: this press slings the ball across to the next planet (a two-beat flight) */
   sling: boolean;
+  /** the first press after a planet hop: at least a beat and a half after landing, with a wider opening, and highlighted */
+  after: boolean;
   /** weave: one of a run of flips that bounce the ball between two rings */
   weave: boolean;
   /** spin gate: the opening is a gap in a turning ring that comes round to the mark on the beat */
@@ -90,6 +92,10 @@ export const NEAR = 0.6; // beats before an opening in which a tap is "going for
 export const FLOW_TOL_S = 0.07; // how close a tap must be to a flow note to touch it
 export const FLOW_S = 0.04; // taps this close to a note build flow
 export const MIN_GAP = 1; // beats between generated survival presses: quarter notes at most
+export const SLING_FLIGHT = 2; // beats a planet hop spends in the air
+export const COUNT_IN = 4; // beats at the very start of a level with no survival press: the 3, 2, 1
+/** Beats after a planet hop lands in which nothing can end the run: at least 1.5, and at least 0.85 s at any tempo. */
+export const landingGrace = (spb: number) => Math.max(1.5, Math.ceil((0.85 / spb) * 2) / 2);
 const TWO_PI = Math.PI * 2;
 /** How a flight climbs to the next ring: fast at first, so it is through the opening early and then floats down. */
 export const rise = (u: number) => 1 - Math.pow(1 - u, 2.4);
@@ -135,7 +141,8 @@ export function barPlan(level: Level): BarCfg[] {
       const w = token.split('+');
       if (w.includes('fast')) speed = 1.25; else if (w.includes('slow')) speed = 0.8; else if (w.includes('normal')) speed = 1;
       const twin = w.includes('twin');
-      out.push({ token, mode: w.includes('weave') ? 'weave' : w.includes('down') ? 'down' : 'up', spin: w.includes('spin'), twin, sling: w.includes('sling') && !twin, turn: w.includes('turn'), speed });
+      // a planet hop only ever starts a phrase or its second half (every other bar), and never in a twin orbit
+      out.push({ token, mode: w.includes('weave') ? 'weave' : w.includes('down') ? 'down' : 'up', spin: w.includes('spin'), twin, sling: w.includes('sling') && !twin && k % 2 === 0, turn: w.includes('turn'), speed });
     }
   }
   return out;
@@ -161,9 +168,34 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
   // first beat (`launch`: the game takes that press itself).
   const auto = new Set(segs.filter((s) => s.core?.launch && inRange(s.beat0)).map((s) => s.beat0));
   const smash = new Set(segs.filter((s) => s.core?.smash && inRange(s.beat0)).map((s) => s.beat0));
-  let ground = [...new Set([...layers.survival.map(snap).filter((b) => inRange(b) && !inCharge(b)), ...auto, ...smash])].sort((a, b) => a - b);
+  // the level's first bar is the count-in: its notes are flow notes, so the first press never comes as a surprise
+  const counted = (b: number) => !!range || b >= COUNT_IN - 1e-6;
+  let ground = [...new Set([...layers.survival.map(snap).filter((b) => inRange(b) && !inCharge(b) && counted(b)), ...auto, ...smash])].sort((a, b) => a - b);
   // nothing else within a beat of a smash or a launch: those own their moment
   ground = ground.filter((b) => auto.has(b) || smash.has(b) || ![...auto, ...smash].some((x) => Math.abs(x - b) < MIN_GAP - 1e-6));
+  // Planet hops. One launches from the first press of a bar marked `sling`, if that press is on the beat in the
+  // bar's first half: a strong beat at a phrase boundary. The flight lasts two beats, and after it lands nothing can
+  // end the run for the landing grace: presses that fall in the flight or the grace become flow notes.
+  const grace = landingGrace(spb);
+  const slings = new Set<number>();
+  const afters = new Set<number>();
+  const kept: number[] = [];
+  let hold = -Infinity;
+  let waiting = false;
+  for (const b of ground) {
+    const fixed = smash.has(b) || auto.has(b);
+    if (b < hold - 1e-6 && !fixed) continue;
+    const bar = Math.floor((b + 1e-6) / 4);
+    const firstInBar = !kept.some((x) => Math.floor((x + 1e-6) / 4) === bar);
+    if (waiting) { afters.add(b); waiting = false; }
+    if (!fixed && barAt(b).sling && firstInBar && Math.abs(b - Math.round(b)) < 0.01 && b - bar * 4 < 2 - 1e-6) {
+      slings.add(b);
+      hold = b + SLING_FLIGHT + grace;
+      waiting = true;
+    }
+    kept.push(b);
+  }
+  ground = kept;
   const groundSet = new Set(ground);
   // every note that is not a press is a flow note: the flow layer, plus presses inside a charge or crowded out by a smash
   const flowBeats = [...new Set([...layers.flow, ...layers.survival].map(snap))].filter((b) => inRange(b) && !groundSet.has(b)).sort((a, b) => a - b);
@@ -177,22 +209,19 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
   let lv = 0;
   let side: 1 | -1 = 1;
   let planet = 0;
-  const slung = new Set<number>();
   let lastTwin: 'a' | 'b' = 'b';
   ground.forEach((beat, i) => {
     const prev = i > 0 ? beat - ground[i - 1] : 99;
     const next = i + 1 < ground.length ? ground[i + 1] - beat : 99;
     const isSmash = smash.has(beat);
-    const tol = clamp(0.45 * Math.min(prev, next) * spb, TOL_MIN_S, isSmash ? TOL_SMASH_S : TOL_S) / spb;
+    const after = afters.has(beat);
+    const tol = clamp(0.45 * Math.min(prev, next) * spb, TOL_MIN_S, isSmash || after ? TOL_SMASH_S : TOL_S) / spb;
     const seg = level.segAt((beat + 1e-6) * spb);
-    const bar = Math.floor((beat + 1e-6) / 4);
     const cfg = barAt(beat);
-    const land = i + 1 < ground.length ? Math.min(ground[i + 1], beat + CAP) : Math.min(beat + 1, end);
+    const sling = slings.has(beat);
+    const land = sling ? beat + SLING_FLIGHT : i + 1 < ground.length ? Math.min(ground[i + 1], beat + CAP) : Math.min(beat + 1, end);
     const dur = land - beat;
     const plain = isSmash || auto.has(beat); // the drop's own press is never anything else
-    // planet hop: the first press of a bar marked sling
-    const sling = !plain && cfg.sling && !slung.has(bar);
-    if (sling) slung.add(bar);
     // gravity: a weave flips on every press; otherwise flip only when the bar wants the other side of the ring
     const weave = !plain && !sling && cfg.mode === 'weave';
     const want = cfg.mode === 'up' ? 1 : cfg.mode === 'down' ? -1 : side;
@@ -214,7 +243,7 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
     if (sling) first(beat, 'sling');
     if (cfg.spin && !plain) first(beat, 'spin');
     presses.push({
-      i, beat, tol, kind: flip ? 'flip' : 'hop', auto: auto.has(beat), smash: isSmash, accent, sling, weave, spin: cfg.spin && !plain && !sling, twin,
+      i, beat, tol, kind: flip ? 'flip' : 'hop', auto: auto.has(beat), smash: isSmash, accent, sling, after, weave, spin: cfg.spin && !plain && !sling, twin,
       from: lv, to, side, planet, planetTo: sling ? planet + 1 : planet, camLv: weave ? lv + side * 0.5 : to,
       land, bounce: i + 1 < ground.length && ground[i + 1] === land,
       bulge: flip ? 0 : sling ? 0.5 : clamp(0.35 * dur - 0.1, 0.06, 0.7), pitch: pitchAt(beat), seg: seg.index

@@ -67,7 +67,11 @@ export class Sim {
   /** results of presses the simulation made by itself (buffered taps, launches, the run-in): the run reads and empties this */
   out: TapResult[] = [];
 
-  constructor(readonly c: Course, start: number, private autoUntil = -Infinity) {
+  /** times the game stepped in for the player (tutorial only) */
+  helped = 0;
+
+  /** forgiving: nothing ends the run. A missed mark is taken for the player and an early tap is ignored (the tutorial). */
+  constructor(readonly c: Course, start: number, private autoUntil = -Infinity, private forgiving = false) {
     this.beat = start;
     const ps = c.presses;
     while (this.ni < ps.length && ps[this.ni].beat + ps[this.ni].tol < start) this.ni++;
@@ -179,6 +183,7 @@ export class Sim {
     this.advance(t);
     const spb = this.c.spb;
     if (this.crashed || (t - this.lastTap) * spb < DEBOUNCE_S) return { kind: 'none' };
+    if (t < this.autoUntil) return { kind: 'none' }; // the game is still playing the run-in: taps do nothing until it hands over
     this.lastTap = t;
     // mashing (outside a charge) is read as off-beat tapping: flow drains and the music muffles, whatever it happens to hit
     this.recent.push(t);
@@ -225,10 +230,11 @@ export class Sim {
       this.charge = Math.max(0, this.charge - 0.4 / Math.max(1, 0.75 * this.c.chargeNotes));
       return free();
     }
-    if (!p || p.auto) return free(); // nothing left to miss
+    if (!p || p.auto || p.after) return free(); // nothing left to miss, or the first press after a planet hop: tapping early there is never punished
     // near a flow note, or with one still to come before the opening: the tap was for the flow note, never punished
     if (this.c.flow.some((f) => f.beat < p.beat && (f.beat - t) * spb > -GRACE_S)) return free();
     if (d < -NEAR) { this.off(); return free(); } // far from any opening: free, though it is not on the beat
+    if (this.forgiving) return free();
     return this.crash('early', t); // went for the opening too soon and hit the ring
   }
 
@@ -270,6 +276,10 @@ export class Sim {
           this.needJudge = p.auto && p.beat >= this.autoUntil; // a tap right on a launch still counts for flow
           this.out.push({ kind: p.kind, err: 0, pitch: p.pitch, auto: true });
         }
+      } else if (nb > p.beat + p.tol && this.forgiving) {
+        this.takeoff(p, nb);
+        this.helped++;
+        this.out.push({ kind: p.kind, err: 0, pitch: p.pitch, auto: true });
       } else if (nb > p.beat + p.tol) {
         this.crashed = true; // ran off the end of the ring
         this.crashBeat = nb;

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { PACKS, SLICE } from '../src/game/packs';
 import { Level } from '../src/game/level';
 import { SmoothClock } from '../src/gd/clock';
-import { autoLayers, buildCourse, TOL_S } from '../src/gd/course';
+import { autoLayers, buildCourse, landingGrace, SLING_FLIGHT, TOL_S } from '../src/gd/course';
 import { accentBeats, layerTicks, layers, pitchLookup } from '../src/gd/presses';
 import { Sim } from '../src/gd/sim';
 
@@ -142,6 +142,7 @@ for (const pack of PACKS.filter((p) => SLICE.includes(p.level.id))) {
     it('practice run-in: the game plays the notes before a checkpoint and hands over on it', () => {
       const cp = course.checkpoints.find((b) => b > course.start + 4 && !course.inCharge(b) && course.presses.some((p) => p.beat >= b && p.beat < b + 4))!;
       const sim = new Sim(course, cp - 3.2, cp);
+      for (let b = cp - 3; b < cp - 0.05; b += 0.13) sim.press(b); // tapping along during the run-in does nothing
       sim.advance(cp - 0.01);
       expect(sim.crashed).toBe(false);
       expect(sim.judged).toBe(0);
@@ -169,8 +170,35 @@ for (const pack of PACKS.filter((p) => SLICE.includes(p.level.id))) {
       const inDrop = course.presses.filter((p) => p.beat >= course.dropBeat && has(p)).length;
       const before = course.presses.filter((p) => p.beat < course.dropBeat && has(p)).length;
       expect(before, 'introduced before the drop').toBeGreaterThanOrEqual(1);
-      expect(inDrop, 'stars in the drop').toBeGreaterThanOrEqual(8);
+      expect(inDrop, 'stars in the drop').toBeGreaterThanOrEqual(star === 'sling' ? 3 : 8);
       if (id !== 'invincible') expect(course.presses.some((p) => p.twin)).toBe(false); // the twin orbit stays in the last level
+    });
+
+    it('transitions are fair: every planet hop launches on a strong beat at a phrase boundary, and after it lands the next press is at least 1.5 beats away, on the ring you landed on, and extra wide', () => {
+      const hops = course.presses.filter((p) => p.sling);
+      expect(landingGrace(course.spb)).toBeGreaterThanOrEqual(1.5);
+      expect(landingGrace(course.spb) * course.spb).toBeGreaterThanOrEqual(0.85);
+      for (const p of hops) {
+        const seg = level.segments[p.seg];
+        const bar = Math.floor((p.beat + 1e-6) / 4);
+        expect(Math.abs(p.beat - Math.round(p.beat)), `hop at ${p.beat} is on the beat`).toBeLessThan(0.01);
+        expect((bar - seg.bar0) % 2, `hop at ${p.beat} starts a phrase or its second half`).toBe(0);
+        expect(p.beat - bar * 4, `hop at ${p.beat} is in the first half of its bar`).toBeLessThan(2);
+        expect(p.land - p.beat).toBe(SLING_FLIGHT);
+        expect(p.twin, 'no planet hops in a twin orbit').toBe(null);
+        const next = course.presses[p.i + 1];
+        if (!next) continue;
+        expect(next.beat - p.land, `press after the hop at ${p.beat}`).toBeGreaterThanOrEqual(landingGrace(course.spb) - 1e-9);
+        expect(next.planet, 'on the planet you landed on').toBe(p.planetTo);
+        expect(next.from, 'on the ring you landed on, so it is on screen with the ball').toBe(p.to);
+        expect(next.after).toBe(true);
+        if (!next.smash) expect(next.tol * course.spb, 'extra wide').toBeGreaterThanOrEqual(0.159);
+        // nothing at all can end the run between launch and the end of the grace: no taps, or mashing, both survive it
+        const before = pressBeats.filter((b) => b <= p.beat);
+        expect(run(before, course.start - 3, next.beat - next.tol - 0.05).crashed, `no taps after the hop at ${p.beat}`).toBe(false);
+        expect(run([...before, ...spam(p.beat + 0.3, 10, 0, next.beat - next.tol - 0.1)], course.start - 3, next.beat - next.tol - 0.05).crashed, `mashing after the hop at ${p.beat}`).toBe(false);
+      }
+      console.log(`HOPS ${id}: ${hops.length} planet hops at beats ${hops.map((p) => p.beat).join(', ')}; landing grace ${landingGrace(course.spb)} beats (${(landingGrace(course.spb) * course.spb).toFixed(2)} s)`);
     });
 
     it('same music, same pattern: sections sharing a motif have the same presses and flow notes', () => {

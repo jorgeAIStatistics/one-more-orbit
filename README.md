@@ -32,6 +32,24 @@ Each bar of a level has a mode (`core.bars` in the level file), so the mechanic 
 - **Start at the build-up** on the menu starts runs at the first charge section (not saved), to reach the drop quickly.
 - Code: `src/gd/course.ts` (notes to rings), `src/gd/sim.ts` (fixed 240 Hz steps, survival, flow and charge), `src/gd/clock.ts` (smooth clock), `src/gd/run.ts`, `src/gd/render.ts`. `tests/gd.test.ts` covers autoplay in full flow, press spacing and window sizes, "nothing can crash in the build-up", the charge, flow notes never hurting, uneven timing, the muffle steps, mash bots at 8, 10 and 12 taps a second, and the clock.
 
+### Transitions, entry and finish
+
+- **Planet hops are fair by rule** (`tests/gd.test.ts`): a hop launches only from an on-beat press that opens a phrase or its second half; it flies for two beats; after it lands nothing can end the run for the landing grace (at least 1.5 beats and at least 0.85 s); the first press after it is on the ring you landed on, has the wide ±160 ms opening, forgives early taps and is highlighted. The camera reaches the next planet before the ball does, the launch arrows pulse on the beat, and a cyan target marks the landing spot. There are no hops in a twin orbit.
+- **Entry:** the level's first bar is a count-in with no survival press (its notes are flow notes). A fresh start shows a title card over the run-in and counts 3, 2, 1 on the beats. An instant restart after a crash cuts in at beat 2 with the attempt counter flashing.
+- **Crash:** a short burst, the percent reached, and a restart by itself half a second later (a tap restarts at once). Results only appear on a clear or on quitting.
+- **Finish:** when the last press lands the level is won: the ball launches out through every ring, the world bursts into the level's colours, LEVEL COMPLETE shows with its bar filling to 100 while the music plays out, then the results fade in. A first clear lists what it unlocked.
+
+### Front end
+
+One design system (`src/style.css`): Unbounded for display type, flat surfaces with a 2px line, one primary button, one secondary, icon buttons, chips. Screens cross-fade in half a beat at 120 BPM. `src/ui/art.ts` holds the icon set and each level card's own artwork; `src/main.ts` is the app controller.
+
+- **Title:** the wordmark (the O of ORBIT is a ring with a ball riding round it) over the living orbit scene; tap to start.
+- **Level select:** swipeable cards (scroll-snap; arrows and arrow keys on desktop) with Best and Practice bars, attempts, locks and their unlock condition, a song preview on focus, PLAY and PRACTICE, and Orbs / Badges / Settings.
+- **Results:** percent reached, new best or first clear, attempts, on-the-beat share, best streak, drop charge, the progress bar with the drop and the crash point, the sync line with its one-tap fix, then RETRY, NEXT LEVEL and LEVELS.
+- **Pause:** resume, restart, practice from here, practice the build-up and drop, settings, quit.
+- **Settings:** three volumes (music, effects, tap sounds), offsets and the sync check, reduced motion, About (credits and the licence note), and playtest options (all levels open, autoplay, replay the tutorial; Record mode only on the dev server).
+- **First run:** the 10-second sync check, then a 24-beat tutorial on level 1 in which nothing can end the run.
+
 ### Sync: measuring, not guessing
 
 - **In the game:** every tap that meets a note is logged as milliseconds early or late. The results screen and the pause screen show the average and spread for survival presses and for flow notes; if the taps are consistently off (15 ms or more, with a tight spread) a one-tap button corrects the audio offset. Settings has a live **Sync overlay** (or add `?sync=1`). The 10-second sync check runs before the first level, is one tap away on the menu, and is asked for again when the audio output changes.
@@ -46,6 +64,10 @@ Each bar of a level has a mode (`core.bars` in the level file), so the mechanic 
 Run `npm run dev`, open the menu and choose **Record mode**. Sections marked `record` in the level file (the hook and the drop phrases) are listed first as record candidates. Pick a section, a speed (100, 75 or 50%; slower also lowers the pitch) and a snap grid (1/4, 1/8, 1/16, triplets). Choose which layer you are recording (survival presses or flow notes), press Record, wait one bar of count-in and tap what you hear (the pad or any key). The take, snapped to the grid, replaces that layer in the section and leaves the other layer alone. Clicking a square steps it through empty, survival press (blue), flow note (gold). Listen plays the section with a high click on presses and a low one on flow notes; Play this section starts it in practice; Copy to matching sections puts the same notes on every other section that shares the music. In a charge section every note plays as a flow note whatever its layer. **Save** writes `levels/<id>/presses.json` (`t` = presses, `f` = flow notes per bar); bars in it are marked `by: hand` and nothing in `tools/` ever rewrites that file. Bars without a hand recording use the generated chart. Outside the dev server (the single-file build) Save keeps the bars in the browser and shows the JSON to copy.
 
 The earlier one-beat-hop slice of Heroes Tonight is tagged `gd-hop-slice`; the judged one-button game is on the `one-button` branch.
+
+### Screenshots of every screen (dev tool)
+
+`tools/stage-shots.js` stages each screen with sample progress, music muted and nothing saved. With the dev server running, in the page's console: `await import('/tools/stage-shots.js'); await __stage('levels')`. Names: title, levels, final, entry, play, twin, tutorial, pause, quit, finale, clear, settings, orbs, badges, sync. The current set is in `../v4-screenshots/front-end/`.
 
 ## Run it
 

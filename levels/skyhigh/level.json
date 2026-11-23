@@ -18,7 +18,7 @@
   "segments": [
     {"id": "intro", "core": {"bars": ["up"]}, "bars": 4, "label": "INTRO", "lap": 8, "follow": "arp", "lead": "snare", "motif": "intro", "cycle": 4, "teach": "TAP as the ball crosses each gate", "look": {"palette": "deep", "bg": "stars", "eq": "bars", "zoom": [0.9, 1]},
       "plan": ["L=beat"] },
-    {"id": "intro2", "core": {"bars": ["up", "up+sling", "up", "up"]}, "bars": 4, "label": "INTRO", "lap": 8, "follow": "arp", "lead": "snare", "motif": "intro", "cycle": 4, "look": {"palette": "ocean", "bg": "stars", "eq": "bars"},
+    {"id": "intro2", "core": {"bars": ["up", "up", "up+sling", "up"]}, "bars": 4, "label": "INTRO", "lap": 8, "follow": "arp", "lead": "snare", "motif": "intro", "cycle": 4, "look": {"palette": "ocean", "bg": "stars", "eq": "bars"},
       "plan": ["L=beat"] },
     {"id": "verse", "core": {"bars": ["up", "down", "up+sling", "down"], "record": true}, "bars": 4, "label": "VERSE", "lap": 8, "follow": "arp", "lead": "snare", "motif": "verse", "cycle": 4, "shape": "ellipse", "warn": "FLIP GATE", "teach": "FLIP GATE: tapping it turns the ball round", "look": {"palette": "violet", "bg": "tunnel", "eq": "wave"},
       "plan": ["L=8 flip", "L=8", "L=8", "L=8"] },
@@ -38,7 +38,7 @@
       "plan": ["L=16 acc", "L=16", "L=16", "L=16"] },
     {"id": "drop3", "core": {"bars": ["down", "weave", "up", "weave"]}, "bars": 4, "label": "DROP", "lap": 4, "follow": "lead", "lead": "hook", "motif": "drop", "cycle": 4, "shape": "square", "rocket": 2, "enter": "pulse", "warn": "FLIP GATES", "look": {"palette": "gold", "bg": "grid", "eq": "burst", "rot": [0, 1]},
       "plan": ["L=16 flip", "L=16 flip", "L=16 flip", "L=16 flip"] },
-    {"id": "drop4", "core": {"bars": ["weave", "up+sling", "down", "weave"]}, "bars": 4, "label": "DROP", "lap": 4, "follow": "lead", "lead": "hook", "motif": "drop", "cycle": 4, "shape": "circle", "sling": [-1, 0.25], "enter": "pulse", "look": {"palette": "hot", "bg": "tunnel", "eq": "burst", "zoom": [1, 1.1], "flip": true},
+    {"id": "drop4", "core": {"bars": ["up+sling", "weave", "down", "weave"]}, "bars": 4, "label": "DROP", "lap": 4, "follow": "lead", "lead": "hook", "motif": "drop", "cycle": 4, "shape": "circle", "sling": [-1, 0.25], "enter": "pulse", "look": {"palette": "hot", "bg": "tunnel", "eq": "burst", "zoom": [1, 1.1], "flip": true},
       "plan": ["L=16 acc", "L=16", "L=16", "L=16"] },
     {"id": "outro", "core": {"bars": ["up"]}, "bars": 1, "label": "END", "lap": 8, "follow": "kick", "rocket": 6, "enter": "flash", "look": {"palette": "deep", "bg": "stars", "eq": "wave", "zoom": [1.1, 0.95]},
       "plan": ["B=@X..............."] }

@@ -9,8 +9,11 @@ import { Sim, type TapResult } from './sim';
 
 export type RunState = 'loading' | 'playing' | 'paused' | 'resuming' | 'failed' | 'done' | 'error';
 /** partial: started part-way through from the menu ("start at the build-up"); plays like a normal run but is not saved */
-export interface RunOptions { bot?: boolean; practice?: boolean; partial?: boolean; startAt?: number; leadIn?: number }
-export interface RunEvent { kind: 'hop' | 'flip' | 'spark' | 'skip' | 'land' | 'crash' | 'drop'; flow?: boolean; charge?: boolean; accent?: boolean; smash?: boolean; sling?: boolean; full?: boolean; power?: number }
+/** tutorial: the first-run lesson: nothing ends the run, missed marks are taken for the player, and it stops after a few bars */
+export interface RunOptions { bot?: boolean; practice?: boolean; partial?: boolean; tutorial?: boolean; startAt?: number; leadIn?: number }
+/** beats the tutorial lasts */
+export const TUTORIAL_BEATS = 24;
+export interface RunEvent { kind: 'hop' | 'flip' | 'spark' | 'skip' | 'land' | 'crash' | 'drop' | 'finale'; flow?: boolean; charge?: boolean; accent?: boolean; smash?: boolean; sling?: boolean; full?: boolean; power?: number }
 
 const RESUME_COUNT = 1.2;
 
@@ -36,6 +39,9 @@ export class GdRun {
   /** whether the drop went off in full (null until it happens), and how big it was, 0..1: charge times flow */
   dropFull: boolean | null = null;
   dropPower = 1;
+  /** the finish: from the moment the last press lands, the level is won and the ending plays out */
+  finale = false;
+  finaleAt = Infinity;
   private songStart = 0;
   private latency = 0;
   private music: { stop: (fade?: number) => void } | null = null;
@@ -44,6 +50,7 @@ export class GdRun {
   private lastNow = 0;
   private seenLand = -99;
   private readonly leadIn: number;
+  private endTimer = 0;
 
   constructor(readonly pack: LevelPack, readonly opts: RunOptions, private onEnd: (run: GdRun) => void) {
     this.level = new Level(pack.level, pack.audio, pack.chart);
@@ -55,7 +62,9 @@ export class GdRun {
     this.leadIn = opts.leadIn ?? 1;
     this.time = this.viewTime = this.startAt - this.leadIn;
     // from a checkpoint, the game plays the notes of the run-in itself and hands over on the checkpoint
-    this.sim = new Sim(this.course, this.time / spb, this.startAt > this.t0 ? this.startAt / spb : -Infinity);
+    this.sim = new Sim(this.course, this.time / spb, this.startAt > this.t0 ? this.startAt / spb : -Infinity, !!opts.tutorial);
+    const lastPress = this.course.presses[this.course.presses.length - 1];
+    if (lastPress && !opts.tutorial) this.finaleAt = lastPress.land * spb;
     while (this.bi < this.course.taps.length && this.course.taps[this.bi] * spb < this.startAt) this.bi++;
     if (this.startAt / spb > this.course.dropBeat) this.dropFull = true;
   }
@@ -94,11 +103,17 @@ export class GdRun {
 
   /** How far through the built stretch, 0..1. */
   get progress(): number {
-    return Math.max(0, Math.min(1, (this.time - this.t0) / (this.t1 - this.t0)));
+    const p = Math.max(0, Math.min(1, (this.time - this.t0) / (this.t1 - this.t0)));
+    return this.finale ? p + (1 - p) * Math.min(1, this.finaleAge / 1.4) : p; // the bar fills to 100 as the finish goes off
   }
 
   get pct(): number {
-    return this.state === 'done' ? 100 : Math.min(99, Math.floor(this.progress * 100));
+    return this.state === 'done' ? 100 : this.finale ? Math.min(100, Math.round(this.progress * 100)) : Math.min(99, Math.floor(this.progress * 100));
+  }
+
+  /** seconds since the finish began */
+  get finaleAge(): number {
+    return this.finale ? this.time - this.finaleAt : 0;
   }
 
   /** Song time of the crash, or -1. */
@@ -110,14 +125,14 @@ export class GdRun {
     if (r.kind === 'none' || r.kind === 'crash') return;
     if (r.kind === 'skip') { audio.hit('stray', 0.3); this.events.push({ kind: 'skip' }); return; }
     // one hit sound for every tap that meets a note; on the beat in a hook section it also plays the hook's pitch
-    audio.hit('hit', r.auto ? 0.55 : r.kind === 'spark' ? 0.8 : 1);
+    audio.hit('hit', (r.auto ? 0.55 : r.kind === 'spark' ? 0.8 : 1) * save.hitVol);
     const hook = this.level.segAt(Math.max(0, this.time)).follow === 'lead';
-    if (r.flow && hook && r.pitch) audio.pluck(r.pitch, 0.5);
+    if (r.flow && hook && r.pitch) audio.pluck(r.pitch, 0.5 * save.hitVol);
     if (r.charge) {
       // charging the drop: each tap on the roll plays the next step up the song's scale
       const scale = this.pack.level.scale ?? [0, 2, 4, 5, 7, 9, 11];
       const k = Math.min(14, Math.floor(this.sim.charge * 14));
-      audio.pluck(60 + 12 * Math.floor(k / scale.length) + scale[k % scale.length], 0.4);
+      audio.pluck(60 + 12 * Math.floor(k / scale.length) + scale[k % scale.length], 0.4 * save.hitVol);
     }
     const press = r.kind === 'spark' ? null : this.course.presses[this.sim.ni - 1];
     this.events.push({ kind: r.kind, flow: !!r.flow || !!r.auto, charge: !!r.charge, accent: !!press?.accent, smash: !!press?.smash, sling: !!press?.sling });
@@ -125,7 +140,7 @@ export class GdRun {
 
   /** The one button. The tap is applied at the moment it happened, not when the next frame runs. */
   tap(perfMs: number): void {
-    if (this.state !== 'playing') return;
+    if (this.state !== 'playing' || this.finale) return;
     this.react(this.sim.press(this.clock.at(perfMs) / this.level.spb));
   }
 
@@ -159,16 +174,27 @@ export class GdRun {
     if (this.sim.crashed) {
       audio.hit('miss', 0.9);
       this.events.push({ kind: 'crash' });
-      this.finish('failed', 420);
-    } else if (t >= this.t1) this.finish('done', 600);
+      this.finish('failed', 520);
+    } else if (this.opts.tutorial) {
+      if (beat >= TUTORIAL_BEATS) this.finish('done', 200);
+    } else {
+      if (!this.finale && t >= this.finaleAt) {
+        // the last press has landed: the level is won. The music plays out while the finish goes off.
+        this.finale = true;
+        audio.setMuffle(0);
+        audio.hit('impact', 1);
+        this.events.push({ kind: 'finale' });
+      }
+      if (t >= Math.max(this.t1, this.finaleAt + 3.6)) this.finish('done', 0);
+    }
   }
 
   private finish(state: 'failed' | 'done', delay: number): void {
     if (this.ended) return;
     this.ended = true;
     this.state = state;
-    this.music?.stop(state === 'failed' ? 0.1 : 0.5);
-    setTimeout(() => { audio.setMuffle(0); this.onEnd(this); }, delay);
+    this.music?.stop(state === 'failed' ? 0.1 : 0.8);
+    this.endTimer = window.setTimeout(() => { audio.setMuffle(0); this.onEnd(this); }, delay);
   }
 
   /** Autoplay proof of smooth movement: how evenly the game clock advanced, frame by frame. */
@@ -191,7 +217,16 @@ export class GdRun {
     this.resumeAt = performance.now() + RESUME_COUNT * 1000;
   }
 
+  /** Ends a crashed attempt's short pause at once (a tap restarts immediately). */
+  skipWait(): void {
+    if (this.state !== 'failed') return;
+    clearTimeout(this.endTimer);
+    audio.setMuffle(0);
+    this.onEnd(this);
+  }
+
   stop(): void {
+    clearTimeout(this.endTimer);
     this.ended = true;
     this.music?.stop(0.08);
     this.state = 'done';

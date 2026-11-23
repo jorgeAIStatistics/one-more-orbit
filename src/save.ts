@@ -9,6 +9,8 @@ export interface LevelBest {
   grade: Grade | '';
   cleared: boolean;
   attempts: number;
+  /** furthest reached in practice mode, percent */
+  prac?: number;
 }
 
 export interface SaveData {
@@ -33,10 +35,16 @@ export interface SaveData {
   calLatency: number;
   /** show the live sync overlay while playing */
   syncOverlay: boolean;
+  /** volume of the tap sounds, apart from the other effects */
+  hitVol: number;
+  /** the first-run tutorial on level 1 has been played or skipped */
+  tutorialDone: boolean;
+  /** playtest: every level open, whatever has been cleared */
+  unlockAll: boolean;
 }
 
 const defaults = (): SaveData => ({
-  music: 0.8, sfx: 0.7, audioOffset: 0, visualOffset: 0, reducedMotion: false, hardcore: false, errorBar: true, level: 0, skin: 'cyan', badges: {}, practiced: {}, bests: {}, teachSeen: {}, core: 4, calibrated: false, calLatency: -1, syncOverlay: false
+  music: 0.8, sfx: 0.7, audioOffset: 0, visualOffset: 0, reducedMotion: false, hardcore: false, errorBar: true, level: 0, skin: 'cyan', badges: {}, practiced: {}, bests: {}, teachSeen: {}, core: 4, calibrated: false, calLatency: -1, syncOverlay: false, hitVol: 1, tutorialDone: false, unlockAll: true
 });
 
 function load(): SaveData {
