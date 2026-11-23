@@ -2,7 +2,7 @@
 
 A one-button rhythm game: a ball orbits a ring in time with the music, you tap as it crosses each gate, and the last gate on a ring launches it to the next while the camera zooms out. All variety comes from the world around that one tap.
 
-**Status: vertical slice** on the `one-button` branch. One level (Sky High, one chart) for playtesting. Still planned, not built yet: the other three levels, mods (Hidden, Sudden Death, Mirror, Double Time), skins and badges, and the art-direction pass. The earlier two-hand version is tagged `v4-two-hand-slice`.
+**Status:** four levels on the `one-button` branch (Heroes Tonight, Sky High, Blank, Invincible), one chart each, unlocked in order, with orbs and badges. Still planned: mods, the art-direction pass, the PWA and the native wrapper. The earlier two-hand version is tagged `v4-two-hand-slice`.
 
 **Music licence.** The tracks are NCS releases and are here for private testing only. Releasing the game needs a game licence from NoCopyrightSounds (ncs.io). Credits and that note are in `levels/manifest.json` and shown in the game.
 

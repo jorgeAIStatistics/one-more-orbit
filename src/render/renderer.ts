@@ -1,5 +1,6 @@
 import { audio } from '../audio/audio';
 import type { JEvent } from '../game/engine';
+import { orbColour } from '../game/extras';
 import { shapePoint } from '../game/level';
 import { HOP_BEATS, ORBIT_RATIO, WINDOW } from '../game/rules';
 import type { Run } from '../game/run';
@@ -18,7 +19,13 @@ const PALETTES: Record<string, Palette> = {
   neon: { bg0: [62, 10, 86], bg1: [10, 2, 30], ring: [255, 70, 210], acc: [255, 150, 240] },
   aqua: { bg0: [6, 60, 82], bg1: [2, 10, 26], ring: [0, 235, 255], acc: [160, 255, 250] },
   gold: { bg0: [84, 48, 8], bg1: [26, 6, 22], ring: [255, 207, 64], acc: [255, 240, 170] },
-  hot: { bg0: [96, 16, 36], bg1: [34, 4, 44], ring: [255, 255, 255], acc: [255, 220, 240] }
+  hot: { bg0: [96, 16, 36], bg1: [34, 4, 44], ring: [255, 255, 255], acc: [255, 220, 240] },
+  dawn: { bg0: [78, 30, 44], bg1: [16, 6, 26], ring: [255, 150, 110], acc: [255, 214, 160] },
+  sky: { bg0: [16, 54, 96], bg1: [4, 10, 30], ring: [110, 190, 255], acc: [200, 235, 255] },
+  ice: { bg0: [30, 46, 74], bg1: [6, 8, 18], ring: [200, 225, 255], acc: [255, 255, 255] },
+  void: { bg0: [18, 8, 38], bg1: [0, 0, 0], ring: [150, 110, 255], acc: [220, 200, 255] },
+  blood: { bg0: [84, 6, 14], bg1: [18, 2, 6], ring: [255, 50, 60], acc: [255, 170, 150] },
+  toxic: { bg0: [24, 58, 10], bg1: [4, 12, 4], ring: [150, 255, 60], acc: [230, 255, 150] }
 };
 const CYAN: RGB = [0, 245, 255];
 const PINK: RGB = [255, 60, 150];
@@ -380,7 +387,9 @@ export class Renderer {
         // ghost gates fade out before the ball arrives: the rhythm has to carry you
         const ghost = n.ghost ? clamp((n.beat - beat - (n.ghost === 2 ? 0.35 : 1)) / 0.9, 0, 1) : 1;
         const alpha = Math.pow(ra, 0.7) * ghost;
-        const [ux, uy] = shapePoint(r.shape, n.angle);
+        // moving gates slide along the ring and lock into place one beat before the ball arrives
+        const na = n.moving ? n.angle + r.dir * 0.55 * clamp((n.beat - beat - 1) / 1.5, 0, 1) : n.angle;
+        const [ux, uy] = shapePoint(r.shape, na);
         const hyp = Math.hypot(ux, uy) || 1;
         const ox = ux / hyp;
         const oy = uy / hyp;
@@ -443,10 +452,10 @@ export class Renderer {
     this.trail.push({ x: bx, y: by });
     if (this.trail.length > 12) this.trail.shift();
     for (let k = 0; k < this.trail.length - 1; k++) {
-      c.fillStyle = this.col(CYAN, (k / this.trail.length) * 0.35);
+      c.fillStyle = this.col(orbColour(save.skin), (k / this.trail.length) * 0.35);
       c.beginPath(); c.arc(this.trail[k].x, this.trail[k].y, m * 0.016 * (k / this.trail.length), 0, TWO_PI); c.fill();
     }
-    this.ball(bx, by, m * 0.018 * (1 + pulse * 0.2 + this.tapPulse * 0.35), CYAN);
+    this.ball(bx, by, m * 0.018 * (1 + pulse * 0.2 + this.tapPulse * 0.35), orbColour(save.skin));
 
     // --- particles
     for (let i = this.particles.length - 1; i >= 0; i--) {

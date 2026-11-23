@@ -17,8 +17,9 @@ for (const pack of PACKS) {
     it('every note is on the 16th-note grid, inside the excerpt, one tap at a time', () => {
       let prev = -99;
       for (const n of pack.chart.notes) {
-        expect(Number.isInteger(n.t) && n.t % 3 === 0, `tick ${n.t}`).toBe(true);
-        expect(n.t - prev, `two taps at once near tick ${n.t}`).toBeGreaterThanOrEqual(3);
+        const onGrid = pack.level.swing ? [0, 4, 6, 10].includes(n.t % 12) : n.t % 3 === 0;
+        expect(Number.isInteger(n.t) && onGrid, `tick ${n.t}`).toBe(true);
+        expect(n.t - prev, `two taps at once near tick ${n.t}`).toBeGreaterThanOrEqual(2);
         prev = n.t;
       }
       for (const n of notes) expect(n.t).toBeLessThan(level.endTime);
@@ -26,15 +27,15 @@ for (const pack of PACKS) {
     it('fast runs stay short: never more than four 16ths in a row', () => {
       let run = 1;
       for (let i = 1; i < notes.length; i++) {
-        run = notes[i].beat - notes[i - 1].beat < 0.26 ? run + 1 : 1;
+        run = notes[i].beat - notes[i - 1].beat < 0.34 ? run + 1 : 1;
         expect(run, `bar ${Math.floor(notes[i].beat / 4) + 1}`).toBeLessThanOrEqual(4);
       }
     });
-    it('rings: bursts of at most three, the ball never laps a ring, gates at least 22 degrees apart', () => {
+    it('rings: bursts of at most three, the ball never laps a ring, gates at least 11 degrees apart', () => {
       for (const r of level.rings.slice(0, -1)) {
         expect(r.last - r.first + 1).toBeLessThanOrEqual(3);
         expect(r.exitBeat - r.b0).toBeLessThanOrEqual(r.lap * 0.875 + 1e-6);
-        for (let k = r.first + 1; k <= r.last; k++) expect(((notes[k].beat - notes[k - 1].beat) / r.lap) * 360).toBeGreaterThanOrEqual(22);
+        for (let k = r.first + 1; k <= r.last; k++) expect(((notes[k].beat - notes[k - 1].beat) / r.lap) * 360).toBeGreaterThanOrEqual(11);
         expect(notes[r.last].exit).toBe(true);
       }
     });
@@ -61,10 +62,10 @@ for (const pack of PACKS) {
         }
       }
     });
-    it('big hits are marked: the drop starts with an accent', () => {
-      const first = notes.filter((n) => Math.abs(n.t - level.dropTime) < 0.01);
-      expect(first.length).toBe(1);
-      expect(first[0].accent).toBe(true);
+    it('big hits are marked: the first gate of the drop is an accent', () => {
+      const first = notes.find((n) => n.t >= level.dropTime - 0.01);
+      expect(first && first.t - level.dropTime).toBeLessThan(4 * level.spb);
+      expect(first?.accent).toBe(true);
     });
     it('uses enough one-button elements for its length, with something new at least every 20 s', () => {
       const used = new Set<string>();

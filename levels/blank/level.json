@@ -1,0 +1,42 @@
+{
+  "_doc": [
+      "Level layout for a one-button level. Segments play in order; 'bars' is each one's length (keep the total at the excerpt's bar count),",
+      "then re-run: python tools/chart.py skyhigh",
+      "lap = beats per trip round a ring (smaller = faster: double-time; larger = half-time).  shape: circle | ellipse | square.",
+      "jump: out (default) or in.  rocket: extra rings the ball launches through on entering.  reverse / revEvery: direction flips.",
+      "look: palette, bg (stars | tunnel | grid), eq (bars | wave | burst), optional [from, to] ramps: zoom, rot (turns), tilt, drain, vignette; flip.",
+      "follow: the ONE sound this section's taps follow (arp, kick, snare, lead); gate colour shows it. lead: which measured layer the L lane reads.",
+      "motif / cycle: sections sharing a motif name are one repeating figure, charted identically every time.",
+      "warn: label shown two beats before the section.  teach: banner the first time.  plan: one pattern per bar (vocabulary at the top of tools/chart.py)."
+  ],
+  "id": "blank",
+  "title": "Blank",
+  "artist": "Disfigure",
+  "release": "NCS Release",
+  "hitsoundNote": 74,
+  "scale": [2, 4, 6, 7, 9, 11, 1],
+  "segments": [
+    {"id": "verse", "bars": 4, "label": "VERSE", "lap": 8, "follow": "arp", "lead": "snare", "motif": "verse", "cycle": 4, "look": {"palette": "ice", "bg": "stars", "eq": "wave", "zoom": [0.9, 1]},
+      "plan": ["L=8"] },
+    {"id": "verse2", "bars": 4, "label": "VERSE", "lap": 8, "follow": "arp", "lead": "snare", "motif": "verse", "cycle": 4, "shape": "ellipse", "reverse": true, "warn": "GHOST GATES", "look": {"palette": "ice", "bg": "grid", "eq": "wave"},
+      "plan": ["L=8", "L=8", "L=8 ghost=L", "L=8 ghost=L"] },
+    {"id": "theme", "bars": 8, "label": "THEME", "lap": 8, "follow": "lead", "shape": "square", "rocket": 2, "enter": "pulse", "warn": "THE THEME", "lead": "hook", "motif": "theme", "cycle": 8, "look": {"palette": "void", "bg": "tunnel", "eq": "bars"},
+      "plan": ["L=16 acc", "L=16", "L=16", "L=16", "L=16", "L=16", "L=16", "L=16"] },
+    {"id": "theme2", "bars": 8, "label": "THEME", "lap": 8, "follow": "lead", "shape": "square", "warn": "MOVING GATES", "teach": "MOVING GATES slide, then lock: trust the beat", "enter": "pulse", "lead": "hook", "motif": "theme", "cycle": 8, "look": {"palette": "violet", "bg": "tunnel", "eq": "bars", "tilt": [0, 0.22]},
+      "plan": ["L=16 acc move", "L=16 move", "L=16 move", "L=16 move", "L=16", "L=16", "L=16", "L=16"] },
+    {"id": "spikes", "bars": 4, "label": "BUILD", "lap": 4, "follow": "snare", "lead": "snare", "jump": "in", "warn": "SPIKES", "teach": "SPIKES: tap the arrow to hop over", "look": {"palette": "dusk", "bg": "grid", "eq": "bars", "zoom": [1, 1.06], "tilt": [0.22, 0]},
+      "plan": ["L=@x...x...x...x... hop"] },
+    {"id": "rush", "bars": 4, "label": "BUILD", "lap": 4, "follow": "snare", "lead": "snare", "jump": "in", "warn": "FASTER", "look": {"palette": "dusk", "bg": "grid", "eq": "bars", "zoom": [1.06, 1.22], "drain": [0, 0.95], "vignette": [0, 0.9]},
+      "plan": ["L=@x.x.x.x.x.x.x.x."] },
+    {"id": "heavy", "bars": 4, "label": "DROP", "lap": 8, "follow": "kick", "lead": "full", "motif": "heavy", "cycle": 4, "shape": "square", "rocket": 4, "enter": "drop", "look": {"palette": "blood", "bg": "grid", "eq": "burst", "zoom": [0.92, 1]},
+      "plan": ["L=8 acc", "L=8", "L=8", "L=8"] },
+    {"id": "heavy2", "bars": 4, "label": "DROP", "lap": 8, "follow": "kick", "lead": "full", "motif": "heavy", "cycle": 4, "shape": "square", "reverse": true, "enter": "pulse", "warn": "REVERSE", "look": {"palette": "blood", "bg": "tunnel", "eq": "burst", "rot": [0, -0.5]},
+      "plan": ["L=8 acc move", "L=8 move", "L=8 move", "L=8 move"] },
+    {"id": "mel", "bars": 8, "label": "DROP", "lap": 8, "follow": "lead", "shape": "ellipse", "rocket": 2, "enter": "pulse", "warn": "THE HOOK", "lead": "hook", "motif": "mel", "cycle": 8, "look": {"palette": "ice", "bg": "tunnel", "eq": "burst", "zoom": [1, 1.06]},
+      "plan": ["L=16 acc", "L=16", "L=16", "L=16", "L=16", "L=16", "L=16", "L=16"] },
+    {"id": "mel2", "bars": 8, "label": "DROP", "lap": 8, "follow": "lead", "shape": "circle", "revEvery": 2, "enter": "pulse", "warn": "REVERSES", "lead": "hook", "motif": "mel", "cycle": 8, "look": {"palette": "hot", "bg": "tunnel", "eq": "burst", "rot": [0, 1], "flip": true},
+      "plan": ["L=16 acc", "L=16", "L=16", "L=16", "L=16 ghost=L", "L=16 ghost=L", "L=16", "L=16"] },
+    {"id": "end", "bars": 1, "label": "END", "lap": 8, "follow": "kick", "rocket": 6, "enter": "flash", "look": {"palette": "ice", "bg": "stars", "eq": "wave"},
+      "plan": ["B=@X..............."] }
+  ]
+}

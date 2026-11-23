@@ -25,7 +25,7 @@
       <div class="eyebrow">ONE-BUTTON BUILD · PLAYTEST</div>
       <h1 class="logo">ONE MORE<br />ORBIT</h1>
       <div class="track">
-        <div id="trackName" class="track-name">Sky High</div>
+        <div class="picker"><button id="levelPrev" class="icon" type="button" aria-label="Previous level">&lsaquo;</button><div><div id="levelNo" class="eyebrow"></div><div id="trackName" class="track-name">Sky High</div></div><button id="levelNext" class="icon" type="button" aria-label="Next level">&rsaquo;</button></div>
         <div id="trackMeta" class="track-meta"></div>
         <div class="track-stats"><span id="levelRating" class="d-stars">★</span><span id="levelBest" class="d-best"></span></div>
       </div>
@@ -37,10 +37,10 @@
       </div>
       <div class="row">
         <button id="settingsBtn" class="pill" type="button">Settings &amp; sync</button>
+        <button id="extrasBtn" class="pill" type="button">Orbs &amp; badges</button>
         <button id="creditsBtn" class="pill" type="button">Music credits</button>
       </div>
       <p class="hint">One button: tap anywhere, or press any key, as the ball crosses each gate. R restarts, Esc pauses.</p>
-      <p class="hint dim">Heroes Tonight, Blank and Invincible follow after this playtest.</p>
     </div>
   </section>
 
@@ -73,6 +73,7 @@
       <div class="timeline" aria-hidden="true"><div id="tlFill"></div><div id="tlMarks"></div><i id="tlDrop"><span>DROP</span></i></div>
       <div id="resTiming" class="sub"></div>
       <div id="resOffset" class="offset-box hidden"><span id="resOffsetText"></span><button id="resOffsetApply" class="pill" type="button">Apply</button></div>
+      <div id="resUnlocks" class="unlocks"></div>
       <button id="retryBtn" class="primary" type="button">RETRY (R)</button>
       <div class="row"><button id="resMenuBtn" class="pill" type="button">Menu</button></div>
     </div>
@@ -110,6 +111,16 @@
       <div id="calResult" class="cal-result"></div>
       <button id="calPad" class="pad" type="button">TAP</button>
       <div class="row"><button id="calStart" class="pill" type="button">Start</button><button id="calClose" class="pill" type="button">Done</button></div>
+    </div>
+  </section>
+
+  <section id="extras" class="screen dim-bg hidden">
+    <div class="card wide">
+      <h2>ORBS</h2>
+      <div id="orbList" class="orbs"></div>
+      <h2>BADGES</h2>
+      <div id="badgeList" class="badges"></div>
+      <div class="row"><button id="extrasClose" class="pill" type="button">Done</button></div>
     </div>
   </section>
 

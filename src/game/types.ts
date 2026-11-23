@@ -45,6 +45,8 @@ export interface LevelFile {
   artist: string;
   release: string;
   hitsoundNote: number;
+  /** 16ths are swung (the off-16ths land late, on ticks 4 and 10 of 12) */
+  swing?: boolean;
   segments: SegmentDef[];
 }
 
@@ -65,6 +67,7 @@ export interface NoteDef {
   p?: number; // MIDI pitch of the followed note, so the hitsound can play the melody
   a?: number; // 1 = accent: a big hit
   g?: number; // ghost gate: 1 fades early, 2 fades late (teaching)
+  m?: number; // moving gate: slides along the ring, then locks a beat before the ball arrives
 }
 
 export interface ChartFile {
@@ -111,6 +114,7 @@ export interface RNote {
   exit: boolean;
   accent: boolean;
   ghost: number;
+  moving: boolean;
   voice: string;
   pitch: number;
   done: boolean;

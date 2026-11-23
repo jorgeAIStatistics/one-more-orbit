@@ -27,10 +27,15 @@ MOTIF_THR = 0.6  # ...and as part of a motif when it is this strong in most repe
 SOUND = {'kick': 'kick/bass', 'snare': 'clap/arpeggio', 'lead': 'lead', 'full': 'full mix', 'hook': 'lead hook (pitch transcription)'}
 SCALE_FALLBACK = 72
 
+def step_tick(i, swing):
+    return (i // 4) * 12 + ((0, 4, 6, 10) if swing else (0, 3, 6, 9))[i % 4]
+
 def load(tid):
     level = json.load(open(ROOT / f'levels/{tid}/level.json')); audio = json.load(open(ROOT / f'levels/{tid}/audio.json'))
     F = dict(np.load(ROOT / f'tools/cache/{tid}.features.npz'))
-    S = {k: F[k][::3] for k in ('kick', 'snare', 'lead', 'full')}       # one value per 16th
+    sw = level.get('swing', False); n16 = len(F['kick']) // 12 * 4
+    ticks = np.array([step_tick(i, sw) for i in range(n16)])
+    S = {k: F[k][ticks] for k in ('kick', 'snare', 'lead', 'full')}     # one value per 16th (swung 16ths when the level says so)
     # the lead hook, from the pitch transcription: strength of each note start, and the pitch sounding on each 16th
     S['hook'] = np.zeros(len(S['kick'])); S['pitch'] = np.zeros(len(S['kick']), dtype=int)
     lp = ROOT / f'tools/cache/{tid}.lead.json'
@@ -120,7 +125,8 @@ def compose_bar(seg, plan, bar, b_in_motif, motif, S):
         else: flags.add(tok)
     for tok in plan.split():
         if '=' in tok and tok[0] in 'BL' and tok[1] == '=': row[tok[0]] = voice_row(tok.split('=')[1], tok[0], seg, bar, b_in_motif, motif, S, opts)
-    if 'hop' in flags: row['B'] = row['B'].replace('x', '^')
+    if 'hop' in flags:
+        for lane in 'BL': row[lane] = row[lane].replace('x', '^')
     for lane in ghost:
         row[lane] = row[lane].replace('x', 'G' if 'late' in flags else 'g')
     if 'acc' in flags:
@@ -161,7 +167,8 @@ def compile_chart(level, audio, S, rows):
             for i, ch in enumerate(r[lane]):
                 if ch == '.': continue
                 idx = bar * 16 + i
-                n = {'t': bar * 48 + i * 3, 'k': 'j' if ch == '^' else 't', 'v': seg.get('follow', 'lead')[0]}
+                n = {'t': bar * 48 + step_tick(i, level.get('swing', False)), 'k': 'j' if ch == '^' else 't', 'v': seg.get('follow', 'lead')[0]}
+                if 'move' in r.get('pat', '').split(): n['m'] = 1
                 if ch == 'X': n['a'] = 1
                 if ch in 'gG': n['g'] = 2 if ch == 'G' else 1
                 if lane == 'L' and idx < len(S['pitch']) and S['pitch'][idx] > 0:
@@ -187,11 +194,11 @@ def compile_chart(level, audio, S, rows):
     digits = lambda v: ''.join(str(int(min(9, round(x * 7.5)))) for x in v)
     return notes, {'kick': digits(S['kick']), 'snare': digits(S['snare'])}, warn
 
-def stars(notes, spb):
+def stars(notes, spb, swing=False):
     ts = np.array(sorted(n['t'] / 12 * spb for n in notes))
     peak = max(np.sum((ts >= t) & (ts < t + 4)) for t in ts) / 4; avg = len(ts) / (ts[-1] - ts[0])
-    gaps = np.diff(ts); fast = float(np.mean(gaps < 0.14)); extra = sum(1 for n in notes if n.get('g') or n['k'] == 'j') / len(notes)
-    return round(float(np.clip(0.5 * peak + 0.45 * avg + 4.0 * fast + 2.5 * extra, 1, 10)), 1)
+    gaps = np.diff(ts); fast = float(np.mean(gaps < 0.14)); extra = sum(1 for n in notes if n.get('g') or n.get('m') or n['k'] == 'j') / len(notes)
+    return round(float(np.clip(0.5 * peak + 0.45 * avg + 4.0 * fast + 2.5 * extra + (0.8 if swing else 0), 1, 10)), 1)
 
 def explain(tid, level, audio, S, sheet, a, b):
     seg_of = {bb: seg for seg, b0, b1 in seg_bars(level) for bb in range(b0, b1)}
@@ -213,7 +220,7 @@ def main(argv):
         return
     write_sheet(tid, sheet)
     notes, energy, warn = compile_chart(level, audio, S, sheet['rows'])
-    st = stars(notes, spb); hand = sum(1 for r in sheet['rows'] if r.get('by') == 'hand')
+    st = stars(notes, spb, level.get('swing', False)); hand = sum(1 for r in sheet['rows'] if r.get('by') == 'hand')
     with open(ROOT / f'levels/{tid}/chart.json', 'w') as f:
         f.write('{\n  "level": "%s", "stars": %s,\n  "energy": %s,\n  "notes": [\n' % (tid, st, json.dumps(energy)))
         f.write(',\n'.join('    ' + json.dumps(n, separators=(', ', ': ')) for n in notes)); f.write('\n  ]\n}\n')

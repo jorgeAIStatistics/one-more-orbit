@@ -1,0 +1,42 @@
+{
+  "_doc": [
+      "Level layout for a one-button level. Segments play in order; 'bars' is each one's length (keep the total at the excerpt's bar count),",
+      "then re-run: python tools/chart.py skyhigh",
+      "lap = beats per trip round a ring (smaller = faster: double-time; larger = half-time).  shape: circle | ellipse | square.",
+      "jump: out (default) or in.  rocket: extra rings the ball launches through on entering.  reverse / revEvery: direction flips.",
+      "look: palette, bg (stars | tunnel | grid), eq (bars | wave | burst), optional [from, to] ramps: zoom, rot (turns), tilt, drain, vignette; flip.",
+      "follow: the ONE sound this section's taps follow (arp, kick, snare, lead); gate colour shows it. lead: which measured layer the L lane reads.",
+      "motif / cycle: sections sharing a motif name are one repeating figure, charted identically every time.",
+      "warn: label shown two beats before the section.  teach: banner the first time.  plan: one pattern per bar (vocabulary at the top of tools/chart.py)."
+  ],
+  "id": "heroes",
+  "title": "Heroes Tonight (feat. Johnning)",
+  "artist": "Janji",
+  "release": "NCS Release",
+  "hitsoundNote": 68,
+  "scale": [8, 10, 0, 1, 3, 5, 7],
+  "segments": [
+    {"id": "calm", "bars": 4, "label": "INTRO", "lap": 16, "follow": "arp", "lead": "snare", "motif": "calm", "cycle": 4, "teach": "TAP as the ball crosses each gate", "look": {"palette": "dawn", "bg": "stars", "eq": "bars", "zoom": [0.9, 1]},
+      "plan": ["L=8"] },
+    {"id": "calm2", "bars": 4, "label": "INTRO", "lap": 16, "follow": "arp", "lead": "snare", "motif": "calm", "cycle": 4, "look": {"palette": "sky", "bg": "stars", "eq": "bars"},
+      "plan": ["L=8"] },
+    {"id": "build", "bars": 2, "label": "BUILD", "lap": 8, "follow": "kick", "warn": "BUILD-UP", "look": {"palette": "dusk", "bg": "tunnel", "eq": "bars", "zoom": [1, 1.04]},
+      "plan": ["B=@x...x...x...x..."] },
+    {"id": "build2", "bars": 4, "label": "BUILD", "lap": 4, "follow": "kick", "warn": "FASTER", "look": {"palette": "dusk", "bg": "tunnel", "eq": "bars", "zoom": [1.04, 1.16], "drain": [0, 0.7], "vignette": [0, 0.6]},
+      "plan": ["B=@x.x.x.x.x.x.x.x."] },
+    {"id": "gap", "bars": 1, "label": "BUILD", "lap": 4, "follow": "kick", "look": {"palette": "dusk", "bg": "tunnel", "eq": "bars", "zoom": [1.16, 1.2], "drain": [0.7, 0.95], "vignette": [0.6, 0.9]},
+      "plan": ["B=@x.xx............"] },
+    {"id": "count", "bars": 1, "label": "READY", "lap": 8, "follow": "kick", "blackout": true, "count": true, "look": {"palette": "dusk", "bg": "stars", "eq": "bars", "zoom": [1.2, 1.25], "drain": [1, 1], "vignette": [0.9, 1]},
+      "plan": ["B=@............X..."] },
+    {"id": "drop1", "bars": 4, "label": "DROP", "lap": 8, "follow": "lead", "lead": "hook", "motif": "drop", "cycle": 4, "rocket": 3, "enter": "drop", "look": {"palette": "dawn", "bg": "tunnel", "eq": "burst", "zoom": [0.94, 1]},
+      "plan": ["L=16 acc", "L=16", "L=16", "L=16"] },
+    {"id": "drop2", "bars": 4, "label": "DROP", "lap": 8, "follow": "lead", "lead": "hook", "motif": "drop", "cycle": 4, "enter": "pulse", "look": {"palette": "gold", "bg": "tunnel", "eq": "burst"},
+      "plan": ["L=16 acc", "L=16", "L=16", "L=16"] },
+    {"id": "drop3", "bars": 4, "label": "DROP", "lap": 8, "follow": "lead", "lead": "hook", "motif": "drop", "cycle": 4, "reverse": true, "enter": "pulse", "warn": "REVERSE", "teach": "REVERSE: the ball turns round", "look": {"palette": "sky", "bg": "grid", "eq": "burst", "rot": [0, 0.5]},
+      "plan": ["L=16 acc", "L=16", "L=16", "L=16"] },
+    {"id": "drop4", "bars": 4, "label": "DROP", "lap": 8, "follow": "lead", "lead": "hook", "motif": "drop", "cycle": 4, "rocket": 2, "enter": "pulse", "look": {"palette": "hot", "bg": "tunnel", "eq": "burst", "zoom": [1, 1.08]},
+      "plan": ["L=16 acc", "L=16", "L=16", "L=16"] },
+    {"id": "outro", "bars": 4, "label": "END", "lap": 8, "follow": "lead", "lead": "hook", "enter": "flash", "look": {"palette": "dawn", "bg": "stars", "eq": "wave", "zoom": [1.08, 0.95]},
+      "plan": ["L=@X...............", "L=@x...............", "L=@x...............", "-"] }
+  ]
+}

@@ -19,12 +19,16 @@ export interface SaveData {
   reducedMotion: boolean;
   hardcore: boolean;
   errorBar: boolean;
+  level: number;
+  skin: string;
+  badges: Record<string, boolean>;
+  practiced: Record<string, boolean>;
   bests: Record<string, LevelBest>;
   teachSeen: Record<string, boolean>;
 }
 
 const defaults = (): SaveData => ({
-  music: 0.8, sfx: 0.7, audioOffset: 0, visualOffset: 0, reducedMotion: false, hardcore: false, errorBar: true, bests: {}, teachSeen: {}
+  music: 0.8, sfx: 0.7, audioOffset: 0, visualOffset: 0, reducedMotion: false, hardcore: false, errorBar: true, level: 0, skin: 'cyan', badges: {}, practiced: {}, bests: {}, teachSeen: {}
 });
 
 function load(): SaveData {
@@ -33,7 +37,7 @@ function load(): SaveData {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const p = JSON.parse(raw) as Partial<SaveData>;
-      Object.assign(d, p, { bests: {}, teachSeen: { ...(p.teachSeen || {}) } });
+      Object.assign(d, p, { bests: {}, teachSeen: { ...(p.teachSeen || {}) }, badges: { ...(p.badges || {}) }, practiced: { ...(p.practiced || {}) } });
       // bests are per level now; entries from the three-difficulty build ("skyhigh:hard") are dropped
       for (const [k, v] of Object.entries(p.bests || {})) if (!k.includes(':')) d.bests[k] = v as LevelBest;
     }

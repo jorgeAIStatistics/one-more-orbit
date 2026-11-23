@@ -22,12 +22,15 @@ def main(tid, b0, b1, lo='G4', hi='A6'):
     C = C.reshape(nb, 3, -1).max(1)                       # one row per semitone
     ft = np.arange(C.shape[1]) * hop / sr
     s16 = 15 / a['bpm']; midi0 = int(round(librosa.hz_to_midi(fmin)))
+    lv = ROOT / f'levels/{tid}/level.json'
+    swing = lv.exists() and json.load(open(lv)).get('swing', False)
+    off16 = (0, 4, 6, 10) if swing else (0, 3, 6, 9)            # ticks (12 per beat) of the four 16ths in a beat
     L = np.log1p(C / (np.percentile(C, 95) + 1e-9) * 8)
     out = {}
     for bar in range(b0 - 1, b1):
         slots = []
         for i in range(16):
-            t = a['offset'] + (bar * 16 + i) * s16
+            t = a['offset'] + (bar * 4 + i // 4 + off16[i % 4] / 12) * 60 / a['bpm']
             m = (ft >= t + 0.012) & (ft < t + s16 - 0.01)
             prof = L[:, m].mean(1); p = int(np.argmax(prof)); level = float(prof[p])
             pre = (ft >= t - 0.045) & (ft < t - 0.008); post = (ft >= t + 0.005) & (ft < t + 0.05)
@@ -37,10 +40,12 @@ def main(tid, b0, b1, lo='G4', hi='A6'):
             prev = slots[i - 1]['p'] if i else None
             s['start'] = bool(s['level'] > 0.9 and (s['p'] != prev or s['rise'] > 0.55))
         out[bar + 1] = slots
+        if '--quiet' in sys.argv: continue
         print(f"bar {bar + 1:2d}  " + ' '.join((NOTE[s['p'] % 12] + str(s['p'] // 12 - 1)).ljust(3) if s['level'] > 0.9 else '.  ' for s in slots))
         print("        " + ' '.join(('^' + str(min(9, int(s['rise'] * 5)))).ljust(3) if s['start'] else ('~' + str(min(9, int(s['rise'] * 5)))).ljust(3) for s in slots))
     (ROOT / 'tools/cache').mkdir(exist_ok=True)
     json.dump(out, open(ROOT / f'tools/cache/{tid}.lead.json', 'w'))
 
 if __name__ == '__main__':
-    main(sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), *sys.argv[4:6])
+    args = [x for x in sys.argv[1:] if not x.startswith('--')]
+    main(args[0], int(args[1]), int(args[2]), *args[3:5])

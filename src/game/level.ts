@@ -90,7 +90,7 @@ export class Level {
       const t = beat * this.spb;
       this.notes.push({
         i, kind: n.k === 'j' ? 'hop' : 'tap', t, beat, seg: this.segAt(t + 1e-6).index, ring: 0, angle: 0, exit: false,
-        accent: n.a === 1, ghost: n.g ?? 0, voice: n.v ?? 'l', pitch: n.p ?? 0, done: false, judge: null, hitT: -1
+        accent: n.a === 1, ghost: n.g ?? 0, moving: n.m === 1, voice: n.v ?? 'l', pitch: n.p ?? 0, done: false, judge: null, hitT: -1
       });
     });
 

@@ -1,0 +1,15 @@
+{
+  "file": "audio/blank.mp3",
+  "frames": 4384800,
+  "firstSig": 14638,
+  "bpm": 140,
+  "offset": 1.7143,
+  "length": 99.429,
+  "dropTime": 56.571,
+  "source": [
+    [
+      14.852,
+      114.281
+    ]
+  ]
+}
