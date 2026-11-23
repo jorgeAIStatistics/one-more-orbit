@@ -20,14 +20,13 @@ Everything below needs your accounts, your money or your devices. Nothing here h
 
 Over `npm run phone` the site is plain HTTP, so "works offline" and "Add to Home Screen as an app" can only be tested on the live GitHub Pages address.
 
-## 2. Website on GitHub Pages (free; uses your GitHub account)
+## 2. Website on GitHub Pages (done on 23 November 2026)
 
-I can do this part for you once you say go (it uses the `gh` login already on this Mac):
-
-- [ ] Create the public repository `jorgeAIStatistics/one-more-orbit` and push `main` and the tags. Public means the source and the four music excerpts are public too. GitHub Pages on a private repository needs a paid plan.
-- [ ] Settings → Pages → Source: **GitHub Actions**. The workflow in `.github/workflows/pages.yml` tests, builds and deploys on every push to `main`.
-- [ ] Live address: `https://jorgeaistatistics.github.io/one-more-orbit/`. If you pick another repository name, change `VITE_SITE_URL` in `.env` (the share preview needs the exact address) and the three URLs in `release/app-store-listing.md`.
-- [ ] After the first deploy: open it on the iPhone, Share → Add to Home Screen, switch on airplane mode and start it. Send the link to yourself in iMessage and WhatsApp and check the preview card.
+- [x] Public repository: https://github.com/jorgeAIStatistics/one-more-orbit (`main` and the tags). The source and the four music excerpts are public.
+- [x] Pages is set to GitHub Actions, the same way as your HistoQuest site. Every push to `main` tests, builds and deploys.
+- [x] Live address: **https://jorgeaistatistics.github.io/one-more-orbit/**
+- [x] Checked in Chrome at phone size: the page, manifest, icons, music, privacy and support pages load; the game opens with no connection after the first visit; the first tap starts the sound.
+- [ ] Still yours, on the iPhone: open it in Safari, Share → Add to Home Screen, switch on airplane mode and start it. Send the link to yourself in iMessage and WhatsApp and check the preview card.
 
 ## 3. Apple Developer Program (costs money)
 
