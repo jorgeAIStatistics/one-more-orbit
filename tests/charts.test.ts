@@ -23,11 +23,11 @@ for (const pack of PACKS) {
       }
       for (const n of notes) expect(n.t).toBeLessThan(level.endTime);
     });
-    it('is playable with one finger: never more than three 16ths in a row', () => {
+    it('fast runs stay short: never more than four 16ths in a row', () => {
       let run = 1;
       for (let i = 1; i < notes.length; i++) {
         run = notes[i].beat - notes[i - 1].beat < 0.26 ? run + 1 : 1;
-        expect(run, `bar ${Math.floor(notes[i].beat / 4) + 1}`).toBeLessThanOrEqual(3);
+        expect(run, `bar ${Math.floor(notes[i].beat / 4) + 1}`).toBeLessThanOrEqual(4);
       }
     });
     it('rings: bursts of at most three, the ball never laps a ring, gates at least 22 degrees apart', () => {
@@ -36,6 +36,29 @@ for (const pack of PACKS) {
         expect(r.exitBeat - r.b0).toBeLessThanOrEqual(r.lap * 0.875 + 1e-6);
         for (let k = r.first + 1; k <= r.last; k++) expect(((notes[k].beat - notes[k - 1].beat) / r.lap) * 360).toBeGreaterThanOrEqual(22);
         expect(notes[r.last].exit).toBe(true);
+      }
+    });
+    it('follows one sound per section, at one ring speed, so spacing reads as time', () => {
+      for (const s of level.segments) {
+        const mine = notes.filter((n) => n.seg === s.index);
+        expect(new Set(mine.map((n) => n.voice)).size, `${s.id}: voices`).toBeLessThanOrEqual(1);
+        expect(new Set(level.rings.filter((r) => r.seg === s.index && r.last >= r.first).map((r) => r.lap)).size, `${s.id}: ring speeds`).toBeLessThanOrEqual(1);
+      }
+    });
+    it('same music = same taps: every repeat of a phrase is charted identically', () => {
+      const groups = new Map<string, { cycle: number; bars: number[] }>();
+      for (const s of level.segments) {
+        if (!s.motif) continue;
+        const g = groups.get(s.motif) ?? { cycle: s.cycle ?? 4, bars: [] };
+        for (let b = 0; b < s.bars; b++) g.bars.push(s.bar0 + b);
+        groups.set(s.motif, g);
+      }
+      const sig = (bar: number) => notes.filter((n) => Math.floor(n.beat / 4 + 1e-6) === bar).map((n) => Math.round((n.beat - bar * 4) * 12)).join(',');
+      for (const [name, g] of groups) {
+        for (let j = 0; j < g.cycle; j++) {
+          const pats = new Set(g.bars.filter((_, k) => k % g.cycle === j).map(sig));
+          expect(pats.size, `motif ${name}, bar ${j + 1} of the phrase`).toBe(1);
+        }
       }
     });
     it('big hits are marked: the drop starts with an accent', () => {

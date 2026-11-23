@@ -25,6 +25,10 @@ export interface SegmentDef {
   jump?: 'out' | 'in';
   rocket?: number; // extra rings the ball launches through on entering this section
   reverse?: boolean;
+  /** the one sound this section's taps follow: arp, kick, snare or lead */
+  follow?: string;
+  motif?: string;
+  cycle?: number;
   revEvery?: number;
   warn?: string;
   teach?: string;
@@ -57,7 +61,8 @@ export interface AudioMeta {
 export interface NoteDef {
   t: number; // ticks, 12 per beat, from bar 1
   k: 't' | 'j'; // tap gate, or spike hop (tap the pad, land half a beat later)
-  v?: 'b' | 'l'; // which voice it follows: bass/kick or lead (colour only)
+  v?: string; // the sound it follows: a arpeggio, k kick, s snare, l lead (gate colour)
+  p?: number; // MIDI pitch of the followed note, so the hitsound can play the melody
   a?: number; // 1 = accent: a big hit
   g?: number; // ghost gate: 1 fades early, 2 fades late (teaching)
 }
@@ -106,7 +111,8 @@ export interface RNote {
   exit: boolean;
   accent: boolean;
   ghost: number;
-  voice: 'b' | 'l';
+  voice: string;
+  pitch: number;
   done: boolean;
   judge: Judge | null;
   hitT: number;

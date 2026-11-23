@@ -24,6 +24,8 @@ const CYAN: RGB = [0, 245, 255];
 const PINK: RGB = [255, 60, 150];
 const GOLD: RGB = [255, 226, 130];
 const RED: RGB = [255, 72, 60];
+/** Gate colour = the sound the section follows: arpeggio, kick, snare/clap, lead. */
+const VOICE_COL: Record<string, RGB> = { a: [214, 226, 255], k: CYAN, b: CYAN, s: [255, 176, 80], l: PINK };
 const JUDGE_COL: Record<string, RGB> = { perfect: [255, 214, 90], great: [0, 245, 255], good: [196, 181, 253], miss: [255, 90, 120] };
 const TWO_PI = Math.PI * 2;
 const EQ_BARS = 48;
@@ -308,14 +310,18 @@ export class Renderer {
       this.ringIdx = ring.idx;
     }
     this.jumpT = Math.min(1, this.jumpT + dt / 0.16);
-    this.camLevel += (ring.lvl - this.camLevel) * Math.min(1, dt * 6.5);
+    // the camera catches a rocket quickly, so the ring is back in frame before the next gate arrives
+    this.camLevel += (ring.lvl - this.camLevel) * Math.min(1, dt * (Math.abs(ring.lvl - this.camLevel) > 1.5 ? 16 : 6.5));
     this.camBias += ((seg.jump === 'in' ? 1.25 : 0) - this.camBias) * Math.min(1, dt * 3);
     this.flash = Math.max(0, this.flash - dt * 2.6);
     this.punch *= Math.exp(-dt * 7);
     this.shake = Math.max(0, this.shake - dt * 3);
     this.tapPulse = Math.max(0, this.tapPulse - dt * 7);
     this.flipAngle += (this.flipTarget - this.flipAngle) * Math.min(1, dt * 8);
-    const zoom = ramp(look.zoom, u, 1) * (1 + this.punch) * (1 + (rm ? 0 : kick * 0.022 * energy));
+    // never zoom so far that the ball's ring (and its gates) leaves the screen
+    const extent = ring.shape === 'ellipse' ? 1.16 : ring.shape === 'square' ? 1.04 : 1;
+    const zoomCap = 0.455 / (0.27 * Math.pow(ORBIT_RATIO, this.camBias) * extent);
+    const zoom = Math.min(ramp(look.zoom, u, 1), zoomCap) * (1 + this.punch) * (1 + (rm ? 0 : kick * 0.022 * energy));
     const rot = rm ? 0 : ramp(look.rot, u, 0) * TWO_PI + this.flipAngle;
     const tilt = rm ? 0 : ramp(look.tilt, u, 0);
 
@@ -352,7 +358,8 @@ export class Renderer {
       const rad = scr(r.lvl) * (1 + (k === ring.idx ? pulse * 0.02 : 0));
       if (rad > Math.max(this.w, this.h) * 0.8 || rad < m * 0.03) continue;
       const d = k - ring.idx;
-      const ra = d < 0 ? 0.3 * (1 - this.jumpT) : d === 0 ? 1 : d === 1 ? 0.55 : d === 2 ? 0.3 : 0.14;
+      // only the next ring is previewed with its gates; the one after is a faint outline, anything further is hidden
+      const ra = d < 0 ? 0.3 * (1 - this.jumpT) : d === 0 ? 1 : d === 1 ? 0.6 : d === 2 ? 0.12 : 0;
       if (ra <= 0.01) continue;
       c.lineWidth = d === 0 ? 2.5 + pulse * 2.5 : 1.5;
       c.strokeStyle = this.col(pal.ring, ra * (0.45 + (d === 0 ? pulse * 0.4 : 0)));
@@ -367,7 +374,7 @@ export class Renderer {
         c.save(); c.translate(mx * rad, my * rad); c.rotate(now / 300);
         c.fillStyle = this.col([255, 255, 255], ra); c.fillRect(-5, -5, 10, 10); c.restore();
       }
-      for (let i = r.first; i <= r.last; i++) {
+      for (let i = r.first; i <= r.last && d <= 1; i++) {
         const n = level.notes[i];
         if (n.done) continue;
         // ghost gates fade out before the ball arrives: the rhythm has to carry you
@@ -379,29 +386,29 @@ export class Renderer {
         const oy = uy / hyp;
         const gx = ux * rad;
         const gy = uy * rad;
-        const col = n.accent ? GOLD : n.voice === 'b' ? CYAN : PINK;
+        const col = VOICE_COL[n.voice] || PINK;
         const len = gateLen * (n.accent ? 1.5 : 1) * (d === 0 ? 1 : 0.8);
         if (alpha > 0.01) {
           c.lineCap = 'round';
           if (n.kind === 'hop') {
-            // spike hop: a launch pad (chevron) with spikes after it
-            for (const f of [0.3, 0.55, 0.8]) {
-              const [px, py] = shapePoint(r.shape, n.angle + (r.dir * TWO_PI * f * HOP_BEATS) / r.lap);
-              const ph = Math.hypot(px, py) || 1;
-              c.fillStyle = this.col(RED, alpha);
-              c.beginPath();
-              c.moveTo(px * rad + (px / ph) * len * 0.75, py * rad + (py / ph) * len * 0.75);
-              c.lineTo(px * rad - (py / ph) * len * 0.3, py * rad + (px / ph) * len * 0.3);
-              c.lineTo(px * rad + (py / ph) * len * 0.3, py * rad - (px / ph) * len * 0.3);
-              c.fill();
-            }
-            c.lineWidth = 4;
-            c.strokeStyle = this.col(GOLD, alpha);
+            // spike hop: ONE thing to tap, a solid arrow, and the spike it carries you over
+            const [px, py] = shapePoint(r.shape, n.angle + (r.dir * TWO_PI * 0.5 * HOP_BEATS) / r.lap);
+            const ph = Math.hypot(px, py) || 1;
+            c.fillStyle = this.col(RED, alpha);
             c.beginPath();
-            c.moveTo(gx - oy * len * 0.45 - ox * len * 0.3, gy + ox * len * 0.45 - oy * len * 0.3);
-            c.lineTo(gx + ox * len * 0.4, gy + oy * len * 0.4);
-            c.lineTo(gx + oy * len * 0.45 - ox * len * 0.3, gy - ox * len * 0.45 - oy * len * 0.3);
-            c.stroke();
+            c.moveTo(px * rad + (px / ph) * len * 0.95, py * rad + (py / ph) * len * 0.95);
+            c.lineTo(px * rad - (py / ph) * len * 0.34, py * rad + (px / ph) * len * 0.34);
+            c.lineTo(px * rad + (py / ph) * len * 0.34, py * rad - (px / ph) * len * 0.34);
+            c.fill();
+            c.fillStyle = this.col(col, alpha);
+            c.shadowColor = this.col(col, alpha);
+            c.shadowBlur = 12;
+            c.beginPath();
+            c.moveTo(gx + ox * len * 0.7, gy + oy * len * 0.7);
+            c.lineTo(gx - oy * len * 0.5 - ox * len * 0.35, gy + ox * len * 0.5 - oy * len * 0.35);
+            c.lineTo(gx + oy * len * 0.5 - ox * len * 0.35, gy - ox * len * 0.5 - oy * len * 0.35);
+            c.fill();
+            c.shadowBlur = 0;
           } else {
             if (n.accent) {
               c.lineWidth = 13;
@@ -594,7 +601,7 @@ export class Renderer {
       this.burst(x, y, 10, RED, rad * 1.2);
       return;
     }
-    const col = n.accent ? GOLD : n.voice === 'b' ? CYAN : PINK;
+    const col = VOICE_COL[n.voice] || PINK;
     if (n.kind === 'hop') this.hopUntil = n.beat + HOP_BEATS;
     this.burst(x, y, ev.judge === 'perfect' ? 16 : 7, ev.judge === 'perfect' ? JUDGE_COL.perfect : col, rad * (ev.judge === 'perfect' ? 1.6 : 1));
     if (n.exit) this.shocks.push({ r: rad, max: rad * ORBIT_RATIO, alpha: 0.4, col, w: 2 }); // the jump to the next ring

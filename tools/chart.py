@@ -1,32 +1,46 @@
 #!/usr/bin/env python3
-"""Pattern composer for a ONE-BUTTON game: builds a level's chart from the song's motifs, then compiles it.
+"""Rhythm-first chart composer for a ONE-BUTTON game.
 
   python tools/chart.py skyhigh                    # compose (keeps hand-edited bars), compile, validate
-  python tools/chart.py skyhigh --explain 26 42    # bar by bar: pattern used and what each note follows
+  python tools/chart.py skyhigh --explain 26 42    # bar by bar: pattern and the sound it follows
   python tools/chart.py skyhigh --motifs           # print the motifs it found
 
-Every note is one tap. Two voices are composed and then merged into a single stream:
-  B = bass / kick      L = lead / arpeggio / clap      (gate colour shows the voice; the tap is the same)
-Sections that share a "motif" name in level.json are one repeating figure; a 16th position is in the motif when
-most repeats hit it hard. Each bar's plan names how each voice is played:
+Rules this tool enforces or warns about:
+  1. ONE followed sound per section ("follow" in level.json: arp, kick, snare or lead). Voices are never merged.
+  2. Same music = same taps. Sections that share a "motif" name are one repeating figure of `cycle` bars; a 16th
+     position belongs to the motif when most repeats hit it hard, and every repeat then gets exactly that row.
+  3. Only clearly audible notes: the tool lists every tap where the followed sound is weak in that bar.
+  4. Repeats charted differently are listed too (a hand-edited bar that departs from its phrase).
+Each bar's plan says how the followed voice is played (B = the kick/bass lane, L = the lead/arpeggio/clap lane):
   beat  8  16  all  half  tail  off  -      or an explicit shape  @x.x.xxx.x.x.xxx.
-flags:  stack (accent on beat 1)   hop (this bar's B notes are spike hops)   ghost=B|L|BL (those gates fade out)
-        late (ghosts fade late: a teaching bar)        options: run=<longest burst of 16ths>
-The result is levels/<id>/sheet.json, one line per bar:  x tap  X accent  g ghost  G late ghost  ^ spike hop  . rest
-Change a bar, set its "by" to "hand", and re-running this tool will not overwrite it.
-Compiling merges the voices (never two taps at once, at most three 16ths in a row), checks every note against
-the audio, bakes the kick/snare energy the visuals react to, and writes levels/<id>/chart.json."""
+flags:  acc (accent on the bar's first note)   hop (the bar's notes are spike hops)   ghost=B|L (gates fade out)
+        late (ghosts fade late: a teaching bar)        options: run=<longest burst of 16ths, default 4>
+The lead layer "hook" comes from tools/lead.py (a pitch transcription), which also gives each tap its pitch so the
+hitsounds can play the melody. The result is levels/<id>/sheet.json, one line per bar (x tap, X accent, g ghost,
+G late ghost, ^ spike hop). Set a bar's "by" to "hand" after editing it and this tool will leave it alone.
+Compiling checks the rules above, bakes kick/snare energy for the visuals, and writes levels/<id>/chart.json."""
 import json, sys, pathlib
 import numpy as np
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 THR = 0.33     # a 16th counts as "hit" in a layer at this strength
 MOTIF_THR = 0.6  # ...and as part of a motif when it is this strong in most repeats
-SOUND = {'kick': 'kick/bass', 'snare': 'clap/arpeggio', 'lead': 'lead', 'full': 'full mix'}
+SOUND = {'kick': 'kick/bass', 'snare': 'clap/arpeggio', 'lead': 'lead', 'full': 'full mix', 'hook': 'lead hook (pitch transcription)'}
+SCALE_FALLBACK = 72
 
 def load(tid):
     level = json.load(open(ROOT / f'levels/{tid}/level.json')); audio = json.load(open(ROOT / f'levels/{tid}/audio.json'))
     F = dict(np.load(ROOT / f'tools/cache/{tid}.features.npz'))
     S = {k: F[k][::3] for k in ('kick', 'snare', 'lead', 'full')}       # one value per 16th
+    # the lead hook, from the pitch transcription: strength of each note start, and the pitch sounding on each 16th
+    S['hook'] = np.zeros(len(S['kick'])); S['pitch'] = np.zeros(len(S['kick']), dtype=int)
+    lp = ROOT / f'tools/cache/{tid}.lead.json'
+    if lp.exists():
+        for bar, slots in json.load(open(lp)).items():
+            for i, sl in enumerate(slots):
+                idx = (int(bar) - 1) * 16 + i
+                if idx >= len(S['hook']): continue
+                if sl['level'] > 0.9: S['pitch'][idx] = sl['p']
+                if sl['start'] and sl['rise'] > 0.3: S['hook'][idx] = min(1.5, 0.45 + sl['rise'] * 0.5)
     return level, audio, S
 
 def seg_bars(level):
@@ -73,11 +87,9 @@ def voice_row(kind, v, seg, bar, b_in_motif, motif, S, opts):
     if len(actual) < 16: actual = np.pad(actual, (0, 16 - len(actual)))
     heard = {i for i in range(16) if actual[i] >= THR}
     m = motif[v][b_in_motif % motif['cycle']] if motif else heard
-    live = {i for i in m if actual[i] >= 0.25}          # a motif note only plays in bars where it really sounds
+    live = set(m)                                       # same music = same taps: every repeat gets the motif exactly
     if kind.startswith('@'):                             # an explicit shape: kept wherever the bar really has that sound
         tpl = list(kind[1:].ljust(16, '.'))
-        for i, ch in enumerate(tpl):
-            if ch in 'xX' and actual[i] < 0.15: tpl[i] = '.'
         return ''.join(tpl)
     if kind == '-': pos = set()
     elif kind == 'beat': pos = {i for i in live if i % 4 == 0}
@@ -89,7 +101,7 @@ def voice_row(kind, v, seg, bar, b_in_motif, motif, S, opts):
     elif kind == 'off': pos = {i for i in (2, 6, 10, 14) if max(actual[max(0, i - 1):i + 2]) >= 0.25}
     else: raise ValueError(f'unknown pattern "{kind}"')
     row = ['.'] * 16
-    cap = opts.get('run', 16); streak = 0
+    cap = opts.get('run', 4); streak = 0
     for i in range(16):
         if i in pos and row[i] == '.':
             streak = streak + 1 if (i > 0 and row[i - 1] == 'x') else 1
@@ -108,25 +120,14 @@ def compose_bar(seg, plan, bar, b_in_motif, motif, S):
         else: flags.add(tok)
     for tok in plan.split():
         if '=' in tok and tok[0] in 'BL' and tok[1] == '=': row[tok[0]] = voice_row(tok.split('=')[1], tok[0], seg, bar, b_in_motif, motif, S, opts)
-    full = S['full'][bar * 16] if bar * 16 < len(S['full']) else 0
-    if 'stack' in flags and full >= 0.2:
-        row['B'] = 'X' + row['B'][1:]; row['L'] = '.' + row['L'][1:]
     if 'hop' in flags: row['B'] = row['B'].replace('x', '^')
     for lane in ghost:
         row[lane] = row[lane].replace('x', 'G' if 'late' in flags else 'g')
-    # one button: never two taps at once (the bass note wins), and never more than `run` sixteenths in a row
+    if 'acc' in flags:
+        for lane in 'BL':
+            k = next((i for i, ch in enumerate(row[lane]) if ch != '.'), None)
+            if k is not None: row[lane] = row[lane][:k] + 'X' + row[lane][k + 1:]; break
     b = list(row['B']); l = list(row['L'])
-    for i in range(16):
-        if b[i] != '.' and l[i] != '.': l[i] = '.'
-    cap = opts.get('run', 3); streak = 0
-    for i in range(16):
-        if b[i] != '.' or l[i] != '.':
-            streak += 1
-            if streak > cap:
-                if l[i] != '.': l[i] = '.'
-                else: b[i] = '.'
-                streak = 0
-        else: streak = 0
     row['B'] = ''.join(b); row['L'] = ''.join(l)
     return row
 
@@ -152,19 +153,37 @@ def compile_chart(level, audio, S, rows):
     spb = 60 / audio['bpm']; notes = []; warn = []; end = audio['length'] - audio['offset'] - 0.3
     seg_of = {b: seg for seg, b0, b1 in seg_bars(level) for b in range(b0, b1)}
     for r in rows:
-        bar = r['bar'] - 1
-        for i in range(16):
-            for lane, voice in (('B', 'b'), ('L', 'l')):
-                ch = r[lane][i]
+        bar = r['bar'] - 1; seg = seg_of[bar]; lay = voice_layers(seg)
+        used = [lane for lane in 'BL' if r[lane].strip('.')]
+        if len(used) > 1: warn.append(f"bar {bar + 1}: two voices in one bar (follow one sound at a time)")
+        for lane in used:
+            layer = lay[lane]
+            for i, ch in enumerate(r[lane]):
                 if ch == '.': continue
-                if notes and notes[-1]['t'] == bar * 48 + i * 3: continue      # one tap per moment
-                n = {'t': bar * 48 + i * 3, 'k': 'j' if ch == '^' else 't', 'v': voice}
+                idx = bar * 16 + i
+                n = {'t': bar * 48 + i * 3, 'k': 'j' if ch == '^' else 't', 'v': seg.get('follow', 'lead')[0]}
                 if ch == 'X': n['a'] = 1
                 if ch in 'gG': n['g'] = 2 if ch == 'G' else 1
+                if lane == 'L' and idx < len(S['pitch']) and S['pitch'][idx] > 0:
+                    p = int(S['pitch'][idx]); scale = level.get('scale')
+                    if scale and p % 12 not in scale:      # keep hitsounds in the song's key: snap a stray pitch to the nearest scale note
+                        p += min((d for d in (-1, 1, -2, 2) if (p + d) % 12 in scale), key=abs)
+                    n['p'] = p
                 notes.append(n)
-                idx = bar * 16 + i
-                if max(S[k][idx] if idx < len(S[k]) else 0 for k in ('kick', 'snare', 'lead', 'full')) < 0.15: warn.append(f"bar {bar + 1} step {i + 1}")
+                heard = S[layer][idx] if idx < len(S[layer]) else 0
+                if heard < THR: warn.append(f"bar {bar + 1} step {i + 1}: {SOUND[layer]} is weak here ({heard:.2f})")
+    # same music = same taps: every repeat of a motif must be charted identically
+    by_bar = {r['bar'] - 1: r for r in rows}; groups = {}
+    for seg, b0, b1 in seg_bars(level):
+        if seg.get('motif'): groups.setdefault(seg['motif'], [seg.get('cycle', 4), []])[1].extend(range(b0, b1))
+    for name, (cyc, bars) in groups.items():
+        for j in range(cyc):
+            pats = {}
+            for k, bar in enumerate(bars):
+                if k % cyc == j: pats.setdefault((by_bar[bar]['B'] + by_bar[bar]['L']).lower().replace('g', 'x'), []).append(bar + 1)
+            if len(pats) > 1: warn.append(f"motif '{name}' bar {j + 1} of {cyc} is charted {len(pats)} ways: " + ' vs '.join('bars ' + ','.join(map(str, v)) for v in pats.values()))
     notes = [n for n in notes if n['t'] / 12 * spb < end]
+    notes.sort(key=lambda n: n['t'])
     digits = lambda v: ''.join(str(int(min(9, round(x * 7.5)))) for x in v)
     return notes, {'kick': digits(S['kick']), 'snare': digits(S['snare'])}, warn
 
@@ -200,7 +219,8 @@ def main(argv):
         f.write(',\n'.join('    ' + json.dumps(n, separators=(', ', ': ')) for n in notes)); f.write('\n  ]\n}\n')
     kinds = dict(taps=sum(1 for n in notes if n['k'] == 't' and not n.get('g')), ghosts=sum(1 for n in notes if n.get('g')), hops=sum(1 for n in notes if n['k'] == 'j'), accents=sum(1 for n in notes if n.get('a')))
     print(f"{tid}: {len(notes)} notes {kinds}, rating {st} stars, hand-edited bars {hand}")
-    if warn: print(f"   !! {len(warn)} notes with no measured sound: " + '; '.join(warn[:12]))
+    print(f"   {len(warn)} warning(s)" + (':' if warn else ''))
+    for w in warn[:40]: print('   !! ' + w)
     if '--explain' in argv:
         i = argv.index('--explain'); explain(tid, level, audio, S, sheet, int(argv[i + 1]), int(argv[i + 2]))
 

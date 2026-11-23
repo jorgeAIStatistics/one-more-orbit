@@ -110,10 +110,19 @@ export class Run {
   private onJudge(ev: JEvent, auto: boolean): void {
     const inDrop = ev.note.t >= this.level.dropTime - 1e-6;
     const j = ev.judge;
-    if (j === 'miss') audio.hit('miss', auto ? 0.5 : 0.8);
-    else {
-      audio.hit(ev.note.kind === 'hop' ? 'hop' : ev.note.voice === 'b' ? 'L' : 'R', j === 'good' ? 0.55 : 1);
-      if (j === 'perfect') audio.hit(inDrop ? 'sparkleHi' : 'sparkle', inDrop ? 0.8 : 0.6);
+    if (j === 'miss') {
+      audio.hit('miss', auto ? 0.5 : 0.8);
+      audio.muffle(); // you hear that the rhythm broke
+    } else {
+      const n = ev.note;
+      if (n.pitch) {
+        // a tap on a melody note plays that note, so a clean run sounds like playing the hook
+        audio.pluck(n.pitch, j === 'perfect' ? 1 : j === 'great' ? 0.75 : 0.5);
+        if (j === 'perfect') audio.pluck(n.pitch + 12, inDrop ? 0.3 : 0.2);
+      } else {
+        audio.hit(n.kind === 'hop' ? 'hop' : n.voice === 'k' ? 'L' : n.voice === 's' ? 'R' : 'tap', j === 'good' ? 0.55 : 1);
+        if (j === 'perfect') audio.hit(inDrop ? 'sparkleHi' : 'sparkle', 0.5);
+      }
       if (ev.note.accent) audio.hit('impact', j === 'good' ? 0.5 : 0.9); // big hits get their own sound
     }
     this.lastJudge = { judge: j, err: ev.err, at: performance.now() };

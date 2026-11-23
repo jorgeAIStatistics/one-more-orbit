@@ -27,6 +27,8 @@ export class AudioEngine {
   private musicGain!: GainNode;
   private sfxGain!: GainNode;
   private pre!: GainNode;
+  private lp!: BiquadFilterNode;
+  private plucks = new Map<number, AudioBuffer>();
   private analyser: AnalyserNode | null = null;
   private freq = new Uint8Array(0);
   private wave = new Uint8Array(0);
@@ -62,7 +64,11 @@ export class AudioEngine {
       this.sfxGain.connect(this.master);
       // the music passes through `pre` before its volume control, so the equalizer still sees it when muted
       this.pre = c.createGain();
-      this.pre.connect(this.musicGain);
+      this.lp = c.createBiquadFilter();
+      this.lp.type = 'lowpass';
+      this.lp.frequency.value = 20000;
+      this.pre.connect(this.lp);
+      this.lp.connect(this.musicGain);
       this.analyser = c.createAnalyser();
       this.analyser.fftSize = 256;
       this.analyser.smoothingTimeConstant = 0.72;
@@ -209,6 +215,44 @@ export class AudioEngine {
         setTimeout(() => { try { g.disconnect(); } catch { /* ignore */ } }, (fade + 0.5) * 1000);
       }
     };
+  }
+
+  /** Briefly low-passes the music: the sound of a missed gate. */
+  muffle(): void {
+    const c = this.ctx;
+    if (!c) return;
+    const now = c.currentTime;
+    this.lp.frequency.cancelScheduledValues(now);
+    this.lp.frequency.setTargetAtTime(480, now, 0.012);
+    this.lp.frequency.setTargetAtTime(20000, now + 0.26, 0.1);
+  }
+
+  /** A short plucked note at a MIDI pitch (pre-rendered once per pitch): the musical hitsound. */
+  pluck(midi: number, gain = 1): void {
+    const c = this.ctx;
+    if (!c || c.state !== 'running') return;
+    let b = this.plucks.get(midi);
+    if (!b) {
+      const sr = c.sampleRate;
+      const n = Math.floor(0.26 * sr);
+      b = c.createBuffer(1, n, sr);
+      const d = b.getChannelData(0);
+      const w = 2 * Math.PI * 440 * Math.pow(2, (midi - 69) / 12);
+      for (let i = 0; i < n; i++) {
+        const t = i / sr;
+        const env = Math.min(1, t / 0.003) * Math.exp(-t * 15);
+        d[i] = (Math.sin(w * t) * 0.6 + Math.sin(2 * w * t) * 0.25 * Math.exp(-t * 20) + Math.sin(3 * w * t) * 0.12 * Math.exp(-t * 30)) * env * 0.55;
+      }
+      for (let i = 0; i < 64; i++) d[n - 1 - i] *= i / 64;
+      this.plucks.set(midi, b);
+    }
+    const src = c.createBufferSource();
+    src.buffer = b;
+    const g = c.createGain();
+    g.gain.value = gain;
+    src.connect(g);
+    g.connect(this.sfxGain);
+    src.start();
   }
 
   /** Live spectrum of the music (0..255 per bin), or null when there is no audio. */

@@ -90,7 +90,7 @@ export class Level {
       const t = beat * this.spb;
       this.notes.push({
         i, kind: n.k === 'j' ? 'hop' : 'tap', t, beat, seg: this.segAt(t + 1e-6).index, ring: 0, angle: 0, exit: false,
-        accent: n.a === 1, ghost: n.g ?? 0, voice: n.v ?? 'l', done: false, judge: null, hitT: -1
+        accent: n.a === 1, ghost: n.g ?? 0, voice: n.v ?? 'l', pitch: n.p ?? 0, done: false, judge: null, hitT: -1
       });
     });
 
@@ -109,9 +109,8 @@ export class Level {
       const seg = this.segments[this.notes[first].seg];
       const span = this.notes[last].beat - lastBeat;
       let lap = seg.lap;
-      // a burst of 16ths gets a faster ring so its gates sit at least 22.5 degrees apart...
-      for (let k = first + 1; k <= last; k++) if (this.notes[k].beat - this.notes[k - 1].beat < 0.26 && lap > 4) lap = 4;
-      // ...but the ball must never lap a ring before its exit gate
+      // Ring speed is constant across a section, so the gap between gates always reads as time.
+      // (Safety only: a ring is slowed if the ball would otherwise lap it before its exit gate.)
       while (span > lap * 0.875) lap *= 2;
       let reversed = false;
       if (seg.index !== prevSeg && seg.reverse) { dir = -dir; reversed = true; }
