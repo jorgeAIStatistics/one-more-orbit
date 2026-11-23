@@ -39,7 +39,7 @@ Title, the World 1 map, play, pause, results, Orbs, Badges, Quests, Settings, th
 - **The gate** at the end opens on 9 stars, and the last level is behind it: **Royalty**, tier *Singularity* (`levels/royalty/`, `FINAL` in `src/game/packs.ts`; it is not on the route, so stars open it, not a clear). Its rules are harder (`"rules"` in its level file: openings of ±100 ms, 2.5 beats of course shown), it may ask for a press on every beat (2.7 a second at its 160 BPM), and it has three star trails of its own, which makes 15.
 - **Tethers** are that level's own mechanic (bar word `tether`): a red rail that must be held. Let go more than 120 ms before its end and the run is over; it is the only hold in the game that can end a run. A tether always starts on a white mark on the beat and is never a planet hop.
 - **Quests**: two per level (`src/game/quests.ts`), each a way of clearing it well (the drop at 100%, every hold, 90% on the beat, no stray taps, a streak of 80). A quest is done by a clear that counts. Both quests of a level give an orb.
-- **"All levels open"** in Settings (on by default while the game is in playtest) opens every planet and shows every moon; the gate always needs its stars.
+- **"All levels open"** in Settings is a playtest switch, off by default: it opens every planet and shows every moon; the gate always needs its stars. (`?unlock=1` on the address does the same for one visit.)
 
 ## Sync
 

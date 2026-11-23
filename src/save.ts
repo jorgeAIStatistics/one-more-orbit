@@ -39,8 +39,10 @@ export interface SaveData {
   hitVol: number;
   /** the first-run tutorial on level 1 has been played or skipped */
   tutorialDone: boolean;
-  /** playtest: every level open, whatever has been cleared */
+  /** playtest: every level open, whatever has been cleared. Off in the released game. */
   unlockAll: boolean;
+  /** which release's one-off changes this save has had (1: "all levels open", on in every playtest save, switched off) */
+  rel: number;
   /** touches you can feel on taps, the drop, a crash and a clear */
   haptics: boolean;
   /** stars kept, per level: one entry per star trail. A star is kept when the run that collected it clears the level. */
@@ -52,7 +54,7 @@ export interface SaveData {
 }
 
 const defaults = (): SaveData => ({
-  music: 0.8, sfx: 0.7, audioOffset: 0, visualOffset: 0, reducedMotion: false, hardcore: false, errorBar: true, level: 0, skin: 'cyan', badges: {}, practiced: {}, bests: {}, teachSeen: {}, core: 4, calibrated: false, calLatency: -1, syncOverlay: false, hitVol: 1, tutorialDone: false, unlockAll: true, haptics: true, stars: {}, quests: {}, at: ''
+  music: 0.8, sfx: 0.7, audioOffset: 0, visualOffset: 0, reducedMotion: false, hardcore: false, errorBar: true, level: 0, skin: 'cyan', badges: {}, practiced: {}, bests: {}, teachSeen: {}, core: 4, calibrated: false, calLatency: -1, syncOverlay: false, hitVol: 1, tutorialDone: false, unlockAll: false, rel: 1, haptics: true, stars: {}, quests: {}, at: ''
 });
 
 function load(): SaveData {
@@ -66,6 +68,10 @@ function load(): SaveData {
       // ...and so are bests from the judged one-button build: its progress and clears say nothing about this core
       if (p.core === 4) for (const [k, v] of Object.entries(p.bests || {})) if (!k.includes(':')) d.bests[k] = v as LevelBest;
       d.core = 4;
+      // the release: the playtest builds saved "all levels open" as on for everyone. It goes off once; clears, stars and
+      // everything else stay, and it can still be switched back on in Settings.
+      if (!(Number(p.rel) >= 1)) d.unlockAll = false;
+      d.rel = 1;
     }
   } catch { /* storage unavailable: play with defaults */ }
   // volumes are always a number from 0 to 1, whatever an older save holds
