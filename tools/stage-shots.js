@@ -55,7 +55,7 @@ window.__stage = async (name) => {
   else if (name === 'final') { demo(true); await focus(3); }
   else if (name === 'moon') await place('heroes-b');
   else if (name === 'hidden') await place('skyhigh-b');
-  else if (name === 'gate') await place('gate');
+  else if (name === 'gate') { o.save.stars = { heroes: [true, true, true], skyhigh: [true, true, true], blank: [true, true, true] }; await place('gate'); }
   else if (name === 'quests') { o.show('levels'); o.quests(); await wait(300); }
   else if (name === 'entry') { await focus(1); o.start(false); await until(() => o.run.state === 'playing'); await wait(1300); $('titleCard').style.cssText = 'animation:none;opacity:1'; freeze = true; }
   else if (name === 'play') { await focus(0); o.start(true, false, (68 * 60) / 128); await until(() => beat() >= 72.6); freeze = true; }

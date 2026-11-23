@@ -4,7 +4,7 @@ A one-button rhythm game. A ball rides a ring in time with the music. Tap on eac
 
 **Version:** 1.0 release candidate 1 (`v1.0-rc1`).
 
-**Music licence.** The four tracks are NCS releases, used under a game licence from NoCopyrightSounds (ncs.io); the owner holds the licence. Each song is one entry in `levels/manifest.json` and one in `src/game/packs.ts`, so a track can be swapped without touching the rest. Credits are shown in Settings as "Song – Artist [NCS Release] · Music provided by NoCopyrightSounds".
+**Music licence.** The tracks are NCS releases. The four levels of the route are used under a game licence from NoCopyrightSounds (ncs.io), which the owner holds. Royalty, the level behind the gate, was added on the `world-1` branch and must be covered by that licence before it is published. Each song is one entry in `levels/manifest.json` and one in `src/game/packs.ts`, so a track can be swapped without touching the rest. Credits are shown in Settings as "Song – Artist [NCS Release] · Music provided by NoCopyrightSounds".
 
 ## The game
 
@@ -14,6 +14,7 @@ A one-button rhythm game. A ball rides a ring in time with the music. Tap on eac
 | Sky High | Normal | Weave: gravity flips that bounce the ball between two rings |
 | Blank | Hard | Spin gates: the opening is a gap in a turning ring; with turns and speed changes |
 | Invincible | Insane | Twin orbit: one tap moves two mirrored balls; plus every mode before |
+| Royalty (behind the gate) | Singularity | Tethers: red rails you must hold; with weave, spin gates and planet hops |
 
 - **Two layers of notes.** *Survival presses* (white marks) sit on strong beats only, never closer than a beat. A tap on one hops the ball to the next ring. *Flow notes* (gold) are every faster note in the music: optional, and they can never end the run.
 - **Survival is generous.** An opening is clearable within ±120 ms of its note (±160 ms for the big gold presses and the first press after a planet hop). Riding past a mark, or tapping early right next to one, ends the run. Taps away from any opening, or near a flow note, are free.
@@ -35,7 +36,8 @@ Title, the World 1 map, play, pause, results, Orbs, Badges, Quests, Settings, th
 
 - **Planets** open when the one before is cleared.
 - **Moons** are hidden levels, one per planet: its *B-side*. A moon appears when all three of its planet's stars are kept. A B-side is the same song and notes on the night side (`levels/<id>/bside.json`): openings of ±90 ms instead of ±120, two beats of course shown instead of three, the orbit mirrored and faster, the lights down, and the bars re-dealt with mechanics that level never had (the twin orbit stays in Invincible). No star trails. Clearing one gives an orb.
-- **The gate** at the end opens on 9 of the 12 stars. What lies behind it is not built yet.
+- **The gate** at the end opens on 9 stars, and the last level is behind it: **Royalty**, tier *Singularity* (`levels/royalty/`, `FINAL` in `src/game/packs.ts`; it is not on the route, so stars open it, not a clear). Its rules are harder (`"rules"` in its level file: openings of ±100 ms, 2.5 beats of course shown), it may ask for a press on every beat (2.7 a second at its 160 BPM), and it has three star trails of its own, which makes 15.
+- **Tethers** are that level's own mechanic (bar word `tether`): a red rail that must be held. Let go more than 120 ms before its end and the run is over; it is the only hold in the game that can end a run. A tether always starts on a white mark on the beat and is never a planet hop.
 - **Quests**: two per level (`src/game/quests.ts`), each a way of clearing it well (the drop at 100%, every hold, 90% on the beat, no stray taps, a streak of 80). A quest is done by a clear that counts. Both quests of a level give an orb.
 - **"All levels open"** in Settings (on by default while the game is in playtest) opens every planet and shows every moon; the gate always needs its stars.
 
@@ -71,7 +73,7 @@ It prints a `Network:` address such as `http://192.168.1.20:4173`. Open that in 
 npm test
 ```
 
-`tests/gd.test.ts` runs on all four levels: autoplay in full flow and full charge, press spacing (at least a beat apart, at most 2.5 a second), opening sizes, every note in exactly one layer, nothing can crash in the build-up, flow notes never hurt, uneven timing, the muffle steps, mash bots, practice run-ins, variety (no mode longer than 8 bars, each level's mode before and in its drop), fair planet hops, holds (never lethal, time to let go), busy drops (never more than two beats idle, no bar rhythm more than twice running), the star trails (a clean run collects all three; a stray tap, a missed note, a hold let go or mashing loses that one star) and the smooth clock. The same suite runs on the four B-sides, with their tighter openings. `tests/world.test.ts` covers the map's rules and the quests. `tests/charts.test.ts` checks the note data.
+`tests/gd.test.ts` runs on all four levels: autoplay in full flow and full charge, press spacing (at least a beat apart, at most 2.5 a second), opening sizes, every note in exactly one layer, nothing can crash in the build-up, flow notes never hurt, uneven timing, the muffle steps, mash bots, practice run-ins, variety (no mode longer than 8 bars, each level's mode before and in its drop), fair planet hops, holds (never lethal, time to let go), busy drops (never more than two beats idle, no bar rhythm more than twice running), the star trails (a clean run collects all three; a stray tap, a missed note, a hold let go or mashing loses that one star) and the smooth clock. The same suite runs on the final level (with tether tests) and on the four B-sides, with their tighter openings. `tests/world.test.ts` covers the map's rules and the quests. `tests/charts.test.ts` checks the note data.
 
 ## Build it
 
@@ -133,7 +135,7 @@ Each section in `levels/<id>/level.json` has `bars` (its length) and `core`:
 - `bars`: how each bar plays, repeated to fill the section. A bar is words joined by `+`: `up` / `down` / `weave`, `spin`, `twin`, `sling` (planet hop), `turn`, `fast` / `slow` / `normal`, `long` (two long strides to hold, for a bar with a press on every beat).
 - `charge` (a build-up), `smash` (the section opens with the drop's big press), `pulse`, `record` (a passage worth recording by hand).
 
-Heroes Tonight, Blank and Invincible are generated by `tools/_levels.py`; Sky High's file is hand-kept. Run `npm test` after any change.
+Heroes Tonight, Blank and Invincible are generated by `tools/_levels.py`; Sky High's and Royalty's files are hand-kept. Run `npm test` after any change.
 
 ## Dev tools
 

@@ -9,6 +9,7 @@ export const BADGES: Badge[] = [
   { id: 'clear_blank', name: 'Blank Slate', desc: 'Clear Blank' },
   { id: 'clear_invincible', name: 'Invincible', desc: 'Clear Invincible' },
   { id: 'setlist', name: 'One More Orbit', desc: 'Clear all four levels' },
+  { id: 'clear_royalty', name: 'Event Horizon', desc: 'Clear Royalty, the level behind the gate' },
   { id: 'in_flow', name: 'In The Pocket', desc: 'Clear a level with 85% of your taps on the beat' },
   { id: 'full_drop', name: 'Full Send', desc: 'Set off a drop at 100%: fully charged and in flow' },
   { id: 'streak', name: 'Locked In', desc: 'Reach a streak of 60 on-beat taps' },
@@ -24,6 +25,7 @@ export const ORBS: Orb[] = [
   { id: 'toxic', name: 'Toxic', rgb: [160, 255, 70], needs: 'clear_invincible', how: 'Clear Invincible' },
   { id: 'gold', name: 'Gold', rgb: [255, 214, 90], needs: 'full_drop', how: 'Set off a drop at 100%' },
   { id: 'rose', name: 'Rose', rgb: [255, 90, 160], needs: 'in_flow', how: 'Clear a level with 85% on the beat' },
+  { id: 'singular', name: 'Singular', rgb: [255, 255, 255], needs: 'clear_royalty', how: 'Clear Royalty' },
   // quests: both of a level's quests
   { id: 'coral', name: 'Coral', rgb: [255, 120, 110], needs: 'quests:heroes', how: 'Both quests on Heroes Tonight' },
   { id: 'magenta', name: 'Magenta', rgb: [255, 90, 240], needs: 'quests:skyhigh', how: 'Both quests on Sky High' },

@@ -1,4 +1,4 @@
-import { FLOW_S, FLOW_TOL_S, NEAR, arc, rise, smoothstep, type Course, type FlowNote, type Hold, type Press } from './course';
+import { FLOW_S, FLOW_TOL_S, NEAR, TETHER_GRIP, TETHER_LET_S, arc, rise, smoothstep, type Course, type FlowNote, type Hold, type Press } from './course';
 
 export interface TapResult {
   /** hop / flip: a survival press. spark: a flow note. skip: a free tap. tick: gold collected along a hold. held: a hold has gone by. release: let go right on a hold's end. */
@@ -54,7 +54,8 @@ export class Sim {
   private mashing = false;
   crashed = false;
   crashBeat = -1;
-  crashKind: 'edge' | 'early' | '' = '';
+  /** edge: rode off a ring. early: tapped into the ring before an opening. let: let go of a tether. */
+  crashKind: 'edge' | 'early' | 'let' | '' = '';
   landedAt = -99;
   // flow
   flow = 0.5;
@@ -372,6 +373,14 @@ export class Sim {
         this.hi++;
         this.ti = 0;
         this.got = 0;
+      }
+      // a tether: once the ball is on it the button must stay down until just before its end
+      const th = this.c.holds[this.hi];
+      if (th && th.tether && !this.down && !this.forgiving && th.a >= this.autoUntil && this.mode === 'flight' && this.doneBeat === th.a && nb > th.a + TETHER_GRIP && nb < th.b - TETHER_LET_S / this.c.spb) {
+        this.crashed = true;
+        this.crashBeat = nb;
+        this.crashKind = 'let';
+        break;
       }
       // a star trail played through to its end with no slip: the star is collected
       const st = this.c.stars[this.si];

@@ -130,10 +130,10 @@ function gate(): string {
 }
 
 export function levelArt(id: string): string {
-  return id === 'heroes' ? heroes() : id === 'skyhigh' ? skyhigh() : id === 'blank' ? blank() : id === 'invincible' ? invincible() : id === 'gate' ? gate() : wrap('', '#0d1022');
+  return id === 'heroes' ? heroes() : id === 'skyhigh' ? skyhigh() : id === 'blank' ? blank() : id === 'invincible' ? invincible() : id === 'gate' || id === 'royalty' ? gate() : wrap('', '#0d1022');
 }
 
 /** Each level's colour for its card details (difficulty dots, Best bar) and where its song preview starts. */
 export const LEVEL_UI: Record<string, { col: string; dots: number }> = {
-  heroes: { col: '#ffb37a', dots: 1 }, skyhigh: { col: '#ff6fe0', dots: 2 }, blank: { col: '#9fc4ff', dots: 3 }, invincible: { col: '#a8ff5a', dots: 5 }
+  heroes: { col: '#ffb37a', dots: 1 }, skyhigh: { col: '#ff6fe0', dots: 2 }, blank: { col: '#9fc4ff', dots: 3 }, invincible: { col: '#a8ff5a', dots: 5 }, royalty: { col: '#ff3d8b', dots: 5 }
 };

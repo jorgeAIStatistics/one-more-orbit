@@ -29,6 +29,13 @@
       "artist": "DEAF KEV",
       "release": "NCS Release",
       "playable": true
+    },
+    {
+      "id": "royalty",
+      "title": "Royalty",
+      "artist": "Egzod, Maestro Chives, Neoni",
+      "release": "NCS Release",
+      "playable": true
     }
   ]
 }

@@ -16,5 +16,8 @@ export const PALETTES: Record<string, Palette> = {
   ice: { bg0: [30, 46, 74], bg1: [6, 8, 18], ring: [200, 225, 255], acc: [255, 255, 255] },
   void: { bg0: [18, 8, 38], bg1: [0, 0, 0], ring: [150, 110, 255], acc: [220, 200, 255] },
   blood: { bg0: [84, 6, 14], bg1: [18, 2, 6], ring: [255, 50, 60], acc: [255, 170, 150] },
-  toxic: { bg0: [24, 58, 10], bg1: [4, 12, 4], ring: [150, 255, 60], acc: [230, 255, 150] }
+  toxic: { bg0: [24, 58, 10], bg1: [4, 12, 4], ring: [150, 255, 60], acc: [230, 255, 150] },
+  // the last level: the edge of a black hole, then its white-hot core
+  horizon: { bg0: [52, 8, 40], bg1: [2, 0, 6], ring: [255, 61, 139], acc: [255, 170, 210] },
+  core: { bg0: [70, 44, 70], bg1: [8, 2, 14], ring: [255, 255, 255], acc: [255, 200, 225] }
 };

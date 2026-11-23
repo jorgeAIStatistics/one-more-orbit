@@ -1,7 +1,7 @@
 // Writes each level's two note layers, as the game builds them, to tools/cache/<id>.layers.json (for the listening
 // previews) and prints a section-by-section summary.   Usage: npx vite-node tools/export-layers.ts
 import { writeFileSync } from 'node:fs';
-import { PACKS, SLICE } from '../src/game/packs';
+import { FINAL, PACKS, SLICE } from '../src/game/packs';
 import { Level } from '../src/game/level';
 import { buildCourse } from '../src/gd/course';
 import { accentBeats, auditSwitch, handBars, layers, pitchLookup } from '../src/gd/presses';
@@ -10,7 +10,7 @@ import { accentBeats, auditSwitch, handBars, layers, pitchLookup } from '../src/
 const base = process.env.BASE === '1';
 auditSwitch.on = !base;
 
-for (const pack of PACKS.filter((p) => SLICE.includes(p.level.id))) {
+for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), FINAL]) {
   const id = pack.level.id;
   const level = new Level(pack.level, pack.audio, pack.chart);
   const c = buildCourse(level, layers(pack), pitchLookup(pack), pack.level.lab, accentBeats(pack));

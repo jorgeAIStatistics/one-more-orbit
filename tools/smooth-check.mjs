@@ -6,7 +6,8 @@
 import { chromium } from 'playwright-core';
 const URL = process.env.OMO_URL || 'http://localhost:5173/';
 // [level index, start beat, seconds, how it is played]
-const RUNS = [[0, 62, 14, 'bot'], [0, 62, 14, 'human'], [1, 60, 14, 'human'], [2, 124, 14, 'human'], [3, 78, 14, 'human'], [0, 8, 12, 'human']];
+// (a level index, or a place on the map by its id: 'gate' is the final level)
+const RUNS = [[0, 62, 14, 'bot'], [0, 62, 14, 'human'], [1, 60, 14, 'human'], [2, 124, 14, 'human'], [3, 78, 14, 'human'], [0, 8, 12, 'human'], ['gate', 36, 14, 'human'], ['gate', 186, 14, 'human']];
 const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--mute-audio'] });
 const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true });
 const page = await ctx.newPage();
@@ -18,12 +19,13 @@ for (const [lvl, beat0, secs, how] of RUNS) {
   const r = await page.evaluate(async ([lvl, beat0, secs, how]) => {
     const o = window.__omo;
     Storage.prototype.setItem = function () {};
-    Object.assign(o.save, { music: 0, sfx: 0, hitVol: 0, calibrated: true, tutorialDone: true, unlockAll: true, audioOffset: 0, visualOffset: 0 });
+    Object.assign(o.save, { music: 0, sfx: 0, hitVol: 0, calibrated: true, tutorialDone: true, unlockAll: true, audioOffset: 0, visualOffset: 0, stars: { heroes: [true, true, true], skyhigh: [true, true, true], blank: [true, true, true] } });
+    const go = () => (typeof lvl === 'string' ? o.select(lvl) : o.level(lvl));
     const wait = (ms) => new Promise((res) => setTimeout(res, ms));
-    o.show('levels'); o.level(lvl); await wait(80);
+    o.show('levels'); go(); await wait(80);
     const bot = how === 'bot';
     o.start(bot, true, 0); await wait(300);
-    const spb = o.run.level.spb; o.run.stop(); o.show('levels'); o.level(lvl); await wait(60);
+    const spb = o.run.level.spb; o.run.stop(); o.show('levels'); go(); await wait(60);
     o.start(bot, true, beat0 * spb);
     for (let i = 0; i < 200 && o.run.state !== 'playing'; i++) await wait(30);
     // a person: taps land 0 to 45 ms either side of the note, and each reaches the game up to a frame late
@@ -72,7 +74,7 @@ for (const [lvl, beat0, secs, how] of RUNS) {
     const worst = [...jolts].sort((a, b) => b[0] - a[0]).slice(0, 6).map((x) => `${x[0].toFixed(1)}px@${x[1]}${x[2] ? 'f' : 'g'}`);
     return { level: o.run ? '' : '', frames: pts.length, medianStep: +steps[Math.floor(steps.length / 2)].toFixed(2), jolts2px: big.length, jolts5px: jolts.filter((x) => x[0] > 5).length, maxJolt: +Math.max(...jolts.map((x) => x[0])).toFixed(1), worst, crashed };
   }, [lvl, beat0, secs, how]);
-  rows.push({ run: `L${lvl + 1} beat ${beat0} ${how}`, ...r });
+  rows.push({ run: `${typeof lvl === 'string' ? lvl : `L${lvl + 1}`} beat ${beat0} ${how}`, ...r });
 }
 for (const r of rows) console.log(`${r.run.padEnd(22)} frames ${String(r.frames).padStart(4)}  step ${r.medianStep}px  jolts>2px ${String(r.jolts2px).padStart(3)}  >5px ${String(r.jolts5px).padStart(3)}  max ${r.maxJolt}px  worst ${r.worst.join(' ')}${r.crashed ? '  (crashed)' : ''}`);
 if (errs.length) console.log('errors', errs.slice(0, 3));

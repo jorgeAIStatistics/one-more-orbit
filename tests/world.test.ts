@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ORBS } from '../src/game/extras';
-import { BSIDES, PACKS } from '../src/game/packs';
+import { BSIDES, FINAL, PACKS } from '../src/game/packs';
 import { QUESTS, questSet, questsEarned, questsFor, type QuestStats } from '../src/game/quests';
 import { GATE_STARS, NODES, TIERS, maxStars, nodeOf, nodeState, playable, totalStars, type Progress } from '../src/game/world';
 
@@ -13,7 +13,8 @@ describe('world 1: the map', () => {
     expect(NODES.filter((n) => n.kind === 'planet').map((n) => n.id)).toEqual(ids);
     expect(NODES.filter((n) => n.kind === 'moon').map((n) => n.id)).toEqual(BSIDES.map((b) => b.level.id));
     expect(NODES[NODES.length - 1].kind).toBe('gate');
-    expect(maxStars).toBe(12);
+    expect(maxStars).toBe(15); // three in each of the four levels, and three behind the gate
+    expect(TIERS[FINAL.level.id]).toBe('Singularity');
     expect(GATE_STARS).toBeLessThan(maxStars);
     for (const id of ids) expect(TIERS[id]).toBeTruthy();
   });
@@ -43,13 +44,17 @@ describe('world 1: the map', () => {
     expect(nodeState(nodeOf('heroes-b'), progress(['heroes', 'heroes-b'], { heroes: all3 }))).toBe('cleared');
   });
 
-  it('the gate opens on nine stars, wherever they come from, and can never be played yet', () => {
+  it('the gate opens on nine stars, wherever they come from, and the last level is behind it', () => {
     const eight = { heroes: all3, skyhigh: all3, blank: [true, true, false] };
     expect(totalStars(progress([], eight))).toBe(8);
     expect(nodeState(nodeOf('gate'), progress(ids, eight))).toBe('locked');
     const nine = { ...eight, invincible: [false, true, false] };
     expect(nodeState(nodeOf('gate'), progress([], nine))).toBe('open');
-    expect(playable(nodeOf('gate'), progress(ids, nine))).toBe(false);
+    expect(playable(nodeOf('gate'), progress(ids, eight))).toBe(false);
+    expect(playable(nodeOf('gate'), progress([], nine))).toBe(true); // stars open it, not clears
+    expect(nodeState(nodeOf('gate'), progress([FINAL.level.id], nine))).toBe('cleared');
+    // its own three stars count toward the total
+    expect(totalStars(progress([], { ...nine, [FINAL.level.id]: all3 }))).toBe(12);
   });
 
   it('the playtest switch opens the planets and shows the moons, but not the gate', () => {

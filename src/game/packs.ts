@@ -22,6 +22,11 @@ import invAudio from '../../levels/invincible/audio.json';
 import invChart from '../../levels/invincible/chart.json';
 import invPresses from '../../levels/invincible/presses.json';
 import invAudit from '../../levels/invincible/audit.json';
+import royLevel from '../../levels/royalty/level.json';
+import royAudio from '../../levels/royalty/audio.json';
+import royChart from '../../levels/royalty/chart.json';
+import royPresses from '../../levels/royalty/presses.json';
+import royAudit from '../../levels/royalty/audit.json';
 import heroesB from '../../levels/heroes/bside.json';
 import skyB from '../../levels/skyhigh/bside.json';
 import blankB from '../../levels/blank/bside.json';
@@ -74,3 +79,6 @@ function bside(base: LevelPack, file: unknown): LevelPack {
 
 /** The hidden levels: one B-side per level, in the same order. */
 export const BSIDES: LevelPack[] = [bside(PACKS[0], heroesB), bside(PACKS[1], skyB), bside(PACKS[2], blankB), bside(PACKS[3], invB)];
+
+/** The level behind the gate at the end of the world. Not on the route: it opens on stars, not on a clear. */
+export const FINAL: LevelPack = pack(royLevel, royAudio, royChart, royPresses, royAudit);

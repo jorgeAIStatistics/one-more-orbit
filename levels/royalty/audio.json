@@ -1,0 +1,15 @@
+{
+  "file": "audio/royalty.mp3",
+  "frames": 4299750,
+  "firstSig": 10639,
+  "bpm": 160,
+  "offset": 1.5,
+  "length": 97.5,
+  "dropTime": 49.5,
+  "source": [
+    [
+      22.52,
+      120.019
+    ]
+  ]
+}

@@ -1,19 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { BSIDES, PACKS, SLICE } from '../src/game/packs';
+import { BSIDES, FINAL, PACKS, SLICE } from '../src/game/packs';
 import { Level } from '../src/game/level';
 import { SmoothClock } from '../src/gd/clock';
-import { autoLayers, buildCourse, HOLD_MAX, HOLD_MIN, landingGrace, LINE_TIGHT, SLING_FLIGHT, TOL_S } from '../src/gd/course';
+import { autoLayers, buildCourse, HOLD_MAX, HOLD_MIN, landingGrace, LINE_TIGHT, SLING_FLIGHT, TETHER_LET_S, TOL_S } from '../src/gd/course';
 import { accentBeats, layerTicks, layers, pitchLookup } from '../src/gd/presses';
 import { Sim } from '../src/gd/sim';
 
 const rng = (seed: number) => { let s = seed; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296 - 0.5; }; };
 
-for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), ...BSIDES]) {
+for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), FINAL, ...BSIDES]) {
   const id = pack.level.id;
   /** the level it is a version of: its own id, or for a B-side its planet's */
   const base = pack.level.side?.of ?? id;
-  /** half-width of the ordinary openings, in ms: 120, or 90 on a B-side */
-  const TOL_MS = (pack.level.side?.tol ?? TOL_S) * 1000;
+  /** half-width of the ordinary openings, in ms: 120, 100 in the final level, 90 on a B-side */
+  const TOL_MS = (pack.level.side?.tol ?? pack.level.rules?.tol ?? TOL_S) * 1000;
+  /** presses a second at most: 2.5, and one a beat (2.7) in the final level */
+  const RATE = id === FINAL.level.id ? 2.7 : 2.5;
   const level = new Level(pack.level, pack.audio, pack.chart);
   const course = buildCourse(level, layers(pack), pitchLookup(pack), pack.level.lab, accentBeats(pack));
   const ms = (x: number) => x / 1000 / course.spb; // milliseconds as beats
@@ -30,9 +32,16 @@ for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), ...BSIDE
     }
     return sim;
   };
-  /** Quick taps at the given beat-times: each is let go a moment later (so no hold is ever held). */
+  const tethers = course.holds.filter((h) => h.tether);
+  /**
+   * Quick taps at the given beat-times: each is let go a moment later, so no hold is held, except a tether: the tap
+   * that takes one keeps hold to its end, as anyone who wants to live must.
+   */
   const run = (taps: number[], start = course.start - 3, until = course.end) =>
-    play(taps.flatMap((t, i): Array<[number, boolean]> => [[t, true], [Math.min(t + 0.12, i + 1 < taps.length ? Math.max(t, taps[i + 1] - 0.02) : t + 0.12), false]]), start, until);
+    play(taps.flatMap((t, i): Array<[number, boolean]> => {
+      const th = tethers.find((h) => Math.abs(h.a - t) < 0.3);
+      return [[t, true], [th ? th.b : Math.min(t + 0.12, i + 1 < taps.length ? Math.max(t, taps[i + 1] - 0.02) : t + 0.12), false]];
+    }).sort((x, y) => x[0] - y[0] || Number(x[1]) - Number(y[1])), start, until);
   const spam = (from: number, rate: number, phase = 0, to = course.end) => {
     const out: number[] = [];
     for (let b = from + phase / rate / course.spb; b < to; b += 1 / rate / course.spb) out.push(b);
@@ -57,7 +66,7 @@ for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), ...BSIDE
     it('survival presses are strong beats only: never closer than a beat and never faster than 2.5 a second, openings at least ±120 ms (±90 on a B-side)', () => {
       const gaps = pressBeats.slice(1).map((b, i) => b - pressBeats[i]);
       expect(Math.min(...gaps)).toBeGreaterThanOrEqual(1 - 1e-9);
-      expect(1 / (Math.min(...gaps) * course.spb)).toBeLessThanOrEqual(2.5);
+      expect(1 / (Math.min(...gaps) * course.spb)).toBeLessThanOrEqual(RATE);
       for (const p of course.presses) expect(p.tol * course.spb * 1000).toBeGreaterThanOrEqual(TOL_MS - 1e-6);
     });
 
@@ -176,8 +185,10 @@ for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), ...BSIDE
       }
       const star = { heroes: 'sling', skyhigh: 'weave', blank: 'spin', invincible: 'twin' }[base] as 'sling' | 'weave' | 'spin' | 'twin';
       const has = (p: (typeof course.presses)[number]) => (star === 'twin' ? !!p.twin : p[star]);
-      const inDrop = course.presses.filter((p) => p.beat >= course.dropBeat && has(p)).length;
-      const before = course.presses.filter((p) => p.beat < course.dropBeat && has(p)).length;
+      // (the final level's own mode is the tether, which is a hold, not a kind of press)
+      const own = id === FINAL.level.id;
+      const inDrop = own ? tethers.filter((h) => h.a >= course.dropBeat).length + 2 : course.presses.filter((p) => p.beat >= course.dropBeat && has(p)).length;
+      const before = own ? tethers.filter((h) => h.a < course.dropBeat).length : course.presses.filter((p) => p.beat < course.dropBeat && has(p)).length;
       expect(before, 'introduced before the drop').toBeGreaterThanOrEqual(1);
       expect(inDrop, 'stars in the drop').toBeGreaterThanOrEqual(star === 'sling' ? 3 : 8);
       if (base !== 'invincible') expect(course.presses.some((p) => p.twin)).toBe(false); // the twin orbit stays in the last level
@@ -210,7 +221,7 @@ for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), ...BSIDE
       console.log(`HOPS ${id}: ${hops.length} planet hops at beats ${hops.map((p) => p.beat).join(', ')}; landing grace ${landingGrace(course.spb)} beats (${(landingGrace(course.spb) * course.spb).toFixed(2)} s)`);
     });
 
-    it('holds can never end the run, leave time to let go, and swallow the notes they cover', () => {
+    it('holds can never end the run (tethers apart), leave time to let go, and swallow the notes they cover', () => {
       if (!level.file.holds) { expect(course.holds).toEqual([]); return; }
       expect(course.holds.length).toBeGreaterThan(8);
       course.holds.forEach((h, i) => {
@@ -228,13 +239,13 @@ for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), ...BSIDE
       // never holding at all clears (quick taps), with no gold from the holds
       const taps = run(course.taps);
       expect(taps.crashed).toBe(false);
-      expect(taps.holdsFull).toBe(0);
+      expect(taps.holdsFull).toBe(tethers.length); // (a tether has to be held, so it is collected)
       // holding everything (the button stays down from each tap until just before the next) clears too
       const legato = play(course.taps.flatMap((t, i): Array<[number, boolean]> => [[t, true], [i + 1 < course.taps.length ? course.taps[i + 1] - 0.08 : t + 0.5, false]]));
       expect(legato.crashed, `held throughout: ${legato.crashKind} at ${legato.crashBeat.toFixed(2)}`).toBe(false);
       // letting go 150 ms early or late on every hold costs a little gold at most, never the run
       for (const off of [-150, 150]) {
-        const s = play(course.script.map(([t, down]): [number, boolean] => [down || !course.holds.some((h) => h.b === t) ? t : t + ms(off), down]).sort((x, y) => x[0] - y[0] || Number(x[1]) - Number(y[1])));
+        const s = play(course.script.map(([t, down]): [number, boolean] => [down || !course.holds.some((h) => h.b === t && !h.tether) ? t : t + ms(off), down]).sort((x, y) => x[0] - y[0] || Number(x[1]) - Number(y[1])));
         expect(s.crashed, `let go ${off} ms off`).toBe(false);
         expect(s.holdsFull, `let go ${off} ms off`).toBeGreaterThanOrEqual(off > 0 ? course.holds.length : 0);
       }
@@ -242,6 +253,44 @@ for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), ...BSIDE
       const late = play(course.script.map(([t, down]): [number, boolean] => [down && course.holds.some((h) => !h.rail && h.a === t) ? t + ms(120) : t, down]));
       expect(late.crashed).toBe(false);
       console.log(`HOLDS ${id}: ${course.holds.filter((h) => h.rail).length} rails and ${course.holds.filter((h) => !h.rail).length} lines; late starts collected ${late.holdsFull} of ${course.holds.length} in full`);
+    });
+
+    it('tethers: only the final level has them; holding on clears, letting go early ends the run, and they are never sprung on you', () => {
+      if (id !== FINAL.level.id) { expect(tethers).toEqual([]); return; }
+      expect(tethers.length).toBeGreaterThanOrEqual(10);
+      const first = tethers[0];
+      expect(first.a).toBeLessThan(course.dropBeat); // met before the drop, with a hint
+      expect(course.firsts.some((f) => f.what === 'tether' && f.beat === first.a)).toBe(true);
+      for (const h of tethers) {
+        expect(h.rail).toBe(true);
+        const p = course.presses.find((x) => x.beat === h.a)!;
+        // a tether starts on a white mark on the beat, is never a planet hop or the drop's own press, and lasts long enough to grip
+        expect(Math.abs(h.a - Math.round(h.a))).toBeLessThan(0.01);
+        expect(p.sling || p.smash || p.auto).toBe(false);
+        expect((h.b - h.a) * course.spb).toBeGreaterThanOrEqual(0.5);
+        expect(course.inCharge(h.a)).toBe(false);
+      }
+      const moves = (edit: (t: number, down: boolean, h: (typeof tethers)[number] | undefined) => number) =>
+        course.script.map(([t, down]): [number, boolean] => [edit(t, down, down ? undefined : tethers.find((h) => h.b === t)), down]).sort((x, y) => x[0] - y[0] || Number(x[1]) - Number(y[1]));
+      // let go 80 ms early on every tether: fine. 250 ms early on the first: the run ends there, as "let go"
+      expect(play(moves((t, _d, h) => (h ? t - ms(80) : t))).crashed).toBe(false);
+      const early = play(moves((t, _d, h) => (h === first ? t - ms(250) : t)));
+      expect(early.crashKind).toBe('let');
+      expect(early.crashBeat).toBeGreaterThan(first.a);
+      expect(early.crashBeat).toBeLessThan(first.b);
+      expect(TETHER_LET_S).toBeGreaterThanOrEqual(0.1);
+      // a quick tap on its mark, never held: the same
+      const quick = play(course.taps.flatMap((t): Array<[number, boolean]> => [[t, true], [t + 0.1, false]]));
+      expect(quick.crashKind).toBe('let');
+      expect(quick.crashBeat).toBeLessThan(first.b);
+      // holding late is fine: the press 80 ms late and held
+      expect(play(course.script.map(([t, down]): [number, boolean] => [down && tethers.some((h) => h.a === t) ? t + ms(80) : t, down])).crashed).toBe(false);
+      // in the run-in before a practice checkpoint the game holds it for you
+      const cp = course.checkpoints.find((b) => b > first.b)!;
+      const sim = new Sim(course, first.a - 2, cp);
+      sim.advance(cp - 0.01);
+      expect(sim.crashed).toBe(false);
+      console.log(`TETHERS ${id}: ${tethers.length}, the first at beat ${first.a}; lengths ${[...new Set(tethers.map((h) => ((h.b - h.a) * course.spb).toFixed(2)))].join(', ')} s`);
     });
 
     it('a drop keeps you busy: never more than two beats with nothing to do, and no bar rhythm more than twice running', () => {
@@ -295,7 +344,7 @@ for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), ...BSIDE
           expect(others(miss.stars)).toEqual([1, 1]);
         }
         // a hold in the trail let go half a beat early
-        const hold = course.holds.find((h) => inside(st, h));
+        const hold = course.holds.find((h) => inside(st, h) && !h.tether);
         if (hold) {
           const early = play(course.script.map(([t, down]): [number, boolean] => [!down && t === hold.b ? t - 0.6 : t, down]).sort((x, y) => x[0] - y[0] || Number(x[1]) - Number(y[1])));
           expect(early.crashed).toBe(false);
@@ -316,7 +365,7 @@ for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), ...BSIDE
       expect(only.crashed).toBe(false);
       expect(only.stars).toEqual([-1, -1, -1]);
       const quick = run(course.taps);
-      course.stars.forEach((st, i) => expect(quick.stars[i], `quick taps, star ${i + 1}`).toBe(course.holds.some((h) => inside(st, h)) ? -1 : 1));
+      course.stars.forEach((st, i) => expect(quick.stars[i], `quick taps, star ${i + 1}`).toBe(course.holds.some((h) => inside(st, h) && !h.tether) ? -1 : 1));
       // a little late or early throughout still collects them all (the fastest notes leave about ±45 ms)
       for (const off of [-40, 40]) expect(play(course.script.map(([t, down]): [number, boolean] => [t + ms(off), down])).stars, `${off} ms off`).toEqual([1, 1, 1]);
       console.log(`STARS ${id}: ${course.stars.map((st) => `beats ${st.a}-${st.b} (${((st.b - st.a) * course.spb).toFixed(1)} s, ${st.gold} gold)`).join('; ')}`);

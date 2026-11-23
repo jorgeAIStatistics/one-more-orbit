@@ -25,7 +25,8 @@ const HINT: Record<Feature, string> = {
   charge: 'TAP THE ROLL: CHARGE THE DROP', smash: 'THE DROP: HIT THE BIG GOLD MARK', flip: 'VIOLET: GRAVITY FLIP', weave: 'WEAVE: BOUNCE BETWEEN THE TWO RINGS',
   spin: 'SPIN GATE: THE GAP COMES ROUND TO THE MARK', sling: 'CYAN ARROWS: TAP AND HOLD TO RIDE TO THE NEXT PLANET', reverse: 'THE ORBIT TURNS ROUND', faster: 'SPEED UP', slower: 'SLOW DOWN',
   twin: 'TWIN ORBIT: ONE TAP MOVES BOTH',
-  rail: 'GOLD RAIL: TAP AND HOLD THROUGH THE HOP', line: 'GOLD LINE: HOLD TO FLOAT ALONG IT'
+  rail: 'GOLD RAIL: TAP AND HOLD THROUGH THE HOP', line: 'GOLD LINE: HOLD TO FLOAT ALONG IT',
+  tether: 'RED TETHER: HOLD ON. LET GO EARLY AND THE RUN ENDS'
 };
 
 const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
@@ -146,7 +147,7 @@ export class GdRenderer {
     const level = run.level;
     const c = run.course;
     this.plats = platforms(c, level);
-    this.ahead = level.file.side?.ahead ?? 3;
+    this.ahead = level.file.side?.ahead ?? level.file.rules?.ahead ?? 3;
     // hints: the first mark, the first gold note, and each mechanic the first time the level uses it
     this.hints = [];
     const first = c.presses[0];
@@ -798,8 +799,14 @@ export class GdRenderer {
       for (let k = 0; k <= n; k++) { const [x, y] = at(from + ((to - from) * k) / n); if (k === 0) c.moveTo(x, y); else c.lineTo(x, y); }
       c.globalAlpha = show;
       c.strokeStyle = HALO; c.lineWidth = rb * 2.9; c.stroke();
-      c.strokeStyle = rgba(GOLD, on ? 0.5 : 0.24); c.lineWidth = rb * (on ? 2.5 + 0.5 * kick : 2); c.stroke();
-      c.strokeStyle = rgba(on ? WHITE : GOLD, 0.95); c.lineWidth = rb * (on ? 0.7 : 0.5); c.stroke();
+      if (h.tether) {
+        // a tether is in the colours of everything that ends the run: let go of it and it does
+        c.strokeStyle = rgba(DANGER, on ? 0.75 : 0.5); c.lineWidth = rb * (on ? 2.5 + 0.5 * kick : 2.1); c.stroke();
+        c.strokeStyle = rgba(WHITE, 0.97); c.lineWidth = rb * (on ? 0.9 : 0.6); c.stroke();
+      } else {
+        c.strokeStyle = rgba(GOLD, on ? 0.5 : 0.24); c.lineWidth = rb * (on ? 2.5 + 0.5 * kick : 2); c.stroke();
+        c.strokeStyle = rgba(on ? WHITE : GOLD, 0.95); c.lineWidth = rb * (on ? 0.7 : 0.5); c.stroke();
+      }
       // gold along it
       for (const tk of h.ticks) {
         if (tk < beat - 0.02 || tk > beat + this.ahead || sim.tickGone(tk) || Math.abs(tk - h.b) < 1e-6) continue;

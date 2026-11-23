@@ -1,0 +1,55 @@
+{
+ "_doc": "Written by tools/audit.py: survival presses that sat on a weak or buried sound, and where they were moved. demote/promote are ticks (12 per beat) applied to generated bars only; hand-recorded bars ignore this file.",
+ "onsetVsGridMs": {
+  "mean": -2.2,
+  "sd": 22.5,
+  "n": 135
+ },
+ "moved": [
+  {
+   "section": "drop1",
+   "from": 133,
+   "to": 133.5,
+   "was": 0.69,
+   "now": 1.25
+  },
+  {
+   "section": "drop2",
+   "from": 165,
+   "to": 165.5,
+   "was": 0.69,
+   "now": 1.25
+  }
+ ],
+ "demoted": [],
+ "weak": [
+  {
+   "section": "verse2",
+   "beat": 50,
+   "was": 0.75
+  },
+  {
+   "section": "drop1",
+   "beat": 145,
+   "was": 0.71
+  },
+  {
+   "section": "drop2",
+   "beat": 177,
+   "was": 0.71
+  },
+  {
+   "section": "drop1",
+   "beat": 155,
+   "was": 0.73
+  }
+ ],
+ "demote": [
+  1596,
+  1980
+ ],
+ "promote": [
+  1602,
+  1986
+ ]
+}

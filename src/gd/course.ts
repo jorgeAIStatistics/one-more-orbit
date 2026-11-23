@@ -65,6 +65,8 @@ export interface Hold {
   path: Array<{ beat: number; rho: number; side: number; planet: number }>;
   /** in a twin orbit: both balls ride it */
   twin: boolean;
+  /** a tether: a rail that must be held. Let go before its end and the run is over. */
+  tether: boolean;
 }
 /**
  * A star trail: a stretch of the level to play clean. Collect every piece of gold from `a` to `b` (notes and holds)
@@ -83,9 +85,9 @@ export interface Star {
 }
 export interface Layers { survival: number[]; flow: number[] }
 /** Things a level can ask of the player; the first time each appears it gets a hint. */
-export type Feature = 'smash' | 'charge' | 'flip' | 'weave' | 'spin' | 'sling' | 'reverse' | 'faster' | 'slower' | 'twin' | 'rail' | 'line';
+export type Feature = 'smash' | 'charge' | 'flip' | 'weave' | 'spin' | 'sling' | 'reverse' | 'faster' | 'slower' | 'twin' | 'rail' | 'line' | 'tether';
 /** How one bar plays. */
-export interface BarCfg { token: string; mode: 'up' | 'down' | 'weave'; spin: boolean; twin: boolean; sling: boolean; turn: boolean; long: boolean; speed: number }
+export interface BarCfg { token: string; mode: 'up' | 'down' | 'weave'; spin: boolean; twin: boolean; sling: boolean; turn: boolean; long: boolean; tether: boolean; speed: number }
 
 export interface Course {
   spb: number;
@@ -138,6 +140,8 @@ export const HOLD_MAX = 2; // ...and no gold line longer
 export const HOLDS_FROM = 16; // beats: a level's opening bars are taps only
 export const RAIL_FLIGHT = 2; // a hop that flies this long becomes a rail
 export const LINE_CLEAR = 0.75; // beats between the end of a gold line and the next white mark: time to let go and tap
+export const TETHER_GRIP = 0.3; // beats after a tether's mark by which the button must be down...
+export const TETHER_LET_S = 0.12; // ...and it may come up this many seconds before the tether's end
 export const TURN_EASE = 0.25; // beats either side of a bar line over which a turn or a speed change is eased
 export const LINE_TIGHT = 0.5; // ...or this, where the ride is too short for a line otherwise (a rail leaves no more either)
 /** Beats after a planet hop lands in which nothing can end the run: at least 1.5, and at least 0.85 s at any tempo. */
@@ -185,6 +189,7 @@ export function autoLayers(beats: number[], accents: number[] = []): Layers {
  * by "+": up | down | weave set how the ball moves between rings; spin, twin, sling, turn add to it; fast | slow |
  * normal set the orbit speed from that bar on. long: the bar is played in two long strides (its presses on beats 2
  * and 4 fold into the hop before them, which becomes a rail to hold); for bars that are a press on every beat.
+ * tether: the bar's rails must be held (never a planet hop's).
  */
 export function barPlan(level: Level): BarCfg[] {
   const out: BarCfg[] = [];
@@ -197,7 +202,7 @@ export function barPlan(level: Level): BarCfg[] {
       if (w.includes('fast')) speed = 1.25; else if (w.includes('slow')) speed = 0.8; else if (w.includes('normal')) speed = 1;
       const twin = w.includes('twin');
       // a planet hop only ever starts a phrase or its second half (every other bar), and never in a twin orbit
-      out.push({ token, mode: w.includes('weave') ? 'weave' : w.includes('down') ? 'down' : 'up', spin: w.includes('spin'), twin, sling: w.includes('sling') && !twin && k % 2 === 0, turn: w.includes('turn'), long: w.includes('long'), speed });
+      out.push({ token, mode: w.includes('weave') ? 'weave' : w.includes('down') ? 'down' : 'up', spin: w.includes('spin'), twin, sling: w.includes('sling') && !twin && k % 2 === 0, turn: w.includes('turn'), long: w.includes('long'), tether: w.includes('tether'), speed });
     }
   }
   return out;
@@ -281,7 +286,7 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
     const next = i + 1 < ground.length ? ground[i + 1] - beat : 99;
     const isSmash = smash.has(beat);
     const after = afters.has(beat);
-    const tol = clamp(0.45 * Math.min(prev, next) * spb, TOL_MIN_S, isSmash || after ? TOL_SMASH_S : level.file.side?.tol ?? TOL_S) / spb;
+    const tol = clamp(0.45 * Math.min(prev, next) * spb, TOL_MIN_S, isSmash || after ? TOL_SMASH_S : level.file.side?.tol ?? level.file.rules?.tol ?? TOL_S) / spb;
     const seg = level.segAt((beat + 1e-6) * spb);
     const cfg = barAt(beat);
     const sling = slings.has(beat);
@@ -328,7 +333,7 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
     const okAt = (b: number) => b >= Math.max(HOLDS_FROM, start + COUNT_IN) - 1e-6 && !inCharge(b) && !barAt(b).twin;
     // rails also run in a twin orbit (both balls ride them), and a planet hop is a rail from the level's first bars on
     const railAt = (p: Press) => p.beat >= (p.sling ? start + COUNT_IN : Math.max(HOLDS_FROM, start + COUNT_IN)) - 1e-6 && !inCharge(p.beat);
-    const mk = (a: number, b: number, rail: boolean, pos: (beat: number) => { rho: number; side: number; planet: number }): void => {
+    const mk = (a: number, b: number, rail: boolean, pos: (beat: number) => { rho: number; side: number; planet: number }, tether = false): void => {
       const eat = free.filter((f) => f > a + 1e-6 && f <= b + 1e-6);
       free = free.filter((f) => !(f > a + 1e-6 && f <= b + 1e-6));
       const grid: number[] = [];
@@ -337,8 +342,8 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
       const path: Hold['path'] = [];
       const n = Math.max(2, Math.round((b - a) * 8));
       for (let k = 0; k <= n; k++) { const beat = a + ((b - a) * k) / n; path.push({ beat, ...pos(beat) }); }
-      holds.push({ i: 0, a, b, rail, ticks, path, twin: barAt(a).twin });
-      first(a, rail ? 'rail' : 'line');
+      holds.push({ i: 0, a, b, rail, ticks, path, twin: barAt(a).twin, tether });
+      first(a, tether ? 'tether' : rail ? 'rail' : 'line');
     };
     presses.forEach((p, i) => {
       const next = presses[i + 1];
@@ -352,7 +357,7 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
         if (b - p.beat >= HOLD_MIN - 1e-6) {
           // (a gravity flip crosses to the other side of the ring line on the way, as the ball does)
           const u = (beat: number) => (beat - p.beat) / (p.land - p.beat);
-          mk(p.beat, b, true, (beat) => ({ rho: flightRho(p, beat), side: p.kind === 'flip' ? p.side * (1 - 2 * smoothstep(u(beat))) : p.side, planet: p.sling ? p.planet + smoothstep(u(beat)) : p.planetTo }));
+          mk(p.beat, b, true, (beat) => ({ rho: flightRho(p, beat), side: p.kind === 'flip' ? p.side * (1 - 2 * smoothstep(u(beat))) : p.side, planet: p.sling ? p.planet + smoothstep(u(beat)) : p.planetTo }), barAt(p.beat).tether && !p.sling && !p.auto && !p.smash);
         }
       }
       // a line: the ball has landed and nothing asks for a tap for a while
