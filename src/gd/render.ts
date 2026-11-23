@@ -673,6 +673,60 @@ export class GdRenderer {
     const origin = (pf: number): [number, number] => { const [x, y] = this.planetXY(pf); return [x - this.camX, y - this.camY]; };
     // the star trail in view: still whole, and close enough to see
     const trail = run.finale ? undefined : course.stars.find((st) => sim.stars[st.i] === 0 && st.a - beat <= this.ahead && beat <= st.b + 0.15);
+    // Holds: gold rails through long hops and gold lines above the ring. They are drawn first, under the rings and
+    // their marks, and kept slim: a hold is a path to follow, and it must never hide a white mark or look like one.
+    // What is left of each is drawn from the ball onward; it brightens while you are holding on it; a gold ring marks
+    // where to let go (white is only ever "tap here").
+    for (const h of course.holds) {
+      if (h.a - beat > this.ahead) break;
+      if (h.b < beat - 0.05 || (twin && !h.twin)) continue;
+      const at = (t: number): [number, number] => {
+        const u = clamp((t - h.a) / (h.b - h.a), 0, 1) * (h.path.length - 1);
+        const k = Math.min(h.path.length - 2, Math.floor(u));
+        const p0 = h.path[k];
+        const p1 = h.path[k + 1];
+        const f = u - k;
+        const r = this.rad(lerp(p0.rho, p1.rho, f)) + lerp(p0.side, p1.side, f) * rb;
+        const [ox, oy] = origin(lerp(p0.planet, p1.planet, f));
+        return [ox + Math.cos(ang(t)) * r, oy + Math.sin(ang(t)) * r];
+      };
+      // a rail starts a little way past its white mark, so the mark stands clear of it
+      const from = Math.max(h.a + (h.rail ? 0.22 : 0), beat);
+      const to = Math.min(h.b, beat + this.ahead);
+      const on = sim.down && beat >= h.a - 0.1;
+      const show = clamp((this.ahead - (h.a - beat)) / 0.6, 0, 1);
+      const body: RGB = h.tether ? DANGER : GOLD; // a tether is in the colour of everything that ends the run
+      c.lineCap = 'round';
+      c.lineJoin = 'round';
+      c.globalAlpha = show;
+      if (to - from >= 0.02) {
+        const n = Math.max(2, Math.ceil((to - from) * 10));
+        c.beginPath();
+        for (let k = 0; k <= n; k++) { const [x, y] = at(from + ((to - from) * k) / n); if (k === 0) c.moveTo(x, y); else c.lineTo(x, y); }
+        c.strokeStyle = 'rgba(3,5,14,0.45)'; c.lineWidth = rb * 1.7; c.stroke();
+        c.strokeStyle = rgba(body, on ? 0.55 : h.tether ? 0.36 : 0.28); c.lineWidth = rb * (on ? 1.3 + 0.25 * kick : 1.1); c.stroke();
+        c.strokeStyle = rgba(on ? mix(body, WHITE, 0.55) : body, 0.97); c.lineWidth = Math.max(2, rb * (on ? 0.5 : 0.42)); c.stroke();
+      }
+      // gold along it
+      for (const tk of h.ticks) {
+        if (tk < beat - 0.02 || tk > beat + this.ahead || sim.tickGone(tk) || Math.abs(tk - h.b) < 1e-6) continue;
+        const [x, y] = at(tk);
+        c.fillStyle = 'rgba(3,5,14,0.5)'; c.beginPath(); c.arc(x, y, rb * 0.6, 0, TWO_PI); c.fill();
+        c.fillStyle = rgba(GOLD); c.beginPath(); c.arc(x, y, rb * 0.38, 0, TWO_PI); c.fill();
+      }
+      // the end: let go here. A ring in the hold's own colour, closing in as the ball arrives.
+      if (h.b <= beat + this.ahead && h.b >= beat - 0.05) {
+        const [x, y] = at(h.b);
+        const near = on ? clamp(1 - (h.b - beat) / 1, 0, 1) : 0;
+        c.strokeStyle = 'rgba(3,5,14,0.5)'; c.lineWidth = Math.max(4, rb * 0.75);
+        c.beginPath(); c.arc(x, y, rb * 0.95, 0, TWO_PI); c.stroke();
+        c.strokeStyle = rgba(body); c.lineWidth = Math.max(2, rb * 0.36);
+        c.beginPath(); c.arc(x, y, rb * 0.95, 0, TWO_PI); c.stroke();
+        if (near > 0.01) { c.strokeStyle = rgba(body, 0.75 * near); c.lineWidth = 2; c.beginPath(); c.arc(x, y, rb * (0.95 + 1.6 * (1 - near)), 0, TWO_PI); c.stroke(); }
+      }
+      c.globalAlpha = 1;
+      c.lineCap = 'butt';
+    }
     for (const pl of this.plats) {
       if (twin ? pl.twin === null : false) continue;
       if (Math.min(pl.cs, pl.fs) - beat > this.ahead || beat > pl.fe + 0.5) continue;
@@ -704,6 +758,7 @@ export class GdRenderer {
       for (let k = sim.ni; k < Math.min(course.presses.length, sim.ni + 3); k++) {
         const p = course.presses[k];
         if (p.beat - beat > this.ahead - 0.4) break;
+        if (course.holds.some((h) => h.rail && h.a === p.beat)) continue; // a rail shows the way itself
         const n = Math.max(3, Math.round((p.land - p.beat) * (p.sling ? 14 : 8)));
         c.fillStyle = p.sling ? rgba(CYAN, 0.8) : rgba(WHITE, k === sim.ni ? 0.5 : 0.25);
         for (let i = 1; i < n; i++) {
@@ -771,62 +826,6 @@ export class GdRenderer {
       }
       c.lineCap = 'butt';
       c.globalAlpha = 1;
-    }
-    // holds: gold rails through long hops and gold lines above the ring. What is left of each is drawn from the ball
-    // onward, it brightens while you are holding on it, and a white bar marks where to let go.
-    for (const h of course.holds) {
-      if (h.a - beat > this.ahead) break;
-      if (h.b < beat - 0.05 || (twin && !h.twin)) continue;
-      const at = (t: number): [number, number] => {
-        const u = clamp((t - h.a) / (h.b - h.a), 0, 1) * (h.path.length - 1);
-        const k = Math.min(h.path.length - 2, Math.floor(u));
-        const p0 = h.path[k];
-        const p1 = h.path[k + 1];
-        const f = u - k;
-        const r = this.rad(lerp(p0.rho, p1.rho, f)) + lerp(p0.side, p1.side, f) * rb;
-        const [ox, oy] = origin(lerp(p0.planet, p1.planet, f));
-        return [ox + Math.cos(ang(t)) * r, oy + Math.sin(ang(t)) * r];
-      };
-      const from = Math.max(h.a, beat);
-      const to = Math.min(h.b, beat + this.ahead);
-      if (to - from < 0.02) continue;
-      const on = sim.down && beat >= h.a - 0.1;
-      const show = clamp((this.ahead - (h.a - beat)) / 0.6, 0, 1);
-      const n = Math.max(2, Math.ceil((to - from) * 10));
-      c.lineCap = 'round';
-      c.lineJoin = 'round';
-      c.beginPath();
-      for (let k = 0; k <= n; k++) { const [x, y] = at(from + ((to - from) * k) / n); if (k === 0) c.moveTo(x, y); else c.lineTo(x, y); }
-      c.globalAlpha = show;
-      c.strokeStyle = HALO; c.lineWidth = rb * 2.9; c.stroke();
-      if (h.tether) {
-        // a tether is in the colours of everything that ends the run: let go of it and it does
-        c.strokeStyle = rgba(DANGER, on ? 0.75 : 0.5); c.lineWidth = rb * (on ? 2.5 + 0.5 * kick : 2.1); c.stroke();
-        c.strokeStyle = rgba(WHITE, 0.97); c.lineWidth = rb * (on ? 0.9 : 0.6); c.stroke();
-      } else {
-        c.strokeStyle = rgba(GOLD, on ? 0.5 : 0.24); c.lineWidth = rb * (on ? 2.5 + 0.5 * kick : 2); c.stroke();
-        c.strokeStyle = rgba(on ? WHITE : GOLD, 0.95); c.lineWidth = rb * (on ? 0.7 : 0.5); c.stroke();
-      }
-      // gold along it
-      for (const tk of h.ticks) {
-        if (tk < beat - 0.02 || tk > beat + this.ahead || sim.tickGone(tk) || Math.abs(tk - h.b) < 1e-6) continue;
-        const [x, y] = at(tk);
-        c.fillStyle = HALO; c.beginPath(); c.arc(x, y, rb * 0.75, 0, TWO_PI); c.fill();
-        c.fillStyle = rgba(GOLD); c.beginPath(); c.arc(x, y, rb * 0.5, 0, TWO_PI); c.fill();
-      }
-      // the end: let go here
-      if (h.b <= beat + this.ahead) {
-        const [x, y] = at(h.b);
-        const [x0, y0] = at(h.b - 0.05);
-        const len = Math.hypot(x - x0, y - y0) || 1;
-        const nx = (-(y - y0) / len) * rb * 1.5;
-        const ny = ((x - x0) / len) * rb * 1.5;
-        c.beginPath(); c.moveTo(x - nx, y - ny); c.lineTo(x + nx, y + ny);
-        c.strokeStyle = HALO; c.lineWidth = 7; c.stroke();
-        c.strokeStyle = rgba(WHITE); c.lineWidth = 3.5; c.stroke();
-      }
-      c.globalAlpha = 1;
-      c.lineCap = 'butt';
     }
     // flow notes: optional taps, on the ring or in mid-flight. Gold, and smaller than the white marks you must hit.
     for (const f of course.flow) {
