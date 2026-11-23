@@ -98,12 +98,20 @@ export const COUNT_IN = 4; // beats at the very start of a level with no surviva
 export const landingGrace = (spb: number) => Math.max(1.5, Math.ceil((0.85 / spb) * 2) / 2);
 const TWO_PI = Math.PI * 2;
 /** How a flight climbs to the next ring: fast at first, so it is through the opening early and then floats down. */
-export const rise = (u: number) => 1 - Math.pow(1 - u, 2.4);
+/**
+ * How far through a hop the ball is, 0 to 1, for a share u of its flight time. It leaves the ring from rest, is
+ * fastest a fifth of the way in and settles onto the next ring: no sudden start, so the ball never jumps on the tap.
+ */
+const RISE_K = 5;
+const RISE_END = 1 - (1 + RISE_K) * Math.exp(-RISE_K);
+export const rise = (u: number) => (u <= 0 ? 0 : u >= 1 ? 1 : (1 - (1 + RISE_K * u) * Math.exp(-RISE_K * u)) / RISE_END);
+/** The arc of a hop that comes back to the same height: up and down from rest, 0 at both ends and 1 in the middle. */
+export const arc = (u: number) => { const s = Math.sin(Math.PI * (u < 0 ? 0 : u > 1 ? 1 : u)); return s * s; };
 export const smoothstep = (t: number) => { const x = t < 0 ? 0 : t > 1 ? 1 : t; return x * x * (3 - 2 * x); };
 /** Radial position (ring levels) of a perfectly timed flight of press p at a beat. */
 export const flightRho = (p: Press, beat: number): number => {
   const u = Math.max(0, Math.min(1, (beat - p.beat) / (p.land - p.beat)));
-  return p.from + (p.to - p.from) * rise(u) + p.side * p.bulge * 4 * u * (1 - u);
+  return p.from + (p.to - p.from) * rise(u) + p.side * p.bulge * arc(u);
 };
 const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
 const snap = (b: number) => Math.round(b * 12) / 12;

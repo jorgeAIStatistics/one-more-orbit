@@ -64,6 +64,12 @@ export class GdRenderer {
   private flipK = 0;
   private burstK = 0;
   private camX = 0;
+  private camVX = 0;
+  private camVY = 0;
+  // The camera's bumps as the course feels them. `punch` and `zoomKick` jump the moment a hit lands (the backdrop uses
+  // them like that); these follow within a few frames, so the rings and the ball swell and settle instead of jumping.
+  private punchS = 0;
+  private zoomS = 0;
   private camY = 0;
   private pf = 0;
   private coreX = 0;
@@ -147,6 +153,7 @@ export class GdRenderer {
     this.waves = [];
     this.trail = [];
     this.flash = this.strobe = this.punch = this.zoomKick = this.ringFlash = this.landPulse = this.shake = this.dark = this.drain = this.glitch = this.flipK = this.burstK = 0;
+    this.punchS = this.zoomS = 0;
     this.dropAge = 99;
     this.dropFull = run.dropFull === true;
     this.dropPower = run.dropPower;
@@ -159,6 +166,7 @@ export class GdRenderer {
     this.sizes();
     this.pf = this.planetOf(run, beat);
     [this.camX, this.camY] = this.planetXY(this.pf);
+    this.camVX = this.camVY = 0;
     this.baseR = run.sim.side > 0 ? 1 : 1.5;
     this.flowV = run.sim.flow;
     this.inten = this.energyAt(beat);
@@ -214,7 +222,7 @@ export class GdRenderer {
 
   /** Screen radius of a ring level. The camera bumps on big hits and pulls right back as the drop goes off. */
   private rad(lv: number): number {
-    return (this.r0 * this.baseR + (lv - this.cam) * this.gap) * (1 + this.punch * 0.05) * (1 - this.zoomKick * 0.2);
+    return (this.r0 * this.baseR + (lv - this.cam) * this.gap) * (1 + this.punchS * 0.05) * (1 - this.zoomS * 0.2);
   }
 
   private burst(x: number, y: number, n: number, col: RGB, speed: number, size = 1, back = false): void {
@@ -730,7 +738,8 @@ export class GdRenderer {
     // the ball: its place round the core is a pure function of the clock, so it moves exactly as smoothly as the clock does
     if (run.state === 'failed') return;
     const rho = sim.rho(beat);
-    const off = sim.sideAt(beat) * rb * (1 - 0.3 * this.landPulse);
+    const squash = 4 * this.landPulse * (1 - this.landPulse); // a landing presses the ball down and lets it up again, from rest
+    const off = sim.sideAt(beat) * rb * (1 - 0.3 * squash);
     // at the finish the ball launches straight out through every ring and off the screen
     const away = run.finale ? Math.pow(Math.min(1.4, run.finaleAge / 0.9), 2.2) * this.r0 * 7 : 0;
     if (away > Math.hypot(this.w, this.h)) return;
@@ -755,10 +764,11 @@ export class GdRenderer {
     const stretch = sim.mode !== 'ground' ? clamp(Math.abs(vr) / (r0 * 4), 0, 0.2) : 0;
     const x = bx0 + Math.cos(a) * br;
     const y = by0 + Math.sin(a) * br;
+    this.ballXY = [x, y];
     // a dark halo, so the ball reads against anything
     c.fillStyle = 'rgba(3,5,14,0.5)';
     c.beginPath(); c.arc(x, y, rb * 2.1, 0, TWO_PI); c.fill();
-    this.drawBall(x, y, rb, skin, a, 1 + stretch - 0.3 * this.landPulse, 1 - stretch * 0.5 + 0.22 * this.landPulse);
+    this.drawBall(x, y, rb, skin, a, 1 + stretch - 0.3 * squash, 1 - stretch * 0.5 + 0.22 * squash);
     if (!twin) {
       this.ball.x = x;
       this.ball.y = y;
@@ -939,21 +949,34 @@ export class GdRenderer {
     // the camera follows the ball from planet to planet, and leans toward the next one before a planet hop
     this.pf = this.planetOf(run, beat);
     // camera first: in a planet hop the camera reaches the next planet well before the ball, so everything there is in view on landing
-    const hop = lastP?.sling && sim.mode === 'flight' && sim.fl ? lastP.planet + smoothstep(Math.min(1, ((beat - sim.fl.t0) / (sim.fl.t1 - sim.fl.t0)) * 2.4)) : this.pf;
+    // It is one continuous move: a lean toward the next planet over the two beats before the hop (whatever the ball is
+    // doing then, and held if the tap comes late), carried straight on into the crossing when the ball takes off.
+    const LEAN = 0.32;
+    const slinging = !!lastP?.sling && sim.mode === 'flight' && !!sim.fl;
+    // the next planet hop coming up, even if another press comes before it
+    let slingP: typeof nextP | undefined = undefined as typeof nextP | undefined;
+    for (let i = sim.ni; i < course.presses.length && course.presses[i].beat - beat < 2.5; i++) if (course.presses[i].sling) { slingP = course.presses[i]; break; }
+    const hop = slinging ? lastP!.planet + LEAN + (1 - LEAN) * smoothstep(Math.min(1, ((beat - sim.fl!.t0) / (sim.fl!.t1 - sim.fl!.t0)) * 2.4)) : this.pf;
     let [tx, ty] = this.planetXY(hop);
-    if (nextP?.sling && sim.mode !== 'flight' && nextP.beat - beat < 2.5) {
-      const [nx, ny] = this.planetXY(nextP.planetTo);
-      const lean = 0.32 * smooth((2.5 - (nextP.beat - beat)) / 2);
+    if (!slinging && slingP) {
+      const [nx, ny] = this.planetXY(slingP.planetTo);
+      const lean = LEAN * smoothstep((2.5 - (slingP.beat - beat)) / 2);
       tx += (nx - tx) * lean;
       ty += (ny - ty) * lean;
     }
-    this.camX += (tx - this.camX) * Math.min(1, dt * 9);
-    this.camY += (ty - this.camY) * Math.min(1, dt * 9);
+    // a spring, like the zoom: the camera picks up speed and settles, it never changes pace in a single frame
+    const ok = 11;
+    this.camVX += (ok * ok * (tx - this.camX) - 2 * ok * this.camVX) * dt;
+    this.camVY += (ok * ok * (ty - this.camY) - 2 * ok * this.camVY) * dt;
+    this.camX += this.camVX * dt;
+    this.camY += this.camVY * dt;
     const [wx, wy] = this.planetXY(this.pf);
     this.coreX = wx - this.camX;
     this.coreY = wy - this.camY;
     this.baseR += ((inward ? 1.5 : 1) - wound * 0.1 - this.baseR) * Math.min(1, dt * 3.5);
     this.punch = Math.max(0, this.punch - dt / 0.45);
+    this.punchS += (this.punch - this.punchS) * Math.min(1, dt / 0.06);
+    this.zoomS += (this.zoomKick - this.zoomS) * Math.min(1, dt / 0.09);
     this.zoomKick = Math.max(0, this.zoomKick - dt / 0.9) * (1 - Math.min(1, dt * 1.5));
     this.flash = Math.max(0, this.flash - dt / 0.18);
     this.flipK = Math.max(0, this.flipK - dt / 0.11);
@@ -967,7 +990,7 @@ export class GdRenderer {
     const twinNow = course.twins.some(([a, z]) => beat >= a - 1 && beat < z + 0.25);
     this.twinV += ((twinNow ? 1 : 0) - this.twinV) * Math.min(1, dt * 5);
     if (run.state === 'playing') {
-      this.trail.push({ beat, rho, off: sim.sideAt(beat) * rb * (1 - 0.3 * this.landPulse), pf: this.pf, away: run.finale ? Math.pow(Math.min(1.4, run.finaleAge / 0.9), 2.2) * r0 * 7 : 0 });
+      this.trail.push({ beat, rho, off: sim.sideAt(beat) * rb * (1 - 0.3 * 4 * this.landPulse * (1 - this.landPulse)), pf: this.pf, away: run.finale ? Math.pow(Math.min(1.4, run.finaleAge / 0.9), 2.2) * r0 * 7 : 0 });
       if (this.trail.length > 30) this.trail.shift();
     }
 
@@ -979,7 +1002,8 @@ export class GdRenderer {
     c.save();
     let cx = this.w / 2;
     let cy = this.h * 0.52;
-    if (this.shake > 0) { cx += (Math.random() - 0.5) * 10 * this.shake; cy += (Math.random() - 0.5) * 10 * this.shake; }
+    // the drop shakes the picture: a quick sway that dies away, not a new random place every frame
+    if (this.shake > 0) { const sh = 4 * this.shake * (1 - this.shake) * 5; cx += Math.sin(now * 0.031) * sh; cy += Math.sin(now * 0.026 + 1) * sh; }
     if (this.dropPower >= 0.3 && this.dropAge < 1.2 && !calm) cx += Math.exp(-this.dropAge * 4) * Math.sin(this.dropAge * 10) * m * 0.045 * this.dropPower; // the launch swings the camera
     c.translate(cx, cy);
 
@@ -1072,6 +1096,8 @@ export class GdRenderer {
   /** The menus choose the idle scene's palette (the focused level's) and where its centre sits (fractions of the screen). */
   idlePal = 'deep';
   idleAt: [number, number] = [0.5, 0.5];
+  /** Where the ball was last drawn, in screen pixels. Read by the smoothness check (tools/smooth-check.mjs). */
+  ballXY: [number, number] = [0, 0];
   /** Size of the menu scene, 1 = its usual size; the title screen fits it between the wordmark and the call to start. */
   idleScale = 1;
   private idleS = 1;

@@ -1,4 +1,4 @@
-import { FLOW_S, NEAR, rise, type Course, type FlowNote, type Press } from './course';
+import { FLOW_S, NEAR, arc, rise, smoothstep, type Course, type FlowNote, type Press } from './course';
 
 export interface TapResult {
   /** hop / flip: a survival press. spark: a flow note. skip: a free tap. */
@@ -99,11 +99,13 @@ export class Sim {
     if (this.mode === 'flight' && this.fl) {
       const f = this.fl;
       const u = Math.max(0, Math.min(1, (b - f.t0) / (f.t1 - f.t0)));
-      return f.from + (f.to - f.from) * rise(u) + f.s1 * f.bulge * 4 * u * (1 - u) * (f.s0 === f.s1 ? 1 : 0);
+      return f.from + (f.to - f.from) * rise(u) + f.s1 * f.bulge * arc(u) * (f.s0 === f.s1 ? 1 : 0);
     }
     if (this.mode === 'skip') {
       const u = Math.max(0, Math.min(1, (b - this.skipStart) / (this.skipEnd - this.skipStart)));
-      return this.lv + this.side * 0.3 * 4 * u * (1 - u);
+      // a bounce cut short by an opening coming up is a lower bounce, not a faster one: the ball never snaps up and down
+      const room = Math.min(1, (this.skipEnd - this.skipStart) / SKIP);
+      return this.lv + this.side * 0.3 * room * room * arc(u);
     }
     return this.lv;
   }
@@ -112,7 +114,7 @@ export class Sim {
   sideAt(b = this.beat): number {
     if (this.mode === 'flight' && this.fl && this.fl.s0 !== this.fl.s1) {
       const u = Math.max(0, Math.min(1, (b - this.fl.t0) / (this.fl.t1 - this.fl.t0)));
-      return this.fl.s0 + (this.fl.s1 - this.fl.s0) * u;
+      return this.fl.s0 + (this.fl.s1 - this.fl.s0) * smoothstep(u); // crossing a ring: eased, not a straight line
     }
     return this.mode === 'flight' && this.fl ? this.fl.s1 : this.side;
   }
