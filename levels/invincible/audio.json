@@ -1,0 +1,19 @@
+{
+  "file": "audio/invincible.mp3",
+  "frames": 4634909,
+  "firstSig": 16409,
+  "bpm": 100,
+  "offset": 2.4,
+  "length": 105.1,
+  "dropTime": 40.8,
+  "source": [
+    [
+      27.601,
+      58.793
+    ],
+    [
+      193.193,
+      267.101
+    ]
+  ]
+}

@@ -2,9 +2,33 @@
   "licenceNote": "These tracks are included for private testing only. Releasing the game needs a game licence from NoCopyrightSounds (ncs.io).",
   "creditSuffix": "Music provided by NoCopyrightSounds",
   "tracks": [
-    { "id": "heroes", "title": "Heroes Tonight (feat. Johnning)", "artist": "Janji", "release": "NCS Release", "playable": false },
-    { "id": "skyhigh", "title": "Sky High", "artist": "Elektronomia", "release": "NCS Release", "playable": true },
-    { "id": "blank", "title": "Blank", "artist": "Disfigure", "release": "NCS Release", "playable": false },
-    { "id": "invincible", "title": "Invincible", "artist": "DEAF KEV", "release": "NCS Release", "playable": false }
+    {
+      "id": "heroes",
+      "title": "Heroes Tonight (feat. Johnning)",
+      "artist": "Janji",
+      "release": "NCS Release",
+      "playable": true
+    },
+    {
+      "id": "skyhigh",
+      "title": "Sky High",
+      "artist": "Elektronomia",
+      "release": "NCS Release",
+      "playable": true
+    },
+    {
+      "id": "blank",
+      "title": "Blank",
+      "artist": "Disfigure",
+      "release": "NCS Release",
+      "playable": true
+    },
+    {
+      "id": "invincible",
+      "title": "Invincible",
+      "artist": "DEAF KEV",
+      "release": "NCS Release",
+      "playable": true
+    }
   ]
 }

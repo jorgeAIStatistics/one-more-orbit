@@ -9,7 +9,7 @@ import type { Judge, Segment } from './types';
 export type RunState = 'loading' | 'playing' | 'paused' | 'resuming' | 'failed' | 'done' | 'error';
 
 /** Things that happened this frame, for the renderer and HUD to react to. */
-export type Fx = { type: 'judge'; ev: JEvent; auto: boolean } | { type: 'enter'; seg: Segment } | { type: 'tap' };
+export type Fx = { type: 'judge'; ev: JEvent; auto: boolean } | { type: 'enter'; seg: Segment } | { type: 'tap' } | { type: 'stray' };
 
 export interface RunOptions {
   bot?: boolean;
@@ -33,7 +33,7 @@ export class Run {
   /** song time the picture is drawn at (time + visual offset) */
   viewTime: number;
   fx: Fx[] = [];
-  lastJudge: { judge: Judge; err: number | null; at: number } | null = null;
+  lastJudge: { judge: Judge; err: number | null; at: number; label: string } | null = null;
   recentErrs: Array<{ err: number; judge: Judge; at: number }> = [];
   resumeAt = 0;
   error = '';
@@ -101,31 +101,32 @@ export class Run {
   /** The one input: a tap, stamped with the time it happened. */
   tap(perfMs: number): void {
     if (this.state !== 'playing') return;
-    const ev = this.engine.pressAt(this.songTimeAt(perfMs));
+    const st = this.songTimeAt(perfMs);
+    for (const late of this.engine.update(st)) this.onJudge(late, true); // gates already gone are settled first
+    const ev = this.engine.pressAt(st);
     this.fx.push({ type: 'tap' });
-    if (ev) this.onJudge(ev, false);
-    else audio.hit('tap', 0.18);
+    if (!ev) return;
+    if ('stray' in ev) {
+      audio.hit('stray', 0.8); // a stray tap never sounds like a hit
+      this.lastJudge = { judge: 'miss', err: null, at: performance.now(), label: 'STRAY TAP' };
+      this.fx.push({ type: 'stray' });
+    } else this.onJudge(ev, false);
   }
 
   private onJudge(ev: JEvent, auto: boolean): void {
     const inDrop = ev.note.t >= this.level.dropTime - 1e-6;
     const j = ev.judge;
     if (j === 'miss') {
-      audio.hit('miss', auto ? 0.5 : 0.8);
+      audio.hit('miss', auto ? 0.6 : 0.85);
       audio.muffle(); // you hear that the rhythm broke
     } else {
-      const n = ev.note;
-      if (n.pitch) {
-        // a tap on a melody note plays that note, so a clean run sounds like playing the hook
-        audio.pluck(n.pitch, j === 'perfect' ? 1 : j === 'great' ? 0.75 : 0.5);
-        if (j === 'perfect') audio.pluck(n.pitch + 12, inDrop ? 0.3 : 0.2);
-      } else {
-        audio.hit(n.kind === 'hop' ? 'hop' : n.voice === 'k' ? 'L' : n.voice === 's' ? 'R' : 'tap', j === 'good' ? 0.55 : 1);
-        if (j === 'perfect') audio.hit(inDrop ? 'sparkleHi' : 'sparkle', 0.5);
-      }
-      if (ev.note.accent) audio.hit('impact', j === 'good' ? 0.5 : 0.9); // big hits get their own sound
+      // ONE core hit sound for every successful tap, always the same. Extras only ever sit on top of it.
+      audio.hit('hit', 1);
+      if (ev.note.pitch) audio.pluck(ev.note.pitch, 0.3);
+      if (j === 'perfect') audio.hit(inDrop ? 'sparkleHi' : 'sparkle', 0.45);
+      if (ev.note.accent) audio.hit('impact', 0.8);
     }
-    this.lastJudge = { judge: j, err: ev.err, at: performance.now() };
+    this.lastJudge = { judge: j, err: ev.err, at: performance.now(), label: j === 'miss' ? (ev.early ? 'TOO EARLY' : 'MISS') : j.toUpperCase() };
     if (ev.err !== null) {
       this.recentErrs.push({ err: ev.err, judge: j, at: performance.now() });
       if (this.recentErrs.length > 24) this.recentErrs.shift();
@@ -144,7 +145,7 @@ export class Run {
     if (this.time < this.startAt + 1) this.latency = audio.latency(); // the reported latency can settle just after start
     const st = this.songTimeAt(now);
     this.time = st;
-    this.viewTime = st + save.visualOffset / 1000;
+    this.viewTime = audio.viewTimeAt(now) - this.songStart - this.latency - save.audioOffset / 1000 + save.visualOffset / 1000;
     if (this.bot) while (this.bi < this.bot.length && this.bot[this.bi] <= st) this.tap(this.perfForSong(this.bot[this.bi++]));
     for (const ev of this.engine.update(st)) this.onJudge(ev, true);
     const seg = this.level.segAt(st);

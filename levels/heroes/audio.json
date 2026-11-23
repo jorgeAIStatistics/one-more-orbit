@@ -1,0 +1,15 @@
+{
+  "file": "audio/heroes.mp3",
+  "frames": 3059437,
+  "firstSig": 13912,
+  "bpm": 128,
+  "offset": 1.875,
+  "length": 69.375,
+  "dropTime": 31.875,
+  "source": [
+    [
+      125.626,
+      195.001
+    ]
+  ]
+}

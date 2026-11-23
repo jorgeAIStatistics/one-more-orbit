@@ -1,0 +1,99 @@
+{
+ "_doc": "Written by tools/audit.py: survival presses that sat on a weak or buried sound, and where they were moved. demote/promote are ticks (12 per beat) applied to generated bars only; hand-recorded bars ignore this file.",
+ "onsetVsGridMs": {
+  "mean": 1.7,
+  "sd": 9.5,
+  "n": 115
+ },
+ "moved": [
+  {
+   "section": "drop1",
+   "from": 101.25,
+   "to": 101.0,
+   "was": 0.68,
+   "now": 1.41
+  },
+  {
+   "section": "drop2",
+   "from": 117.25,
+   "to": 117.0,
+   "was": 0.68,
+   "now": 1.41
+  },
+  {
+   "section": "drop3",
+   "from": 133.25,
+   "to": 133.0,
+   "was": 0.68,
+   "now": 1.41
+  },
+  {
+   "section": "drop4",
+   "from": 149.25,
+   "to": 149.0,
+   "was": 0.68,
+   "now": 1.41
+  },
+  {
+   "section": "drop1",
+   "from": 102.25,
+   "to": 102.75,
+   "was": 0.57,
+   "now": 1.49
+  },
+  {
+   "section": "drop2",
+   "from": 118.25,
+   "to": 118.75,
+   "was": 0.57,
+   "now": 1.49
+  },
+  {
+   "section": "drop3",
+   "from": 134.25,
+   "to": 134.75,
+   "was": 0.57,
+   "now": 1.49
+  },
+  {
+   "section": "drop4",
+   "from": 150.25,
+   "to": 150.75,
+   "was": 0.57,
+   "now": 1.49
+  }
+ ],
+ "demoted": [],
+ "weak": [
+  {
+   "section": "spikes",
+   "beat": 69,
+   "was": 0.65
+  },
+  {
+   "section": "spikes",
+   "beat": 72,
+   "was": 0.74
+  }
+ ],
+ "demote": [
+  1215,
+  1227,
+  1407,
+  1419,
+  1599,
+  1611,
+  1791,
+  1803
+ ],
+ "promote": [
+  1212,
+  1233,
+  1404,
+  1425,
+  1596,
+  1617,
+  1788,
+  1809
+ ]
+}
