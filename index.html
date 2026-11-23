@@ -33,7 +33,7 @@
   <div id="hud" class="hidden">
     <div class="hud-row">
       <div class="hud-left"><div id="attempt"></div><div id="section"></div></div>
-      <div class="hud-mid"><div id="pct">0%</div><small id="bestPct"></small></div>
+      <div class="hud-mid"><div id="pct">0%</div><small id="bestPct"></small><div id="hudStars" class="stars3" aria-hidden="true"></div></div>
       <div class="hud-right"><button id="pauseBtn" class="icon" type="button" data-icon="pause" aria-label="Pause"></button></div>
     </div>
     <div id="titleCard" class="title-card" aria-hidden="true"><small id="tcLevel"></small><b id="tcSong"></b><span id="tcArtist"></span></div>
@@ -53,7 +53,7 @@
   </section>
 
   <section id="levels" class="screen">
-    <header class="topbar"><button id="lvBack" class="icon" type="button" data-icon="back" aria-label="Back to the title"></button><span class="label">CHOOSE A LEVEL</span><span class="icon ghost"></span></header>
+    <header class="topbar"><button id="lvBack" class="icon" type="button" data-icon="back" aria-label="Back to the title"></button><span class="label">CHOOSE A LEVEL</span><span id="starTotal" class="star-total"></span></header>
     <div class="carousel">
       <button id="lvPrev" class="icon nav" type="button" data-icon="left" aria-label="Previous level"></button>
       <div id="cards" class="cards"></div>
@@ -93,6 +93,7 @@
         <div class="pct-big"><b id="resPct">100</b><i>%</i></div>
         <span id="resCallout" class="callout hidden"></span>
         <h2 id="resTitle">LEVEL COMPLETE</h2>
+        <div id="resStars" class="stars3 big"></div>
       </div>
       <div class="res-body">
         <div class="track big"><i id="resFill"></i><u id="resDrop"><em>DROP</em></u><s id="resCrash" class="hidden"></s></div>

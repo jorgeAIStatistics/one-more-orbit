@@ -75,6 +75,8 @@ export interface LevelFile {
   lab?: [number, number];
   /** holds: long hops become gold rails to hold through, and empty stretches of ring get gold lines to float along */
   holds?: boolean;
+  /** star trails: [from, to] in beats. Play each stretch clean (every piece of gold, no stray taps) for its star. */
+  stars?: Array<[number, number]>;
   segments: SegmentDef[];
 }
 

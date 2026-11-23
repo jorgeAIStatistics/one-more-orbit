@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { PACKS, SLICE } from '../src/game/packs';
 import { Level } from '../src/game/level';
 import { SmoothClock } from '../src/gd/clock';
-import { autoLayers, buildCourse, HOLD_MAX, HOLD_MIN, landingGrace, LINE_CLEAR, SLING_FLIGHT, TOL_S } from '../src/gd/course';
+import { autoLayers, buildCourse, HOLD_MAX, HOLD_MIN, landingGrace, LINE_TIGHT, SLING_FLIGHT, TOL_S } from '../src/gd/course';
 import { accentBeats, layerTicks, layers, pitchLookup } from '../src/gd/presses';
 import { Sim } from '../src/gd/sim';
 
@@ -214,7 +214,7 @@ for (const pack of PACKS.filter((p) => SLICE.includes(p.level.id))) {
         if (i > 0) expect(h.a - course.holds[i - 1].b, `gap before the hold at ${h.a}`).toBeGreaterThanOrEqual(0.5 - 1e-9);
         // after a hold ends there is time to let go before the next white mark
         const next = course.presses.find((p) => p.beat > h.a + 1e-6);
-        if (next) expect(next.beat - h.b, `after the hold at ${h.a}`).toBeGreaterThanOrEqual((h.rail ? 0.5 : LINE_CLEAR) - 1e-9);
+        if (next) expect(next.beat - h.b, `after the hold at ${h.a}`).toBeGreaterThanOrEqual(LINE_TIGHT - 1e-9);
         // a rail starts on a white mark, a line on a gold note; nothing else asks for a tap inside either
         if (h.rail) expect(pressBeats.includes(h.a)).toBe(true); else expect(course.flow.some((f) => f.beat === h.a && f.hold === i)).toBe(true);
         expect(course.taps.filter((t) => t > h.a + 1e-6 && t <= h.b + 1e-6), `taps inside the hold at ${h.a}`).toEqual([]);
@@ -254,6 +254,66 @@ for (const pack of PACKS.filter((p) => SLICE.includes(p.level.id))) {
         let same = 1;
         for (let bar = s.bar0 + 1; bar < s.bar0 + s.bars; bar++) { same = sig(bar) === sig(bar - 1) ? same + 1 : 1; expect(same, `bar ${bar} of ${s.id}`).toBeLessThanOrEqual(2); }
       }
+    });
+
+    it('three star trails: a clean run collects them all; a stray tap, a missed gold note, a hold let go or mashing loses that star and nothing else', () => {
+      const perfect = play(course.script);
+      expect(course.stars.length).toBe(3);
+      expect(perfect.stars).toEqual([1, 1, 1]);
+      const inside = (st: { a: number; b: number }, h: { a: number; b: number }) => h.a >= st.a - 1e-6 && h.b <= st.b + 1e-6;
+      course.stars.forEach((st, i) => {
+        expect(st.b - st.a, `length of star ${i + 1}`).toBeGreaterThanOrEqual(4);
+        expect(st.b - st.a, `length of star ${i + 1}`).toBeLessThanOrEqual(8);
+        expect(st.gold, `gold in star ${i + 1}`).toBeGreaterThanOrEqual(8);
+        if (i > 0) expect(st.a - course.stars[i - 1].b).toBeGreaterThanOrEqual(8);
+        // it starts on something to tap and ends on its last piece of gold; no hold hangs over either end
+        expect(course.taps.includes(st.a), `star ${i + 1} starts on a tap`).toBe(true);
+        expect(course.flow.some((f) => f.beat === st.b) || course.holds.some((h) => h.b === st.b), `star ${i + 1} ends on gold`).toBe(true);
+        for (const h of course.holds) expect(h.b <= st.a + 1e-6 || h.a >= st.b - 1e-6 || inside(st, h), `hold at ${h.a} and star ${i + 1}`).toBe(true);
+        const others = (got: number[]) => got.filter((_, k) => k !== i);
+        // one tap that meets nothing, somewhere in the trail
+        let stray: number[] | null = null;
+        for (let t = st.a + 0.05; t < st.b && !stray; t += 0.05) {
+          if (course.taps.some((x) => Math.abs(x - t) < 0.25) || course.holds.some((h) => t > h.a - 0.05 && t < h.b + 0.3)) continue;
+          const sim = play([...course.script, [t, true] as [number, boolean], [t + 0.04, false] as [number, boolean]].sort((x, y) => x[0] - y[0]));
+          if (!sim.crashed) stray = sim.stars;
+        }
+        if (stray) { expect(stray[i], `a stray tap in star ${i + 1}`).toBe(-1); expect(others(stray)).toEqual([1, 1]); }
+        // one gold note left out
+        const note = course.flow.find((f) => f.beat > st.a + 1e-6 && f.beat <= st.b + 1e-6 && f.hold < 0);
+        if (note) {
+          const k = course.script.findIndex(([t, down]) => down && t === note.beat);
+          const miss = play(course.script.filter((_, j) => j !== k && j !== k + 1));
+          expect(miss.crashed).toBe(false);
+          expect(miss.stars[i], `a missed note in star ${i + 1}`).toBe(-1);
+          expect(others(miss.stars)).toEqual([1, 1]);
+        }
+        // a hold in the trail let go half a beat early
+        const hold = course.holds.find((h) => inside(st, h));
+        if (hold) {
+          const early = play(course.script.map(([t, down]): [number, boolean] => [!down && t === hold.b ? t - 0.6 : t, down]).sort((x, y) => x[0] - y[0] || Number(x[1]) - Number(y[1])));
+          expect(early.crashed).toBe(false);
+          expect(early.stars[i], `a hold let go early in star ${i + 1}`).toBe(-1);
+          expect(others(early.stars)).toEqual([1, 1]);
+        }
+        // mashing through it never wins it, and nor does joining it part-way from a practice checkpoint
+        for (const rate of [7, 9, 12]) {
+          const mash = run([...course.taps.filter((t) => t < st.a - 1), ...spam(st.a - 0.5, rate, 0, st.b + 0.5)], course.start - 3, st.b + 1);
+          expect(mash.stars[i], `mashing at ${rate} a second through star ${i + 1}`).not.toBe(1);
+        }
+        expect(new Sim(course, st.a + 1 - 3.2, st.a + 1).stars[i]).toBe(-1);
+      });
+      expect(course.stars[0].b).toBeLessThan(course.dropBeat);
+      expect(course.stars[2].a).toBeGreaterThan(course.dropBeat);
+      // tapping only the white marks clears the level with no stars; quick taps on everything keep only the trails with no hold in them
+      const only = run(pressBeats);
+      expect(only.crashed).toBe(false);
+      expect(only.stars).toEqual([-1, -1, -1]);
+      const quick = run(course.taps);
+      course.stars.forEach((st, i) => expect(quick.stars[i], `quick taps, star ${i + 1}`).toBe(course.holds.some((h) => inside(st, h)) ? -1 : 1));
+      // a little late or early throughout still collects them all (the fastest notes leave about ±45 ms)
+      for (const off of [-40, 40]) expect(play(course.script.map(([t, down]): [number, boolean] => [t + ms(off), down])).stars, `${off} ms off`).toEqual([1, 1, 1]);
+      console.log(`STARS ${id}: ${course.stars.map((st) => `beats ${st.a}-${st.b} (${((st.b - st.a) * course.spb).toFixed(1)} s, ${st.gold} gold)`).join('; ')}`);
     });
 
     it('same music, same pattern: sections sharing a motif have the same presses and flow notes', () => {

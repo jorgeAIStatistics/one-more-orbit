@@ -7,7 +7,7 @@ import { GdRenderer as Renderer } from './gd/render';
 import { GdRun as Run, TUTORIAL_BEATS } from './gd/run';
 import { canHaptics, feel, fullScreen, gameCenter, isNative, watchBackground } from './native';
 import { initRecord } from './record';
-import { bestFor, persist, save } from './save';
+import { bestFor, persist, save, starCount, starsFor } from './save';
 import { LEVEL_UI, icon, levelArt } from './ui/art';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -68,6 +68,12 @@ function show(s: Screen): void {
 }
 
 // ------------------------------------------------------------------ level select
+const STARS3 = `<i>${icon('star')}</i>`.repeat(3);
+/** Fills a row of three stars: `kept` are gold, `got` (just collected) glow, `lost` are dimmed. */
+function paintStars(el: Element, state: (i: number) => '' | 'kept' | 'got' | 'lost'): void {
+  if (!el.children.length || el.children[0].tagName !== 'I') el.insertAdjacentHTML('afterbegin', STARS3);
+  for (let i = 0; i < 3; i++) { const cls = state(i); if (el.children[i].className !== cls) el.children[i].className = cls; }
+}
 const cards = $('cards');
 function buildCards(): void {
   cards.innerHTML = '';
@@ -82,6 +88,7 @@ function buildCards(): void {
     el.innerHTML = `<div class="art">${levelArt(p.level.id)}<span class="lvl">LEVEL ${i + 1}</span>${i === PACKS.length - 1 ? '<span class="tag">FINAL LEVEL</span>' : ''}<div class="lock hidden">${icon('lock')}<span></span></div></div>
       <div class="info"><h2></h2><div class="by"></div>
       <div class="diff">${Array.from({ length: 5 }, (_, k) => `<i class="${k < ui.dots ? 'on' : ''}"></i>`).join('')}<span></span></div>
+      <div class="stars3">${STARS3}<span></span></div>
       <div class="adds"></div>
       <div class="meter"><span>BEST</span><div><i></i></div><b></b></div>
       <div class="meter p"><span>PRACTICE</span><div><i></i></div><b></b></div>
@@ -114,9 +121,15 @@ function renderCards(): void {
     meters[0].querySelector('b')!.textContent = `${best}%`;
     meters[1].querySelector<HTMLElement>('i')!.style.width = `${prac}%`;
     meters[1].querySelector('b')!.textContent = `${prac}%`;
+    const kept = starsFor(p.level.id);
+    const row = el.querySelector('.stars3')!;
+    paintStars(row, (k) => (kept[k] ? 'kept' : ''));
+    row.querySelector('span')!.textContent = `${kept.filter(Boolean).length} / 3 STARS`;
     el.querySelector('.tries')!.innerHTML = b.attempts ? `<b>${b.attempts}</b> attempt${b.attempts === 1 ? '' : 's'}${b.cleared ? ' · <b>cleared</b>' : ''}` : 'Not played yet';
     ($('dots').children[i] as HTMLElement).classList.toggle('on', i === levelIdx);
   });
+  $('starTotal').innerHTML = `${icon('star')}${starCount()}/${PACKS.length * 3}`;
+  $('starTotal').setAttribute('aria-label', `${starCount()} of ${PACKS.length * 3} stars`);
   const open = levelOpen(levelIdx);
   $<HTMLButtonElement>('playBtn').disabled = !open;
   $<HTMLButtonElement>('practiceBtn').disabled = !open;
@@ -372,12 +385,23 @@ function showResults(r: Run, cleared: boolean, reached = r.pct): void {
   const counted = !r.opts.bot && !r.opts.practice;
   const first = cleared && counted && !prev.cleared;
   const unlocks: string[] = [];
+  let newStars = [false, false, false];
   if (cleared && counted) {
     save.bests[id] = { ...prev, pct: 100, cleared: true };
     const done = ALL_PACKS.map((p) => p.level.id).filter((x) => bestFor(x).cleared);
     const onBeatPct = r.sim.judged ? (r.sim.onBeat / r.sim.judged) * 100 : 0;
     const fresh = earned(id, { onBeatPct, dropPower: r.dropPower, bestStreak: r.sim.bestStreak, attempts: bestFor(id).attempts, practised: !!save.practiced[id] }, done).filter((b) => !save.badges[b]);
     if (first && levelIdx + 1 < PACKS.length && !save.unlockAll) unlocks.push(`<div class="unlock">${icon('play')}<div>NEXT LEVEL UNLOCKED<small>${shortTitle(PACKS[levelIdx + 1])} · ${PACKS[levelIdx + 1].level.difficulty}</small></div></div>`);
+    // stars are kept when the run that collected them clears the level
+    const had = starsFor(id);
+    const now = had.map((k, i) => k || r.sim.stars[i] === 1);
+    const gained = now.filter(Boolean).length - had.filter(Boolean).length;
+    if (gained > 0) {
+      save.stars[id] = now;
+      newStars = now.map((k, i) => k && !had[i]);
+      const all = now.every(Boolean);
+      unlocks.push(`<div class="unlock">${icon('star')}<div>${all ? 'ALL THREE STARS' : `${gained} NEW STAR${gained === 1 ? '' : 'S'}`}<small>${all ? `Every star trail in ${shortTitle(r.pack)} played clean` : `${now.filter(Boolean).length} of 3 kept on ${shortTitle(r.pack)}`}</small></div></div>`);
+    }
     gameCenter.best(id, 100);
     gameCenter.flow(id, onBeatPct);
     for (const bid of fresh) {
@@ -409,8 +433,21 @@ function showResults(r: Run, cleared: boolean, reached = r.pct): void {
   $('resStreak').textContent = String(session.streak);
   $('resCharge').textContent = session.drop < 0 ? '–' : `${Math.round(session.drop * 100)}%`;
   $('resUnlocks').innerHTML = unlocks.join('');
+  const keptNow = starsFor(id);
+  paintStars($('resStars'), (i) => (newStars[i] ? 'got' : keptNow[i] ? 'kept' : ''));
+  $('resStars').classList.toggle('hidden', !r.course.stars.length);
   const sm = r.smoothness();
-  $('resNote').textContent = r.opts.bot ? `Autoplay. Movement check: ${sm.frames} frames, clock speed never more than ${sm.worstPct.toFixed(2)}% off.` : cleared && r.dropFull === false ? `The drop played at ${Math.round(r.dropPower * 100)}%. Tap the roll's notes and arrive in flow for the full one.` : cleared && r.course.holds.length ? `Gold holds collected in full: ${r.sim.holdsFull} of ${r.course.holds.length}.` : '';
+  const carried = r.sim.stars.filter((x) => x === 1).length;
+  const notes: string[] = [];
+  if (r.opts.bot) notes.push(`Autoplay. Movement check: ${sm.frames} frames, clock speed never more than ${sm.worstPct.toFixed(2)}% off.`);
+  else {
+    if (cleared && r.dropFull === false) notes.push(`The drop played at ${Math.round(r.dropPower * 100)}%. Tap the roll's notes and arrive in flow for the full one.`);
+    if (cleared && r.course.holds.length) notes.push(`Gold holds collected in full: ${r.sim.holdsFull} of ${r.course.holds.length}.`);
+    if (r.opts.practice && carried) notes.push('Practice runs do not keep stars.');
+    else if (!cleared && carried) notes.push('A star is kept when the run that collected it clears the level.');
+    else if (cleared && !keptNow.every(Boolean)) notes.push('Stars: play a star trail clean (all its gold, no extra taps) and clear the level to keep it.');
+  }
+  $('resNote').textContent = notes.join(' ');
   console.log(`[one more orbit] ${r.opts.bot ? 'autoplay' : 'run'} ${cleared ? 'cleared' : 'left'} ${r.level.title}: ${r.sim.onBeat}/${r.sim.judged} taps on the beat, best streak ${r.sim.bestStreak}, drop at ${Math.round(r.dropPower * 100)}%. Movement check: ${sm.frames} frames, clock speed never more than ${sm.worstPct.toFixed(2)}% off (average ${sm.meanPct.toFixed(3)}%)`);
   showSync('resSyncText', 'resSyncFix');
   const next = $<HTMLButtonElement>('nextBtn');
@@ -425,6 +462,10 @@ const hud = { pct: -1, seg: '', count: '', crashShown: false, lesson: -1, finale
 function updateHud(r: Run): void {
   harvest(r);
   drawSyncOverlay();
+  // the level's three stars: gold if already kept, glowing once collected on this attempt, dimmed if lost on it
+  const kept = starsFor(r.pack.level.id);
+  $('hudStars').classList.toggle('hidden', !!r.opts.tutorial || !r.course.stars.length);
+  paintStars($('hudStars'), (i) => (r.sim.stars[i] === 1 ? 'got' : kept[i] ? 'kept' : r.sim.stars[i] === -1 && r.sim.starBeat[i] > -90 ? 'lost' : ''));
   const pct = r.pct;
   if (pct !== hud.pct) { hud.pct = pct; $('pct').textContent = `${pct}%`; }
   $('progFill').style.transform = `scaleX(${r.progress.toFixed(4)})`;
@@ -854,10 +895,12 @@ function tick(now: number): void {
     if (!run.opts.bot) for (const ev of run.events) {
       if (ev.kind === 'hop' || ev.kind === 'flip') feel(ev.smash || ev.sling ? 'big' : 'tap');
       else if (ev.kind === 'tick') feel('tap'); // gold along a hold: a light tick under the thumb
+      else if (ev.kind === 'star') feel('win');
       else if (ev.kind === 'drop') feel('big');
       else if (ev.kind === 'crash') feel('crash');
       else if (ev.kind === 'finale') feel('win');
     }
+    for (const ev of run.events) if (ev.kind === 'star') toast('STAR COLLECTED', true);
     renderer.draw(run, now, dt);
     updateHud(run);
   } else if (screen === 'calib' && cal.mode === 'visual') {

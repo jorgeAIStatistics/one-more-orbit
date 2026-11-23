@@ -15,10 +15,12 @@
   "release": "NCS Release",
   "hitsoundNote": 72,
   "scale": [0, 2, 3, 5, 7, 8, 10],
+  "holds": true,
+  "stars": [[37.5, 43.5], [90, 95.5], [132.25, 138.75]],
   "segments": [
     {"id": "intro", "core": {"bars": ["up"]}, "bars": 4, "label": "INTRO", "lap": 8, "follow": "arp", "lead": "snare", "motif": "intro", "cycle": 4, "teach": "TAP as the ball crosses each gate", "look": {"palette": "deep", "bg": "stars", "eq": "bars", "zoom": [0.9, 1]},
       "plan": ["L=beat"] },
-    {"id": "intro2", "core": {"bars": ["up", "up", "up+sling", "up"]}, "bars": 4, "label": "INTRO", "lap": 8, "follow": "arp", "lead": "snare", "motif": "intro", "cycle": 4, "look": {"palette": "ocean", "bg": "stars", "eq": "bars"},
+    {"id": "intro2", "core": {"bars": ["up", "up+long", "up+sling", "up"]}, "bars": 4, "label": "INTRO", "lap": 8, "follow": "arp", "lead": "snare", "motif": "intro", "cycle": 4, "look": {"palette": "ocean", "bg": "stars", "eq": "bars"},
       "plan": ["L=beat"] },
     {"id": "verse", "core": {"bars": ["up", "down", "up+sling", "down"], "record": true}, "bars": 4, "label": "VERSE", "lap": 8, "follow": "arp", "lead": "snare", "motif": "verse", "cycle": 4, "shape": "ellipse", "warn": "FLIP GATE", "teach": "FLIP GATE: tapping it turns the ball round", "look": {"palette": "violet", "bg": "tunnel", "eq": "wave"},
       "plan": ["L=8 flip", "L=8", "L=8", "L=8"] },

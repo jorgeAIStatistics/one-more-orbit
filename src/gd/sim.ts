@@ -2,7 +2,9 @@ import { FLOW_S, FLOW_TOL_S, NEAR, arc, rise, smoothstep, type Course, type Flow
 
 export interface TapResult {
   /** hop / flip: a survival press. spark: a flow note. skip: a free tap. tick: gold collected along a hold. held: a hold has gone by. release: let go right on a hold's end. */
-  kind: 'hop' | 'flip' | 'spark' | 'skip' | 'none' | 'crash' | 'tick' | 'held' | 'release';
+  kind: 'hop' | 'flip' | 'spark' | 'skip' | 'none' | 'crash' | 'tick' | 'held' | 'release' | 'star' | 'starlost';
+  /** star, starlost: which star trail */
+  star?: number;
   /** held: every piece of gold along the hold was collected */
   full?: boolean;
   /** seconds from the note (negative = early), for taps that met a note */
@@ -86,6 +88,13 @@ export class Sim {
   holdsSeen = 0;
   holdsFull = 0;
 
+  // ---- star trails
+  /** one entry per star: 0 = still to play (or being played), 1 = collected on this attempt, -1 = lost on it */
+  stars: number[];
+  /** the beat each star was collected or lost at */
+  starBeat: number[];
+  private si = 0;
+
   /** forgiving: nothing ends the run. A missed mark is taken for the player and an early tap is ignored (the tutorial). */
   constructor(readonly c: Course, start: number, private autoUntil = -Infinity, private forgiving = false) {
     this.beat = start;
@@ -93,6 +102,11 @@ export class Sim {
     while (this.ni < ps.length && ps[this.ni].beat + ps[this.ni].tol < start) this.ni++;
     while (this.fi < c.flow.length && c.flow[this.fi].beat < Math.max(start, autoUntil)) this.fi++;
     while (this.hi < c.holds.length && c.holds[this.hi].b < start) this.hi++;
+    // a trail the attempt joins part-way (a practice checkpoint) cannot be won on it
+    const from = Math.max(start, autoUntil);
+    this.stars = c.stars.map((st) => (from > st.a - 0.5 ? -1 : 0));
+    this.starBeat = c.stars.map(() => -99);
+    while (this.si < c.stars.length && this.stars[this.si] !== 0) this.si++;
     const prev = ps[this.ni - 1];
     const next = ps[this.ni];
     this.lv = next ? next.from : prev ? prev.to : 0;
@@ -153,6 +167,23 @@ export class Sim {
       if (t >= h.a - 0.3 && t <= h.b + 1e-6) return h;
     }
     return null;
+  }
+
+  /** The star trail being played at a beat, if it is still whole. */
+  trailAt(t: number): number {
+    const st = this.c.stars[this.si];
+    const g = FLOW_TOL_S / this.c.spb;
+    return st && this.stars[this.si] === 0 && t >= st.a - g && t <= st.b + g ? this.si : -1;
+  }
+
+  /** A slip inside a star trail: that star is gone for this attempt. */
+  private slip(t: number): void {
+    const i = this.trailAt(t);
+    if (i < 0) return;
+    this.stars[i] = -1;
+    this.starBeat[i] = t;
+    this.si++;
+    this.out.push({ kind: 'starlost', star: i });
   }
 
   private gain(): void {
@@ -224,12 +255,13 @@ export class Sim {
     this.recent.push(t);
     if (this.recent.length > MASH_TAPS) this.recent.shift();
     this.mashing = this.recent.length === MASH_TAPS && (t - this.recent[0]) * spb < 1 && !this.c.inCharge(t);
-    if (this.mashing) this.off();
+    if (this.mashing) { this.off(); this.slip(t); }
     const p = this.c.presses[this.ni];
     const d = p ? t - p.beat : -Infinity;
     const nf = this.nearFlow(t);
     const hit = nf && Math.abs(nf.d) <= nf.f.tol * spb && !this.used.has(nf.f.beat) ? nf.f : null;
     const free = (): TapResult => {
+      this.slip(t); // a tap that met nothing: in a star trail that is a slip
       if (this.mode !== 'ground') return { kind: 'none' };
       this.skip(t, p ? p.beat - p.tol : Infinity);
       return { kind: 'skip' };
@@ -310,7 +342,9 @@ export class Sim {
       this.beat = nb;
       while (this.fi < fl.length && fl[this.fi].beat + fl[this.fi].tol < nb) {
         const f = fl[this.fi++];
-        if (!this.used.has(f.beat) && !f.charge) this.flow = Math.max(0, this.flow - MISS);
+        if (this.used.has(f.beat)) continue;
+        if (!f.charge) this.flow = Math.max(0, this.flow - MISS);
+        if (f.beat >= this.autoUntil) this.slip(f.beat);
       }
       // gold along a hold: yours if the button is down as the ball reaches it (or came up only just before)
       const g = FLOW_TOL_S / this.c.spb;
@@ -324,7 +358,7 @@ export class Sim {
             this.got++;
             if (!this.mashing) this.flow = Math.min(1, this.flow + TICK_GAIN);
             this.out.push({ kind: 'tick' });
-          } else this.flow = Math.max(0, this.flow - MISS);
+          } else { this.flow = Math.max(0, this.flow - MISS); this.slip(tk); }
         }
         if (this.ti < h.ticks.length || nb <= h.b + g) break;
         this.holdsSeen++;
@@ -334,6 +368,12 @@ export class Sim {
         this.hi++;
         this.ti = 0;
         this.got = 0;
+      }
+      // a star trail played through to its end with no slip: the star is collected
+      const st = this.c.stars[this.si];
+      if (st && nb > st.b + g + 2 * step) {
+        if (this.stars[this.si] === 0) { this.stars[this.si] = 1; this.starBeat[this.si] = st.b; this.out.push({ kind: 'star', star: this.si }); }
+        this.si++;
       }
       if (this.mode === 'flight' && this.fl && nb >= this.fl.t1) {
         this.lv = this.fl.to;

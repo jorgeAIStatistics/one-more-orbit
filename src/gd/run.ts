@@ -13,7 +13,7 @@ export type RunState = 'loading' | 'playing' | 'paused' | 'resuming' | 'failed' 
 export interface RunOptions { bot?: boolean; practice?: boolean; partial?: boolean; tutorial?: boolean; startAt?: number; leadIn?: number }
 /** beats the tutorial lasts */
 export const TUTORIAL_BEATS = 24;
-export interface RunEvent { kind: 'hop' | 'flip' | 'spark' | 'skip' | 'land' | 'crash' | 'drop' | 'finale' | 'tick' | 'held' | 'release'; flow?: boolean; charge?: boolean; accent?: boolean; smash?: boolean; sling?: boolean; full?: boolean; power?: number }
+export interface RunEvent { kind: 'hop' | 'flip' | 'spark' | 'skip' | 'land' | 'crash' | 'drop' | 'finale' | 'tick' | 'held' | 'release' | 'star' | 'starlost'; star?: number; flow?: boolean; charge?: boolean; accent?: boolean; smash?: boolean; sling?: boolean; full?: boolean; power?: number }
 
 const RESUME_COUNT = 1.2;
 
@@ -134,6 +134,15 @@ export class GdRun {
       return;
     }
     if (r.kind === 'held') { this.tickRun = 0; this.events.push({ kind: 'held', full: !!r.full }); if (r.full) audio.hit('hit', 0.5 * save.hitVol); return; }
+    if (r.kind === 'star') {
+      // a star: three quick notes up the song's scale
+      const scale = this.pack.level.scale ?? [0, 2, 4, 5, 7, 9, 11];
+      [0, 2, 4].forEach((k, n) => window.setTimeout(() => audio.pluck(84 + scale[k % scale.length], 0.5 * save.hitVol), n * 70));
+      audio.hit('hit', 0.8 * save.hitVol);
+      this.events.push({ kind: 'star', star: r.star });
+      return;
+    }
+    if (r.kind === 'starlost') { audio.pluck(48, 0.35 * save.hitVol); this.events.push({ kind: 'starlost', star: r.star }); return; }
     if (r.kind === 'release') { if (r.flow) audio.hit('hit', 0.6 * save.hitVol); this.events.push({ kind: 'release', flow: !!r.flow }); return; }
     // one hit sound for every tap that meets a note; on the beat in a hook section it also plays the hook's pitch
     audio.hit('hit', (r.auto ? 0.55 : r.kind === 'spark' ? 0.8 : 1) * save.hitVol);
