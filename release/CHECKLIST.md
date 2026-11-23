@@ -4,7 +4,7 @@ Everything below needs your accounts, your money or your devices. Nothing here h
 
 ## 0. Before anything is public: the music licence
 
-- [ ] **Get the NCS game licence** (ncs.io) for the four tracks, or decide to replace them. The website and the App Store build both ship the music. Until this is settled, Settings → About still says the tracks are for private testing; that line and `levels/manifest.json` (`licenceNote`) get updated once you have the licence.
+- [x] **NCS game licence:** you confirmed on 23 November 2026 that you hold it. Settings → About now reads "Music used under a game licence from NoCopyrightSounds". Keep the licence document at hand: App Review can ask for it.
 - A track is swapped by replacing its entry in `levels/manifest.json` and `src/game/packs.ts` (see `tools/README.md` for cutting and charting a new song).
 
 ## 1. Test on your iPhone (free, 15 minutes)

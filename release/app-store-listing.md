@@ -102,7 +102,7 @@ Seven shots each (1 to 10 allowed): level select, the drop, twin orbit, level co
 
 > ONE MORE ORBIT is a one-button rhythm game with four levels. No account or login is needed. Game Center is optional: the game is fully playable signed out. Tap anywhere to play; the first launch runs a 10-second sync check (it can be skipped) and a short tutorial. Settings has "All levels open" if you want to see every level without clearing the earlier ones. The music is by NoCopyrightSounds artists and is used under a game licence from NoCopyrightSounds (licence attached).
 
-The last sentence is only true once you hold the NCS game licence: get it first, then attach it. Review can ask for proof of music rights (guideline 5.2).
+Attach your NCS licence document. Review can ask for proof of music rights (guideline 5.2).
 
 ## Guideline 4.2 (minimum functionality): what makes this an app
 

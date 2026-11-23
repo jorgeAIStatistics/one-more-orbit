@@ -4,7 +4,7 @@ A one-button rhythm game. A ball rides a ring in time with the music. Tap on eac
 
 **Version:** 1.0 release candidate 1 (`v1.0-rc1`).
 
-**Music licence.** The four tracks are NCS releases. NoCopyrightSounds requires a game licence before a game using them is published (ncs.io). Each song is one entry in `levels/manifest.json` and one in `src/game/packs.ts`, so a track can be swapped without touching the rest. Credits are shown in Settings as "Song – Artist [NCS Release] · Music provided by NoCopyrightSounds".
+**Music licence.** The four tracks are NCS releases, used under a game licence from NoCopyrightSounds (ncs.io); the owner holds the licence. Each song is one entry in `levels/manifest.json` and one in `src/game/packs.ts`, so a track can be swapped without touching the rest. Credits are shown in Settings as "Song – Artist [NCS Release] · Music provided by NoCopyrightSounds".
 
 ## The game
 
