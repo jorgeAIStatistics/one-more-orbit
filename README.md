@@ -6,18 +6,23 @@ A one-button rhythm game: a ball orbits a ring in time with the music, you tap a
 
 **Music licence.** The tracks are NCS releases and are here for private testing only. Releasing the game needs a game licence from NoCopyrightSounds (ncs.io). Credits and that note are in `levels/manifest.json` and shown in the game.
 
-## New core on the `gd-core` branch (Heroes Tonight slice)
+## Ring-hop core on the `gd-core` branch (Sky High feel lab)
 
-After the playtest of the four judged levels, the core is being rebuilt Geometry Dash style. On this branch:
+The current direction mixes Geometry Dash's forgiving survival structure with the orbit rhythm game. Built so far: a feel lab, Sky High from 0:30 to 1:02 (the build-up into the first drop), plus Record Mode.
 
-- **The ball moves by itself**, one lap of a ring per 8 beats; a ramp at the end of each lap carries it out to the next ring. **A tap hops**, and a hop lasts exactly one beat. There are no PERFECT/GREAT/GOOD judgements, no health and no grades: you clear a hazard or you crash, and a crash restarts at once (practice: from the last checkpoint). The HUD shows percent, best percent and attempts.
-- **Hazards come from the chart.** `src/gd/track.ts` turns the level's rhythm-first chart into a track: each take-off is a chart note with a spike in the middle of its arc; every flat stretch of a beat or more gets an overhead bar; rows of back-to-back hops take a breath every few hops (`chain` per section); sections flagged `pads` get a launch pad on a strong beat; sections flagged `orbs` turn notes half a beat after a take-off into jump orbs.
-- **Timing is forgiving by geometry**: about ±95 ms at 128 BPM per hop, a tap up to 150 ms before landing hops on landing, and hazards are drawn bigger than the part that kills.
-- **Movement** is a pure function of a smooth clock (`src/gd/clock.ts`) that is nudged by at most 0.5% toward the audio clock and never steps; collisions run in fixed 240 Hz steps (`src/gd/sim.ts`). After an autoplay run the results screen and the console show the frame-by-frame clock check.
-- **Picture** (`src/gd/render.ts`): hazards are always white with a pink edge on a dark track bed, pads cyan, orbs gold; only the world behind follows the music, through one intensity value from the measured energy of each bar.
-- `tests/gd.test.ts`: autoplay clears; every tap 80 ms early or late clears; random ±60 ms clears; 130 ms off crashes; doing nothing crashes; spam at 8, 10 and 12 taps a second crashes at once, and from any section start within two bars; a stray jump under any long bar crashes; the clock never steps.
+- **The tap moment is the music.** Every press is a note. The ball rides a ring; a tap on the note's mark hops it to the next ring, and the flight lasts until the next note (two beats at most, then it rides). A run of notes is a staircase of rings; a long note is a floaty arc.
+- **Survival is geometry.** An opening is clearable within ±120 ms of its note (±105 ms on eighth notes, never under ±55 ms). Ride past the mark and the ring ends; tap too early near an opening and the ball hits the ring above. Taps far from any opening are free. A crash restarts at once; practice restarts from the section, and the game plays the run-in for you.
+- **Flow is rhythm.** Taps within ±40 ms build a flow meter (the arc round the core) and sparkle. Off-beat taps take a notch off. After three off-beat taps in a row the music starts to muffle and the colours drain, a step per further off tap; two on-beat taps clear it. On hook sections an on-beat tap also plays the hook's pitch.
+- **The drop is earned.** Arrive in flow for the full set piece (flash, shockwave, the rings shatter, camera kick); out of flow it plays small.
+- **Orbs** are sixteenth notes that fall in mid-flight: optional extra taps, never needed to survive.
+- **Per-section settings** live in `levels/<id>/level.json` under `core`: `pulse` (marks breathe with the kick), `speed` (orbit speed), `flip` (gravity turns over on the section's first press: you ride the inside and hop inward). `lab` at the top of the file is the stretch that is built.
+- Code: `src/gd/course.ts` (notes to rings), `src/gd/sim.ts` (fixed 240 Hz steps, survival and flow), `src/gd/clock.ts` (smooth clock), `src/gd/run.ts`, `src/gd/render.ts`. `tests/gd.test.ts` covers autoplay in full flow, the window sizes, uneven timing, free taps, the muffle steps, mash bots at 8, 10 and 12 taps a second, and the clock.
 
-Only Heroes Tonight is built for this core (`SLICE` in `src/game/packs.ts`). The judged one-button game is unchanged on the `one-button` branch.
+### Record Mode (dev tool)
+
+Run `npm run dev`, open the menu and choose **Record mode**. Pick a section, a speed (100, 75 or 50%; slower also lowers the pitch) and a snap grid (1/4, 1/8, 1/16, triplets). Press Record, wait one bar of count-in and tap what you hear (the pad or any key). The taps, snapped to the grid, replace that section's notes. Click a square to add or remove one note, Listen plays the section with a click on every press, Play this section starts it in practice. **Save** writes `levels/<id>/presses.json`; bars in it are marked `by: hand` and nothing in `tools/` ever rewrites that file. Bars without a hand recording use the generated chart. Outside the dev server (the single-file build) Save keeps the bars in the browser and shows the JSON to copy.
+
+The earlier one-beat-hop slice of Heroes Tonight is tagged `gd-hop-slice`; the judged one-button game is on the `one-button` branch.
 
 ## Run it
 

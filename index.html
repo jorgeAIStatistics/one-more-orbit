@@ -22,7 +22,7 @@
 
   <section id="menu" class="screen">
     <div class="shell">
-      <div class="eyebrow">NEW CORE · HEROES TONIGHT SLICE</div>
+      <div id="menuTag" class="eyebrow">FEEL LAB</div>
       <h1 class="logo">ONE MORE<br />ORBIT</h1>
       <div class="track">
         <div class="picker"><button id="levelPrev" class="icon" type="button" aria-label="Previous level">&lsaquo;</button><div><div id="levelNo" class="eyebrow"></div><div id="trackName" class="track-name">Sky High</div></div><button id="levelNext" class="icon" type="button" aria-label="Next level">&rsaquo;</button></div>
@@ -38,8 +38,9 @@
         <button id="settingsBtn" class="pill" type="button">Settings &amp; sync</button>
         <button id="extrasBtn" class="pill" type="button">Orbs &amp; badges</button>
         <button id="creditsBtn" class="pill" type="button">Music credits</button>
+        <button id="recordBtn" class="pill" type="button">Record mode</button>
       </div>
-      <p class="hint">One button: tap anywhere, or press any key, to hop. Clear the spikes, stay low under the bars. R restarts, Esc pauses.</p>
+      <p class="hint">One button: tap anywhere, or press any key, as the ball crosses each mark. On the note builds flow; a little off still clears. R restarts, Esc pauses.</p>
     </div>
   </section>
 
@@ -62,8 +63,8 @@
       <div id="resSub" class="sub"></div>
       <div class="stats">
         <div><b id="resAttempts">0</b><small>Attempts</small></div>
-        <div><b id="resJumps">0</b><small>Jumps</small></div>
-        <div><b id="resTime">0:00</b><small>Time</small></div>
+        <div><b id="resOnBeat">0%</b><small>On the beat</small></div>
+        <div><b id="resStreak">0</b><small>Best streak</small></div>
       </div>
       <div id="resNote" class="sub"></div>
       <div id="resUnlocks" class="unlocks"></div>
@@ -77,7 +78,7 @@
       <h2>SETTINGS &amp; SYNC</h2>
       <label class="set"><span>Music volume</span><input id="setMusic" type="range" min="0" max="1" step="0.05" /></label>
       <label class="set"><span>Hitsound volume</span><input id="setSfx" type="range" min="0" max="1" step="0.05" /></label>
-      <div class="set"><span>Audio offset<small>Raise it if you have to tap early to clear things (Bluetooth, TV speakers)</small></span>
+      <div class="set"><span>Audio offset<small>Raise it if your on-time taps don't build flow (Bluetooth, TV speakers)</small></span>
         <div class="stepper"><button id="aoMinus" class="icon" type="button">−</button><b id="aoVal">0 ms</b><button id="aoPlus" class="icon" type="button">+</button></div></div>
       <div class="set"><span>Visual offset<small>Raise it if the ball looks behind the music</small></span>
         <div class="stepper"><button id="voMinus" class="icon" type="button">−</button><b id="voVal">0 ms</b><button id="voPlus" class="icon" type="button">+</button></div></div>
@@ -93,7 +94,7 @@
   <section id="calib" class="screen hidden">
     <div class="card wide calib-card">
       <h2>CALIBRATION</h2>
-      <div class="row">
+      <div id="calTabs" class="row">
         <button id="calAudioTab" class="pill toggle on" type="button">1 · Audio</button>
         <button id="calVisualTab" class="pill toggle" type="button">2 · Visual</button>
       </div>
@@ -102,6 +103,29 @@
       <div id="calResult" class="cal-result"></div>
       <button id="calPad" class="pad" type="button">TAP</button>
       <div class="row"><button id="calStart" class="pill" type="button">Start</button><button id="calClose" class="pill" type="button">Done</button></div>
+    </div>
+  </section>
+
+  <section id="record" class="screen hidden">
+    <div class="card wide rec-card">
+      <h2>RECORD MODE</h2>
+      <select id="recSection" aria-label="Section"></select>
+      <div class="rec-opts"><span>Speed</span><div id="recSpeed" class="row"></div></div>
+      <div class="rec-opts"><span>Snap to</span><div id="recGridPick" class="row"></div></div>
+      <div id="recGridView" class="rec-grid"></div>
+      <div id="recStatus" class="sub"></div>
+      <button id="recPad" class="pad" type="button">TAP</button>
+      <div class="row wrap">
+        <button id="recRecord" class="primary small" type="button">● RECORD</button>
+        <button id="recListen" class="pill" type="button">Listen with clicks</button>
+        <button id="recPlay" class="pill" type="button">Play this section</button>
+      </div>
+      <div class="row wrap">
+        <button id="recAuto" class="pill" type="button">Back to generated</button>
+        <button id="recSave" class="pill" type="button">Save</button>
+        <button id="recClose" class="pill" type="button">Done</button>
+      </div>
+      <textarea id="recExport" class="hidden" rows="4" readonly aria-label="Recorded bars as JSON"></textarea>
     </div>
   </section>
 

@@ -27,9 +27,11 @@ export interface SegmentDef {
   /** slingshot: entering this section flies the ball to a new planet in this screen direction */
   sling?: [number, number];
   mini?: boolean; // mini mode: small, fast rings for the phrase
-  orbs?: boolean; // new core: fast notes in this section become jump orbs
-  pads?: boolean; // new core: long flat stretches get a launch pad on a strong beat
-  chain?: number; // new core: back-to-back hops allowed before a breath (default 3)
+  orbs?: boolean; // hop-slice core (tag gd-hop-slice)
+  pads?: boolean;
+  chain?: number;
+  /** ring-hop core: pulse = openings breathe with the kick, speed = orbit speed (1 = a lap per 8 beats), flip = gravity turns over on the section's first press */
+  core?: { pulse?: boolean; speed?: number; flip?: boolean };
   hazard?: string; // 'beam': hops clear a sweeping beam instead of a spike
   reverse?: boolean;
   /** the one sound this section's taps follow: arp, kick, snare or lead */
@@ -54,6 +56,8 @@ export interface LevelFile {
   hitsoundNote: number;
   /** 16ths are swung (the off-16ths land late, on ticks 4 and 10 of 12) */
   swing?: boolean;
+  /** ring-hop core: the stretch of the level (in beats) that is built so far */
+  lab?: [number, number];
   segments: SegmentDef[];
 }
 

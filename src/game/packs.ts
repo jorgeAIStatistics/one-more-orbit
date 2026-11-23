@@ -5,6 +5,7 @@ import manifestJson from '../../levels/manifest.json';
 import skyLevel from '../../levels/skyhigh/level.json';
 import skyAudio from '../../levels/skyhigh/audio.json';
 import skyChart from '../../levels/skyhigh/chart.json';
+import skyPresses from '../../levels/skyhigh/presses.json';
 import heroesLevel from '../../levels/heroes/level.json';
 import heroesAudio from '../../levels/heroes/audio.json';
 import heroesChart from '../../levels/heroes/chart.json';
@@ -19,21 +20,23 @@ export interface LevelPack {
   level: LevelFile;
   audio: AudioMeta;
   chart: ChartFile;
+  /** press moments recorded by hand (Record Mode); bars without one use the chart */
+  presses?: { bars: Record<string, { by: 'hand'; t: number[] }> };
 }
 
-/** Levels built for the new (hop) core so far. The others wait for the playtest of this one. */
-export const SLICE = ['heroes'];
+/** Levels built for the ring-hop core so far (Sky High is a feel lab: its `lab` range only). */
+export const SLICE = ['skyhigh'];
 
 export interface TrackCredit { id: string; title: string; artist: string; release: string; playable: boolean }
 export const manifest = manifestJson as { licenceNote: string; creditSuffix: string; tracks: TrackCredit[] };
 
 export const creditLine = (t: TrackCredit) => `${t.title} – ${t.artist} [${t.release}] · ${manifest.creditSuffix}`;
 
-const pack = (level: unknown, audio: unknown, chart: unknown): LevelPack => ({ level: level as LevelFile, audio: audio as AudioMeta, chart: chart as ChartFile });
+const pack = (level: unknown, audio: unknown, chart: unknown, presses?: unknown): LevelPack => ({ level: level as LevelFile, audio: audio as AudioMeta, chart: chart as ChartFile, presses: presses as LevelPack['presses'] });
 
 export const PACKS: LevelPack[] = [
   pack(heroesLevel, heroesAudio, heroesChart),
-  pack(skyLevel, skyAudio, skyChart),
+  pack(skyLevel, skyAudio, skyChart, skyPresses),
   pack(blankLevel, blankAudio, blankChart),
   pack(invLevel, invAudio, invChart)
 ];

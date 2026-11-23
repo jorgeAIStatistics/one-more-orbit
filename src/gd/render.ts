@@ -1,38 +1,33 @@
-// Picture for the Geometry Dash-style core. Everything the player must read (track, spikes, bars, orbs, pads,
-// ball) is drawn in fixed high-contrast colours over a dark track bed; only the world behind it follows the music.
+// Picture for the ring-hop core. What the player must read (rings, note marks, ceilings, orbs, the ball) is drawn
+// in fixed colours; the world behind follows the song's measured energy, and blooms or drains with the player's flow.
 import { audio } from '../audio/audio';
 import { orbColour } from '../game/extras';
 import type { Level } from '../game/level';
 import { PALETTES, type Palette, type RGB } from '../render/palettes';
 import { bestFor, save } from '../save';
+import { flightRho, type Course } from './course';
 import type { GdRun } from './run';
-import { LAP, PAD_ZONE } from './track';
 
 const TWO_PI = Math.PI * 2;
 const EQ_BARS = 48;
-const GROW = 1.36; // each ring is this much bigger than the one inside it
+const AHEAD = 3; // beats of course drawn ahead of the ball
+const LOOK = 2; // beats before an opening that the ring above shows as a ceiling
 const WHITE: RGB = [255, 255, 255];
-const DANGER: RGB = [255, 64, 120]; // the edge of everything that kills
-const GOLD: RGB = [255, 214, 90]; // jump orbs and the big launch pad
-const CYAN: RGB = [0, 245, 255]; // launch pads
+const DANGER: RGB = [255, 64, 120]; // the edge of everything that ends the run
+const GOLD: RGB = [255, 214, 90]; // orbs, flow
+const VIOLET: RGB = [190, 120, 255]; // gravity flip
+const CYAN: RGB = [0, 245, 255];
 
 const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const smooth = (t: number) => { const x = clamp(t, 0, 1); return x * x * (3 - 2 * x); };
 const mix = (a: RGB, b: RGB, t: number): RGB => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
 const rgba = (c: RGB, a = 1) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
-/** Hops chained through jump orbs climb past one hop's height; the picture eases that off so the ball stays between rings. */
-const shown = (h: number) => (h <= 1 ? h : 1 + 0.25 * (1 - Math.exp(-1.6 * (h - 1))));
 
 interface Particle { x: number; y: number; vx: number; vy: number; life: number; max: number; col: RGB; size: number }
-interface Ripple { beat: number; h: number; lv: number; age: number; col: RGB }
-
-const HINTS: Array<{ when: (run: GdRun) => [number, number] | null; text: string }> = [
-  { when: () => [-9, 3.2], text: 'BARS: STAY LOW' },
-  { when: () => [3.2, 7.5], text: 'SPIKES: TAP TO HOP' },
-  { when: (r) => { const p = r.track.pads.find((x) => !x.big); return p ? [p.beat - 3, p.beat + 0.5] : null; }, text: 'PAD: IT JUMPS FOR YOU' },
-  { when: (r) => { const o = r.track.orbs[0]; return o ? [o.beat - 4.5, o.beat] : null; }, text: 'GOLD ORB: TAP IN MID-AIR' }
-];
+interface Ripple { x: number; y: number; age: number; col: RGB }
+/** One ring as the ball meets it: a ceiling while it is the ring above, then the floor it rides to the next note. */
+interface Platform { lv: number; side: number; fs: number; fe: number; cs: number; ce: number; note: number; tol: number; flipAt: number; flipTol: number; pulse: boolean }
 
 export class GdRenderer {
   private ctx: CanvasRenderingContext2D;
@@ -41,19 +36,24 @@ export class GdRenderer {
   private dpr = 1;
   private particles: Particle[] = [];
   private ripples: Ripple[] = [];
-  private trail: Array<{ beat: number; h: number; lv: number }> = [];
+  private trail: Array<{ beat: number; rho: number; off: number }> = [];
   private eq = new Float32Array(EQ_BARS);
   private stars: Array<{ a: number; d: number; s: number }> = [];
   private bound: GdRun | null = null;
-  private launch: boolean[] = [];
+  private plats: Platform[] = [];
+  private portals: Array<{ beat: number; faster: boolean }> = [];
   private energy: number[] = [];
   private cam = 0;
   private camVel = 0;
+  private baseR = 1;
   private inten = 0;
+  private flowV = 0.5;
+  private drain = 0;
   private flash = 0;
   private shock = -1;
   private punch = 0;
   private dropAge = 99;
+  private dropFull = false;
   private landPulse = 0;
   private shake = 0;
   private dark = 0;
@@ -61,11 +61,11 @@ export class GdRenderer {
   private palFrom: Palette = PALETTES.deep;
   private palName = '';
   private palT = 1;
-  private ball = { x: 0, y: 0 };
+  private ball = { x: 0, y: 0, r: 0 };
   // sizes for this frame
-  private rs = 100;
-  private hop = 20;
-  private rb = 5;
+  private r0 = 100;
+  private gap = 24;
+  private rb = 6;
 
   constructor(private canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
@@ -88,37 +88,32 @@ export class GdRenderer {
   private bind(run: GdRun): void {
     this.bound = run;
     const level = run.level;
-    const laps = Math.ceil(level.totalBeats / LAP) + 2;
-    this.launch = Array.from({ length: laps }, (_, k) => run.track.pads.some((p) => p.big && p.beat === k * LAP));
+    const c = run.course;
+    this.plats = platforms(c, level);
+    this.portals = [];
+    level.segments.forEach((s, i) => {
+      const a = i > 0 ? level.segments[i - 1].core?.speed ?? 1 : 1;
+      const b = s.core?.speed ?? 1;
+      if (a !== b && s.beat0 > c.start && s.beat0 < c.end) this.portals.push({ beat: s.beat0, faster: b > a });
+    });
     this.energy = barEnergy(level);
     this.particles = [];
     this.ripples = [];
     this.trail = [];
-    this.flash = this.punch = this.landPulse = this.shake = this.dark = 0;
+    this.flash = this.punch = this.landPulse = this.shake = this.dark = this.drain = 0;
     this.shock = -1;
     this.dropAge = 99;
-    this.cam = this.lvl(run.viewTime / level.spb);
+    this.dropFull = run.dropFull === true;
+    const beat = run.viewTime / level.spb;
+    this.cam = run.sim.rho(beat);
     this.camVel = 0;
-    const seg = level.segAt(Math.max(0, run.viewTime));
-    this.inten = this.energyAt(run.viewTime / level.spb);
-    this.palName = seg.look.palette;
+    this.baseR = run.sim.side > 0 ? 1 : 1.5;
+    this.flowV = run.sim.flow;
+    this.inten = this.energyAt(beat);
+    this.palName = level.segAt(Math.max(0, run.viewTime)).look.palette;
     this.pal = this.palFrom = PALETTES[this.palName] || PALETTES.deep;
     this.palT = 1;
-  }
-
-  /** Ring level under the ball: whole numbers on a ring, in between while it rides a ramp or flies off a launch pad. */
-  private lvl(beat: number): number {
-    const k = Math.floor(beat / LAP); // the run-in before beat 0 is a ring of its own, one level down
-    const f = beat - k * LAP;
-    if (this.launch[k] && f < 1) return k - 1 + smooth(f);
-    if (!this.launch[k + 1] && f > LAP - 0.5) return k + smooth((f - (LAP - 0.5)) / 0.5);
-    return k;
-  }
-
-  /** Ring level of lap k's own track at a beat (the ramp at its end leads up to the next ring). */
-  private trackLvl(k: number, beat: number): number {
-    const f = beat - k * LAP;
-    return !this.launch[k + 1] && f > LAP - 0.5 ? k + smooth((f - (LAP - 0.5)) / 0.5) : k;
+    this.ball.r = 0;
   }
 
   private energyAt(beat: number): number {
@@ -129,27 +124,28 @@ export class GdRenderer {
     return lerp(e[i], e[Math.min(e.length - 1, i + 1)], x - i);
   }
 
-  private scale(lv: number): number {
-    return Math.pow(GROW, lv - this.cam) * (1 + this.punch * 0.05);
+  /** Palette colour; when the player has lost the rhythm the world's colours drain toward grey. */
+  private col(c: RGB, a = 1): string {
+    const g = c[0] * 0.3 + c[1] * 0.59 + c[2] * 0.11;
+    const d = this.drain * 0.85;
+    return `rgba(${lerp(c[0], g, d) | 0},${lerp(c[1], g, d) | 0},${lerp(c[2], g, d) | 0},${a})`;
   }
 
-  /** Screen point (relative to the core) at a beat, `hpx` above the track of ring level `lv`. */
-  private pt(beat: number, hpx: number, lv: number): [number, number] {
-    const a = -Math.PI / 2 + (TWO_PI * beat) / LAP;
-    const r = (this.rs + hpx) * this.scale(lv);
-    return [Math.cos(a) * r, Math.sin(a) * r];
+  /** Screen radius of a ring level. */
+  private rad(lv: number): number {
+    return (this.r0 * this.baseR + (lv - this.cam) * this.gap) * (1 + this.punch * 0.04);
   }
 
-  private burst(x: number, y: number, n: number, col: RGB, speed: number): void {
+  private burst(x: number, y: number, n: number, col: RGB, speed: number, size = 1): void {
     if (save.reducedMotion) n = Math.ceil(n / 3);
-    for (let i = 0; i < n && this.particles.length < 160; i++) {
+    for (let i = 0; i < n && this.particles.length < 220; i++) {
       const a = Math.random() * TWO_PI;
       const v = speed * (0.3 + Math.random() * 0.7);
-      this.particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0, max: 0.3 + Math.random() * 0.35, col, size: 1.5 + Math.random() * 2.5 });
+      this.particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0, max: 0.3 + Math.random() * 0.35, col, size: (1.2 + Math.random() * 2.2) * size });
     }
   }
 
-  // ---------------------------------------------------------------- the world behind the track
+  // ---------------------------------------------------------------- the world behind the course
   private background(p: Palette, time: number, inten: number, groove: number, dark: number): void {
     const c = this.ctx;
     const cx = this.w / 2;
@@ -157,8 +153,8 @@ export class GdRenderer {
     const span = Math.max(this.w, this.h) * 0.75;
     const k = 0.4 + inten * 0.95 + groove * 0.7;
     const g = c.createRadialGradient(cx, cy, 0, cx, cy, span);
-    g.addColorStop(0, rgba([p.bg0[0] * k, p.bg0[1] * k, p.bg0[2] * k]));
-    g.addColorStop(1, rgba(p.bg1));
+    g.addColorStop(0, this.col([p.bg0[0] * k, p.bg0[1] * k, p.bg0[2] * k]));
+    g.addColorStop(1, this.col(p.bg1));
     c.fillStyle = g;
     c.fillRect(0, 0, this.w, this.h);
     const speed = save.reducedMotion ? 0.01 : 0.01 + inten * 0.07;
@@ -168,20 +164,20 @@ export class GdRenderer {
       for (let i = 0; i < 5; i++) {
         const f = (i / 5 + time * 0.16) % 1;
         c.lineWidth = 1.5 + f * 3;
-        c.strokeStyle = rgba(p.acc, (1 - f) * f * 0.8 * a * (0.35 + groove));
+        c.strokeStyle = this.col(p.acc, (1 - f) * f * 0.8 * a * (0.35 + groove));
         c.beginPath(); c.arc(cx, cy, f * f * span, 0, TWO_PI); c.stroke();
       }
     }
     for (const s of this.stars) {
       const d = (s.d + time * speed * s.s) % 1;
-      c.fillStyle = rgba(p.acc, (0.1 + 0.4 * d) * (0.35 + inten * 0.65));
+      c.fillStyle = this.col(p.acc, (0.1 + 0.4 * d) * (0.35 + inten * 0.65));
       c.fillRect(cx + Math.cos(s.a) * d * span, cy + Math.sin(s.a) * d * span, s.s, s.s);
     }
     if (dark > 0.01) { c.fillStyle = `rgba(0,0,0,${dark})`; c.fillRect(0, 0, this.w, this.h); }
   }
 
-  /** Audio-reactive equalizer round the core: the live spectrum, or the baked kick and snare when there is no audio. */
-  private core(pal: Palette, rc: number, len: number, kick: number, snare: number, dt: number): void {
+  /** Audio-reactive equalizer round the core, with the flow meter as a thin arc round it. */
+  private core(pal: Palette, rc: number, len: number, kick: number, snare: number, dt: number, flow: number): void {
     const c = this.ctx;
     const spec = audio.spectrum();
     for (let i = 0; i < EQ_BARS; i++) {
@@ -190,8 +186,8 @@ export class GdRenderer {
       this.eq[i] += (v - this.eq[i]) * Math.min(1, dt * (v > this.eq[i] ? 40 : 9));
     }
     const glow = c.createRadialGradient(0, 0, 0, 0, 0, rc * (1.1 + kick * 0.4));
-    glow.addColorStop(0, rgba(pal.ring, 0.5 + kick * 0.35));
-    glow.addColorStop(1, rgba(pal.ring, 0));
+    glow.addColorStop(0, this.col(pal.ring, 0.5 + kick * 0.35));
+    glow.addColorStop(1, this.col(pal.ring, 0));
     c.fillStyle = glow;
     c.beginPath(); c.arc(0, 0, rc * (1.1 + kick * 0.4), 0, TWO_PI); c.fill();
     c.lineCap = 'round';
@@ -199,8 +195,22 @@ export class GdRenderer {
     for (let i = 0; i < EQ_BARS; i++) {
       const a = (i / EQ_BARS) * TWO_PI - Math.PI / 2 + Math.PI / EQ_BARS;
       const v = this.eq[i];
-      c.strokeStyle = rgba(mix(pal.ring, pal.acc, v), 0.4 + v * 0.6);
+      c.strokeStyle = this.col(mix(pal.ring, pal.acc, v), 0.4 + v * 0.6);
       c.beginPath(); c.moveTo(Math.cos(a) * rc * 1.12, Math.sin(a) * rc * 1.12); c.lineTo(Math.cos(a) * (rc * 1.2 + v * len), Math.sin(a) * (rc * 1.2 + v * len)); c.stroke();
+    }
+    if (flow >= 0) {
+      // flow meter: fills as taps land on the notes, turns gold when the music is fully open
+      const rm = rc * 1.2 + len + 7;
+      const hot = flow >= 0.66;
+      c.lineWidth = 3.5;
+      c.strokeStyle = 'rgba(255,255,255,0.13)';
+      c.beginPath(); c.arc(0, 0, rm, 0, TWO_PI); c.stroke();
+      if (flow > 0.005) {
+        c.strokeStyle = hot ? rgba(GOLD) : rgba(mix(pal.acc, WHITE, 0.4), 0.9);
+        if (hot) { c.shadowColor = rgba(GOLD, 0.9); c.shadowBlur = 10; }
+        c.beginPath(); c.arc(0, 0, rm, -Math.PI / 2, -Math.PI / 2 + flow * TWO_PI); c.stroke();
+        c.shadowBlur = 0;
+      }
     }
     c.lineCap = 'butt';
   }
@@ -222,155 +232,13 @@ export class GdRenderer {
     c.restore();
   }
 
-  /** Traces lap k's track, `hpx` above it, from beat b0 to b1 (both inside the lap). */
-  private path(k: number, b0: number, b1: number, hpx: number): void {
-    const c = this.ctx;
-    const rampAt = this.launch[k + 1] ? Infinity : k * LAP + LAP - 0.5;
-    c.beginPath();
-    const flat = Math.min(b1, rampAt);
-    if (flat > b0) {
-      const a0 = -Math.PI / 2 + (TWO_PI * b0) / LAP;
-      c.arc(0, 0, (this.rs + hpx) * this.scale(k), a0, a0 + (TWO_PI * (flat - b0)) / LAP);
-    }
-    if (b1 > rampAt) {
-      const from = Math.max(b0, rampAt);
-      const n = Math.max(2, Math.ceil((b1 - from) * 24));
-      for (let i = flat > b0 ? 1 : 0; i <= n; i++) {
-        const b = from + ((b1 - from) * i) / n;
-        const [x, y] = this.pt(b, hpx, this.trackLvl(k, b));
-        if (i === 0) c.moveTo(x, y); else c.lineTo(x, y);
-      }
-    }
-  }
-
-  private drawLap(run: GdRun, k: number, alpha: number, beat: number, pal: Palette, glow: number): void {
-    if (alpha <= 0.01 || k < -1) return;
-    const c = this.ctx;
-    const tr = run.track;
-    const b0 = k * LAP;
-    const b1 = b0 + LAP;
-    const s = this.scale(k);
-    const { hop, rb } = this;
-    c.globalAlpha = alpha;
-    // the dark bed everything is read against
-    c.lineCap = 'butt';
-    c.strokeStyle = 'rgba(0,0,10,0.34)';
-    c.lineWidth = (hop * 1.3 + rb * 2) * s;
-    this.path(k, b0, b1, (hop * 1.3 + rb * 2) / 2 - 1);
-    c.stroke();
-    // the track
-    this.path(k, b0, b1, 0);
-    if (glow > 0.05) { // the ring breathes with the kick once the music is full
-      c.strokeStyle = rgba(pal.ring, glow * 0.3);
-      c.lineWidth = 12 * s;
-      c.stroke();
-    }
-    c.strokeStyle = rgba(mix(pal.ring, WHITE, 0.25 + glow * 0.4));
-    c.lineWidth = Math.max(2, (2.5 + glow * 2) * s);
-    c.stroke();
-
-    const fade = (end: number) => clamp(1 - (beat - end - 0.25) / 0.5, 0, 1);
-    c.lineJoin = 'round';
-    for (const h of tr.hazards) {
-      if (h.b1 <= b0 || h.b0 >= b1) continue;
-      const f = fade(h.b1);
-      if (f <= 0) continue;
-      c.globalAlpha = alpha * f;
-      if (h.kind === 'spike') {
-        // drawn a little wider and taller than the part that kills
-        const d0 = Math.max(b0, h.b0 - 0.05);
-        const d1 = Math.min(b1, h.b1 + 0.05);
-        const n = Math.max(1, Math.round((d1 - d0) / 0.135));
-        const tip = hop * 0.5 + rb * 0.4;
-        c.beginPath();
-        for (let i = 0; i < n; i++) {
-          const x0 = d0 + ((d1 - d0) * i) / n;
-          const x1 = d0 + ((d1 - d0) * (i + 1)) / n;
-          const [ax, ay] = this.pt(x0, 0, this.trackLvl(k, x0));
-          const [mx, my] = this.pt((x0 + x1) / 2, tip, this.trackLvl(k, (x0 + x1) / 2));
-          const [ex, ey] = this.pt(x1, 0, this.trackLvl(k, x1));
-          if (i === 0) c.moveTo(ax, ay);
-          c.lineTo(mx, my);
-          c.lineTo(ex, ey);
-        }
-        for (let i = n - 1; i > 0; i--) { // back along the track, so a long bed follows the curve
-          const x = d0 + ((d1 - d0) * i) / n;
-          const [px, py] = this.pt(x, -1.5, this.trackLvl(k, x));
-          c.lineTo(px, py);
-        }
-        c.closePath();
-        c.fillStyle = '#ffffff';
-        c.fill();
-        c.strokeStyle = rgba(DANGER);
-        c.lineWidth = Math.max(1.5, 2 * s);
-        c.stroke();
-      } else {
-        // overhead bar: a slab above the track, with room for the ball to roll under
-        const d0 = Math.max(b0, h.b0 - 0.04);
-        const d1 = Math.min(b1, h.b1 + 0.04);
-        const th = this.rs * 0.05;
-        const mid = hop * 0.3 + rb * 1.6 + th / 2;
-        this.path(k, d0, d1, mid);
-        c.strokeStyle = rgba(DANGER);
-        c.lineWidth = (th + 4) * s;
-        c.stroke();
-        this.path(k, d0 + 0.012, d1 - 0.012, mid);
-        c.strokeStyle = '#ffffff';
-        c.lineWidth = th * s;
-        c.stroke();
-      }
-    }
-    for (const p of tr.pads) {
-      // a big pad fires from the end of the ring before the one it lands on
-      const lap = p.big ? p.beat / LAP - 1 : Math.floor(p.beat / LAP);
-      if (lap !== k) continue;
-      const f = fade(p.beat + PAD_ZONE);
-      if (f <= 0) continue;
-      c.globalAlpha = alpha * f;
-      const col = p.big ? GOLD : CYAN;
-      const lv = p.big ? k : this.trackLvl(k, p.beat);
-      const z = p.big ? PAD_ZONE * 1.3 : PAD_ZONE;
-      const a0 = -Math.PI / 2 + (TWO_PI * (p.beat - (p.big ? z / 2 : 0))) / LAP;
-      c.lineCap = 'round';
-      c.strokeStyle = rgba(col);
-      c.lineWidth = rb * (p.big ? 1.1 : 0.85) * s;
-      c.beginPath(); c.arc(0, 0, this.rs * this.scale(lv), a0, a0 + (TWO_PI * z) / LAP); c.stroke();
-      // two chevrons pointing the way it throws you
-      const mid = p.beat + (p.big ? 0 : z / 2);
-      c.lineWidth = Math.max(1.5, 2.2 * s);
-      for (let j = 0; j < 2; j++) {
-        const base = rb * (1.5 + j * 1.1);
-        const [lx, ly] = this.pt(mid - 0.07, base, lv);
-        const [tx, ty] = this.pt(mid, base + rb * 0.9, lv);
-        const [rx, ry] = this.pt(mid + 0.07, base, lv);
-        c.globalAlpha = alpha * f * (j === 0 ? 1 : 0.55);
-        c.beginPath(); c.moveTo(lx, ly); c.lineTo(tx, ty); c.lineTo(rx, ry); c.stroke();
-      }
-      c.lineCap = 'butt';
-    }
-    for (const o of tr.orbs) {
-      if (o.beat < b0 || o.beat >= b1 || run.sim.orbUsed(o.beat)) continue;
-      const f = fade(o.beat);
-      if (f <= 0) continue;
-      c.globalAlpha = alpha * f;
-      const [x, y] = this.pt(o.beat, rb + shown(o.h) * hop, this.trackLvl(k, o.beat));
-      const pulse = 1 + 0.12 * Math.sin(beat * Math.PI * 2);
-      c.strokeStyle = rgba(GOLD);
-      c.lineWidth = Math.max(2, rb * 0.42 * s);
-      c.beginPath(); c.arc(x, y, rb * 1.35 * s * pulse, 0, TWO_PI); c.stroke();
-      c.fillStyle = rgba(GOLD, 0.9);
-      c.beginPath(); c.arc(x, y, rb * 0.5 * s, 0, TWO_PI); c.fill();
-    }
-    c.globalAlpha = 1;
-  }
-
   private text(s: string, x: number, y: number, size: number, col: RGB, alpha: number): void {
     if (alpha <= 0.01) return;
     const c = this.ctx;
     c.font = `800 ${Math.round(size)}px ui-rounded, "SF Pro Rounded", system-ui, sans-serif`;
     c.textAlign = 'center';
     c.textBaseline = 'middle';
-    c.fillStyle = `rgba(0,0,8,${alpha * 0.55})`;
+    c.fillStyle = `rgba(0,0,8,${alpha * 0.6})`;
     const w = c.measureText(s).width + size * 1.4;
     c.beginPath();
     c.roundRect(x - w / 2, y - size * 0.95, w, size * 1.9, size * 0.95);
@@ -379,19 +247,92 @@ export class GdRenderer {
     c.fillText(s, x, y + 1);
   }
 
+  private drawPlatform(pl: Platform, c0: Course, beat: number, pal: Palette, kick: number, drop: boolean): void {
+    const c = this.ctx;
+    const start = Math.min(pl.cs, pl.fs);
+    if (start - beat > AHEAD || beat > pl.fe + 0.5) return;
+    const r = this.rad(pl.lv);
+    if (r < this.r0 * 0.5 || r > Math.hypot(this.w, this.h) / 2 + 40) return; // inside the core's meter, or off the screen
+    const alpha = clamp((AHEAD - (start - beat)) / 0.6, 0, 1) * clamp(1 - (beat - pl.fe - 0.1) / 0.4, 0, 1);
+    if (alpha <= 0.01) return;
+    const lo = beat - 1;
+    const hi = beat + AHEAD;
+    const ang = (b: number) => -Math.PI / 2 + c0.angle(b);
+    const arc = (b0: number, b1: number) => { c.beginPath(); c.arc(0, 0, r, ang(Math.max(b0, lo)), ang(Math.min(b1, hi))); };
+    const { rb } = this;
+    const pulse = pl.pulse ? kick : 0;
+    // the whole ring, faintly: the lit stretch below is the part of it you can ride
+    c.globalAlpha = alpha * (0.11 + pulse * 0.06);
+    c.strokeStyle = this.col(pal.ring);
+    c.lineWidth = 1.5;
+    c.beginPath(); c.arc(0, 0, r, 0, TWO_PI); c.stroke();
+    c.globalAlpha = alpha;
+    // ceiling: the ring above, closed until its opening. Hazard colours: touching it ends the run.
+    if (pl.ce - pl.cs > 0.06 && pl.ce > lo && pl.cs < hi) {
+      arc(pl.cs, pl.ce);
+      c.lineCap = 'butt';
+      c.strokeStyle = rgba(DANGER);
+      c.lineWidth = 5;
+      c.stroke();
+      c.strokeStyle = '#ffffff';
+      c.lineWidth = 2;
+      c.stroke();
+    }
+    // gravity flip: the ring above takes you on its underside
+    if (!Number.isNaN(pl.flipAt)) {
+      arc(pl.flipAt - pl.flipTol * 0.85, pl.fs);
+      c.lineCap = 'round';
+      c.strokeStyle = rgba(VIOLET, 0.35);
+      c.lineWidth = 12;
+      c.stroke();
+      c.strokeStyle = rgba(VIOLET);
+      c.lineWidth = 5;
+      c.stroke();
+    }
+    // floor: the stretch you ride, ending just past the note you leave on (drawn a little short of the real edge)
+    const fe = Number.isNaN(pl.note) ? pl.fe : pl.note + pl.tol * 0.85;
+    if (fe > lo && pl.fs < hi) {
+      c.lineCap = 'round';
+      arc(pl.fs, fe);
+      if (drop || pulse > 0.05) {
+        c.strokeStyle = this.col(pal.ring, drop ? 0.22 + pulse * 0.2 : pulse * 0.35);
+        c.lineWidth = drop ? 11 : 9;
+        c.stroke();
+      }
+      c.strokeStyle = this.col(mix(pal.ring, WHITE, drop ? 0.55 : 0.3));
+      c.lineWidth = drop ? 4.5 : 3.5;
+      c.stroke();
+      if (!Number.isNaN(pl.note) && pl.note > lo && pl.note < hi) {
+        // the note: a bright mark across the ring. This is the moment to tap.
+        const a = ang(pl.note);
+        const len = rb * (1.15 + pulse * 0.5);
+        c.strokeStyle = '#ffffff';
+        c.lineWidth = 3.5 + pulse * 2.5;
+        c.beginPath(); c.moveTo(Math.cos(a) * (r - len), Math.sin(a) * (r - len)); c.lineTo(Math.cos(a) * (r + len), Math.sin(a) * (r + len)); c.stroke();
+        // and the edge: ride past it and the run ends
+        const e = ang(fe);
+        c.fillStyle = rgba(DANGER);
+        c.beginPath(); c.arc(Math.cos(e) * r, Math.sin(e) * r, 3.2, 0, TWO_PI); c.fill();
+      }
+      c.lineCap = 'butt';
+    }
+    c.globalAlpha = 1;
+  }
+
   // ---------------------------------------------------------------- a frame of play
   draw(run: GdRun, now: number, dt: number): void {
     if (this.bound !== run) this.bind(run);
     const c = this.ctx;
     const level = run.level;
+    const course = run.course;
     const sim = run.sim;
     const t = run.viewTime;
     const beat = t / level.spb;
     const m = Math.min(this.w, this.h * 0.94);
-    this.rs = m * 0.29;
-    this.hop = this.rs * 0.21;
-    this.rb = Math.max(5, this.rs * 0.052);
-    const { rs, hop, rb } = this;
+    this.r0 = m * 0.27;
+    this.gap = this.r0 * 0.25;
+    this.rb = Math.max(5.5, this.r0 * 0.058);
+    const { r0, rb } = this;
     const skin = orbColour(save.skin);
     const playing = run.state === 'playing';
 
@@ -407,39 +348,58 @@ export class GdRenderer {
     const pal: Palette = this.palT >= 1 ? target : { bg0: mix(this.palFrom.bg0, target.bg0, this.palT), bg1: mix(this.palFrom.bg1, target.bg1, this.palT), ring: mix(this.palFrom.ring, target.ring, this.palT), acc: mix(this.palFrom.acc, target.acc, this.palT) };
     this.pal = pal;
 
-    // one intensity value from the measured energy of each bar; it drives everything behind the track
+    // the song's measured energy sets the scene; the player's flow opens it up or drains it
+    this.flowV += (sim.flow - this.flowV) * Math.min(1, dt * 6);
+    this.drain += (sim.muffle - this.drain) * Math.min(1, dt * (sim.muffle > this.drain ? 1.4 : 9));
     this.inten += (this.energyAt(beat) - this.inten) * Math.min(1, dt * 2.5);
-    const inten = this.inten;
+    const afterDrop = beat >= course.dropBeat;
+    const bloom = (0.6 + 0.55 * this.flowV) * (afterDrop && !this.dropFull ? 0.75 : 1) * (1 - this.drain * 0.4);
+    const inten = clamp(this.inten * bloom, 0, 1.15);
     const kick = level.energyAt('kick', t);
     const snare = level.energyAt('snare', t);
     const groove = kick * inten * inten;
-    this.dark += ((seg.blackout ? 0.5 : 0) - this.dark) * Math.min(1, dt * 4);
+    this.dark += ((seg.blackout ? 0.45 : 0) - this.dark) * Math.min(1, dt * 4);
 
     // what just happened
     for (const ev of run.events) {
-      if (ev === 'jump' || ev === 'orb') {
-        this.ripples.push({ beat, h: rb + shown(sim.height(beat)) * hop, lv: this.lvl(beat), age: 0, col: ev === 'orb' ? GOLD : skin });
-        if (ev === 'orb') this.burst(this.ball.x, this.ball.y, 10, GOLD, rs * 0.9);
-      } else if (ev === 'land') this.landPulse = 1;
-      else if (ev === 'pad') this.burst(this.ball.x, this.ball.y, 8, CYAN, rs * 0.8);
-      else if (ev === 'launch') {
-        this.punch = 1;
-        if (Math.abs(beat - run.track.dropBeat) < 1) { this.flash = 1; this.shock = 0; this.dropAge = 0; } // the one big moment
-        this.burst(this.ball.x, this.ball.y, 18, GOLD, rs * 1.3);
-      } else if (ev === 'crash') {
-        this.burst(this.ball.x, this.ball.y, 34, WHITE, rs * 1.5);
-        this.burst(this.ball.x, this.ball.y, 16, DANGER, rs * 1.1);
+      if (ev.kind === 'hop' || ev.kind === 'flip' || ev.kind === 'orb') {
+        this.ripples.push({ x: this.ball.x, y: this.ball.y, age: 0, col: ev.flow ? GOLD : [170, 180, 200] });
+        if (ev.flow) this.burst(this.ball.x, this.ball.y, ev.kind === 'orb' ? 9 : 5, GOLD, r0 * 0.7, 0.8); // small sparkles: on the note
+        if (ev.kind === 'flip') this.burst(this.ball.x, this.ball.y, 12, VIOLET, r0 * 0.9);
+      } else if (ev.kind === 'land') this.landPulse = 1;
+      else if (ev.kind === 'drop') {
+        this.dropFull = !!ev.full;
+        this.dropAge = 0;
+        if (ev.full) {
+          // the earned drop: one flash, one shockwave, the old rings shatter, the camera kicks out
+          this.flash = 1;
+          this.shock = 0;
+          this.punch = 1;
+          const rr = this.ball.r || r0;
+          for (let i = 0; i < 70; i++) {
+            const a = (i / 70) * TWO_PI;
+            this.particles.push({ x: Math.cos(a) * rr, y: Math.sin(a) * rr, vx: Math.cos(a) * r0 * (1.5 + Math.random() * 2.5), vy: Math.sin(a) * r0 * (1.5 + Math.random() * 2.5), life: 0, max: 0.45 + Math.random() * 0.4, col: i % 3 ? pal.acc : WHITE, size: 2 + Math.random() * 3 });
+          }
+        } else this.punch = 0.35;
+      } else if (ev.kind === 'crash') {
+        this.burst(this.ball.x, this.ball.y, 34, WHITE, r0 * 1.5);
+        this.burst(this.ball.x, this.ball.y, 16, DANGER, r0 * 1.1);
         this.shake = save.reducedMotion ? 0 : 1;
       }
     }
     run.events.length = 0;
     if (this.ripples.length > 8) this.ripples.splice(0, this.ripples.length - 8);
 
-    // spring camera: follows the ring the ball is on, a touch ahead of it
-    const want = this.lvl(beat + 0.3);
-    const om = 11;
-    this.camVel += (om * om * (want - this.cam) - 2 * om * this.camVel) * dt;
+    // spring camera: keeps the ball's ring at a steady radius, a little further out while it rides the inside
+    const rho = sim.rho(beat);
+    const om = 9;
+    this.camVel += (om * om * (rho - this.cam) - 2 * om * this.camVel) * dt;
     this.cam += this.camVel * dt;
+    // riding the inside, the hops go toward the core: the ball's ring is held further out to leave them room,
+    // and the camera starts moving there a couple of beats before the flip
+    const nextP = course.presses[sim.ni];
+    const inward = sim.sideAt(beat) < 0 || (!!nextP && nextP.kind === 'flip' && nextP.side > 0 && nextP.beat - beat < 2.5);
+    this.baseR += ((inward ? 1.5 : 1) - this.baseR) * Math.min(1, dt * 3.5);
     this.punch = Math.max(0, this.punch - dt / 0.45);
     this.flash = Math.max(0, this.flash - dt / 0.15);
     this.landPulse = Math.max(0, this.landPulse - dt / 0.12);
@@ -452,10 +412,10 @@ export class GdRenderer {
     let cx = this.w / 2;
     let cy = this.h * 0.52;
     if (this.shake > 0) { cx += (Math.random() - 0.5) * 10 * this.shake; cy += (Math.random() - 0.5) * 10 * this.shake; }
-    if (this.dropAge < 1.2 && !save.reducedMotion) cx += Math.exp(-this.dropAge * 4) * Math.sin(this.dropAge * 10) * m * 0.03; // the drop's slingshot swing
+    if (this.dropFull && this.dropAge < 1.2 && !save.reducedMotion) cx += Math.exp(-this.dropAge * 4) * Math.sin(this.dropAge * 10) * m * 0.035; // the drop's slingshot swing
     c.translate(cx, cy);
 
-    this.core(pal, m * 0.05, m * 0.05 * (0.4 + 1.1 * inten), kick * (0.3 + 0.7 * inten), snare * inten, dt);
+    this.core(pal, m * 0.045, m * 0.04 * (0.4 + 1.1 * inten), kick * (0.3 + 0.7 * inten), snare * inten, dt, this.flowV);
 
     if (this.shock >= 0) {
       this.shock += dt / 0.6;
@@ -463,58 +423,103 @@ export class GdRenderer {
       else {
         c.strokeStyle = rgba(pal.acc, (1 - this.shock) * 0.6);
         c.lineWidth = 2 + (1 - this.shock) * 8;
-        c.beginPath(); c.arc(0, 0, rs * 0.3 + this.shock * Math.max(this.w, this.h) * 0.75, 0, TWO_PI); c.stroke();
+        c.beginPath(); c.arc(0, 0, r0 * 0.3 + this.shock * Math.max(this.w, this.h) * 0.75, 0, TWO_PI); c.stroke();
       }
     }
 
-    // rings: the one just left (fading), the one the ball is on, and the next one so its obstacles can be read early
-    const kc = Math.floor(beat / LAP);
-    const f = beat - kc * LAP;
-    const ringGlow = groove * 0.8;
-    if (this.launch[kc]) this.drawLap(run, kc - 1, 1 - smooth((f - 0.2) / 1.2), beat, pal, 0);
-    else this.drawLap(run, kc - 1, 1 - smooth(f / 0.9), beat, pal, 0);
-    this.drawLap(run, kc + 1, 0.32 + 0.68 * smooth((f - (LAP - 2.5)) / 2), beat, pal, 0);
-    this.drawLap(run, kc, 1, beat, pal, ringGlow);
+    const ang = (b: number) => -Math.PI / 2 + course.angle(b);
+    const dropStyle = afterDrop && this.dropFull;
+    for (const pl of this.plats) this.drawPlatform(pl, course, beat, pal, kick, dropStyle);
 
-    // tap ripples: the same small ring on every hop
+    // where the next hops go: a faint dotted path from each note to its landing
+    for (let k = sim.ni; k < Math.min(course.presses.length, sim.ni + 3); k++) {
+      const p = course.presses[k];
+      if (p.beat - beat > AHEAD - 0.4) break;
+      const n = Math.max(3, Math.round((p.land - p.beat) * 8));
+      c.fillStyle = rgba(WHITE, k === sim.ni ? 0.5 : 0.25);
+      for (let i = 1; i < n; i++) {
+        const b = p.beat + ((p.land - p.beat) * i) / n;
+        const r = this.rad(flightRho(p, b)) + (p.kind === 'flip' ? p.side * rb * (1 - (2 * i) / n) : p.side * rb);
+        c.beginPath(); c.arc(Math.cos(ang(b)) * r, Math.sin(ang(b)) * r, 1.6, 0, TWO_PI); c.fill();
+      }
+    }
+
+    // speed portals
+    for (const sp of this.portals) {
+      const d = sp.beat - beat;
+      if (d > AHEAD || d < -0.4) continue;
+      const a = ang(sp.beat);
+      c.save();
+      c.rotate(a + Math.PI / 2);
+      c.globalAlpha = clamp((AHEAD - d) / 0.6, 0, 1) * clamp(1 + d / 0.4, 0, 1);
+      c.strokeStyle = rgba(CYAN);
+      c.lineWidth = 3;
+      c.lineCap = 'round';
+      const rr = this.rad(this.cam);
+      for (let i = -1; i <= 1; i++) {
+        const x = i * rb * 1.3 * (sp.faster ? 1 : -1);
+        c.beginPath(); c.moveTo(x - rb * 0.6, -rr - rb * 2.4); c.lineTo(x + rb * 0.6, -rr); c.lineTo(x - rb * 0.6, -rr + rb * 2.4); c.stroke();
+      }
+      c.restore();
+      c.lineCap = 'butt';
+    }
+
+    // orbs: optional extra taps on notes that fall in mid-flight
+    for (const o of course.orbs) {
+      const d = o.beat - beat;
+      if (d > AHEAD || d < -0.25 || sim.orbUsed(o.beat)) continue;
+      const p = course.presses[o.press];
+      const r = this.rad(flightRho(p, o.beat)) + p.side * rb;
+      const x = Math.cos(ang(o.beat)) * r;
+      const y = Math.sin(ang(o.beat)) * r;
+      c.globalAlpha = clamp((AHEAD - d) / 0.6, 0, 1) * clamp(1 + d / 0.25, 0, 1);
+      c.strokeStyle = rgba(GOLD);
+      c.lineWidth = Math.max(2, rb * 0.36);
+      c.beginPath(); c.arc(x, y, rb * 1.15, 0, TWO_PI); c.stroke();
+      c.fillStyle = rgba(GOLD, 0.9);
+      c.beginPath(); c.arc(x, y, rb * 0.4, 0, TWO_PI); c.fill();
+      c.globalAlpha = 1;
+    }
+
     for (const r of this.ripples) {
       r.age += dt;
       const u = r.age / 0.28;
       if (u >= 1) continue;
-      const [x, y] = this.pt(r.beat, r.h, r.lv);
       c.strokeStyle = rgba(r.col, (1 - u) * 0.8);
       c.lineWidth = 2;
-      c.beginPath(); c.arc(x, y, rb * (1.2 + u * 2.6), 0, TWO_PI); c.stroke();
+      c.beginPath(); c.arc(r.x, r.y, rb * (1.2 + u * 2.6), 0, TWO_PI); c.stroke();
     }
 
-    // the ball: a pure function of the clock, so it moves exactly as smoothly as the clock does
-    const lv = this.lvl(beat);
-    const air = !!sim.air;
-    const hNow = rb * (1 - 0.3 * this.landPulse) + shown(sim.height(beat)) * hop;
-    const [bx, by] = this.pt(beat, hNow, lv);
+    // the ball: its place round the core is a pure function of the clock, so it moves exactly as smoothly as the clock does
+    const off = sim.sideAt(beat) * rb * (1 - 0.3 * this.landPulse);
+    const br = this.rad(rho) + off;
+    const a = ang(beat);
+    const bx = Math.cos(a) * br;
+    const by = Math.sin(a) * br;
     if (run.state !== 'failed') {
       if (playing) {
-        this.trail.push({ beat, h: hNow, lv });
+        this.trail.push({ beat, rho, off });
         if (this.trail.length > 30) this.trail.shift();
       }
       c.lineCap = 'round';
       const n = this.trail.length;
       for (let i = 1; i < n; i++) {
-        const a = this.trail[i - 1];
-        const b = this.trail[i];
+        const p0 = this.trail[i - 1];
+        const p1 = this.trail[i];
         const u = i / n;
-        const [x0, y0] = this.pt(a.beat, a.h, a.lv);
-        const [x1, y1] = this.pt(b.beat, b.h, b.lv);
+        const ra = this.rad(p0.rho) + p0.off;
+        const rz = this.rad(p1.rho) + p1.off;
         c.strokeStyle = rgba(skin, u * u * 0.55);
         c.lineWidth = rb * 1.7 * u;
-        c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
+        c.beginPath(); c.moveTo(Math.cos(ang(p0.beat)) * ra, Math.sin(ang(p0.beat)) * ra); c.lineTo(Math.cos(ang(p1.beat)) * rz, Math.sin(ang(p1.beat)) * rz); c.stroke();
       }
       c.lineCap = 'butt';
-      const stretch = air ? clamp(Math.abs(sim.speed(beat)) / 4, 0, 1) * 0.2 : 0;
-      const ang = -Math.PI / 2 + (TWO_PI * beat) / LAP;
-      this.drawBall(bx, by, rb, skin, ang, 1 + stretch - 0.3 * this.landPulse, 1 - stretch * 0.5 + 0.22 * this.landPulse);
+      const vr = dt > 0 && this.ball.r ? (br - this.ball.r) / dt : 0;
+      const stretch = sim.mode !== 'ground' ? clamp(Math.abs(vr) / (r0 * 4), 0, 0.2) : 0;
+      this.drawBall(bx, by, rb, skin, a, 1 + stretch - 0.3 * this.landPulse, 1 - stretch * 0.5 + 0.22 * this.landPulse);
       this.ball.x = bx;
       this.ball.y = by;
+      this.ball.r = br;
     }
 
     for (let i = this.particles.length - 1; i >= 0; i--) {
@@ -529,45 +534,53 @@ export class GdRenderer {
       c.beginPath(); c.arc(p.x, p.y, p.size, 0, TWO_PI); c.fill();
     }
 
-    // short hints, inside the ring and out of the ball's way
+    // short hints, near the core and out of the ball's way
     if (run.state !== 'loading' && (!bestFor(level.id).cleared || run.opts.practice)) {
-      for (const hint of HINTS) {
-        const span = hint.when(run);
-        if (!span || beat < span[0] || beat > span[1]) continue;
-        const a = Math.min(1, (beat - Math.max(span[0], run.startAt / level.spb - 3)) / 0.5, (span[1] - beat) / 0.5);
-        this.text(hint.text, 0, rs * 0.5, clamp(m * 0.024, 11, 17), WHITE, clamp(a, 0, 1));
+      const first = course.presses[0];
+      const flip = course.presses.find((p) => p.kind === 'flip');
+      const orb = course.orbs[0];
+      const hints: Array<[number, number, string]> = [];
+      if (first) hints.push([course.start - 9, first.beat + 1.5, 'TAP ON EACH MARK']);
+      if (orb) hints.push([orb.beat - 5, orb.beat, 'GOLD ORB: BONUS TAP']);
+      if (flip) hints.push([flip.beat - 5, flip.beat, 'VIOLET: GRAVITY FLIP']);
+      for (const [b0, b1, s] of hints) {
+        if (beat < b0 || beat > b1) continue;
+        const al = Math.min(1, (beat - Math.max(b0, run.startAt / level.spb - 4)) / 0.5, (b1 - beat) / 0.5);
+        this.text(s, 0, -m * 0.045 * 1.2 - m * 0.04 * 1.5 - 30, clamp(m * 0.022, 10, 16), WHITE, clamp(al, 0, 1));
         break;
       }
     }
-    if (run.state === 'resuming') this.text(String(Math.max(1, Math.ceil((run.resumeAt - now) / 400))), 0, -rs * 0.5, m * 0.07, WHITE, 1);
-    if (run.state === 'loading') this.text('LOADING', 0, rs * 0.5, clamp(m * 0.024, 11, 17), WHITE, 0.8);
+    if (run.state === 'resuming') this.text(String(Math.max(1, Math.ceil((run.resumeAt - now) / 400))), 0, m * 0.16, m * 0.06, WHITE, 1);
+    if (run.state === 'loading') this.text('LOADING', 0, m * 0.16, clamp(m * 0.024, 11, 17), WHITE, 0.8);
     c.restore();
 
-    if (this.flash > 0) { c.fillStyle = `rgba(255,255,255,${this.flash * (save.reducedMotion ? 0.12 : 0.5)})`; c.fillRect(0, 0, this.w, this.h); }
+    if (this.flash > 0) { c.fillStyle = `rgba(255,255,255,${this.flash * (save.reducedMotion ? 0.1 : 0.38)})`; c.fillRect(0, 0, this.w, this.h); }
   }
 
   /** Idle picture behind the menus. */
   drawIdle(now: number, dt = 0.016): void {
     const c = this.ctx;
     c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.drain = 0;
     const pal = PALETTES.deep;
     const pulse = Math.exp(-(((now / 1000) * 2) % 1) * 4) * 0.5;
     this.background(pal, now / 1000, 0.45, pulse * 0.2, 0);
     const m = Math.min(this.w, this.h);
     c.save();
     c.translate(this.w / 2, this.h * 0.5);
-    this.core(pal, m * 0.06, m * 0.05, pulse, pulse * 0.5, dt);
-    for (let k = 0; k < 2; k++) {
+    this.core(pal, m * 0.06, m * 0.05, pulse, pulse * 0.5, dt, -1);
+    for (let k = 0; k < 3; k++) {
       c.lineWidth = 2;
-      c.strokeStyle = rgba(pal.ring, 0.32 - k * 0.14);
-      c.beginPath(); c.arc(0, 0, m * 0.27 * Math.pow(GROW, k), 0, TWO_PI); c.stroke();
+      c.strokeStyle = rgba(pal.ring, 0.3 - k * 0.08);
+      c.beginPath(); c.arc(0, 0, m * (0.24 + k * 0.07), 0, TWO_PI); c.stroke();
     }
-    // the ball rolls round and hops once a lap
+    // the ball climbs a ring every half turn, then drops back
     const turn = (now / 5200) % 1;
-    const u = (turn * 8) % 1;
-    const hopH = Math.floor(turn * 8) % 4 === 1 ? 4 * u * (1 - u) : 0;
-    const a = -Math.PI / 2 + turn * TWO_PI;
-    const r = m * 0.27 + m * 0.014 + hopH * m * 0.055;
+    const step = Math.floor(turn * 4) % 3;
+    const u = smooth(((turn * 4) % 1) * 3);
+    const lv = step === 2 ? 2 - 2 * u : step + u;
+    const a = -Math.PI / 2 + turn * TWO_PI * 2;
+    const r = m * (0.24 + lv * 0.07) + m * 0.014;
     this.drawBall(Math.cos(a) * r, Math.sin(a) * r, m * 0.014, orbColour(save.skin));
     c.restore();
   }
@@ -576,6 +589,7 @@ export class GdRenderer {
   drawMetronome(now: number, phase: number): void {
     const c = this.ctx;
     c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.drain = 0;
     const pal = PALETTES.deep;
     this.background(pal, now / 1000, 0.4, 0, 0);
     const cx = this.w / 2;
@@ -585,13 +599,41 @@ export class GdRenderer {
     c.strokeStyle = rgba(pal.ring, 0.5);
     c.beginPath(); c.arc(cx, cy, R, 0, TWO_PI); c.stroke();
     c.lineCap = 'round';
-    c.lineWidth = 7;
-    c.strokeStyle = rgba(GOLD);
-    c.beginPath(); c.moveTo(cx, cy - R * 0.85); c.lineTo(cx, cy - R * 1.15); c.stroke();
+    c.lineWidth = 5;
+    c.strokeStyle = '#ffffff';
+    c.beginPath(); c.moveTo(cx, cy - R * 0.87); c.lineTo(cx, cy - R * 1.13); c.stroke();
     c.lineCap = 'butt';
     const a = -Math.PI / 2 + phase * TWO_PI;
-    this.drawBall(cx + Math.cos(a) * R, cy + Math.sin(a) * R, R * 0.1, CYAN);
+    this.drawBall(cx + Math.cos(a) * (R + R * 0.1), cy + Math.sin(a) * (R + R * 0.1), R * 0.1, CYAN);
   }
+}
+
+/** Turns the presses into the rings the ball meets, in order. */
+function platforms(c: Course, level: Level): Platform[] {
+  const ps = c.presses;
+  const out: Platform[] = [];
+  for (let j = 0; j <= ps.length; j++) {
+    const p = ps[j];
+    const prev = ps[j - 1];
+    const lv = p ? p.from : prev ? prev.to : 0;
+    const side = p ? p.side : prev ? (prev.kind === 'flip' ? -prev.side : prev.side) : 1;
+    const fs = prev ? prev.land - (prev.bounce && p ? p.tol * 0.85 : 0.1) : c.start - 16;
+    const fe = p ? p.beat + p.tol : c.end + 16;
+    let cs = Infinity;
+    let ce = -Infinity;
+    if (prev) {
+      // while the ball rides the ring before, this ring is the ceiling above it, up to the opening over the note
+      const before = out[j - 1];
+      cs = Math.max(prev.beat - LOOK, before.fs);
+      ce = prev.beat - prev.tol * (prev.kind === 'flip' ? 0.85 : 0.9);
+    }
+    out.push({
+      lv, side, fs, fe, cs, ce, note: p ? p.beat : NaN, tol: p ? p.tol : 0,
+      flipAt: prev && prev.kind === 'flip' ? prev.beat : NaN, flipTol: prev ? prev.tol : 0,
+      pulse: !!level.segAt(((p ? p.beat : c.end) + 1e-6) * c.spb).core?.pulse
+    });
+  }
+  return out;
 }
 
 /** Measured energy of each bar, 0..1: the kick and snare strengths baked into the chart, averaged and lightly smoothed. */

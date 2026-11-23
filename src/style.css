@@ -201,3 +201,23 @@ button { font: inherit; }
 .badge.on { opacity: 1; border-color: var(--gold); background: rgba(255, 214, 90, 0.08); }
 .orb.on { border-color: var(--cyan); background: rgba(0, 245, 255, 0.1); }
 .orb.locked { opacity: 0.45; cursor: default; }
+
+/* ---------- record mode (dev tool) ---------- */
+.rec-card { gap: 10px; max-height: 96vh; overflow-y: auto; }
+#recSection { width: 100%; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.18); background: rgba(255, 255, 255, 0.06); color: #fff; font: inherit; font-weight: 700; }
+.rec-opts { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; font-weight: 700; color: var(--muted); }
+.rec-opts .row { margin: 0; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.rec-opts .pill { padding: 6px 10px; font-size: 12px; }
+.rec-grid { width: 100%; display: flex; flex-direction: column; gap: 5px; }
+.rec-row { display: grid; grid-template-columns: 58px 1fr; align-items: center; gap: 8px; }
+.rec-tag { font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); text-align: left; }
+.rec-tag.hand { color: var(--gold); }
+.rec-cells { display: grid; gap: 3px; }
+.rec-cell { height: 26px; padding: 0; border-radius: 5px; border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(255, 255, 255, 0.04); cursor: pointer; }
+.rec-cell.beat { border-color: rgba(255, 255, 255, 0.3); }
+.rec-cell.on { background: var(--cyan); border-color: var(--cyan); }
+.rec-cell.on.off { background: repeating-linear-gradient(45deg, var(--cyan), var(--cyan) 4px, rgba(0, 245, 255, 0.35) 4px, rgba(0, 245, 255, 0.35) 8px); }
+.rec-cell.fresh { background: var(--gold); border-color: var(--gold); }
+.rec-cell.now { box-shadow: 0 0 0 2px #fff; }
+#record .pad { padding: 16px; font-size: 18px; }
+#recExport { width: 100%; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.18); background: rgba(0, 0, 0, 0.35); color: #cfe; font: 11px ui-monospace, monospace; }

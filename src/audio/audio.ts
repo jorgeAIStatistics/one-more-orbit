@@ -206,10 +206,11 @@ export class AudioEngine {
   }
 
   /** Starts a buffer at audio-clock time `when`, from `offset` seconds in. */
-  playMusic(buffer: AudioBuffer, when: number, offset = 0): { stop: (fade?: number) => void } {
+  playMusic(buffer: AudioBuffer, when: number, offset = 0, rate = 1): { stop: (fade?: number) => void } {
     const c = this.ctx!;
     const src = c.createBufferSource();
     src.buffer = buffer;
+    src.playbackRate.value = rate; // Record Mode plays sections slowed down (the pitch drops with it)
     const g = c.createGain();
     src.connect(g);
     g.connect(this.pre);
@@ -228,6 +229,22 @@ export class AudioEngine {
         setTimeout(() => { try { g.disconnect(); } catch { /* ignore */ } }, (fade + 0.5) * 1000);
       }
     };
+  }
+
+  private muffled = -1;
+  /**
+   * How muffled the music is, 0 (full mix) to 1 (deep low-pass, never silent). It closes slowly and opens
+   * fast, so losing the rhythm creeps in and finding it again is heard at once.
+   */
+  setMuffle(amount: number): void {
+    const c = this.ctx;
+    const m = Math.max(0, Math.min(1, amount));
+    if (!c || m === this.muffled) return;
+    const closing = m > this.muffled;
+    this.muffled = m;
+    const now = c.currentTime;
+    this.lp.frequency.cancelScheduledValues(now);
+    this.lp.frequency.setTargetAtTime(18000 * Math.pow(650 / 18000, m), now, closing ? 0.6 : 0.07);
   }
 
   /** Briefly low-passes the music: the sound of a missed gate. */

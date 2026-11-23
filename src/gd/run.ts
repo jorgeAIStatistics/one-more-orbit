@@ -3,21 +3,25 @@ import { Level } from '../game/level';
 import type { LevelPack } from '../game/packs';
 import { save } from '../save';
 import { SmoothClock } from './clock';
-import { Sim } from './sim';
-import { buildTrack, type Track } from './track';
+import { buildCourse, type Course } from './course';
+import { pitchLookup, pressTicks } from './presses';
+import { Sim, type TapResult } from './sim';
 
 export type RunState = 'loading' | 'playing' | 'paused' | 'resuming' | 'failed' | 'done' | 'error';
 export interface RunOptions { bot?: boolean; practice?: boolean; startAt?: number; leadIn?: number }
-export type RunEvent = 'jump' | 'orb' | 'land' | 'pad' | 'launch' | 'crash';
+export interface RunEvent { kind: 'hop' | 'flip' | 'orb' | 'skip' | 'land' | 'crash' | 'drop'; flow?: boolean; full?: boolean }
 
 const RESUME_COUNT = 1.2;
 
-/** One attempt in the new core: the ball moves by itself, a tap hops, a hazard ends the attempt. */
+/** One attempt: the ball orbits by itself, a tap on a note hops it to the next ring, a missed opening ends it. */
 export class GdRun {
   readonly level: Level;
-  readonly track: Track;
+  readonly course: Course;
   readonly sim: Sim;
+  /** song times: where this attempt starts, and where the built stretch of the level starts and ends */
   readonly startAt: number;
+  readonly t0: number;
+  readonly t1: number;
   readonly clock = new SmoothClock();
   state: RunState = 'loading';
   time: number;
@@ -28,25 +32,30 @@ export class GdRun {
   events: RunEvent[] = [];
   /** song milliseconds per page millisecond, frame by frame: 1.000 is perfectly smooth */
   stepLog: number[] = [];
+  /** whether the drop was entered in flow (null until it happens) */
+  dropFull: boolean | null = null;
   private songStart = 0;
   private latency = 0;
   private music: { stop: (fade?: number) => void } | null = null;
   private bi = 0;
   private ended = false;
   private lastNow = 0;
-  private seenJumps = 0;
-  private seenPads = 0;
-  private seenLand = -9;
+  private seenLand = -99;
   private readonly leadIn: number;
 
   constructor(readonly pack: LevelPack, readonly opts: RunOptions, private onEnd: (run: GdRun) => void) {
     this.level = new Level(pack.level, pack.audio, pack.chart);
-    this.track = buildTrack(this.level);
-    this.startAt = opts.startAt ?? 0;
+    const spb = this.level.spb;
+    this.course = buildCourse(this.level, pressTicks(pack).map((t) => t / 12), pitchLookup(pack), pack.level.lab);
+    this.t0 = this.course.start * spb;
+    this.t1 = Math.min(this.course.end * spb, this.level.endTime);
+    this.startAt = Math.max(this.t0, opts.startAt ?? this.t0);
     this.leadIn = opts.leadIn ?? 1;
     this.time = this.viewTime = this.startAt - this.leadIn;
-    this.sim = new Sim(this.track, this.time / this.level.spb);
-    while (this.bi < this.track.presses.length && this.track.presses[this.bi] * this.level.spb < this.time) this.bi++;
+    // from a checkpoint, the game plays the notes of the run-in itself and hands over on the checkpoint
+    this.sim = new Sim(this.course, this.time / spb, this.startAt > this.t0 ? this.startAt / spb : -Infinity);
+    while (this.bi < this.course.taps.length && this.course.taps[this.bi] * spb < this.startAt) this.bi++;
+    if (this.startAt / spb > this.course.dropBeat) this.dropFull = true;
   }
 
   async start(): Promise<void> {
@@ -63,6 +72,7 @@ export class GdRun {
     }
     if (this.ended) return;
     await audio.resume();
+    audio.setMuffle(0);
     const c = audio.ctx;
     const off = this.pack.audio.offset;
     if (c && track) {
@@ -80,9 +90,9 @@ export class GdRun {
     return audio.ctxTimeAt(now) - this.songStart - this.latency - save.audioOffset / 1000;
   }
 
-  /** How far through the level, 0..1. */
+  /** How far through the built stretch, 0..1. */
   get progress(): number {
-    return Math.max(0, Math.min(1, this.time / this.level.endTime));
+    return Math.max(0, Math.min(1, (this.time - this.t0) / (this.t1 - this.t0)));
   }
 
   get pct(): number {
@@ -94,14 +104,20 @@ export class GdRun {
     return this.sim.crashed ? this.sim.crashBeat * this.level.spb : -1;
   }
 
+  private react(r: TapResult): void {
+    if (r.kind === 'none' || r.kind === 'crash') return;
+    if (r.kind === 'skip') { audio.hit('stray', 0.35); this.events.push({ kind: 'skip' }); return; }
+    // one hit sound for every tap that meets a note; on the beat in a hook section it also plays the hook's pitch
+    audio.hit('hit', r.auto ? 0.55 : 1);
+    const hook = this.level.segAt(Math.max(0, this.time)).follow === 'lead';
+    if (r.flow && hook && r.pitch) audio.pluck(r.pitch, 0.5);
+    this.events.push({ kind: r.kind, flow: !!r.flow || !!r.auto });
+  }
+
   /** The one button. The tap is applied at the moment it happened, not when the next frame runs. */
   tap(perfMs: number): void {
     if (this.state !== 'playing') return;
-    const r = this.sim.press(this.clock.at(perfMs) / this.level.spb);
-    if (r === 'none') return;
-    this.seenJumps = this.sim.jumps;
-    audio.hit('hit', 1);
-    this.events.push(r);
+    this.react(this.sim.press(this.clock.at(perfMs) / this.level.spb));
   }
 
   frame(now: number): void {
@@ -119,34 +135,30 @@ export class GdRun {
     this.time = t;
     this.viewTime = t + save.visualOffset / 1000;
     const beat = t / this.level.spb;
-    if (this.opts.bot) {
-      while (this.bi < this.track.presses.length && this.track.presses[this.bi] <= beat) {
-        const r = this.sim.press(this.track.presses[this.bi++]);
-        if (r !== 'none') { audio.hit('hit', 1); this.events.push(r); this.seenJumps = this.sim.jumps; }
-      }
-    }
+    if (this.opts.bot) while (this.bi < this.course.taps.length && this.course.taps[this.bi] <= beat) this.react(this.sim.press(this.course.taps[this.bi++]));
     this.sim.advance(beat);
-    if (this.sim.jumps > this.seenJumps) { this.seenJumps = this.sim.jumps; audio.hit('hit', 1); this.events.push('jump'); } // a buffered tap
-    if (this.sim.padsHit > this.seenPads) {
-      this.seenPads = this.sim.padsHit;
-      const big = this.track.pads.some((p) => p.big && Math.abs(p.beat - (this.sim.air?.b0 ?? -9)) < 0.3);
-      audio.hit(big ? 'impact' : 'hop', big ? 1 : 0.7);
-      this.events.push(big ? 'launch' : 'pad');
+    while (this.sim.out.length) this.react(this.sim.out.shift()!);
+    if (this.sim.landedAt !== this.seenLand) { this.seenLand = this.sim.landedAt; this.events.push({ kind: 'land' }); }
+    audio.setMuffle(this.sim.muffle);
+    if (this.dropFull === null && beat >= this.course.dropBeat) {
+      // the drop is earned: arrive in flow and it goes off in full
+      this.dropFull = this.sim.flow >= 0.6 && this.sim.muffle < 0.3;
+      if (this.dropFull) audio.hit('impact', 1);
+      this.events.push({ kind: 'drop', full: this.dropFull });
     }
-    if (this.sim.landedAt !== this.seenLand) { this.seenLand = this.sim.landedAt; this.events.push('land'); }
     if (this.sim.crashed) {
       audio.hit('miss', 0.9);
-      this.events.push('crash');
+      this.events.push({ kind: 'crash' });
       this.finish('failed', 420);
-    } else if (t >= this.level.endTime) this.finish('done', 500);
+    } else if (t >= this.t1) this.finish('done', 600);
   }
 
   private finish(state: 'failed' | 'done', delay: number): void {
     if (this.ended) return;
     this.ended = true;
     this.state = state;
-    this.music?.stop(state === 'failed' ? 0.1 : 0.2);
-    setTimeout(() => this.onEnd(this), delay);
+    this.music?.stop(state === 'failed' ? 0.1 : 0.5);
+    setTimeout(() => { audio.setMuffle(0); this.onEnd(this); }, delay);
   }
 
   /** Autoplay proof of smooth movement: how evenly the game clock advanced, frame by frame. */
@@ -173,6 +185,7 @@ export class GdRun {
     this.ended = true;
     this.music?.stop(0.08);
     this.state = 'done';
+    audio.setMuffle(0);
     void audio.resume();
   }
 }
