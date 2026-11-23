@@ -96,9 +96,9 @@
     <div class="panel wide scroll">
       <header class="topbar"><button id="settingsClose" class="icon" type="button" data-icon="back" aria-label="Back"></button><span class="label">SETTINGS</span><span class="icon ghost"></span></header>
       <h3>Sound</h3>
-      <label class="set"><span>Music</span><input id="setMusic" type="range" min="0" max="1" step="0.05" /></label>
-      <label class="set"><span>Effects</span><input id="setSfx" type="range" min="0" max="1" step="0.05" /></label>
-      <label class="set"><span>Tap sounds</span><input id="setHit" type="range" min="0" max="1" step="0.05" /></label>
+      <label class="set"><span>Music</span><span class="slide"><input id="setMusic" type="range" min="0" max="1" step="0.05" /><output id="setMusicVal" for="setMusic"></output></span></label>
+      <label class="set"><span>Effects</span><span class="slide"><input id="setSfx" type="range" min="0" max="1" step="0.05" /><output id="setSfxVal" for="setSfx"></output></span></label>
+      <label class="set"><span>Tap sounds</span><span class="slide"><input id="setHit" type="range" min="0" max="1" step="0.05" /><output id="setHitVal" for="setHit"></output></span></label>
       <h3>Sync</h3>
       <div class="set"><span>Audio offset<small>Raise it if on-time taps read late (Bluetooth adds 150 to 250 ms)</small></span>
         <div class="stepper"><button id="aoMinus" class="icon small" type="button" aria-label="Lower">−</button><b id="aoVal">0 ms</b><button id="aoPlus" class="icon small" type="button" aria-label="Raise">+</button></div></div>

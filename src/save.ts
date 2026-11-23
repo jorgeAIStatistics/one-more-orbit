@@ -60,6 +60,11 @@ function load(): SaveData {
       d.core = 4;
     }
   } catch { /* storage unavailable: play with defaults */ }
+  // volumes are always a number from 0 to 1, whatever an older save holds
+  const vol = (v: unknown, fallback: number): number => (typeof v === 'number' && isFinite(v) ? Math.max(0, Math.min(1, v)) : fallback);
+  d.music = vol(d.music, 0.8);
+  d.sfx = vol(d.sfx, 0.7);
+  d.hitVol = vol(d.hitVol, 1);
   d.audioOffset = Math.max(-200, Math.min(400, Math.round(Number(d.audioOffset) || 0)));
   d.visualOffset = Math.max(-200, Math.min(400, Math.round(Number(d.visualOffset) || 0)));
   return d;

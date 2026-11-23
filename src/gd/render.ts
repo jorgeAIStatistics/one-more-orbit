@@ -1072,6 +1072,9 @@ export class GdRenderer {
   /** The menus choose the idle scene's palette (the focused level's) and where its centre sits (fractions of the screen). */
   idlePal = 'deep';
   idleAt: [number, number] = [0.5, 0.5];
+  /** Size of the menu scene, 1 = its usual size; the title screen fits it between the wordmark and the call to start. */
+  idleScale = 1;
+  private idleS = 1;
   private idleX = 0.5;
   private idleY = 0.5;
   private idleMix: Palette = PALETTES.deep;
@@ -1087,12 +1090,13 @@ export class GdRenderer {
     const pal = this.idleMix;
     this.idleX += (this.idleAt[0] - this.idleX) * Math.min(1, dt * 4);
     this.idleY += (this.idleAt[1] - this.idleY) * Math.min(1, dt * 4);
+    this.idleS += (this.idleScale - this.idleS) * Math.min(1, dt * 4);
     // the scene listens: when music is playing its bass drives the pulse; in silence a steady beat does
     const bass = (this.eq[0] + this.eq[1] + this.eq[2] + this.eq[EQ_BARS - 1]) / 4;
     const steady = Math.exp(-(((now / 1000) * 2) % 1) * 4) * 0.4;
     const pulse = Math.max(steady * (bass > 0.05 ? 0.3 : 1), Math.min(1, bass * 1.3));
     this.background(pal, now / 1000, dt, 0.5, pulse * 0.25, 0, 0, 0);
-    const m = Math.min(this.w, this.h);
+    const m = Math.min(this.w, this.h) * this.idleS;
     c.save();
     c.translate(this.w * this.idleX, this.h * this.idleY);
     this.core(pal, m * 0.06, m * 0.07, pulse, pulse * 0.5, dt, -1, 0, 0, 0);

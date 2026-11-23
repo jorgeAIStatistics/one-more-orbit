@@ -49,6 +49,8 @@ export class AudioEngine {
       let c: AudioContext;
       try { c = new AC({ latencyHint: 'interactive' }); } catch { c = new AC(); }
       this.ctx = c;
+      // iPhone: a game's sound is asked for, so it plays even with the ring/silent switch set to silent (Safari 16.4+)
+      try { const s = (navigator as Navigator & { audioSession?: { type: string } }).audioSession; if (s) s.type = 'playback'; } catch { /* older browsers */ }
       const limiter = c.createDynamicsCompressor();
       limiter.threshold.value = -1.5;
       limiter.knee.value = 3;

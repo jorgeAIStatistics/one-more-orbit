@@ -40,13 +40,27 @@ const wide = () => window.innerWidth >= 900;
 for (const el of document.querySelectorAll<HTMLElement>('[data-icon]')) el.insertAdjacentHTML('afterbegin', icon(el.dataset.icon!));
 
 // ------------------------------------------------------------------ screens
+/** Where the menu scene sits: beside the wordmark on a wide title screen; on a phone, centred in the room between the wordmark and TAP TO START. */
+function placeScene(s: Screen): void {
+  renderer.idleScale = 1;
+  if (s !== 'title') { renderer.idleAt = [0.5, 0.46]; return; }
+  if (wide()) { renderer.idleAt = [0.7, 0.5]; return; }
+  const h = window.innerHeight;
+  const top = document.querySelector<HTMLElement>('.mark')!.getBoundingClientRect().bottom;
+  const bottom = $('cta').getBoundingClientRect().top;
+  const room = bottom - top;
+  if (!(room > 60)) { renderer.idleAt = [0.5, 0.58]; renderer.idleScale = 0.7; return; }
+  const outer = 0.46 * Math.min(window.innerWidth, h); // the outermost ring at full size
+  renderer.idleAt = [0.5, (top + bottom) / 2 / h];
+  renderer.idleScale = Math.max(0.45, Math.min(1, (room / 2 - 14) / outer));
+}
 function show(s: Screen): void {
   screen = s;
   for (const id of SCREENS) $(id).classList.toggle('on', id === s);
   $('hud').classList.toggle('hidden', !(s === 'play' || s === 'pause'));
   $('levels').classList.remove('launch');
   // the scene behind the menus: beside the wordmark on a wide title screen, centred otherwise, in the focused level's colours
-  renderer.idleAt = s === 'title' && wide() ? [0.7, 0.5] : s === 'title' ? [0.5, 0.54] : [0.5, 0.46];
+  placeScene(s);
   renderer.idlePal = s === 'title' ? 'deep' : levelPalette(pack);
   if (s === 'levels') { renderCards(); queuePreview(); }
   if (s === 'title' || s === 'play') audio.stopPreview(s === 'play' ? 0.9 : 0.4);
@@ -457,6 +471,9 @@ window.addEventListener('pointerdown', (e) => {
   e.preventDefault();
   tap(stamp(e));
 }, { passive: false });
+// iOS Safari only lets sound start from the end of a touch (or a click), not from its start: wake the audio there too.
+// The same call brings it back after a phone call or a trip to another app.
+for (const type of ['pointerup', 'touchend', 'click'] as const) window.addEventListener(type, () => { if (audio.ctx && !audio.running && !(run && (run.state === 'paused' || run.state === 'resuming'))) void audio.resume(); }, { capture: true, passive: true });
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 
 window.addEventListener('keydown', (e) => {
@@ -528,6 +545,7 @@ function renderSettings(): void {
   $<HTMLInputElement>('setMusic').value = String(save.music);
   $<HTMLInputElement>('setSfx').value = String(save.sfx);
   $<HTMLInputElement>('setHit').value = String(save.hitVol);
+  showVolumes();
   $('aoVal').textContent = fmtMs(save.audioOffset);
   $('voVal').textContent = fmtMs(save.visualOffset);
   $('setMotion').classList.toggle('on', save.reducedMotion);
@@ -537,6 +555,14 @@ function renderSettings(): void {
   $('recordBtn').classList.toggle('hidden', !import.meta.env.DEV);
   const lat = Math.round(audio.latency() * 1000);
   $('setInfo').textContent = `${audio.ctx ? `This device reports ${lat} ms of output delay, already allowed for. ` : ''}Changed headphones or speakers? Run the sync check again.`;
+}
+/** Each slider says its value, so a saved setting can be read at a glance (and 0 reads as Off, not as a blank bar). */
+function showVolumes(): void {
+  for (const [id, v] of [['setMusicVal', save.music], ['setSfxVal', save.sfx], ['setHitVal', save.hitVol]] as const) {
+    const el = $(id);
+    el.textContent = v <= 0 ? 'Off' : `${Math.round(v * 100)}%`;
+    el.classList.toggle('off', v <= 0);
+  }
 }
 function openSettings(from: Screen): void {
   settingsFrom = from;
@@ -732,9 +758,10 @@ $('resLevelsBtn').addEventListener('click', toLevels);
 $('resSyncCal').addEventListener('click', () => { run?.stop(); run = null; openCalib(true); });
 $('tutorSkip').addEventListener('click', () => { run?.stop(); endTutorial(); });
 $('settingsClose').addEventListener('click', closeSettings);
-$('setMusic').addEventListener('input', (e) => { save.music = Number((e.target as HTMLInputElement).value); audio.setVolumes(save.music, save.sfx); });
-$('setSfx').addEventListener('input', (e) => { save.sfx = Number((e.target as HTMLInputElement).value); audio.setVolumes(save.music, save.sfx); audio.hit('impact', 0.6); });
-$('setHit').addEventListener('input', (e) => { save.hitVol = Number((e.target as HTMLInputElement).value); audio.hit('hit', save.hitVol); });
+$('setMusic').addEventListener('input', (e) => { save.music = Number((e.target as HTMLInputElement).value); audio.setVolumes(save.music, save.sfx); showVolumes(); });
+$('setSfx').addEventListener('input', (e) => { save.sfx = Number((e.target as HTMLInputElement).value); audio.setVolumes(save.music, save.sfx); audio.hit('impact', 0.6); showVolumes(); });
+$('setHit').addEventListener('input', (e) => { save.hitVol = Number((e.target as HTMLInputElement).value); audio.hit('hit', save.hitVol); showVolumes(); });
+for (const id of ['setMusic', 'setSfx', 'setHit']) $(id).addEventListener('change', persist); // saved as soon as the slider is let go
 $('aoMinus').addEventListener('click', () => nudge('audioOffset', -5));
 $('aoPlus').addEventListener('click', () => nudge('audioOffset', 5));
 $('voMinus').addEventListener('click', () => nudge('visualOffset', -5));

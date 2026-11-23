@@ -1,73 +1,40 @@
 # ONE MORE ORBIT
 
-A one-button rhythm game: a ball orbits a ring in time with the music, you tap as it crosses each gate, and the last gate on a ring launches it to the next while the camera zooms out. All variety comes from the world around that one tap.
+A one-button rhythm game. A ball rides a ring in time with the music. Tap on each white mark to hop to the next ring; tap the gold notes to stay in flow and charge the drop. Four levels, each with its own mode.
 
-**Status:** four levels on the `one-button` branch (Heroes Tonight, Sky High, Blank, Invincible), one chart each, unlocked in order, with orbs and badges. Still planned: mods, the art-direction pass, the PWA and the native wrapper. The earlier two-hand version is tagged `v4-two-hand-slice`.
+**Version:** 1.0 release candidate 1 (`v1.0-rc1`).
 
-**Music licence.** The tracks are NCS releases and are here for private testing only. Releasing the game needs a game licence from NoCopyrightSounds (ncs.io). Credits and that note are in `levels/manifest.json` and shown in the game.
+**Music licence.** The four tracks are NCS releases. NoCopyrightSounds requires a game licence before a game using them is published (ncs.io). Each song is one entry in `levels/manifest.json` and one in `src/game/packs.ts`, so a track can be swapped without touching the rest. Credits are shown in Settings as "Song – Artist [NCS Release] · Music provided by NoCopyrightSounds".
 
-## Ring-hop core on the `gd-core` branch (four levels)
+## The game
 
-The current direction mixes Geometry Dash's forgiving survival structure with the orbit rhythm game. All four levels are built for it, each adding to the one before:
-
-| Level | Difficulty | Signature mode (introduced mid-level, stars in the drop) |
+| Level | Difficulty | Mode it introduces |
 |---|---|---|
 | Heroes Tonight | Easy | Planet hop: slingshots from planet to planet |
 | Sky High | Normal | Weave: gravity flips that bounce the ball between two rings |
-| Blank | Hard | Spin gates: the opening is a gap in a turning ring that comes round to the mark on the beat; with turns and speed changes |
-| Invincible | Insane | Twin orbit: a mirrored second ball, one tap moves both; plus every mode before |
+| Blank | Hard | Spin gates: the opening is a gap in a turning ring; with turns and speed changes |
+| Invincible | Insane | Twin orbit: one tap moves two mirrored balls; plus every mode before |
 
-Each bar of a level has a mode (`core.bars` in the level file), so the mechanic changes every bar or two while the notes stay the same for the same music. `tests/gd.test.ts` checks that no mode runs longer than 8 bars, that sections mix several kinds of bar, and that each level's mode appears before its drop and stars in it.
+- **Two layers of notes.** *Survival presses* (white marks) sit on strong beats only, never closer than a beat. A tap on one hops the ball to the next ring. *Flow notes* (gold) are every faster note in the music: optional, and they can never end the run.
+- **Survival is generous.** An opening is clearable within ±120 ms of its note (±160 ms for the big gold presses and the first press after a planet hop). Riding past a mark, or tapping early right next to one, ends the run. Taps away from any opening, or near a flow note, are free.
+- **Flow is rhythm.** Taps within ±40 ms of a note build the flow meter (the gold arc round the core). After three off-beat presses in a row the music starts to muffle; two on-beat taps clear it. Mashing earns no flow.
+- **The build-up is a charge.** Nothing can end the run there. Each note you touch fills the drop's charge.
+- **The drop is as big as you made it:** charge times flow scales the whole set piece. Chaos stays in the background; the ball, marks and openings are always drawn last on a clean band.
+- **Planet hops are fair by rule.** They launch on a strong beat at a phrase boundary, fly for two beats, and nothing can end the run for at least 1.5 beats after landing. The camera arrives first and the landing spot is shown ahead.
+- **Entry, crash, finish.** A level opens with a title card and a 3-2-1 on the beat. A crash shows the percent reached and restarts in half a second (a tap restarts at once). The last press launches the ball out through every ring, LEVEL COMPLETE fills to 100 while the music plays out, then the results appear.
+- **Practice** restarts from the section you reached, and the game plays the run-in for you. "Practice the build-up and drop" starts two bars before the charge.
+- **Orbs and badges.** Clearing levels and playing well earn ball colours and ten badges.
 
-`python tools/intensity.py` measures each excerpt (loudness, bass, hits per second, tempo, drop impact) for the setlist order.
+## Screens
 
-- **Two layers of notes.** *Survival presses* (white marks) are the strong beats only, never closer than a beat: a tap on one hops the ball to the next ring, and the flight lasts until the next press (two beats at most, then it rides). *Flow notes* (gold) are every faster note in the music: optional taps on the ring or in mid-flight that can never end the run.
-- **Survival is geometry.** An opening is clearable within ±120 ms of its note. Ride past the mark and the ring ends; tap too early near an opening with no flow note around and the ball hits the ring above. Taps far from any opening, or anywhere near a flow note, are free. A crash restarts at once; practice restarts from the section, and the game plays the run-in for you.
-- **Flow is rhythm.** Taps within ±40 ms of a note of either layer build the flow meter (the gold arc round the core) and sparkle. An off-beat press takes a notch off; a flow note that goes by untapped costs a sliver. After three off-beat presses in a row the music starts to muffle and the colours drain, a step per further one; two on-beat taps clear it. On hook sections an on-beat tap also plays the hook's pitch.
-- **The build-up is a charge.** In sections marked `charge` nothing can end the run. Every note is a flow note, and each one you touch fills the drop's charge (the white arc round the core; three notes in four fills it) while the ring, core and equalizer wind up. Mashing is safe there but leaks charge.
-- **The drop is as big as you made it.** Its size is charge times flow, and it scales everything in the set piece: the flash, three shockwaves, every ring shattering into turning shards, the camera thrown back, light rays and bloom behind the course. Through the drop the equalizer's bars reach across the screen on the kick, kicks throw bursts off the core and bump the camera, snares flicker the colour (reduced motion tones all of it down). On-beat taps in the loud parts fire a shockwave and light the rings. Marks, ceilings, flow notes and the ball are always drawn last, on top.
-- **Big hits.** The first press of each half of a drop phrase and the chart's accents are drawn bigger with a ring closing in on them; they are ordinary presses with the usual opening. Mashing (nine taps inside a second, outside a charge) earns no flow and muffles the music.
-- **Generated layers.** For bars without a hand recording, `autoLayers` in `src/gd/course.ts` picks the presses: notes on the beat first, then off-beat accents with a clear beat either side; everything else becomes a flow note.
-- **Per-section settings** live in `levels/<id>/level.json` under `core`: `pulse` (marks breathe with the kick), `charge`, `smash` (the section opens with the drop's big gold press, ±160 ms; `launch` makes the game take it), `record` (a passage worth recording by hand), and `bars`: how each bar plays, repeated to fill the section. A bar is words joined by `+`: `up` / `down` / `weave` (ride the outside and hop outward / ride the inside and hop inward / flip on every press between two rings), `spin` (spin gate), `twin` (twin orbit), `sling` (the bar's first press is a planet hop), `turn` (the orbit reverses at the bar line), `fast` / `slow` / `normal` (orbit speed from that bar on). Three of the layouts are generated by `tools/_levels.py` (its `core=` argument); Sky High's is hand-kept.
-- **Start at the build-up** on the menu starts runs at the first charge section (not saved), to reach the drop quickly.
-- Code: `src/gd/course.ts` (notes to rings), `src/gd/sim.ts` (fixed 240 Hz steps, survival, flow and charge), `src/gd/clock.ts` (smooth clock), `src/gd/run.ts`, `src/gd/render.ts`. `tests/gd.test.ts` covers autoplay in full flow, press spacing and window sizes, "nothing can crash in the build-up", the charge, flow notes never hurting, uneven timing, the muffle steps, mash bots at 8, 10 and 12 taps a second, and the clock.
+Title, level select (swipeable cards with Best and Practice bars, locks, song preview), play, pause, results, Orbs, Badges, Settings, the 10-second sync check and a short tutorial on the first run of level 1. Phone portrait, phone landscape and desktop each have their own layout. One design system in `src/style.css` (Unbounded for display type); icons and each level card's artwork are SVG in `src/ui/art.ts`.
 
-### Transitions, entry and finish
+## Sync
 
-- **Planet hops are fair by rule** (`tests/gd.test.ts`): a hop launches only from an on-beat press that opens a phrase or its second half; it flies for two beats; after it lands nothing can end the run for the landing grace (at least 1.5 beats and at least 0.85 s); the first press after it is on the ring you landed on, has the wide ±160 ms opening, forgives early taps and is highlighted. The camera reaches the next planet before the ball does, the launch arrows pulse on the beat, and a cyan target marks the landing spot. There are no hops in a twin orbit.
-- **Entry:** the level's first bar is a count-in with no survival press (its notes are flow notes). A fresh start shows a title card over the run-in and counts 3, 2, 1 on the beats. An instant restart after a crash cuts in at beat 2 with the attempt counter flashing.
-- **Crash:** a short burst, the percent reached, and a restart by itself half a second later (a tap restarts at once). Results only appear on a clear or on quitting.
-- **Finish:** when the last press lands the level is won: the ball launches out through every ring, the world bursts into the level's colours, LEVEL COMPLETE shows with its bar filling to 100 while the music plays out, then the results fade in. A first clear lists what it unlocked.
-
-### Front end
-
-One design system (`src/style.css`): Unbounded for display type, flat surfaces with a 2px line, one primary button, one secondary, icon buttons, chips. Screens cross-fade in half a beat at 120 BPM. `src/ui/art.ts` holds the icon set and each level card's own artwork; `src/main.ts` is the app controller.
-
-- **Title:** the wordmark (the O of ORBIT is a ring with a ball riding round it) over the living orbit scene; tap to start.
-- **Level select:** swipeable cards (scroll-snap; arrows and arrow keys on desktop) with Best and Practice bars, attempts, locks and their unlock condition, a song preview on focus, PLAY and PRACTICE, and Orbs / Badges / Settings.
-- **Results:** percent reached, new best or first clear, attempts, on-the-beat share, best streak, drop charge, the progress bar with the drop and the crash point, the sync line with its one-tap fix, then RETRY, NEXT LEVEL and LEVELS.
-- **Pause:** resume, restart, practice from here, practice the build-up and drop, settings, quit.
-- **Settings:** three volumes (music, effects, tap sounds), offsets and the sync check, reduced motion, About (credits and the licence note), and playtest options (all levels open, autoplay, replay the tutorial; Record mode only on the dev server).
-- **First run:** the 10-second sync check, then a 24-beat tutorial on level 1 in which nothing can end the run.
-
-### Sync: measuring, not guessing
-
-- **In the game:** every tap that meets a note is logged as milliseconds early or late. The results screen and the pause screen show the average and spread for survival presses and for flow notes; if the taps are consistently off (15 ms or more, with a tight spread) a one-tap button corrects the audio offset. Settings has a live **Sync overlay** (or add `?sync=1`). The 10-second sync check runs before the first level, is one tap away on the menu, and is asked for again when the audio output changes.
-- **Against the audio:** `python tools/audit.py` measures the onset under every generated survival press (kick band, snare/vocal/hook band, hats at a third weight) and under every grid position within half a beat. A press that is not on a strong sound moves to a clearly stronger one nearby; the results are in `levels/<id>/audit.json` and apply to generated bars only. It also reports how far the audio's own onsets sit from the grid (within about 0 to 8 ms on all four levels), which is how to tell a chart problem from a latency problem. Run `BASE=1 npx vite-node tools/export-layers.ts` first, then the audit, then the export again.
-
-### Listening previews
-
-`npx vite-node tools/export-layers.ts` writes each level's two layers as the game builds them (and prints a section-by-section summary); `python tools/preview.py <id>` then renders `../v4-chart-previews/<id>.mp3` with a bright click on every survival press and a soft low tick on every flow note.
-
-### Record Mode (dev tool)
-
-Run `npm run dev`, open the menu and choose **Record mode**. Sections marked `record` in the level file (the hook and the drop phrases) are listed first as record candidates. Pick a section, a speed (100, 75 or 50%; slower also lowers the pitch) and a snap grid (1/4, 1/8, 1/16, triplets). Choose which layer you are recording (survival presses or flow notes), press Record, wait one bar of count-in and tap what you hear (the pad or any key). The take, snapped to the grid, replaces that layer in the section and leaves the other layer alone. Clicking a square steps it through empty, survival press (blue), flow note (gold). Listen plays the section with a high click on presses and a low one on flow notes; Play this section starts it in practice; Copy to matching sections puts the same notes on every other section that shares the music. In a charge section every note plays as a flow note whatever its layer. **Save** writes `levels/<id>/presses.json` (`t` = presses, `f` = flow notes per bar); bars in it are marked `by: hand` and nothing in `tools/` ever rewrites that file. Bars without a hand recording use the generated chart. Outside the dev server (the single-file build) Save keeps the bars in the browser and shows the JSON to copy.
-
-The earlier one-beat-hop slice of Heroes Tonight is tagged `gd-hop-slice`; the judged one-button game is on the `one-button` branch.
-
-### Screenshots of every screen (dev tool)
-
-`tools/stage-shots.js` stages each screen with sample progress, music muted and nothing saved. With the dev server running, in the page's console: `await import('/tools/stage-shots.js'); await __stage('levels')`. Names: title, levels, final, entry, play, twin, tutorial, pause, quit, finale, clear, settings, orbs, badges, sync. The current set is in `../v4-screenshots/front-end/`.
+- The audio clock is the only game clock. A tap is judged at its input timestamp mapped onto the audio clock, minus the output delay the device reports, minus the player's audio offset. The picture is drawn at that time plus the visual offset.
+- The **sync check** (tap along to 8 clicks) runs before the first level, and is asked for again when the audio output changes. Bluetooth adds 150 to 250 ms.
+- Every tap that meets a note is logged as milliseconds early or late. Results and pause show the average and spread, with a one-tap fix when the taps are consistently off. Settings has a live sync overlay.
+- `python tools/audit.py` measures the onset under every generated survival press and moves a weak one to a clearly stronger sound nearby (`levels/<id>/audit.json`). The audio's own onsets sit within about 0 to 8 ms of the grid on all four levels.
 
 ## Run it
 
@@ -86,7 +53,7 @@ On a phone (same Wi-Fi as the computer):
 npm run phone
 ```
 
-It prints a `Network:` address such as `http://192.168.1.20:4173`. Open that on the phone. Add `?bot=1` to any address to start in autoplay.
+It prints a `Network:` address such as `http://192.168.1.20:4173`. Open that in Safari on the phone.
 
 ## Test it
 
@@ -94,82 +61,66 @@ It prints a `Network:` address such as `http://192.168.1.20:4173`. Open that on 
 npm test
 ```
 
-- `tests/charts.test.ts`: every note on the grid, no overlaps, gates at least 22 degrees apart, accents on the drop, hazards and spinners in the right sections, level at most 2:00, the variety rules (enough mechanics for the length, something new at least every 20 s, no 4-bar pattern repeated unchanged).
-- `tests/bot.test.ts`: the autoplay bot plays every chart and must score 100% PERFECT with zero error; a player within ±20 ms must clear without a miss; doing nothing must fail.
+`tests/gd.test.ts` runs on all four levels: autoplay in full flow and full charge, press spacing (at least a beat apart, at most 2.5 a second), opening sizes, every note in exactly one layer, nothing can crash in the build-up, flow notes never hurt, uneven timing, the muffle steps, mash bots, practice run-ins, variety (no mode longer than 8 bars, each level's mode before and in its drop), fair planet hops, and the smooth clock. `tests/charts.test.ts` checks the note data.
 
 ## Build it
 
 ```bash
-npm run build          # static site in dist/ (GitHub Pages, PWA, Capacitor webDir)
+npm run build          # static site in dist/
 npm run build:single   # one self-contained file: ../one_more_orbit_v4.html
 ```
 
-The site uses relative paths (`base: './'`), so `dist/` works from any folder or inside a Capacitor web view.
+The site uses relative paths (`base: './'`), so `dist/` works from any folder.
 
 ## Layout
 
 ```
 src/
-  audio/audio.ts      audio context, clock mapping (tap timestamp -> audio time), track loading, hitsounds
-  game/types.ts       level and chart file shapes
-  game/rules.ts       timing windows, health, accuracy weights, grades
-  game/level.ts       timeline: sections, the chain of rings the ball jumps through, orbit shapes
-  game/engine.ts      judging for the one tap. Pure: no DOM, no audio
-  game/bot.ts         the perfect inputs for a chart
-  game/run.ts         one attempt: music + clock + engine + bot
-  game/packs.ts       the list of playable levels
-  render/renderer.ts  canvas drawing: rings, camera, audio-reactive equalizer, build-up and drop effects
-  main.ts             menus, input, HUD, results, settings, calibration
-  save.ts             settings and bests in localStorage
+  main.ts             app controller: screens, input, HUD, results, settings, sync check, tutorial
+  style.css           the design system
+  ui/art.ts           icons and level-card artwork
+  save.ts             settings and bests in localStorage (key one_more_orbit_v4)
+  audio/audio.ts      audio context, clock mapping, track loading, previews, tap sounds, muffle
+  gd/course.ts        notes to rings: presses, flow notes, modes per bar, planet hops
+  gd/sim.ts           fixed 240 Hz steps: survival, flow, charge
+  gd/run.ts           one attempt: music + clock + sim, crash and finish
+  gd/render.ts        canvas drawing: course, camera, equalizer core, drop effects, menu scene
+  gd/presses.ts       the two note layers (generated, audited, hand-recorded)
+  gd/clock.ts         smooth clock that follows the audio without stepping
+  game/packs.ts       the list of levels (one entry per song)
+  game/level.ts       sections and timeline of a level
+  game/extras.ts      orbs and badges
+  record.ts           Record Mode (dev server only)
 levels/
   manifest.json       tracks, credit lines, licence note
-  <id>/level.json     the layout you edit: sections, modes, looks, chart rules
-  <id>/audio.json     generated: bar-1 offset, length, sample count, drop time
-  <id>/sheet.json     the charts as readable bars: composed by the tool, hand-edited bars are kept
-  <id>/chart.json     the compiled chart (one per level) plus baked kick/snare energy
+  <id>/level.json     sections and how each bar plays (core.bars)
+  <id>/audio.json     generated: bar-1 offset, length, drop time
+  <id>/chart.json     the notes, from the audio analysis
+  <id>/presses.json   hand-recorded bars (kept by every tool)
+  <id>/audit.json     presses moved to stronger sounds
 public/audio/         the cut excerpts
-tools/                Python: cut excerpts, measure audio, compose charts, audit sync (see tools/README.md)
-tests/                chart checks and the autoplay bot
+tools/                Python and dev tools (see tools/README.md)
+tests/
 ```
 
-## One-button elements
+`src/game/engine.ts`, `bot.ts`, `rules.ts`, `run.ts`, `src/render/renderer.ts` and `tests/bot.test.ts` belong to the earlier judged one-button game. The current game does not use them.
 
-Tap gates (accent gates on big hits), bursts of two or three gates on one ring, flip gates (tapping one reverses the ball), portals (jump across the ring), hops over spikes or sweeping beams, slingshots to a new planet, mini mode, speed changes (`lap`), inward jumps and rockets, orbit shapes (circle, ellipse, rounded square), camera rotation, tilt and flips, and a look per section. All are set per section or per bar in `levels/<id>/level.json`.
+## Editing a level
 
-Judging is strict: a tap up to 180 ms before a gate but outside its window is an early miss for that gate, a tap nowhere near a gate breaks the combo and costs health, and each gate is judged once.
+Each section in `levels/<id>/level.json` has `bars` (its length) and `core`:
 
-## How charts are made (rhythm first)
+- `bars`: how each bar plays, repeated to fill the section. A bar is words joined by `+`: `up` / `down` / `weave`, `spin`, `twin`, `sling` (planet hop), `turn`, `fast` / `slow` / `normal`.
+- `charge` (a build-up), `smash` (the section opens with the drop's big press), `pulse`, `record` (a passage worth recording by hand).
 
-1. **One followed sound per section.** `follow` in `levels/<id>/level.json` names it (arp, kick, snare, lead); gate colour shows it. Voices are never merged.
-2. **Same music = same taps.** Sections sharing a `motif` name are one repeating figure of `cycle` bars and are charted identically every time. Variety comes from the world (shape, speed, camera, look), not the rhythm.
-3. **The lead comes from a pitch transcription.** `python tools/lead.py <id> <first bar> <last bar>` finds where each melody note starts and its pitch; the chart uses that rhythm, and the hitsounds play those pitches.
-4. `python tools/chart.py <id>` composes every bar from its `plan`, writes `levels/<id>/sheet.json` (one readable line per bar; set `"by": "hand"` on a bar you edit and it is kept), compiles `chart.json`, and **warns** about any tap where the followed sound is weak and any repeat charted differently.
-5. `python tools/preview.py <id>` renders the excerpt with a click on every tap to `../v4-chart-previews/<id>.mp3`, to check the chart by ear.
-6. Ring speed (`lap`) is constant within a section, so the gap between two gates always reads as time.
+Heroes Tonight, Blank and Invincible are generated by `tools/_levels.py`; Sky High's file is hand-kept. Run `npm test` after any change.
 
-```bash
-python tools/lead.py skyhigh 1 42 C4 A6       # transcribe the melody (once per song)
-python tools/chart.py skyhigh                 # compose + compile + warnings
-python tools/chart.py skyhigh --motifs        # show the motifs it found
-python tools/chart.py skyhigh --explain 26 42 # bar by bar
-python tools/preview.py skyhigh               # listening preview
-```
+## Dev tools
 
-## Tuning a level's pacing
+- **Record Mode** (`npm run dev`, then Settings): record survival presses or flow notes by tapping along at 100, 75 or 50% speed, snapped to a grid. Saved bars go to `levels/<id>/presses.json` marked `by: hand`; no tool overwrites them.
+- **Listening previews:** `npx vite-node tools/export-layers.ts`, then `python tools/preview.py <id>` renders the song with a click on every press and a tick on every flow note.
+- **Screenshots:** with the dev server running, in the page's console: `await import('/tools/stage-shots.js'); await __stage('levels')`. It stages each screen with sample progress, muted, and saves nothing.
+- `python tools/intensity.py` measures each excerpt for the setlist order.
 
-Each section in `level.json` has `bars` (its length). Change it to make a set piece longer or shorter (keep the total the same), re-run `tools/chart.py`, then `npm test`.
+## History
 
-## Adding a level
-
-1. Add the song to `tools/tracks.json` and follow `tools/README.md` to measure it, cut the excerpt and analyse it.
-2. Write `levels/<id>/level.json` (copy Sky High's and change the sections).
-3. `python tools/chart.py <id>`
-4. Add the track to `levels/manifest.json` and one entry to `src/game/packs.ts`.
-5. `npm test`
-
-## Sync, in short
-
-- The decoded audio buffer's clock is the only game clock. Song time 0 is bar 1 of the audio file.
-- A tap is judged at its input-event timestamp mapped onto the audio clock, minus the output latency the device reports, minus the player's audio offset.
-- The picture is drawn at that time plus the player's visual offset.
-- Excerpts are MP3s with the gapless header, so decoders return exactly `frames` samples; the loader checks this and measures the start padding if a decoder ignores it.
+Tags: `v4-two-hand-slice` (two-hand prototype), `gd-hop-slice` (first hop prototype), `v1.0-rc1`. The `one-button` branch holds the earlier judged game.
