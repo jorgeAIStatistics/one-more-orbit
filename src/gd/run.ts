@@ -4,12 +4,13 @@ import type { LevelPack } from '../game/packs';
 import { save } from '../save';
 import { SmoothClock } from './clock';
 import { buildCourse, type Course } from './course';
-import { pitchLookup, pressTicks } from './presses';
+import { layers, pitchLookup } from './presses';
 import { Sim, type TapResult } from './sim';
 
 export type RunState = 'loading' | 'playing' | 'paused' | 'resuming' | 'failed' | 'done' | 'error';
-export interface RunOptions { bot?: boolean; practice?: boolean; startAt?: number; leadIn?: number }
-export interface RunEvent { kind: 'hop' | 'flip' | 'orb' | 'skip' | 'land' | 'crash' | 'drop'; flow?: boolean; full?: boolean }
+/** partial: started part-way through from the menu ("start at the build-up"); plays like a normal run but is not saved */
+export interface RunOptions { bot?: boolean; practice?: boolean; partial?: boolean; startAt?: number; leadIn?: number }
+export interface RunEvent { kind: 'hop' | 'flip' | 'spark' | 'skip' | 'land' | 'crash' | 'drop'; flow?: boolean; charge?: boolean; full?: boolean; power?: number }
 
 const RESUME_COUNT = 1.2;
 
@@ -32,8 +33,9 @@ export class GdRun {
   events: RunEvent[] = [];
   /** song milliseconds per page millisecond, frame by frame: 1.000 is perfectly smooth */
   stepLog: number[] = [];
-  /** whether the drop was entered in flow (null until it happens) */
+  /** whether the drop went off in full (null until it happens), and how big it was, 0..1: charge times flow */
   dropFull: boolean | null = null;
+  dropPower = 1;
   private songStart = 0;
   private latency = 0;
   private music: { stop: (fade?: number) => void } | null = null;
@@ -46,7 +48,7 @@ export class GdRun {
   constructor(readonly pack: LevelPack, readonly opts: RunOptions, private onEnd: (run: GdRun) => void) {
     this.level = new Level(pack.level, pack.audio, pack.chart);
     const spb = this.level.spb;
-    this.course = buildCourse(this.level, pressTicks(pack).map((t) => t / 12), pitchLookup(pack), pack.level.lab);
+    this.course = buildCourse(this.level, layers(pack), pitchLookup(pack), pack.level.lab);
     this.t0 = this.course.start * spb;
     this.t1 = Math.min(this.course.end * spb, this.level.endTime);
     this.startAt = Math.max(this.t0, opts.startAt ?? this.t0);
@@ -106,12 +108,18 @@ export class GdRun {
 
   private react(r: TapResult): void {
     if (r.kind === 'none' || r.kind === 'crash') return;
-    if (r.kind === 'skip') { audio.hit('stray', 0.35); this.events.push({ kind: 'skip' }); return; }
+    if (r.kind === 'skip') { audio.hit('stray', 0.3); this.events.push({ kind: 'skip' }); return; }
     // one hit sound for every tap that meets a note; on the beat in a hook section it also plays the hook's pitch
-    audio.hit('hit', r.auto ? 0.55 : 1);
+    audio.hit('hit', r.auto ? 0.55 : r.kind === 'spark' ? 0.8 : 1);
     const hook = this.level.segAt(Math.max(0, this.time)).follow === 'lead';
     if (r.flow && hook && r.pitch) audio.pluck(r.pitch, 0.5);
-    this.events.push({ kind: r.kind, flow: !!r.flow || !!r.auto });
+    if (r.charge) {
+      // charging the drop: each tap on the roll plays the next step up the song's scale
+      const scale = this.pack.level.scale ?? [0, 2, 4, 5, 7, 9, 11];
+      const k = Math.min(14, Math.floor(this.sim.charge * 14));
+      audio.pluck(60 + 12 * Math.floor(k / scale.length) + scale[k % scale.length], 0.4);
+    }
+    this.events.push({ kind: r.kind, flow: !!r.flow || !!r.auto, charge: !!r.charge });
   }
 
   /** The one button. The tap is applied at the moment it happened, not when the next frame runs. */
@@ -141,10 +149,11 @@ export class GdRun {
     if (this.sim.landedAt !== this.seenLand) { this.seenLand = this.sim.landedAt; this.events.push({ kind: 'land' }); }
     audio.setMuffle(this.sim.muffle);
     if (this.dropFull === null && beat >= this.course.dropBeat) {
-      // the drop is earned: arrive in flow and it goes off in full
-      this.dropFull = this.sim.flow >= 0.6 && this.sim.muffle < 0.3;
-      if (this.dropFull) audio.hit('impact', 1);
-      this.events.push({ kind: 'drop', full: this.dropFull });
+      // the drop is as big as you made it: the charge from the roll, times how well you are in flow
+      this.dropPower = this.sim.charge * Math.min(1, this.sim.flow / 0.6) * (1 - 0.5 * this.sim.muffle);
+      this.dropFull = this.dropPower >= 0.8;
+      audio.hit('impact', 0.3 + 0.7 * this.dropPower);
+      this.events.push({ kind: 'drop', full: this.dropFull, power: this.dropPower });
     }
     if (this.sim.crashed) {
       audio.hit('miss', 0.9);

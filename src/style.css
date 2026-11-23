@@ -217,7 +217,10 @@ button { font: inherit; }
 .rec-cell.beat { border-color: rgba(255, 255, 255, 0.3); }
 .rec-cell.on { background: var(--cyan); border-color: var(--cyan); }
 .rec-cell.on.off { background: repeating-linear-gradient(45deg, var(--cyan), var(--cyan) 4px, rgba(0, 245, 255, 0.35) 4px, rgba(0, 245, 255, 0.35) 8px); }
-.rec-cell.fresh { background: var(--gold); border-color: var(--gold); }
+.rec-cell.flow { background: var(--gold); border-color: var(--gold); }
+.rec-cell.flow.off { background: repeating-linear-gradient(45deg, var(--gold), var(--gold) 4px, rgba(255, 214, 90, 0.35) 4px, rgba(255, 214, 90, 0.35) 8px); }
+.rec-cell.fresh { box-shadow: 0 0 10px #fff; }
+.pill.toggle.on.lay-flow { border-color: var(--gold); color: var(--gold); background: rgba(255, 214, 90, 0.1); }
 .rec-cell.now { box-shadow: 0 0 0 2px #fff; }
 #record .pad { padding: 16px; font-size: 18px; }
 #recExport { width: 100%; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.18); background: rgba(0, 0, 0, 0.35); color: #cfe; font: 11px ui-monospace, monospace; }

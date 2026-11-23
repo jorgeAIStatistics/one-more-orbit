@@ -27,7 +27,7 @@ const rgba = (c: RGB, a = 1) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`
 interface Particle { x: number; y: number; vx: number; vy: number; life: number; max: number; col: RGB; size: number }
 interface Ripple { x: number; y: number; age: number; col: RGB }
 /** One ring as the ball meets it: a ceiling while it is the ring above, then the floor it rides to the next note. */
-interface Platform { lv: number; side: number; fs: number; fe: number; cs: number; ce: number; note: number; tol: number; flipAt: number; flipTol: number; pulse: boolean }
+interface Platform { lv: number; side: number; fs: number; fe: number; cs: number; ce: number; note: number; tol: number; auto: boolean; flipAt: number; flipTol: number; pulse: boolean }
 
 export class GdRenderer {
   private ctx: CanvasRenderingContext2D;
@@ -54,6 +54,8 @@ export class GdRenderer {
   private punch = 0;
   private dropAge = 99;
   private dropFull = false;
+  private dropPower = 1;
+  private chargeV = 0;
   private landPulse = 0;
   private shake = 0;
   private dark = 0;
@@ -104,6 +106,8 @@ export class GdRenderer {
     this.shock = -1;
     this.dropAge = 99;
     this.dropFull = run.dropFull === true;
+    this.dropPower = run.dropPower;
+    this.chargeV = run.sim.charge;
     const beat = run.viewTime / level.spb;
     this.cam = run.sim.rho(beat);
     this.camVel = 0;
@@ -177,7 +181,7 @@ export class GdRenderer {
   }
 
   /** Audio-reactive equalizer round the core, with the flow meter as a thin arc round it. */
-  private core(pal: Palette, rc: number, len: number, kick: number, snare: number, dt: number, flow: number): void {
+  private core(pal: Palette, rc: number, len: number, kick: number, snare: number, dt: number, flow: number, charge = 0): void {
     const c = this.ctx;
     const spec = audio.spectrum();
     for (let i = 0; i < EQ_BARS; i++) {
@@ -209,6 +213,18 @@ export class GdRenderer {
         c.strokeStyle = hot ? rgba(GOLD) : rgba(mix(pal.acc, WHITE, 0.4), 0.9);
         if (hot) { c.shadowColor = rgba(GOLD, 0.9); c.shadowBlur = 10; }
         c.beginPath(); c.arc(0, 0, rm, -Math.PI / 2, -Math.PI / 2 + flow * TWO_PI); c.stroke();
+        c.shadowBlur = 0;
+      }
+      if (charge > 0.005) {
+        // the drop's charge: a thicker white arc outside the flow meter, filled by tapping the roll
+        const ro = rm + 8 + charge * 2;
+        c.lineWidth = 5 + charge * 3;
+        c.strokeStyle = 'rgba(255,255,255,0.16)';
+        c.beginPath(); c.arc(0, 0, ro, 0, TWO_PI); c.stroke();
+        c.strokeStyle = rgba(mix(WHITE, GOLD, charge >= 1 ? 0.6 : 0));
+        c.shadowColor = 'rgba(255,255,255,0.9)';
+        c.shadowBlur = 6 + charge * 14;
+        c.beginPath(); c.arc(0, 0, ro, -Math.PI / 2, -Math.PI / 2 + charge * TWO_PI); c.stroke();
         c.shadowBlur = 0;
       }
     }
@@ -306,13 +322,15 @@ export class GdRenderer {
         // the note: a bright mark across the ring. This is the moment to tap.
         const a = ang(pl.note);
         const len = rb * (1.15 + pulse * 0.5);
-        c.strokeStyle = '#ffffff';
-        c.lineWidth = 3.5 + pulse * 2.5;
+        c.strokeStyle = pl.auto ? rgba(GOLD) : '#ffffff';
+        c.lineWidth = (pl.auto ? 6 : 3.5) + pulse * 2.5;
         c.beginPath(); c.moveTo(Math.cos(a) * (r - len), Math.sin(a) * (r - len)); c.lineTo(Math.cos(a) * (r + len), Math.sin(a) * (r + len)); c.stroke();
-        // and the edge: ride past it and the run ends
-        const e = ang(fe);
-        c.fillStyle = rgba(DANGER);
-        c.beginPath(); c.arc(Math.cos(e) * r, Math.sin(e) * r, 3.2, 0, TWO_PI); c.fill();
+        if (!pl.auto) {
+          // and the edge: ride past it and the run ends (a gold launch mark fires by itself, so it has none)
+          const e = ang(fe);
+          c.fillStyle = rgba(DANGER);
+          c.beginPath(); c.arc(Math.cos(e) * r, Math.sin(e) * r, 3.2, 0, TWO_PI); c.fill();
+        }
       }
       c.lineCap = 'butt';
     }
@@ -353,34 +371,41 @@ export class GdRenderer {
     this.drain += (sim.muffle - this.drain) * Math.min(1, dt * (sim.muffle > this.drain ? 1.4 : 9));
     this.inten += (this.energyAt(beat) - this.inten) * Math.min(1, dt * 2.5);
     const afterDrop = beat >= course.dropBeat;
-    const bloom = (0.6 + 0.55 * this.flowV) * (afterDrop && !this.dropFull ? 0.75 : 1) * (1 - this.drain * 0.4);
-    const inten = clamp(this.inten * bloom, 0, 1.15);
-    const kick = level.energyAt('kick', t);
+    this.chargeV += (sim.charge - this.chargeV) * Math.min(1, dt * 8);
+    // before the drop the charge winds everything up; after it, the drop is as big as the charge and flow made it
+    const wound = afterDrop ? 0 : this.chargeV * (course.charges.length ? 1 : 0);
+    const bloom = (0.6 + 0.55 * this.flowV) * (afterDrop ? 0.6 + 0.4 * this.dropPower : 1) * (1 - this.drain * 0.4);
+    const inten = clamp(this.inten * bloom + wound * 0.3, 0, 1.15);
+    const kick = Math.min(1.3, level.energyAt('kick', t) * (1 + wound * 0.8));
     const snare = level.energyAt('snare', t);
     const groove = kick * inten * inten;
     this.dark += ((seg.blackout ? 0.45 : 0) - this.dark) * Math.min(1, dt * 4);
 
     // what just happened
     for (const ev of run.events) {
-      if (ev.kind === 'hop' || ev.kind === 'flip' || ev.kind === 'orb') {
-        this.ripples.push({ x: this.ball.x, y: this.ball.y, age: 0, col: ev.flow ? GOLD : [170, 180, 200] });
-        if (ev.flow) this.burst(this.ball.x, this.ball.y, ev.kind === 'orb' ? 9 : 5, GOLD, r0 * 0.7, 0.8); // small sparkles: on the note
+      if (ev.kind === 'hop' || ev.kind === 'flip' || ev.kind === 'spark') {
+        if (ev.kind !== 'spark' || ev.flow) this.ripples.push({ x: this.ball.x, y: this.ball.y, age: 0, col: ev.flow ? GOLD : [170, 180, 200] });
+        if (ev.flow) this.burst(this.ball.x, this.ball.y, ev.kind === 'spark' ? 7 : 5, GOLD, r0 * 0.7, 0.8); // small sparkles: on the note
+        if (ev.charge) this.punch = Math.max(this.punch, 0.2); // each roll note you catch winds the picture a little tighter
         if (ev.kind === 'flip') this.burst(this.ball.x, this.ball.y, 12, VIOLET, r0 * 0.9);
       } else if (ev.kind === 'land') this.landPulse = 1;
       else if (ev.kind === 'drop') {
+        const pw = ev.power ?? (ev.full ? 1 : 0.3);
         this.dropFull = !!ev.full;
+        this.dropPower = pw;
         this.dropAge = 0;
-        if (ev.full) {
-          // the earned drop: one flash, one shockwave, the old rings shatter, the camera kicks out
-          this.flash = 1;
+        this.punch = 0.3 + 0.7 * pw;
+        if (pw >= 0.45) {
+          // the earned drop: one flash, one shockwave, the old rings shatter, the camera kicks out; all scaled by how full it is
+          this.flash = pw;
           this.shock = 0;
-          this.punch = 1;
           const rr = this.ball.r || r0;
-          for (let i = 0; i < 70; i++) {
-            const a = (i / 70) * TWO_PI;
-            this.particles.push({ x: Math.cos(a) * rr, y: Math.sin(a) * rr, vx: Math.cos(a) * r0 * (1.5 + Math.random() * 2.5), vy: Math.sin(a) * r0 * (1.5 + Math.random() * 2.5), life: 0, max: 0.45 + Math.random() * 0.4, col: i % 3 ? pal.acc : WHITE, size: 2 + Math.random() * 3 });
+          const n = Math.round(70 * pw);
+          for (let i = 0; i < n; i++) {
+            const a = (i / n) * TWO_PI;
+            this.particles.push({ x: Math.cos(a) * rr, y: Math.sin(a) * rr, vx: Math.cos(a) * r0 * (1.5 + Math.random() * 2.5) * pw, vy: Math.sin(a) * r0 * (1.5 + Math.random() * 2.5) * pw, life: 0, max: 0.45 + Math.random() * 0.4, col: i % 3 ? pal.acc : WHITE, size: 2 + Math.random() * 3 });
           }
-        } else this.punch = 0.35;
+        }
       } else if (ev.kind === 'crash') {
         this.burst(this.ball.x, this.ball.y, 34, WHITE, r0 * 1.5);
         this.burst(this.ball.x, this.ball.y, 16, DANGER, r0 * 1.1);
@@ -399,7 +424,7 @@ export class GdRenderer {
     // and the camera starts moving there a couple of beats before the flip
     const nextP = course.presses[sim.ni];
     const inward = sim.sideAt(beat) < 0 || (!!nextP && nextP.kind === 'flip' && nextP.side > 0 && nextP.beat - beat < 2.5);
-    this.baseR += ((inward ? 1.5 : 1) - this.baseR) * Math.min(1, dt * 3.5);
+    this.baseR += ((inward ? 1.5 : 1) - wound * 0.1 - this.baseR) * Math.min(1, dt * 3.5);
     this.punch = Math.max(0, this.punch - dt / 0.45);
     this.flash = Math.max(0, this.flash - dt / 0.15);
     this.landPulse = Math.max(0, this.landPulse - dt / 0.12);
@@ -412,10 +437,11 @@ export class GdRenderer {
     let cx = this.w / 2;
     let cy = this.h * 0.52;
     if (this.shake > 0) { cx += (Math.random() - 0.5) * 10 * this.shake; cy += (Math.random() - 0.5) * 10 * this.shake; }
-    if (this.dropFull && this.dropAge < 1.2 && !save.reducedMotion) cx += Math.exp(-this.dropAge * 4) * Math.sin(this.dropAge * 10) * m * 0.035; // the drop's slingshot swing
+    if (this.dropPower >= 0.45 && this.dropAge < 1.2 && !save.reducedMotion) cx += Math.exp(-this.dropAge * 4) * Math.sin(this.dropAge * 10) * m * 0.035 * this.dropPower; // the drop's slingshot swing
     c.translate(cx, cy);
 
-    this.core(pal, m * 0.045, m * 0.04 * (0.4 + 1.1 * inten), kick * (0.3 + 0.7 * inten), snare * inten, dt, this.flowV);
+    const chargeShown = afterDrop ? this.chargeV * clamp(1 - this.dropAge / 0.35, 0, 1) : course.charges.length && beat > course.charges[0][0] - 4 ? Math.max(this.chargeV, 0.006) : 0;
+    this.core(pal, m * 0.045, m * 0.04 * (0.4 + 1.1 * inten) * (1 + wound * 0.7), kick * (0.3 + 0.7 * inten), snare * inten, dt, this.flowV, chargeShown);
 
     if (this.shock >= 0) {
       this.shock += dt / 0.6;
@@ -428,7 +454,7 @@ export class GdRenderer {
     }
 
     const ang = (b: number) => -Math.PI / 2 + course.angle(b);
-    const dropStyle = afterDrop && this.dropFull;
+    const dropStyle = afterDrop && this.dropPower >= 0.45;
     for (const pl of this.plats) this.drawPlatform(pl, course, beat, pal, kick, dropStyle);
 
     // where the next hops go: a faint dotted path from each note to its landing
@@ -464,20 +490,21 @@ export class GdRenderer {
       c.lineCap = 'butt';
     }
 
-    // orbs: optional extra taps on notes that fall in mid-flight
-    for (const o of course.orbs) {
-      const d = o.beat - beat;
-      if (d > AHEAD || d < -0.25 || sim.orbUsed(o.beat)) continue;
-      const p = course.presses[o.press];
-      const r = this.rad(flightRho(p, o.beat)) + p.side * rb;
-      const x = Math.cos(ang(o.beat)) * r;
-      const y = Math.sin(ang(o.beat)) * r;
+    // flow notes: optional taps, on the ring or in mid-flight. Gold, and smaller than the white marks you must hit.
+    for (const f of course.flow) {
+      const d = f.beat - beat;
+      if (d > AHEAD) break;
+      if (d < -0.25 || sim.noteUsed(f.beat)) continue;
+      const r = this.rad(f.rho) + f.side * rb;
+      const x = Math.cos(ang(f.beat)) * r;
+      const y = Math.sin(ang(f.beat)) * r;
       c.globalAlpha = clamp((AHEAD - d) / 0.6, 0, 1) * clamp(1 + d / 0.25, 0, 1);
+      const big = f.air ? 1 : 0.8;
       c.strokeStyle = rgba(GOLD);
-      c.lineWidth = Math.max(2, rb * 0.36);
-      c.beginPath(); c.arc(x, y, rb * 1.15, 0, TWO_PI); c.stroke();
-      c.fillStyle = rgba(GOLD, 0.9);
-      c.beginPath(); c.arc(x, y, rb * 0.4, 0, TWO_PI); c.fill();
+      c.lineWidth = Math.max(1.5, rb * 0.3);
+      c.beginPath(); c.arc(x, y, rb * 0.95 * big, 0, TWO_PI); c.stroke();
+      c.fillStyle = rgba(f.charge ? WHITE : GOLD, 0.95);
+      c.beginPath(); c.arc(x, y, rb * 0.4 * big, 0, TWO_PI); c.fill();
       c.globalAlpha = 1;
     }
 
@@ -538,10 +565,11 @@ export class GdRenderer {
     if (run.state !== 'loading' && (!bestFor(level.id).cleared || run.opts.practice)) {
       const first = course.presses[0];
       const flip = course.presses.find((p) => p.kind === 'flip');
-      const orb = course.orbs[0];
+      const gold = course.flow.find((f) => !f.charge && f.beat > course.dropBeat);
       const hints: Array<[number, number, string]> = [];
-      if (first) hints.push([course.start - 9, first.beat + 1.5, 'TAP ON EACH MARK']);
-      if (orb) hints.push([orb.beat - 5, orb.beat, 'GOLD ORB: BONUS TAP']);
+      if (first) hints.push([course.start - 9, first.beat + 1.5, 'TAP ON EACH WHITE MARK']);
+      if (course.charges.length) hints.push([course.charges[0][0] - 2.5, course.charges[0][0] + 4, 'TAP THE ROLL: CHARGE THE DROP']);
+      if (gold) hints.push([gold.beat - 4, gold.beat + 2, 'GOLD NOTES: BONUS TAPS']);
       if (flip) hints.push([flip.beat - 5, flip.beat, 'VIOLET: GRAVITY FLIP']);
       for (const [b0, b1, s] of hints) {
         if (beat < b0 || beat > b1) continue;
@@ -621,14 +649,15 @@ function platforms(c: Course, level: Level): Platform[] {
     const fe = p ? p.beat + p.tol : c.end + 16;
     let cs = Infinity;
     let ce = -Infinity;
-    if (prev) {
+    if (prev && !prev.auto) {
       // while the ball rides the ring before, this ring is the ceiling above it, up to the opening over the note
+      // (a launch the game takes itself has no ceiling: nothing there can go wrong)
       const before = out[j - 1];
       cs = Math.max(prev.beat - LOOK, before.fs);
       ce = prev.beat - prev.tol * (prev.kind === 'flip' ? 0.85 : 0.9);
     }
     out.push({
-      lv, side, fs, fe, cs, ce, note: p ? p.beat : NaN, tol: p ? p.tol : 0,
+      lv, side, fs, fe, cs, ce, note: p ? p.beat : NaN, tol: p ? p.tol : 0, auto: !!p && p.auto,
       flipAt: prev && prev.kind === 'flip' ? prev.beat : NaN, flipTol: prev ? prev.tol : 0,
       pulse: !!level.segAt(((p ? p.beat : c.end) + 1e-6) * c.spb).core?.pulse
     });

@@ -1,13 +1,16 @@
-// Where the press moments come from. Bars recorded by hand (Record Mode) win over the generated chart and are
-// never overwritten by the tools; every other bar falls back to the chart's notes.
+// Where the notes come from. Bars recorded by hand (Record Mode) win over the generated chart and are never
+// overwritten by the tools; every other bar falls back to the chart's notes, split into layers automatically.
 import type { LevelPack } from '../game/packs';
+import { autoLayers, type Layers } from './course';
 
-export interface HandBar { by: 'hand'; t: number[] } // ticks inside the bar, 12 per beat
+/** One hand-recorded bar: `t` are the survival presses, `f` the flow notes, as ticks inside the bar (12 per beat). */
+export interface HandBar { by: 'hand'; t: number[]; f?: number[] }
 export interface PressFile { _doc?: string; bars: Record<string, HandBar> }
 
 const TICKS = 48; // per bar
 const key = (id: string) => `omo_presses_${id}`;
 const store = new Map<string, PressFile>();
+const DOC = 'Notes recorded by hand in Record Mode. Per bar: t = survival presses, f = flow notes, as ticks inside the bar (12 per beat). The tools never overwrite this file.';
 
 /** The hand-recorded bars for a level: the file in its folder, unless this browser holds a newer unsaved copy. */
 export function handBars(pack: LevelPack): PressFile {
@@ -24,13 +27,25 @@ export function handBars(pack: LevelPack): PressFile {
   return f;
 }
 
-/** Ticks (12 per beat, from the start of the level) of every press, bar by bar: hand bars where they exist. */
-export function pressTicks(pack: LevelPack): number[] {
+/** Both layers as ticks (12 per beat, from the start of the level): hand bars where they exist, the chart elsewhere. */
+export function layerTicks(pack: LevelPack): { survival: number[]; flow: number[] } {
   const hand = handBars(pack).bars;
-  const out: number[] = [];
-  for (const n of pack.chart.notes) if (!hand[String(Math.floor(n.t / TICKS))]) out.push(n.t);
-  for (const [bar, b] of Object.entries(hand)) for (const t of b.t) out.push(Number(bar) * TICKS + t);
-  return [...new Set(out)].sort((a, b) => a - b);
+  const auto = autoLayers(pack.chart.notes.map((n) => n.t / 12));
+  const isHand = (tick: number) => !!hand[String(Math.floor(tick / TICKS))];
+  const survival = auto.survival.map((b) => Math.round(b * 12)).filter((t) => !isHand(t));
+  const flow = auto.flow.map((b) => Math.round(b * 12)).filter((t) => !isHand(t));
+  for (const [bar, b] of Object.entries(hand)) {
+    for (const t of b.t) survival.push(Number(bar) * TICKS + t);
+    for (const t of b.f ?? []) if (!b.t.includes(t)) flow.push(Number(bar) * TICKS + t);
+  }
+  const sort = (a: number[]) => [...new Set(a)].sort((x, y) => x - y);
+  return { survival: sort(survival), flow: sort(flow) };
+}
+
+/** The layers in beats, ready for the course builder. */
+export function layers(pack: LevelPack): Layers {
+  const t = layerTicks(pack);
+  return { survival: t.survival.map((x) => x / 12), flow: t.flow.map((x) => x / 12) };
 }
 
 /** MIDI pitch of the chart's note at (or right next to) a beat, so on-beat taps can play the hook. */
@@ -45,17 +60,19 @@ export function pitchLookup(pack: LevelPack): (beat: number) => number | null {
   };
 }
 
-export function setBar(pack: LevelPack, bar: number, ticks: number[] | null): void {
-  const f = handBars(pack);
-  if (ticks === null) delete f.bars[String(bar)];
-  else f.bars[String(bar)] = { by: 'hand', t: [...new Set(ticks)].filter((t) => t >= 0 && t < TICKS).sort((a, b) => a - b) };
+/** Sets a bar's notes by hand (ticks inside the bar), or hands it back to the generated chart with null. */
+export function setBar(pack: LevelPack, bar: number, notes: { t: number[]; f: number[] } | null): void {
+  const file = handBars(pack);
+  if (notes === null) { delete file.bars[String(bar)]; return; }
+  const clean = (a: number[]) => [...new Set(a)].filter((t) => t >= 0 && t < TICKS).sort((x, y) => x - y);
+  const t = clean(notes.t);
+  file.bars[String(bar)] = { by: 'hand', t, f: clean(notes.f).filter((x) => !t.includes(x)) };
 }
 
 /** Saves to the level folder through the dev server; without one, keeps the bars in this browser. */
 export async function saveBars(pack: LevelPack): Promise<'file' | 'browser'> {
   const id = pack.level.id;
-  const f = handBars(pack);
-  const body = JSON.stringify({ _doc: 'Press moments recorded by hand in Record Mode. Ticks inside each bar, 12 per beat. The tools never overwrite this file.', bars: f.bars }, null, 1);
+  const body = JSON.stringify({ _doc: DOC, bars: handBars(pack).bars }, null, 1);
   try {
     const r = await fetch(`/__presses/${id}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body });
     if (r.ok) { try { localStorage.removeItem(key(id)); } catch { /* ignore */ } return 'file'; }
@@ -76,4 +93,4 @@ export async function refreshBars(pack: LevelPack): Promise<void> {
   } catch { /* not the dev server */ }
 }
 
-export const exportBars = (pack: LevelPack) => JSON.stringify({ bars: handBars(pack).bars }, null, 1);
+export const exportBars = (pack: LevelPack) => JSON.stringify({ _doc: DOC, bars: handBars(pack).bars }, null, 1);

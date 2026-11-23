@@ -1,9 +1,10 @@
-// Record Mode (a dev tool): play a section, tap along, and the taps, snapped to a grid, become the press
-// moments the course is built from. Bars recorded here are marked "by: hand" and the tools never overwrite them.
+// Record Mode (a dev tool): play a section, tap along, and the taps, snapped to a grid, become the notes the course
+// is built from. Each note is a survival press (can end the run) or a flow note (optional). Bars recorded here are
+// marked "by: hand" and the tools never overwrite them.
 import { audio } from './audio/audio';
 import { Level } from './game/level';
 import type { LevelPack } from './game/packs';
-import { exportBars, handBars, pressTicks, saveBars, setBar } from './gd/presses';
+import { exportBars, handBars, layerTicks, saveBars, setBar } from './gd/presses';
 import { save } from './save';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -19,6 +20,7 @@ export function initRecord(deps: { pack: () => LevelPack; show: (screen: 'menu' 
   let segIdx = 0;
   let rate = 1;
   let grid = '8';
+  let layer: 'survival' | 'flow' = 'survival';
   let tr: Transport | null = null;
   let nowCell: HTMLElement | null = null;
   let dirty = false;
@@ -26,9 +28,13 @@ export function initRecord(deps: { pack: () => LevelPack; show: (screen: 'menu' 
   const seg = () => segs[segIdx];
   const status = (s: string) => { $('recStatus').textContent = s; };
 
-  function barTicks(bar: number): number[] {
-    return pressTicks(deps.pack()).filter((t) => t >= bar * BAR && t < (bar + 1) * BAR).map((t) => t - bar * BAR);
+  /** A bar's notes in both layers, as ticks inside the bar. */
+  function barNotes(bar: number): { t: number[]; f: number[] } {
+    const all = layerTicks(deps.pack());
+    const pick = (a: number[]) => a.filter((x) => x >= bar * BAR && x < (bar + 1) * BAR).map((x) => x - bar * BAR);
+    return { t: pick(all.survival), f: pick(all.flow) };
   }
+  const isCharge = () => !!seg().core?.charge;
 
   function renderControls(): void {
     const sel = $<HTMLSelectElement>('recSection');
@@ -61,7 +67,17 @@ export function initRecord(deps: { pack: () => LevelPack; show: (screen: 'menu' 
       b.addEventListener('click', () => { grid = k; renderControls(); renderGrid(); });
       gr.appendChild(b);
     }
-    $('recRecord').textContent = tr?.mode === 'record' ? '■ STOP AND KEEP' : '● RECORD';
+    const lay = $('recLayer');
+    lay.innerHTML = '';
+    for (const [k, name] of [['survival', 'Survival presses'], ['flow', 'Flow notes']] as const) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `pill toggle${k === layer ? ' on' : ''} lay-${k}`;
+      b.textContent = name;
+      b.addEventListener('click', () => { if (!tr) { layer = k; renderControls(); } });
+      lay.appendChild(b);
+    }
+    $('recRecord').textContent = tr?.mode === 'record' ? '■ STOP AND KEEP' : `● RECORD ${layer === 'survival' ? 'SURVIVAL PRESSES' : 'FLOW NOTES'}`;
     $('recListen').textContent = tr?.mode === 'listen' ? 'Stop' : 'Listen with clicks';
   }
 
@@ -83,15 +99,17 @@ export function initRecord(deps: { pack: () => LevelPack; show: (screen: 'menu' 
       const line = document.createElement('div');
       line.className = 'rec-cells';
       line.style.gridTemplateColumns = `repeat(${cells}, 1fr)`;
-      const ticks = barTicks(b);
+      const notes = barNotes(b);
+      const at = (a: number[], k: number) => a.filter((t) => Math.min(cells - 1, Math.round(t / step)) === k);
       for (let k = 0; k < cells; k++) {
-        const here = ticks.filter((t) => Math.min(cells - 1, Math.round(t / step)) === k);
+        const sv = at(notes.t, k);
+        const fl = at(notes.f, k);
         const cell = document.createElement('button');
         cell.type = 'button';
-        cell.className = `rec-cell${k % (cells / 4) === 0 ? ' beat' : ''}${here.length ? ' on' : ''}${here.some((t) => t % step !== 0) ? ' off' : ''}`;
+        cell.className = `rec-cell${k % (cells / 4) === 0 ? ' beat' : ''}${sv.length ? ' on' : fl.length ? ' flow' : ''}${[...sv, ...fl].some((t) => t % step !== 0) ? ' off' : ''}`;
         cell.dataset.bar = String(b);
         cell.dataset.cell = String(k);
-        cell.setAttribute('aria-label', `bar ${b + 1}, step ${k + 1}${here.length ? ', note' : ''}`);
+        cell.setAttribute('aria-label', `bar ${b + 1}, step ${k + 1}${sv.length ? ', survival press' : fl.length ? ', flow note' : ''}`);
         line.appendChild(cell);
       }
       row.appendChild(line);
@@ -99,16 +117,22 @@ export function initRecord(deps: { pack: () => LevelPack; show: (screen: 'menu' 
     }
   }
 
+  /** Clicking a square steps it round: empty, survival press, flow note, empty. */
   function toggle(bar: number, cell: number): void {
     if (tr) return;
     const cells = GRIDS[grid].cells;
     const step = BAR / cells;
-    const ticks = barTicks(bar);
-    const here = ticks.filter((t) => Math.min(cells - 1, Math.round(t / step)) === cell);
-    setBar(deps.pack(), bar, here.length ? ticks.filter((t) => !here.includes(t)) : [...ticks, cell * step]);
+    const n = barNotes(bar);
+    const here = (t: number) => Math.min(cells - 1, Math.round(t / step)) === cell;
+    const wasS = n.t.some(here);
+    const wasF = n.f.some(here);
+    const t = n.t.filter((x) => !here(x));
+    const f = n.f.filter((x) => !here(x));
+    if (!wasS && !wasF) t.push(cell * step); else if (wasS) f.push(cell * step);
+    setBar(deps.pack(), bar, { t, f });
     dirty = true;
     renderGrid();
-    status('Edited. This bar is now "by hand". Listen, play it, or save.');
+    status(`${!wasS && !wasF ? 'Survival press' : wasS ? 'Flow note' : 'Empty'}. This bar is now "by hand".${isCharge() ? ' This section charges the drop, so every note in it plays as a flow note.' : ''}`);
   }
 
   async function start(mode: 'record' | 'listen'): Promise<void> {
@@ -128,13 +152,17 @@ export function initRecord(deps: { pack: () => LevelPack; show: (screen: 'menu' 
     const music = audio.playMusic(track.buffer, t0, Math.max(0, pack.audio.offset + track.shift + pos0), rate);
     for (let k = 0; k < pre; k++) audio.hit(k === 0 ? 'clickHi' : 'click', 0.7, t0 + (k * spb) / rate); // one bar of count-in
     if (mode === 'listen') {
-      for (const t of pressTicks(pack)) {
-        const song = (t / 12) * spb;
-        if (song >= s.t0 - 1e-6 && song < s.t1) audio.hit('click', 1, t0 + (song - pos0) / rate);
+      const all = layerTicks(pack);
+      // survival presses click high, flow notes click low and softer
+      for (const [ticks, name, gain] of [[all.survival, 'clickHi', 1], [all.flow, 'click', 0.6]] as const) {
+        for (const t of ticks) {
+          const song = (t / 12) * spb;
+          if (song >= s.t0 - 1e-6 && song < s.t1) audio.hit(name, gain, t0 + (song - pos0) / rate);
+        }
       }
     }
     tr = { mode, t0, pos0, rate, end: t0 + (s.t1 - pos0) / rate + 0.12, music, taps: [] };
-    status(mode === 'record' ? 'Recording: one bar of count-in, then tap along (the pad, or any key).' : 'Listening: a click on every press.');
+    status(mode === 'record' ? `Recording ${layer === 'survival' ? 'survival presses' : 'flow notes'}: one bar of count-in, then tap along (the pad, or any key).` : 'Listening: a high click on every survival press, a low one on every flow note.');
     renderControls();
   }
 
@@ -146,9 +174,14 @@ export function initRecord(deps: { pack: () => LevelPack; show: (screen: 'menu' 
     void audio.suspend().then(() => audio.resume()); // drops clicks still queued
     if (t.mode === 'record' && keep) {
       const s = seg();
-      for (let b = s.bar0; b < s.bar0 + s.bars; b++) setBar(deps.pack(), b, t.taps.filter((x) => x >= b * BAR && x < (b + 1) * BAR).map((x) => x - b * BAR));
+      // the take replaces this layer in the section; the other layer stays, apart from notes the take landed on
+      for (let b = s.bar0; b < s.bar0 + s.bars; b++) {
+        const got = t.taps.filter((x) => x >= b * BAR && x < (b + 1) * BAR).map((x) => x - b * BAR);
+        const old = barNotes(b);
+        setBar(deps.pack(), b, layer === 'survival' ? { t: got, f: old.f.filter((x) => !got.includes(x)) } : { t: old.t.filter((x) => !got.includes(x)), f: got });
+      }
       dirty = true;
-      status(`Recorded ${t.taps.length} taps on the ${GRIDS[grid].name} grid. Listen back, fix single notes in the grid, re-record, or save.`);
+      status(`Recorded ${t.taps.length} ${layer === 'survival' ? 'survival presses' : 'flow notes'} on the ${GRIDS[grid].name} grid; the other layer is untouched. Listen back, click squares to fix single notes, re-record, or save.${isCharge() ? ' This section charges the drop, so every note in it plays as a flow note.' : ''}`);
     } else if (t.mode === 'record') status('Recording thrown away.');
     else status('');
     renderControls();
@@ -167,7 +200,7 @@ export function initRecord(deps: { pack: () => LevelPack; show: (screen: 'menu' 
     tr.taps.push(tick);
     audio.hit('tap', 0.8);
     const cell = document.querySelector<HTMLElement>(`.rec-cell[data-bar="${Math.floor(tick / BAR)}"][data-cell="${Math.round((tick % BAR) / step)}"]`);
-    cell?.classList.add('on', 'fresh');
+    cell?.classList.add(layer === 'survival' ? 'on' : 'flow', 'fresh');
   }
 
   function tick(now: number): void {
@@ -189,7 +222,7 @@ export function initRecord(deps: { pack: () => LevelPack; show: (screen: 'menu' 
     segIdx = Math.min(segIdx, segs.length - 1);
     renderControls();
     renderGrid();
-    status('Pick a section and a grid, press Record and tap what you hear. Click a square to add or remove one note.');
+    status('Blue = survival press (must be hit), gold = flow note (optional). Record one layer at a time, or click a square to step it through empty, survival, flow.');
     deps.show('record');
   }
 

@@ -30,8 +30,12 @@ export interface SegmentDef {
   orbs?: boolean; // hop-slice core (tag gd-hop-slice)
   pads?: boolean;
   chain?: number;
-  /** ring-hop core: pulse = openings breathe with the kick, speed = orbit speed (1 = a lap per 8 beats), flip = gravity turns over on the section's first press */
-  core?: { pulse?: boolean; speed?: number; flip?: boolean };
+  /**
+   * ring-hop core. pulse: marks breathe with the kick. speed: orbit speed (1 = a lap per 8 beats). flip: gravity turns
+   * over on the section's first press. charge: nothing here can end the run; every note is a flow note that charges the drop.
+   * launch: the section opens with a press the game takes itself (the launch into the drop).
+   */
+  core?: { pulse?: boolean; speed?: number; flip?: boolean; charge?: boolean; launch?: boolean };
   hazard?: string; // 'beam': hops clear a sweeping beam instead of a spike
   reverse?: boolean;
   /** the one sound this section's taps follow: arp, kick, snare or lead */
@@ -56,6 +60,8 @@ export interface LevelFile {
   hitsoundNote: number;
   /** 16ths are swung (the off-16ths land late, on ticks 4 and 10 of 12) */
   swing?: boolean;
+  /** pitch classes of the song's scale, lowest first (used for the rising notes while the drop charges) */
+  scale?: number[];
   /** ring-hop core: the stretch of the level (in beats) that is built so far */
   lab?: [number, number];
   segments: SegmentDef[];

@@ -30,6 +30,17 @@ let settingsFrom: Screen = 'menu';
 let run: Run | null = null;
 let botMode = /[?&]bot=1/.test(location.search);
 let practice = false;
+/** start runs at the build-up (the first charge section) instead of the beginning; such runs are not saved */
+let fromBuild = false;
+function buildStart(): number {
+  const lab = pack.level.lab;
+  let beat = 0;
+  for (const s of pack.level.segments) {
+    if (s.core?.charge && (!lab || (beat >= lab[0] && beat < lab[1]))) return (beat * 60) / pack.audio.bpm;
+    beat += s.bars * 4;
+  }
+  return -1;
+}
 let lastFrame = performance.now();
 
 /** Input events carry the time the tap happened; fall back to "now" on browsers that report something else. */
@@ -59,6 +70,8 @@ function renderMenu(): void {
     ? 'Not played yet'
     : `Best ${b.cleared ? 100 : b.pct}% · ${b.attempts} attempt${b.attempts === 1 ? '' : 's'}${b.cleared ? ' · CLEARED' : ''}`;
   $('practiceBtn').classList.toggle('on', practice);
+  $('fromBtn').classList.toggle('on', fromBuild);
+  $('fromBtn').classList.toggle('hidden', buildStart() < 0);
   $('botBtn').classList.toggle('on', botMode);
   const play = $<HTMLButtonElement>('playBtn');
   play.disabled = !open;
@@ -73,19 +86,21 @@ function startRun(from = -1, quick = false): void {
   if (!botMode && !save.calibrated && from < 0 && !quick) { openCalib(true); return; } // first run: a quick sync check
   if (practice && !botMode && !save.practiced[pack.level.id]) { save.practiced[pack.level.id] = true; persist(); }
   run?.stop();
-  const counted = !botMode && !practice;
+  const partial = from < 0 && fromBuild && buildStart() >= 0;
+  if (partial) from = buildStart();
+  const counted = !botMode && !practice && !partial;
   if (counted) {
     save.bests[pack.level.id] = { ...bestFor(pack.level.id), attempts: bestFor(pack.level.id).attempts + 1 };
     persist();
   }
   renderer.reset();
-  run = new Run(pack, { bot: botMode, practice: practice && !botMode, startAt: from >= 0 ? from : undefined, leadIn: from >= 0 ? 1.5 : quick ? 1.2 : 2 }, onRunEnd);
+  run = new Run(pack, { bot: botMode, practice: practice && !botMode, partial, startAt: from >= 0 ? from : undefined, leadIn: from >= 0 ? 1.5 : quick ? 1.2 : 2 }, onRunEnd);
   const b = bestFor(pack.level.id);
   $('dropMark').style.left = `${((run.level.dropTime - run.t0) / (run.t1 - run.t0)) * 100}%`;
   $('bestMark').style.left = `${b.cleared ? 100 : b.pct}%`;
   $('bestMark').classList.toggle('hidden', b.pct === 0 && !b.cleared);
   $('bestPct').textContent = b.cleared ? 'CLEARED' : `BEST ${b.pct}%`;
-  $('attempt').textContent = botMode ? 'AUTOPLAY' : practice ? 'PRACTICE' : `ATTEMPT ${b.attempts}`;
+  $('attempt').textContent = botMode ? 'AUTOPLAY' : practice ? 'PRACTICE' : partial ? 'FROM THE BUILD-UP' : `ATTEMPT ${b.attempts}`;
   hudPct = -1;
   show('play');
   void run.start().then(() => { if (run && run.state === 'error') { alert(`Could not start the level: ${run.error}`); show('menu'); } });
@@ -108,7 +123,7 @@ function onRunEnd(r: Run): void {
   if (r !== run) return;
   const id = r.pack.level.id;
   const prev = bestFor(id);
-  const counted = !r.opts.bot && !r.opts.practice;
+  const counted = !r.opts.bot && !r.opts.practice && !r.opts.partial;
   if (r.state === 'failed') {
     if (r.opts.practice) {
       // back to the start of the section; the one before if you fell right at its start
@@ -130,7 +145,7 @@ function onRunEnd(r: Run): void {
   persist();
   const s = r.sim;
   $('resUnlocks').textContent = '';
-  $('resTag').textContent = r.opts.bot ? 'AUTOPLAY · NOT SAVED' : r.opts.practice ? 'PRACTICE · NOT SAVED' : prev.cleared ? `ATTEMPT ${prev.attempts}` : '★ FIRST CLEAR ★';
+  $('resTag').textContent = r.opts.bot ? 'AUTOPLAY · NOT SAVED' : r.opts.practice ? 'PRACTICE · NOT SAVED' : r.opts.partial ? 'FROM THE BUILD-UP · NOT SAVED' : prev.cleared ? `ATTEMPT ${prev.attempts}` : '★ FIRST CLEAR ★';
   $('resTitle').textContent = r.pack.level.lab ? 'LAB COMPLETE' : 'LEVEL COMPLETE';
   $('resSub').textContent = r.level.title;
   $('resAttempts').textContent = counted ? String(bestFor(id).attempts) : '–';
@@ -138,8 +153,9 @@ function onRunEnd(r: Run): void {
   $('resStreak').textContent = String(s.bestStreak);
   const sm = r.smoothness();
   const move = `Movement check: ${sm.frames} frames, clock speed never more than ${sm.worstPct.toFixed(2)}% off (average ${sm.meanPct.toFixed(3)}%)`;
-  console.log(`[one more orbit] ${r.opts.bot ? 'autoplay' : 'run'} cleared ${r.level.title}: ${s.onBeat}/${s.judged} taps on the beat, best streak ${s.bestStreak}, drop ${r.dropFull ? 'in full' : 'small'}. ${move}`);
-  $('resNote').textContent = r.opts.bot ? move : r.dropFull === false ? 'You reached the drop out of flow, so it played small. Arrive on the beat for the full one.' : r.dropFull ? 'You hit the drop in flow.' : '';
+  const drop = `drop at ${Math.round(r.dropPower * 100)}% (charge ${Math.round(s.charge * 100)}%)`;
+  console.log(`[one more orbit] ${r.opts.bot ? 'autoplay' : 'run'} cleared ${r.level.title}: ${s.onBeat}/${s.judged} taps on the beat, best streak ${s.bestStreak}, ${drop}. ${move}`);
+  $('resNote').textContent = r.opts.bot ? `${move}. Autoplay ${drop}.` : r.dropFull ? 'Full drop: fully charged and in flow.' : r.dropFull === false ? `The drop played at ${Math.round(r.dropPower * 100)}%: you charged it to ${Math.round(s.charge * 100)}% in the roll. Tap the roll's notes and arrive in flow for the full one.` : '';
   show('results');
 }
 
@@ -332,6 +348,7 @@ function closeCalib(): void {
 // ------------------------------------------------------------------ wiring
 $('playBtn').addEventListener('click', () => startRun());
 $('practiceBtn').addEventListener('click', () => { practice = !practice; renderMenu(); });
+$('fromBtn').addEventListener('click', () => { fromBuild = !fromBuild; renderMenu(); });
 $('botBtn').addEventListener('click', () => { botMode = !botMode; renderMenu(); });
 $('settingsBtn').addEventListener('click', () => openSettings('menu'));
 $('creditsBtn').addEventListener('click', () => show('credits'));
@@ -425,5 +442,5 @@ requestAnimationFrame(loop);
 
 // Hooks for tests and debugging; the game itself never reads these.
 Object.assign(window, {
-  __omo: { audio, save, get run() { return run; }, get screen() { return screen; }, tick, level: selectLevel, start: (bot: boolean, prac = false, from = -1) => { botMode = bot; practice = prac; startRun(from); } }
+  __omo: { audio, save, get run() { return run; }, get screen() { return screen; }, tick, level: selectLevel, start: (bot: boolean, prac = false, from = -1, build = false) => { botMode = bot; practice = prac; fromBuild = build; startRun(from); } }
 });

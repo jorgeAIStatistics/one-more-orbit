@@ -32,6 +32,7 @@
       <button id="playBtn" class="primary" type="button">PLAY</button>
       <div class="row">
         <button id="practiceBtn" class="pill toggle" type="button">Practice: checkpoints</button>
+        <button id="fromBtn" class="pill toggle" type="button">Start at the build-up</button>
         <button id="botBtn" class="pill toggle" type="button">Watch autoplay</button>
       </div>
       <div class="row">
@@ -40,7 +41,7 @@
         <button id="creditsBtn" class="pill" type="button">Music credits</button>
         <button id="recordBtn" class="pill" type="button">Record mode</button>
       </div>
-      <p class="hint">One button: tap anywhere, or press any key, as the ball crosses each mark. On the note builds flow; a little off still clears. R restarts, Esc pauses.</p>
+      <p class="hint">One button: tap anywhere, or press any key. White marks must be hit (a little off still clears). Gold notes are optional: on the beat they build flow, and in the roll they charge the drop. R restarts, Esc pauses.</p>
     </div>
   </section>
 
@@ -112,6 +113,7 @@
       <select id="recSection" aria-label="Section"></select>
       <div class="rec-opts"><span>Speed</span><div id="recSpeed" class="row"></div></div>
       <div class="rec-opts"><span>Snap to</span><div id="recGridPick" class="row"></div></div>
+      <div class="rec-opts"><span>Record as</span><div id="recLayer" class="row"></div></div>
       <div id="recGridView" class="rec-grid"></div>
       <div id="recStatus" class="sub"></div>
       <button id="recPad" class="pad" type="button">TAP</button>

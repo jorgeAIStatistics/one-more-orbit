@@ -21,7 +21,7 @@ export interface LevelPack {
   audio: AudioMeta;
   chart: ChartFile;
   /** press moments recorded by hand (Record Mode); bars without one use the chart */
-  presses?: { bars: Record<string, { by: 'hand'; t: number[] }> };
+  presses?: { bars: Record<string, { by: 'hand'; t: number[]; f?: number[] }> };
 }
 
 /** Levels built for the ring-hop core so far (Sky High is a feel lab: its `lab` range only). */
