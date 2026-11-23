@@ -15,7 +15,7 @@ export interface LoadedTrack {
   exact: boolean;
 }
 
-type HitName = 'impact' | 'tap' | 'L' | 'R' | 'sparkle' | 'sparkleHi' | 'miss' | 'spin' | 'hop' | 'release' | 'click' | 'clickHi';
+type HitName = 'hit' | 'stray' | 'impact' | 'tap' | 'L' | 'R' | 'sparkle' | 'sparkleHi' | 'miss' | 'spin' | 'hop' | 'release' | 'click' | 'clickHi';
 
 /**
  * Web Audio wrapper. The audio context's clock is the game clock: `ctxTimeAt()` maps an input
@@ -37,6 +37,7 @@ export class AudioEngine {
   private w0 = -Infinity;
   private w1 = -Infinity;
   private wStart = 0;
+  private smooth = NaN; // slew-limited clock offset for drawing, so the picture never steps
   musicVol = 0.8;
   sfxVol = 0.7;
 
@@ -86,6 +87,7 @@ export class AudioEngine {
     const c = this.ctx;
     if (!c || c.state === 'running' || c.state === 'closed') return Promise.resolve();
     this.w0 = this.w1 = -Infinity;
+    this.smooth = NaN;
     return c.resume().catch(() => undefined);
   }
 
@@ -115,6 +117,17 @@ export class AudioEngine {
     const d = c.currentTime - now / 1000;
     if (now - this.wStart > 300) { this.w0 = this.w1; this.w1 = -Infinity; this.wStart = now; }
     if (d > this.w1) this.w1 = d;
+    const est = Math.max(this.w0, this.w1);
+    if (!isFinite(this.smooth) || Math.abs(est - this.smooth) > 0.05) this.smooth = est;
+    else this.smooth += Math.max(-0.0003, Math.min(0.0003, est - this.smooth));
+  }
+
+  /** Like ctxTimeAt but on the smoothed offset: judging uses the exact clock, drawing uses this one. */
+  viewTimeAt(perfMs: number): number {
+    const c = this.ctx;
+    if (!c) return perfMs / 1000;
+    if (c.state !== 'running' || !isFinite(this.smooth)) return c.currentTime;
+    return perfMs / 1000 + this.smooth;
   }
 
   /** Audio-clock time at a page timestamp (performance.now() / event.timeStamp, in ms). */
@@ -298,6 +311,8 @@ export class AudioEngine {
     this.hits.sparkle = make(0.16, (t) => (Math.sin(TAU * hz * 4 * t) * 0.5 + Math.sin(TAU * hz * 6 * t) * 0.3) * Math.exp(-t * 26) * 0.5);
     this.hits.sparkleHi = make(0.2, (t) => (Math.sin(TAU * hz * 4 * t) * 0.4 + Math.sin(TAU * hz * 6 * t) * 0.35 + Math.sin(TAU * hz * 8 * t) * 0.25) * Math.exp(-t * 20) * 0.55);
     this.hits.impact = make(0.4, (t) => Math.sin(TAU * (55 * t + (110 * (1 - Math.exp(-t * 28))) / 28)) * Math.exp(-t * 8) * 0.85 + hpNoise() * Math.exp(-t * 13) * 0.3);
+    this.hits.hit = make(0.07, (t) => hpNoise() * Math.exp(-t * 140) * 0.5 + Math.sin(TAU * 1100 * t) * Math.exp(-t * 90) * 0.45 + Math.sin(TAU * 220 * t) * Math.exp(-t * 60) * 0.3);
+    this.hits.stray = make(0.06, (t) => Math.sin(TAU * 150 * t) * Math.exp(-t * 70) * 0.5 + noise() * Math.exp(-t * 200) * 0.08);
     this.hits.miss = make(0.16, (t) => Math.sin(TAU * (70 * t - 60 * t * t)) * Math.exp(-t * 22) * 0.8);
     this.hits.spin = make(0.025, (t) => hpNoise() * Math.exp(-t * 260) * 0.45);
     this.hits.hop = make(0.07, (t) => Math.sin(TAU * (600 * t + 2500 * t * t)) * Math.exp(-t * 55) * 0.4);

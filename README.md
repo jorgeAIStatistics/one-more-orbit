@@ -71,7 +71,9 @@ tests/                chart checks and the autoplay bot
 
 ## One-button elements
 
-Tap gates (accent gates on big hits), bursts of two or three gates on one ring, reversals, speed changes (`lap`), ghost gates that fade before you reach them, spike hops (tap the pad, land on the beat), inward jumps and a rocket outward, orbit shapes (circle, ellipse, square), camera rotation and flips, and a look per section (palette, background, equalizer style). All of them are set per section in `levels/<id>/level.json`.
+Tap gates (accent gates on big hits), bursts of two or three gates on one ring, flip gates (tapping one reverses the ball), portals (jump across the ring), hops over spikes or sweeping beams, slingshots to a new planet, mini mode, speed changes (`lap`), inward jumps and rockets, orbit shapes (circle, ellipse, rounded square), camera rotation, tilt and flips, and a look per section. All are set per section or per bar in `levels/<id>/level.json`.
+
+Judging is strict: a tap up to 180 ms before a gate but outside its window is an early miss for that gate, a tap nowhere near a gate breaks the combo and costs health, and each gate is judged once.
 
 ## How charts are made (rhythm first)
 

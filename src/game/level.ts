@@ -8,7 +8,6 @@ function rawPoint(shape: Shape, a: number): [number, number] {
   const c = Math.cos(a);
   const s = Math.sin(a);
   if (shape === 'ellipse') return [c * 1.16, s * 0.84];
-  if (shape === 'square') return [Math.sign(c) * Math.pow(Math.abs(c), 0.5) * 1.04, Math.sign(s) * Math.pow(Math.abs(s), 0.5) * 1.04];
   return [c, s];
 }
 const TABLES = new Map<Shape, Float32Array>();
@@ -37,8 +36,28 @@ function table(shape: Shape): Float32Array {
   return t;
 }
 /** Point on a unit-sized shape after travelling `angle / 2π` of the way round it. */
+/** Rounded square, walked at constant speed: four straight sides joined by quarter-circle corners. */
+function squarePoint(u: number): [number, number] {
+  const a = 0.97;
+  const r = 0.4;
+  const side = 2 * (a - r);
+  const arc = (Math.PI * r) / 2;
+  let d = (((u % 1) + 1) % 1) * 4 * (side + arc) + side / 2; // start at the middle of the right-hand side
+  for (let k = 0; k < 5; k++) {
+    const ca = Math.cos((k * Math.PI) / 2);
+    const sa = Math.sin((k * Math.PI) / 2);
+    const rot = (x: number, y: number): [number, number] => [x * ca - y * sa, x * sa + y * ca];
+    if (d < side) return rot(a, -(a - r) + d);
+    d -= side;
+    if (d < arc) { const t = d / r; return rot(a - r + r * Math.cos(t), a - r + r * Math.sin(t)); }
+    d -= arc;
+  }
+  return [a, 0];
+}
+
 export function shapePoint(shape: Shape, angle: number): [number, number] {
   if (shape === 'circle') return [Math.cos(angle), Math.sin(angle)];
+  if (shape === 'square') return squarePoint(angle / TWO_PI);
   const t = table(shape);
   const N = t.length - 1;
   let u = (angle / TWO_PI) % 1;
@@ -89,8 +108,8 @@ export class Level {
       const beat = n.t / TICKS_PER_BEAT;
       const t = beat * this.spb;
       this.notes.push({
-        i, kind: n.k === 'j' ? 'hop' : 'tap', t, beat, seg: this.segAt(t + 1e-6).index, ring: 0, angle: 0, exit: false,
-        accent: n.a === 1, ghost: n.g ?? 0, moving: n.m === 1, voice: n.v ?? 'l', pitch: n.p ?? 0, done: false, judge: null, hitT: -1
+        i, kind: n.k === 'j' ? 'hop' : n.k === 'f' ? 'flip' : n.k === 'p' ? 'portal' : 'tap', t, beat, seg: this.segAt(t + 1e-6).index, ring: 0, angle: 0, exit: false,
+        accent: n.a === 1, voice: n.v ?? 'l', pitch: n.p ?? 0, done: false, judge: null, hitT: -1
       });
     });
 
@@ -100,11 +119,16 @@ export class Level {
     let lvl = 0;
     let prevSeg = -1;
     let flipKey = '';
+    let planet = 0;
+    let afterFlip = false;
+    let afterPortal = false;
     let i = 0;
     while (i < this.notes.length) {
       const first = i;
       let last = i;
-      while (last + 1 < this.notes.length && last - first < 2 && this.notes[last + 1].seg === this.notes[first].seg &&
+      // flip gates and portals always end their ring: what they do happens on the jump to the next one
+      const special = (k: number) => this.notes[k].kind === 'flip' || this.notes[k].kind === 'portal';
+      while (!special(last) && last + 1 < this.notes.length && last - first < 2 && this.notes[last + 1].seg === this.notes[first].seg &&
         this.notes[last + 1].beat - this.notes[last].beat <= 0.5001) last++;
       const seg = this.segments[this.notes[first].seg];
       const span = this.notes[last].beat - lastBeat;
@@ -113,6 +137,9 @@ export class Level {
       // (Safety only: a ring is slowed if the ball would otherwise lap it before its exit gate.)
       while (span > lap * 0.875) lap *= 2;
       let reversed = false;
+      if (afterFlip) { dir = -dir; reversed = true; }
+      if (afterPortal) lastAngle += Math.PI;
+      if (seg.index !== prevSeg && seg.sling) planet++;
       if (seg.index !== prevSeg && seg.reverse) { dir = -dir; reversed = true; }
       if (seg.revEvery) {
         const key = `${seg.index}:${Math.floor((this.notes[first].beat - seg.beat0) / (seg.revEvery * 4))}`;
@@ -121,7 +148,9 @@ export class Level {
       const idx = this.rings.length;
       if (idx > 0) lvl += (seg.jump === 'in' ? -1 : 1) + (seg.index !== prevSeg && seg.rocket ? seg.rocket : 0);
       prevSeg = seg.index;
-      const ring: Ring = { idx, b0: lastBeat, exitBeat: this.notes[last].beat, a0: lastAngle, dir, lap, lvl, seg: seg.index, shape: seg.shape ?? 'circle', first, last, reversed };
+      const ring: Ring = { idx, b0: lastBeat, exitBeat: this.notes[last].beat, a0: lastAngle, dir, lap, lvl, seg: seg.index, shape: seg.shape ?? 'circle', first, last, reversed, portal: afterPortal, planet };
+      afterFlip = this.notes[last].kind === 'flip';
+      afterPortal = this.notes[last].kind === 'portal';
       for (let k = first; k <= last; k++) {
         const n = this.notes[k];
         n.ring = idx;
@@ -135,7 +164,7 @@ export class Level {
     }
     // a last, empty ring to coast on after the final gate
     const end = this.segments[this.segments.length - 1];
-    this.rings.push({ idx: this.rings.length, b0: lastBeat, exitBeat: Infinity, a0: lastAngle, dir, lap: 8, lvl: lvl + 1 + (end.rocket ?? 0), seg: end.index, shape: end.shape ?? 'circle', first: this.notes.length, last: this.notes.length - 1, reversed: false });
+    this.rings.push({ idx: this.rings.length, b0: lastBeat, exitBeat: Infinity, a0: lastAngle, dir, lap: 8, lvl: lvl + 1 + (end.rocket ?? 0), seg: end.index, shape: end.shape ?? 'circle', first: this.notes.length, last: this.notes.length - 1, reversed: false, portal: false, planet });
   }
 
   segAt(t: number): Segment {

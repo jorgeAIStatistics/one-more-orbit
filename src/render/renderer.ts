@@ -67,6 +67,14 @@ export class Renderer {
   private jumpFrom = 0;
   private hopUntil = -1;
   private kickWas = 0;
+  private camVel = 0;
+  private landed = true;
+  private landPulse = 0;
+  private panT = 1;
+  private panFrom = { x: 0, y: 0 };
+  private lastBall = { x: 0, y: 0 };
+  private redAt = { x: 0, y: 0, a: 0 };
+  private planetVec = new Map<number, [number, number]>();
   private eq = new Float32Array(EQ_BARS);
   private stars: Array<{ a: number; d: number; s: number }> = [];
   private trail: Array<{ x: number; y: number }> = [];
@@ -95,6 +103,11 @@ export class Renderer {
     this.flash = this.punch = this.shake = this.drain = this.tapPulse = this.camBias = 0;
     this.flipAngle = this.flipTarget = 0;
     this.camLevel = startLevel;
+    this.camVel = 0;
+    this.panT = 1;
+    this.landPulse = 0;
+    this.redAt.a = 0;
+    this.planetVec.clear();
     this.ringIdx = -1;
     this.jumpT = 1;
     this.hopUntil = -1;
@@ -288,6 +301,7 @@ export class Renderer {
     for (const f of run.fx) {
       if (f.type === 'enter') this.onEnter(f.seg, now, run);
       else if (f.type === 'judge') this.onJudge(run, f.ev, scr);
+      else if (f.type === 'stray') this.redAt = { x: this.lastBall.x, y: this.lastBall.y, a: 1 };
       else this.tapPulse = 1;
     }
     run.fx.length = 0;
@@ -310,23 +324,45 @@ export class Renderer {
     const ring = level.ringAt(beat);
     if (ring.idx !== this.ringIdx) {
       const prev = this.ringIdx >= 0 ? level.rings[this.ringIdx] : ring;
-      if (this.ringIdx < 0) this.camLevel = ring.lvl;
+      if (this.ringIdx < 0) { this.camLevel = ring.lvl; this.camVel = 0; }
       this.jumpFrom = prev.lvl;
       this.jumpT = this.ringIdx < 0 ? 1 : 0;
+      this.landed = this.ringIdx < 0;
+      if (ring.planet !== prev.planet) { this.panT = 0; this.panFrom = { x: this.lastBall.x, y: this.lastBall.y }; this.trail = []; }
       if (Math.abs(ring.lvl - prev.lvl) > 1.5 && !rm) { this.shake = Math.max(this.shake, 0.7); this.burst(0, 0, 60, pal.acc, scr(ring.lvl) * 4); } // rocket
       this.ringIdx = ring.idx;
     }
-    this.jumpT = Math.min(1, this.jumpT + dt / 0.16);
-    // the camera catches a rocket quickly, so the ring is back in frame before the next gate arrives
-    this.camLevel += (ring.lvl - this.camLevel) * Math.min(1, dt * (Math.abs(ring.lvl - this.camLevel) > 1.5 ? 16 : 6.5));
-    this.camBias += ((seg.jump === 'in' ? 1.25 : 0) - this.camBias) * Math.min(1, dt * 3);
+    this.jumpT = Math.min(1, this.jumpT + dt / clamp(0.34 * level.spb, 0.11, 0.2)); // the jump lasts a third of a beat
+    if (this.jumpT >= 1 && !this.landed) { this.landed = true; this.landPulse = 1; }
+    this.landPulse = Math.max(0, this.landPulse - dt * 9);
+    this.redAt.a = Math.max(0, this.redAt.a - dt * 4);
+    // one critically damped spring follows the ball's ring: no sudden camera speed changes, rockets included
+    const kCam = 170;
+    for (let s = 0; s < 2; s++) {
+      this.camVel += (kCam * (ring.lvl - this.camLevel) - 2 * Math.sqrt(kCam) * this.camVel) * (dt / 2);
+      this.camLevel += this.camVel * (dt / 2);
+    }
+    this.panT = Math.min(1, this.panT + dt / 0.34);
+    const pe = this.panT * this.panT * (3 - 2 * this.panT);
+    // slingshot: each planet has its own centre; the camera pans from the old one to the new one
+    const vecOf = (q: number): [number, number] => {
+      let v = this.planetVec.get(q);
+      if (!v) { const fr = level.rings.find((x) => x.planet === q); v = (fr && level.segments[fr.seg].sling) || [1, 0]; this.planetVec.set(q, v); }
+      return v;
+    };
+    const planetOff = (q: number): [number, number] => {
+      const v = vecOf(Math.max(q, ring.planet));
+      const k = (q - (ring.planet - 1 + pe)) * m * 1.05;
+      return [v[0] * k, v[1] * k];
+    };
+    this.camBias += ((seg.jump === 'in' ? 1.25 : 0) + (seg.mini ? -0.85 : 0) - this.camBias) * Math.min(1, dt * 3);
     this.flash = Math.max(0, this.flash - dt * 2.6);
     this.punch *= Math.exp(-dt * 7);
     this.shake = Math.max(0, this.shake - dt * 3);
     this.tapPulse = Math.max(0, this.tapPulse - dt * 7);
     this.flipAngle += (this.flipTarget - this.flipAngle) * Math.min(1, dt * 8);
     // never zoom so far that the ball's ring (and its gates) leaves the screen
-    const extent = ring.shape === 'ellipse' ? 1.16 : ring.shape === 'square' ? 1.04 : 1;
+    const extent = ring.shape === 'ellipse' ? 1.16 : ring.shape === 'square' ? 1.22 : 1;
     const zoomCap = 0.455 / (0.27 * Math.pow(ORBIT_RATIO, this.camBias) * extent);
     const zoom = Math.min(ramp(look.zoom, u, 1), zoomCap) * (1 + this.punch) * (1 + (rm ? 0 : kick * 0.022 * energy));
     const rot = rm ? 0 : ramp(look.rot, u, 0) * TWO_PI + this.flipAngle;
@@ -343,7 +379,13 @@ export class Renderer {
     c.scale(zoom, zoom * (1 - tilt));
 
     // --- equalizer round the core
-    if (!seg.blackout) this.equalizer(look.eq || 'bars', pal, m * (0.085 - this.camBias * 0.02), m * 0.075, kick, snare, dt);
+    if (!seg.blackout) {
+      const [eox, eoy] = planetOff(ring.planet);
+      c.save();
+      c.translate(eox, eoy);
+      this.equalizer(look.eq || 'bars', pal, m * (0.085 - Math.max(0, this.camBias) * 0.02), m * 0.075, kick, snare, dt);
+      c.restore();
+    }
     this.kickWas = kick;
 
     // --- shockwaves
@@ -368,6 +410,9 @@ export class Renderer {
       // only the next ring is previewed with its gates; the one after is a faint outline, anything further is hidden
       const ra = d < 0 ? 0.3 * (1 - this.jumpT) : d === 0 ? 1 : d === 1 ? 0.6 : d === 2 ? 0.12 : 0;
       if (ra <= 0.01) continue;
+      const [rox, roy] = planetOff(r.planet);
+      c.save();
+      c.translate(rox, roy);
       c.lineWidth = d === 0 ? 2.5 + pulse * 2.5 : 1.5;
       c.strokeStyle = this.col(pal.ring, ra * (0.45 + (d === 0 ? pulse * 0.4 : 0)));
       c.shadowColor = this.col(pal.ring, 0.8);
@@ -384,12 +429,8 @@ export class Renderer {
       for (let i = r.first; i <= r.last && d <= 1; i++) {
         const n = level.notes[i];
         if (n.done) continue;
-        // ghost gates fade out before the ball arrives: the rhythm has to carry you
-        const ghost = n.ghost ? clamp((n.beat - beat - (n.ghost === 2 ? 0.35 : 1)) / 0.9, 0, 1) : 1;
-        const alpha = Math.pow(ra, 0.7) * ghost;
-        // moving gates slide along the ring and lock into place one beat before the ball arrives
-        const na = n.moving ? n.angle + r.dir * 0.55 * clamp((n.beat - beat - 1) / 1.5, 0, 1) : n.angle;
-        const [ux, uy] = shapePoint(r.shape, na);
+        const alpha = Math.pow(ra, 0.7); // gates stay fully visible until they are hit
+        const [ux, uy] = shapePoint(r.shape, n.angle);
         const hyp = Math.hypot(ux, uy) || 1;
         const ox = ux / hyp;
         const oy = uy / hyp;
@@ -400,15 +441,29 @@ export class Renderer {
         if (alpha > 0.01) {
           c.lineCap = 'round';
           if (n.kind === 'hop') {
-            // spike hop: ONE thing to tap, a solid arrow, and the spike it carries you over
-            const [px, py] = shapePoint(r.shape, n.angle + (r.dir * TWO_PI * 0.5 * HOP_BEATS) / r.lap);
-            const ph = Math.hypot(px, py) || 1;
-            c.fillStyle = this.col(RED, alpha);
-            c.beginPath();
-            c.moveTo(px * rad + (px / ph) * len * 0.95, py * rad + (py / ph) * len * 0.95);
-            c.lineTo(px * rad - (py / ph) * len * 0.34, py * rad + (px / ph) * len * 0.34);
-            c.lineTo(px * rad + (py / ph) * len * 0.34, py * rad - (px / ph) * len * 0.34);
-            c.fill();
+            // hop: ONE thing to tap, a solid arrow, and the hazard it carries you over (a spike, or a sweeping beam)
+            if (level.segments[n.seg].hazard === 'beam') {
+              // the beam sweeps round to meet the ball in the middle of its hop
+              const ab = n.angle + (r.dir * TWO_PI * (0.5 * HOP_BEATS + (n.beat + 0.5 * HOP_BEATS - beat))) / r.lap;
+              const near = clamp(1 - (n.beat - beat) / 2, 0, 1);
+              if (n.beat - beat < 2) {
+                c.lineWidth = 5;
+                c.strokeStyle = this.col(RED, alpha * (0.25 + 0.75 * near));
+                c.shadowColor = this.col(RED, 0.9);
+                c.shadowBlur = 14 * near;
+                c.beginPath(); c.moveTo(Math.cos(ab) * rad * 0.3, Math.sin(ab) * rad * 0.3); c.lineTo(Math.cos(ab) * rad * 1.28, Math.sin(ab) * rad * 1.28); c.stroke();
+                c.shadowBlur = 0;
+              }
+            } else {
+              const [px, py] = shapePoint(r.shape, n.angle + (r.dir * TWO_PI * 0.5 * HOP_BEATS) / r.lap);
+              const ph = Math.hypot(px, py) || 1;
+              c.fillStyle = this.col(RED, alpha);
+              c.beginPath();
+              c.moveTo(px * rad + (px / ph) * len * 0.95, py * rad + (py / ph) * len * 0.95);
+              c.lineTo(px * rad - (py / ph) * len * 0.34, py * rad + (px / ph) * len * 0.34);
+              c.lineTo(px * rad + (py / ph) * len * 0.34, py * rad - (px / ph) * len * 0.34);
+              c.fill();
+            }
             c.fillStyle = this.col(col, alpha);
             c.shadowColor = this.col(col, alpha);
             c.shadowBlur = 12;
@@ -432,30 +487,80 @@ export class Renderer {
             c.shadowBlur = 0;
           }
         }
+        if (alpha > 0.01 && n.kind === 'flip') {
+          // flip gate: arrowheads on both sides, because tapping it turns the ball round
+          c.fillStyle = `rgba(255,255,255,${alpha})`;
+          for (const sg of [-1, 1]) {
+            const tx = -oy * sg;
+            const ty = ox * sg;
+            c.beginPath();
+            c.moveTo(gx + tx * len, gy + ty * len);
+            c.lineTo(gx + tx * len * 0.42 + ox * len * 0.34, gy + ty * len * 0.42 + oy * len * 0.34);
+            c.lineTo(gx + tx * len * 0.42 - ox * len * 0.34, gy + ty * len * 0.42 - oy * len * 0.34);
+            c.fill();
+          }
+        } else if (alpha > 0.01 && n.kind === 'portal') {
+          // portal: a violet ring on the gate and its twin on the far side, where the ball comes out
+          c.lineWidth = 3;
+          c.strokeStyle = this.col([200, 150, 255], alpha);
+          c.beginPath(); c.arc(gx, gy, len * 0.66, 0, TWO_PI); c.stroke();
+          c.beginPath(); c.arc(-gx, -gy, len * 0.5, 0, TWO_PI); c.stroke();
+        }
+        const after = level.rings[r.idx + 1];
+        if (alpha > 0.01 && n.exit && after && after.planet !== r.planet) {
+          // launch gate: a gold arrow along the slingshot's flight path
+          const v = vecOf(after.planet);
+          const vl = Math.hypot(v[0], v[1]) || 1;
+          c.lineWidth = 4;
+          c.strokeStyle = this.col(GOLD, alpha);
+          c.beginPath(); c.moveTo(gx, gy); c.lineTo(gx + (v[0] / vl) * len * 2.2, gy + (v[1] / vl) * len * 2.2); c.stroke();
+          c.beginPath(); c.arc(gx + (v[0] / vl) * len * 2.2, gy + (v[1] / vl) * len * 2.2, 4, 0, TWO_PI); c.fillStyle = this.col(GOLD, alpha); c.fill();
+        }
         // approach circle on the very next gate: it closes on the gate exactly on the beat
         if (n === next && t <= n.t) {
           const rem = clamp((n.t - t) / (1.5 * level.spb), 0, 1);
           c.lineWidth = 2.5;
-          c.strokeStyle = this.col(col, 0.85 * (1 - rem * 0.6) * (n.ghost ? ghost : 1));
+          c.strokeStyle = this.col(col, 0.85 * (1 - rem * 0.6));
           c.beginPath(); c.arc(gx, gy, gateLen * (0.62 + 2.2 * rem), 0, TWO_PI); c.stroke();
         }
       }
+      c.restore();
     }
 
     // --- ball: rides the ring's shape, slides between rings on a jump, arcs over spikes on a hop
-    const brad = lerp(scr(this.jumpFrom), scr(ring.lvl), ease(this.jumpT));
-    const [bx0, by0] = shapePoint(ring.shape, level.angleOn(ring, beat));
+    // the jump is a short arc: ease off the old ring, overshoot a little, settle on the new one
+    const jp = this.jumpT;
+    const je = jp * jp * (3 - 2 * jp);
+    const rFrom = scr(this.jumpFrom);
+    const rTo = scr(ring.lvl);
+    const brad = lerp(rFrom, rTo, je) + Math.sin(Math.PI * jp) * (rTo - rFrom) * 0.2;
+    // reversals turn round smoothly: angular speed ramps through zero over a few frames either side of the jump
+    let ang = level.angleOn(ring, beat);
+    const wOf = (q: Ring) => (q.dir * TWO_PI) / (q.lap * level.spb);
+    const EASE = 0.09;
+    const prv = level.rings[ring.idx - 1];
+    const nxt = level.rings[ring.idx + 1];
+    if (ring.reversed && prv) { const tau = t - ring.b0 * level.spb; if (tau >= 0 && tau < EASE / 2) ang += ((wOf(ring) - wOf(prv)) * Math.pow(EASE / 2 - tau, 2)) / (2 * EASE); }
+    if (nxt && nxt.reversed) { const tau = ring.exitBeat * level.spb - t; if (tau >= 0 && tau < EASE / 2) ang += ((wOf(nxt) - wOf(ring)) * Math.pow(EASE / 2 - tau, 2)) / (2 * EASE); }
+    const [bx0, by0] = shapePoint(ring.shape, ang);
     let hop = 1;
     if (beat < this.hopUntil) hop = 1 + 0.2 * Math.sin(Math.PI * (1 - (this.hopUntil - beat) / HOP_BEATS));
-    const bx = bx0 * brad * hop;
-    const by = by0 * brad * hop;
+    const [pox, poy] = planetOff(ring.planet);
+    let bx = bx0 * brad * hop + pox;
+    let by = by0 * brad * hop + poy;
+    if (this.panT < 1) { bx = lerp(this.panFrom.x, bx, pe); by = lerp(this.panFrom.y, by, pe); } // the slingshot flight is a straight line
+    this.lastBall = { x: bx, y: by };
     this.trail.push({ x: bx, y: by });
     if (this.trail.length > 12) this.trail.shift();
     for (let k = 0; k < this.trail.length - 1; k++) {
       c.fillStyle = this.col(orbColour(save.skin), (k / this.trail.length) * 0.35);
       c.beginPath(); c.arc(this.trail[k].x, this.trail[k].y, m * 0.016 * (k / this.trail.length), 0, TWO_PI); c.fill();
     }
-    this.ball(bx, by, m * 0.018 * (1 + pulse * 0.2 + this.tapPulse * 0.35), orbColour(save.skin));
+    this.ball(bx, by, m * 0.018 * (1 + pulse * 0.2 + this.tapPulse * 0.35 + this.landPulse * 0.3), orbColour(save.skin));
+    if (this.redAt.a > 0) { // a miss (or a stray tap) flashes red right where it happened
+      c.fillStyle = `rgba(255,60,70,${0.55 * this.redAt.a})`;
+      c.beginPath(); c.arc(this.redAt.x, this.redAt.y, m * 0.05 * (1.4 - this.redAt.a * 0.4), 0, TWO_PI); c.fill();
+    }
 
     // --- particles
     for (let i = this.particles.length - 1; i >= 0; i--) {
@@ -501,8 +606,8 @@ export class Renderer {
       const age = (now - lj.at) / 1000;
       if (age < 0.5) {
         const al = 1 - age / 0.5;
-        this.text(lj.judge.toUpperCase(), cx, below, m * (lj.judge === 'perfect' ? 0.058 : 0.048) * (1 + (1 - al) * 0.15), JUDGE_COL[lj.judge], al);
-        if (lj.err !== null && lj.judge !== 'perfect') this.text(lj.err > 0 ? 'LATE' : 'EARLY', cx, below + m * 0.05, m * 0.03, [255, 255, 255], al * 0.8);
+        this.text(lj.label, cx, below, m * (lj.judge === 'perfect' ? 0.058 : 0.048) * (1 + (1 - al) * 0.15), JUDGE_COL[lj.judge], al);
+        if (lj.err !== null && lj.judge !== 'perfect' && lj.judge !== 'miss') this.text(lj.err > 0 ? 'LATE' : 'EARLY', cx, below + m * 0.05, m * 0.03, [255, 255, 255], al * 0.8);
       }
     }
     if (this.banner && now < this.banner.until) {
@@ -608,6 +713,7 @@ export class Renderer {
     if (ev.judge === 'miss') {
       this.shake = Math.max(this.shake, 0.45);
       this.burst(x, y, 10, RED, rad * 1.2);
+      this.redAt = { x, y, a: 1 };
       return;
     }
     const col = VOICE_COL[n.voice] || PINK;

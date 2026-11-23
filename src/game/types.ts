@@ -24,6 +24,10 @@ export interface SegmentDef {
   shape?: Shape;
   jump?: 'out' | 'in';
   rocket?: number; // extra rings the ball launches through on entering this section
+  /** slingshot: entering this section flies the ball to a new planet in this screen direction */
+  sling?: [number, number];
+  mini?: boolean; // mini mode: small, fast rings for the phrase
+  hazard?: string; // 'beam': hops clear a sweeping beam instead of a spike
   reverse?: boolean;
   /** the one sound this section's taps follow: arp, kick, snare or lead */
   follow?: string;
@@ -62,12 +66,10 @@ export interface AudioMeta {
 
 export interface NoteDef {
   t: number; // ticks, 12 per beat, from bar 1
-  k: 't' | 'j'; // tap gate, or spike hop (tap the pad, land half a beat later)
+  k: 't' | 'j' | 'f' | 'p'; // tap gate, hop (over a spike or beam), flip gate (reverses direction), portal (jumps across the ring)
   v?: string; // the sound it follows: a arpeggio, k kick, s snare, l lead (gate colour)
   p?: number; // MIDI pitch of the followed note, so the hitsound can play the melody
   a?: number; // 1 = accent: a big hit
-  g?: number; // ghost gate: 1 fades early, 2 fades late (teaching)
-  m?: number; // moving gate: slides along the ring, then locks a beat before the ball arrives
 }
 
 export interface ChartFile {
@@ -101,11 +103,13 @@ export interface Ring {
   first: number;
   last: number;
   reversed: boolean;
+  portal: boolean; // entered through a portal (the ball arrives on the far side)
+  planet: number;
 }
 
 export interface RNote {
   i: number;
-  kind: 'tap' | 'hop';
+  kind: 'tap' | 'hop' | 'flip' | 'portal';
   t: number; // seconds of song time (0 = bar 1)
   beat: number;
   seg: number;
@@ -113,8 +117,6 @@ export interface RNote {
   angle: number;
   exit: boolean;
   accent: boolean;
-  ghost: number;
-  moving: boolean;
   voice: string;
   pitch: number;
   done: boolean;

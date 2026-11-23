@@ -4,7 +4,10 @@ import type { Judge } from './types';
 export const WINDOW = { p: 0.033, g: 0.062, o: 0.09 };
 
 /** Health is 0..100. A miss costs `miss`; PERFECT heals `heal`, GREAT half of it, GOOD nothing. */
-export const HEALTH = { miss: 14, heal: 2.5 };
+export const HEALTH = { miss: 14, heal: 2.5, stray: 4 };
+
+/** A tap this close before a gate, but outside its GOOD window, is an EARLY MISS for that gate (seconds). */
+export const EARLY_ZONE = 0.18;
 
 export const WEIGHT: Record<Judge, number> = { perfect: 100, great: 65, good: 30, miss: 0 };
 export const POINTS: Record<Judge, number> = { perfect: 300, great: 195, good: 90, miss: 0 };

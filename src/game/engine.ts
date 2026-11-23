@@ -1,6 +1,6 @@
 import type { Judge, RNote } from './types';
 import type { Level } from './level';
-import { HEALTH, POINTS, WEIGHT, WINDOW, gradeFor, judgeFor, type Grade } from './rules';
+import { EARLY_ZONE, HEALTH, POINTS, WEIGHT, WINDOW, gradeFor, judgeFor, type Grade } from './rules';
 
 export interface JEvent {
   judge: Judge;
@@ -8,7 +8,12 @@ export interface JEvent {
   err: number | null;
   t: number;
   note: RNote;
+  /** tapped too early: the gate is gone */
+  early?: boolean;
 }
+
+/** A tap with no gate anywhere near it. */
+export interface Stray { stray: true; t: number }
 
 export interface EngineOptions {
   hardcore?: boolean; // one miss = fail
@@ -33,6 +38,7 @@ export class Engine {
   health = 100;
   failed = false;
   failT = -1;
+  strays = 0;
   errs: number[] = [];
   log: JEvent[] = [];
   readonly total: number;
@@ -62,13 +68,24 @@ export class Engine {
     return this.notes[this.pi];
   }
 
-  /** A tap at song time t. Returns the judgement, or null for a tap with no gate in range (no penalty). */
-  pressAt(t: number): JEvent | null {
+  /**
+   * A tap at song time t. Strict, like osu!: the next gate is judged once, by the first tap in its zone.
+   *  - inside the GOOD window: PERFECT / GREAT / GOOD
+   *  - up to EARLY_ZONE before the gate: an EARLY MISS for that gate
+   *  - nowhere near a gate: a stray tap, which breaks the combo and costs a little health
+   */
+  pressAt(t: number): JEvent | Stray | null {
     if (this.failed) return null;
     const n = this.nextNote();
-    if (!n || n.t - t > WINDOW.o) return null;
-    const err = t - n.t;
-    return this.apply({ judge: judgeFor(Math.abs(err)), err, t, note: n });
+    if (!n || t < (this.opts.startAt ?? 0) - 0.5) return null; // before the level or after the last gate: free
+    const early = n.t - t;
+    if (early <= WINDOW.o) return this.apply({ judge: judgeFor(Math.abs(early)), err: -early, t, note: n });
+    if (early <= EARLY_ZONE) return this.apply({ judge: 'miss', err: -early, t, note: n, early: true });
+    this.combo = 0;
+    this.strays++;
+    this.health -= HEALTH.stray;
+    if (!this.opts.noFail && this.health <= 0) { this.health = 0; this.failed = true; this.failT = t; }
+    return { stray: true, t };
   }
 
   /** Advance to song time t: gates the player let go by are missed here. */
@@ -102,7 +119,7 @@ export class Engine {
       this.score += Math.round(POINTS[j] * (1 + Math.min(this.combo, 100) / 100) * (inDrop ? 2 : 1) * (ev.note.accent ? 1.5 : 1));
       this.health = Math.min(100, this.health + (j === 'perfect' ? HEALTH.heal : j === 'great' ? HEALTH.heal / 2 : 0));
     }
-    if (ev.err !== null) this.errs.push(ev.err);
+    if (ev.err !== null && j !== 'miss') this.errs.push(ev.err);
     this.log.push(ev);
     if (!this.opts.noFail && !this.failed && (this.health <= 0 || (this.opts.hardcore && j === 'miss'))) {
       this.health = Math.max(0, this.health);

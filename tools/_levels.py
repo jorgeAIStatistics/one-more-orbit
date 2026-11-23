@@ -11,9 +11,9 @@ write('heroes', dict(id='heroes', title='Heroes Tonight (feat. Johnning)', artis
   seg('build2', 4, 'BUILD', 4, 'kick', ['B=@x.x.x.x.x.x.x.x.'], L('dusk', bg='tunnel', zoom=[1.04, 1.16], drain=[0, 0.7], vignette=[0, 0.6]), warn='FASTER'),
   seg('gap', 1, 'BUILD', 4, 'kick', ['B=@x.xx............'], L('dusk', bg='tunnel', zoom=[1.16, 1.2], drain=[0.7, 0.95], vignette=[0.6, 0.9])),
   seg('count', 1, 'READY', 8, 'kick', ['B=@............X...'], L('dusk', zoom=[1.2, 1.25], drain=[1, 1], vignette=[0.9, 1]), blackout=True, count=True),
-  seg('drop1', 4, 'DROP', 8, 'lead', ['L=16 acc', 'L=16', 'L=16', 'L=16'], L('dawn', bg='tunnel', eq='burst', zoom=[0.94, 1]), lead='hook', motif='drop', cycle=4, rocket=3, enter='drop'),
+  seg('drop1', 4, 'DROP', 8, 'lead', ['L=16 acc', 'L=16', 'L=16', 'L=16'], L('dawn', bg='tunnel', eq='burst', zoom=[0.94, 1]), lead='hook', motif='drop', cycle=4, rocket=3, sling=[1, -0.3], enter='drop'),
   seg('drop2', 4, 'DROP', 8, 'lead', ['L=16 acc', 'L=16', 'L=16', 'L=16'], L('gold', bg='tunnel', eq='burst'), lead='hook', motif='drop', cycle=4, enter='pulse'),
-  seg('drop3', 4, 'DROP', 8, 'lead', ['L=16 acc', 'L=16', 'L=16', 'L=16'], L('sky', bg='grid', eq='burst', rot=[0, 0.5]), lead='hook', motif='drop', cycle=4, reverse=True, enter='pulse', warn='REVERSE', teach='REVERSE: the ball turns round'),
+  seg('drop3', 4, 'DROP', 8, 'lead', ['L=16 flip', 'L=16', 'L=16 flip', 'L=16'], L('sky', bg='grid', eq='burst', rot=[0, 0.5]), lead='hook', motif='drop', cycle=4, enter='pulse', warn='FLIP GATES', teach='FLIP GATE: tapping it turns the ball round'),
   seg('drop4', 4, 'DROP', 8, 'lead', ['L=16 acc', 'L=16', 'L=16', 'L=16'], L('hot', bg='tunnel', eq='burst', zoom=[1, 1.08]), lead='hook', motif='drop', cycle=4, rocket=2, enter='pulse'),
   seg('outro', 4, 'END', 8, 'lead', ['L=@X...............', 'L=@x...............', 'L=@x...............', '-'], L('dawn', eq='wave', zoom=[1.08, 0.95]), lead='hook', enter='flash')])
 
@@ -21,29 +21,29 @@ write('heroes', dict(id='heroes', title='Heroes Tonight (feat. Johnning)', artis
 TH = dict(lead='hook', motif='theme', cycle=8); ME = dict(lead='hook', motif='mel', cycle=8)
 write('blank', dict(id='blank', title='Blank', artist='Disfigure', release='NCS Release', hitsoundNote=74, scale=[2, 4, 6, 7, 9, 11, 1]), [
   seg('verse', 4, 'VERSE', 8, 'arp', ['L=8'], L('ice', eq='wave', zoom=[0.9, 1]), lead='snare', motif='verse', cycle=4),
-  seg('verse2', 4, 'VERSE', 8, 'arp', ['L=8', 'L=8', 'L=8 ghost=L', 'L=8 ghost=L'], L('ice', bg='grid', eq='wave'), lead='snare', motif='verse', cycle=4, shape='ellipse', reverse=True, warn='GHOST GATES'),
+  seg('verse2', 4, 'VERSE', 8, 'arp', ['L=8 flip', 'L=8', 'L=8 portal', 'L=8'], L('ice', bg='grid', eq='wave'), lead='snare', motif='verse', cycle=4, shape='ellipse', warn='PORTALS', teach='PORTAL: tap it to jump across the ring'),
   seg('theme', 8, 'THEME', 8, 'lead', ['L=16 acc', 'L=16', 'L=16', 'L=16', 'L=16', 'L=16', 'L=16', 'L=16'], L('void', bg='tunnel', eq='bars'), shape='square', rocket=2, enter='pulse', warn='THE THEME', **TH),
-  seg('theme2', 8, 'THEME', 8, 'lead', ['L=16 acc move', 'L=16 move', 'L=16 move', 'L=16 move', 'L=16', 'L=16', 'L=16', 'L=16'], L('violet', bg='tunnel', eq='bars', tilt=[0, 0.22]), shape='square', warn='MOVING GATES', teach='MOVING GATES slide, then lock: trust the beat', enter='pulse', **TH),
+  seg('theme2', 8, 'THEME', 8, 'lead', ['L=16 acc', 'L=16', 'L=16', 'L=16', 'L=16 flip', 'L=16', 'L=16', 'L=16'], L('violet', bg='tunnel', eq='bars', tilt=[0, 0.22]), shape='square', sling=[-1, -0.2], warn='SLINGSHOT', enter='pulse', **TH),
   seg('spikes', 4, 'BUILD', 4, 'snare', ['L=@x...x...x...x... hop'], L('dusk', bg='grid', zoom=[1, 1.06], tilt=[0.22, 0]), lead='snare', jump='in', warn='SPIKES', teach='SPIKES: tap the arrow to hop over'),
-  seg('rush', 4, 'BUILD', 4, 'snare', ['L=@x.x.x.x.x.x.x.x.'], L('dusk', bg='grid', zoom=[1.06, 1.22], drain=[0, 0.95], vignette=[0, 0.9]), lead='snare', jump='in', warn='FASTER'),
-  seg('heavy', 4, 'DROP', 8, 'kick', ['L=8 acc', 'L=8', 'L=8', 'L=8'], L('blood', bg='grid', eq='burst', zoom=[0.92, 1]), lead='full', motif='heavy', cycle=4, shape='square', rocket=4, enter='drop'),
-  seg('heavy2', 4, 'DROP', 8, 'kick', ['L=8 acc move', 'L=8 move', 'L=8 move', 'L=8 move'], L('blood', bg='tunnel', eq='burst', rot=[0, -0.5]), lead='full', motif='heavy', cycle=4, shape='square', reverse=True, enter='pulse', warn='REVERSE'),
-  seg('mel', 8, 'DROP', 8, 'lead', ['L=16 acc', 'L=16', 'L=16', 'L=16', 'L=16', 'L=16', 'L=16', 'L=16'], L('ice', bg='tunnel', eq='burst', zoom=[1, 1.06]), shape='ellipse', rocket=2, enter='pulse', warn='THE HOOK', **ME),
-  seg('mel2', 8, 'DROP', 8, 'lead', ['L=16 acc', 'L=16', 'L=16', 'L=16', 'L=16 ghost=L', 'L=16 ghost=L', 'L=16', 'L=16'], L('hot', bg='tunnel', eq='burst', rot=[0, 1], flip=True), shape='circle', revEvery=2, enter='pulse', warn='REVERSES', **ME),
+  seg('rush', 4, 'BUILD', 4, 'snare', ['L=@x.x.x.x.x.x.x.x.'], L('dusk', bg='grid', zoom=[1.06, 1.22], drain=[0, 0.95], vignette=[0, 0.9]), lead='snare', jump='in', mini=True, warn='MINI MODE'),
+  seg('heavy', 4, 'DROP', 8, 'kick', ['L=8 acc hop', 'L=8 hop', 'L=8 hop', 'L=8 hop'], L('blood', bg='grid', eq='burst', zoom=[0.92, 1]), lead='full', motif='heavy', cycle=4, shape='square', rocket=4, sling=[1, 0.3], hazard='beam', enter='drop', teach='BEAMS sweep the ring: tap to hop them'),
+  seg('heavy2', 4, 'DROP', 8, 'kick', ['L=8 hop', 'L=8 hop', 'L=8 hop', 'L=8 hop'], L('blood', bg='tunnel', eq='burst', rot=[0, -0.5]), lead='full', motif='heavy', cycle=4, shape='square', hazard='beam', enter='pulse'),
+  seg('mel', 8, 'DROP', 8, 'lead', ['L=16 acc', 'L=16', 'L=16', 'L=16', 'L=16', 'L=16', 'L=16', 'L=16'], L('ice', bg='tunnel', eq='burst', zoom=[1, 1.06]), shape='ellipse', rocket=2, sling=[-1, 0.25], enter='pulse', warn='SLINGSHOT', **ME),
+  seg('mel2', 8, 'DROP', 8, 'lead', ['L=16 flip', 'L=16', 'L=16 portal', 'L=16', 'L=16 flip', 'L=16', 'L=16 portal', 'L=16'], L('hot', bg='tunnel', eq='burst', rot=[0, 1], flip=True), shape='circle', enter='pulse', warn='FLIPS AND PORTALS', **ME),
   seg('end', 1, 'END', 8, 'kick', ['B=@X...............'], L('ice', eq='wave'), rocket=6, enter='flash')])
 
 # ---- 4. Invincible: everything, on swung 16ths. The drop is the densest, fastest-changing stretch in the game.
 DR = dict(motif='drop', cycle=4, enter='pulse')
 write('invincible', dict(id='invincible', title='Invincible', artist='DEAF KEV', release='NCS Release', hitsoundNote=65, scale=[0, 1, 3, 5, 7, 8, 10], swing=True), [
   seg('groove', 4, 'GROOVE', 4, 'kick', ['B=8'], L('toxic', bg='grid', zoom=[0.9, 1]), motif='groove', cycle=4),
-  seg('groove2', 4, 'GROOVE', 4, 'kick', ['B=8', 'B=8', 'B=8 ghost=B', 'B=8 ghost=B'], L('toxic', bg='grid', rot=[0, 0.25]), motif='groove', cycle=4, shape='ellipse', reverse=True, warn='GHOST GATES'),
+  seg('groove2', 4, 'GROOVE', 4, 'kick', ['B=8 flip', 'B=8', 'B=8 portal', 'B=8'], L('toxic', bg='grid', rot=[0, 0.25]), motif='groove', cycle=4, shape='ellipse', warn='FLIPS AND PORTALS'),
   seg('break', 4, 'BREAK', 4, 'snare', ['L=@.....xxx.....xxx', 'L=@.....xxx......x.', 'L=@.....xxx.....xxx', 'L=@x...xxxx....x...'], L('void', eq='wave'), lead='snare', jump='in', warn='SWUNG TRIPLES'),
-  seg('build', 2, 'BUILD', 4, 'kick', ['B=@x...x...x...x... hop'], L('dusk', bg='grid', zoom=[1, 1.08], drain=[0, 0.4], vignette=[0, 0.4]), jump='in', warn='SPIKES'),
-  seg('roll', 2, 'BUILD', 4, 'kick', ['B=@x.x.x.x.x.x.x.x.', 'B=@x.x....xX.......'], L('dusk', bg='grid', zoom=[1.08, 1.22], drain=[0.4, 1], vignette=[0.4, 1]), jump='in', warn='FASTER'),
-  seg('drop1', 4, 'DROP', 4, 'kick', ['B=16 acc', 'B=16', 'B=16', 'B=16'], L('toxic', bg='tunnel', eq='burst', zoom=[0.92, 1]), shape='square', rocket=5, **{**DR, 'enter': 'drop'}),
-  seg('drop2', 4, 'DROP', 4, 'kick', ['B=16 acc move', 'B=16 move', 'B=16 move', 'B=16 move'], L('blood', bg='tunnel', eq='burst', tilt=[0, 0.2]), shape='square', revEvery=2, warn='MOVING GATES', **DR),
-  seg('drop3', 4, 'DROP', 4, 'kick', ['B=16 acc', 'B=16', 'B=16 ghost=B', 'B=16 ghost=B'], L('void', bg='grid', eq='burst', rot=[0, 1], tilt=[0.2, 0]), shape='ellipse', revEvery=1, rocket=2, warn='REVERSES', **DR),
-  seg('drop4', 4, 'DROP', 4, 'kick', ['B=16 acc', 'B=16', 'B=16', 'B=16'], L('gold', bg='tunnel', eq='burst', flip=True), shape='circle', jump='in', warn='INWARD', **DR),
-  seg('drop5', 4, 'DROP', 4, 'kick', ['B=16 acc move', 'B=16 move', 'B=16 ghost=B', 'B=16 ghost=B'], L('toxic', bg='grid', eq='burst', rot=[0, -1]), shape='square', revEvery=1, rocket=4, warn='EVERYTHING', **DR),
-  seg('drop6', 4, 'DROP', 4, 'kick', ['B=16 acc', 'B=16', 'B=16', 'B=16'], L('hot', bg='tunnel', eq='burst', zoom=[1, 1.1], flip=True), shape='circle', revEvery=2, **DR),
+  seg('build', 2, 'BUILD', 4, 'kick', ['B=@x...x...x...x... hop'], L('dusk', bg='grid', zoom=[1, 1.08], drain=[0, 0.4], vignette=[0, 0.4]), jump='in', hazard='beam', warn='BEAMS'),
+  seg('roll', 2, 'BUILD', 4, 'kick', ['B=@x.x.x.x.x.x.x.x.', 'B=@x.x....xX.......'], L('dusk', bg='grid', zoom=[1.08, 1.22], drain=[0.4, 1], vignette=[0.4, 1]), jump='in', mini=True, warn='MINI MODE'),
+  seg('drop1', 4, 'DROP', 4, 'kick', ['B=16 acc', 'B=16', 'B=16', 'B=16'], L('toxic', bg='tunnel', eq='burst', zoom=[0.92, 1]), shape='square', rocket=5, sling=[1, -0.3], **{**DR, 'enter': 'drop'}),
+  seg('drop2', 4, 'DROP', 4, 'kick', ['B=16 flip', 'B=16', 'B=16 flip', 'B=16'], L('blood', bg='tunnel', eq='burst', tilt=[0, 0.2]), shape='square', warn='FLIP GATES', **DR),
+  seg('drop3', 4, 'DROP', 4, 'kick', ['B=16 portal', 'B=16 flip', 'B=16 portal', 'B=16 flip'], L('void', bg='grid', eq='burst', rot=[0, 1], tilt=[0.2, 0]), shape='ellipse', rocket=2, sling=[-1, 0.3], warn='SLINGSHOT', **DR),
+  seg('drop4', 4, 'DROP', 4, 'kick', ['B=16 acc', 'B=16', 'B=16', 'B=16'], L('gold', bg='tunnel', eq='burst', flip=True), shape='circle', jump='in', mini=True, warn='MINI MODE', **DR),
+  seg('drop5', 4, 'DROP', 4, 'kick', ['B=16 flip', 'B=16 portal', 'B=16 flip', 'B=16 portal'], L('toxic', bg='grid', eq='burst', rot=[0, -1]), shape='square', rocket=4, sling=[1, 0.3], warn='EVERYTHING', **DR),
+  seg('drop6', 4, 'DROP', 4, 'kick', ['B=16 acc', 'B=16', 'B=16', 'B=16'], L('hot', bg='tunnel', eq='burst', zoom=[1, 1.1], flip=True), shape='circle', sling=[-1, -0.3], **DR),
   seg('end', 1, 'END', 8, 'kick', ['B=@X...............'], L('toxic', eq='wave'), rocket=6, enter='flash')])

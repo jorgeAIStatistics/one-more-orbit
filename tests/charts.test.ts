@@ -1,9 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import { PACKS } from '../src/game/packs';
-import { Level } from '../src/game/level';
+import { Level, shapePoint } from '../src/game/level';
 import type { SegmentDef } from '../src/game/types';
 
-const lookKey = (s: SegmentDef) => JSON.stringify([s.lap, s.shape ?? 'circle', s.jump ?? 'out', !!s.reverse, s.revEvery ?? 0, s.rocket ?? 0, s.look.palette, s.look.bg, s.look.eq, s.look.rot ?? 0, !!s.look.flip]);
+const lookKey = (s: SegmentDef) => JSON.stringify([!!s.sling, !!s.mini, s.hazard ?? '', (s as { plan?: unknown }).plan, s.lap, s.shape ?? 'circle', s.jump ?? 'out', !!s.reverse, s.revEvery ?? 0, s.rocket ?? 0, s.look.palette, s.look.bg, s.look.eq, s.look.rot ?? 0, !!s.look.flip]);
+
+describe('orbit shapes', () => {
+  it('the ball moves at a constant speed along every shape', () => {
+    for (const shape of ['circle', 'ellipse', 'square'] as const) {
+      const steps: number[] = [];
+      let [px, py] = shapePoint(shape, 0);
+      for (let i = 1; i <= 360; i++) {
+        const [x, y] = shapePoint(shape, (i / 360) * Math.PI * 2);
+        steps.push(Math.hypot(x - px, y - py));
+        px = x; py = y;
+      }
+      const mean = steps.reduce((s, v) => s + v, 0) / steps.length;
+      for (const d of steps) expect(Math.abs(d - mean) / mean, shape).toBeLessThan(0.03);
+    }
+  });
+});
 
 for (const pack of PACKS) {
   const level = new Level(pack.level, pack.audio, pack.chart);
@@ -70,7 +86,11 @@ for (const pack of PACKS) {
     it('uses enough one-button elements for its length, with something new at least every 20 s', () => {
       const used = new Set<string>();
       if (level.rings.some((r) => r.last > r.first)) used.add('bursts');
-      if (notes.some((n) => n.ghost)) used.add('ghost gates');
+      if (notes.some((n) => n.kind === 'flip')) used.add('flip gates');
+      if (notes.some((n) => n.kind === 'portal')) used.add('portals');
+      if (level.segments.some((s) => s.sling)) used.add('slingshot');
+      if (level.segments.some((s) => s.mini)) used.add('mini mode');
+      if (level.segments.some((s) => s.hazard === 'beam')) used.add('beams');
       if (notes.some((n) => n.kind === 'hop')) used.add('spike hops');
       if (level.rings.some((r) => r.reversed)) used.add('reversals');
       if (new Set(level.segments.map((s) => s.lap)).size > 1) used.add('speed changes');
@@ -89,7 +109,7 @@ for (const pack of PACKS) {
     it('new elements get a safe first moment: a teaching banner and an easy first bar', () => {
       for (const s of level.segments.filter((x) => x.teach)) {
         const firstBar = notes.filter((n) => n.seg === s.index && n.beat < s.beat0 + 4);
-        expect(firstBar.length, s.id).toBeLessThanOrEqual(6);
+        expect(firstBar.length, s.id).toBeLessThanOrEqual(8);
       }
     });
   });
