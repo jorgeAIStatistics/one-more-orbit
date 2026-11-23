@@ -1,0 +1,10 @@
+{
+  "name": "omo-game-center",
+  "version": "1.0.0",
+  "description": "Game Center for ONE MORE ORBIT: sign-in, leaderboards and achievements (iOS only).",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "files": ["index.js", "index.d.ts", "ios/Sources", "Package.swift"],
+  "capacitor": { "ios": { "src": "ios" } },
+  "peerDependencies": { "@capacitor/core": ">=8.0.0" }
+}

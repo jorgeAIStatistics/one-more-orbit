@@ -95,6 +95,7 @@ export async function saveBars(pack: LevelPack): Promise<'file' | 'browser'> {
 
 /** In dev, reads the file fresh from disk (the page is not reloaded when Record Mode saves). */
 export async function refreshBars(pack: LevelPack): Promise<void> {
+  if (!import.meta.env.DEV) return; // the released game has no such address to ask
   try {
     const r = await fetch(`/__presses/${pack.level.id}`);
     if (!r.ok || !(r.headers.get('content-type') || '').includes('json')) return;

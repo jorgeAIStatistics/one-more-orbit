@@ -1,5 +1,6 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { createHash } from 'node:crypto';
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
 import { viteSingleFile } from 'vite-plugin-singlefile';
@@ -36,11 +37,53 @@ function pressesApi(): Plugin {
   };
 }
 
+/** iPhone screens (CSS points, pixel ratio) that have a launch image in public/splash; see tools/make-icons.py. */
+const SPLASH: [number, number, number][] = [[440, 956, 3], [430, 932, 3], [420, 912, 3], [402, 874, 3], [393, 852, 3], [390, 844, 3], [428, 926, 3], [375, 812, 3], [414, 896, 3], [414, 896, 2], [375, 667, 2]];
+
+/**
+ * Site build only. Makes the game work offline after the first visit: writes sw.js with the list of every built
+ * file (the name of its cache changes whenever a file does, so an update replaces the old copy), and adds the
+ * launch images iOS shows for a home-screen web app.
+ */
+function offline(): Plugin {
+  return {
+    name: 'omo-offline',
+    apply: 'build',
+    transformIndexHtml() {
+      return SPLASH.map(([w, h, r]) => ({
+        tag: 'link',
+        attrs: { rel: 'apple-touch-startup-image', href: `./splash/${w}x${h}@${r}.png`, media: `(device-width: ${w}px) and (device-height: ${h}px) and (-webkit-device-pixel-ratio: ${r}) and (orientation: portrait)` },
+        injectTo: 'head' as const
+      }));
+    },
+    closeBundle() {
+      const dist = resolve(root, 'dist');
+      if (!existsSync(resolve(dist, 'index.html'))) return;
+      const files: string[] = [];
+      const walk = (dir: string): void => {
+        for (const name of readdirSync(dir)) {
+          const full = resolve(dir, name);
+          if (statSync(full).isDirectory()) walk(full); else files.push(relative(dist, full).split('\\').join('/'));
+        }
+      };
+      walk(dist);
+      // launch images are only read by iOS when the app is added to the home screen: no need to keep them offline
+      const keep = files.filter((f) => f !== 'sw.js' && !f.startsWith('splash/') && !f.endsWith('.DS_Store')).sort();
+      const hash = createHash('sha1');
+      for (const f of keep) { hash.update(f); hash.update(readFileSync(resolve(dist, f))); }
+      const sw = readFileSync(resolve(root, 'tools/sw.template.js'), 'utf8')
+        .replace('__CACHE__', `omo-${hash.digest('hex').slice(0, 12)}`)
+        .replace('__FILES__', JSON.stringify(['./', ...keep]));
+      writeFileSync(resolve(dist, 'sw.js'), sw);
+    }
+  };
+}
+
 // `vite build`               -> dist/         static site (GitHub Pages, PWA, Capacitor webDir)
 // `vite build --mode single` -> dist-single/  one HTML file; tools/build-single.mjs then embeds the audio
 export default defineConfig(({ mode }) => ({
   base: './',
-  plugins: mode === 'single' ? [viteSingleFile()] : [pressesApi()],
+  plugins: mode === 'single' ? [viteSingleFile()] : [pressesApi(), offline()],
   build: {
     outDir: mode === 'single' ? 'dist-single' : 'dist',
     target: 'es2020',

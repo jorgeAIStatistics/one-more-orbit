@@ -124,6 +124,10 @@ body.boot .screen { transition: none; }
 .actions { display: grid; grid-template-columns: 1fr; gap: var(--s2); width: 100%; max-width: 440px; }
 .tabs { display: flex; gap: var(--s2); justify-content: center; }
 .tab { display: grid; justify-items: center; gap: 4px; min-width: 76px; padding: 9px 10px 7px; border-radius: 16px; background: rgba(13, 16, 34, 0.8); border: 2px solid var(--line); color: var(--text); transition: transform 0.08s; }
+/* a row of two where one is hidden: the other takes the full width */
+.two:has(> .hidden) { grid-template-columns: 1fr; }
+.note a { color: var(--cyan); }
+.tabs:has(.tab:nth-child(4):not(.hidden)) .tab { min-width: 68px; }
 .tab span { font-size: 9.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--mute); }
 /* choosing a level: everything else falls away and the card opens into the level */
 #levels.launch { pointer-events: none; }

@@ -72,6 +72,13 @@ npm run build:single   # one self-contained file: ../one_more_orbit_v4.html
 
 The site uses relative paths (`base: './'`), so `dist/` works from any folder.
 
+## Release
+
+- **Website (installable):** `npm run build` writes `dist/` with a web-app manifest, icons, iPhone launch images, a share preview and `sw.js`, which keeps every file (music included) so the game opens offline after the first visit. `.github/workflows/pages.yml` deploys `dist/` to GitHub Pages on every push to `main`. The site's address is `VITE_SITE_URL` in `.env`. `public/privacy.html` and `public/support.html` are the privacy policy and support page.
+- **iPhone app:** `npm run ios:sync` builds the site and copies it into the Xcode project in `ios/` (Capacitor 8); `npm run ios:open` opens Xcode. Nothing is loaded from the web. `src/native.ts` is the game's side of haptics, Game Center and backgrounding; `plugins/game-center/` is the Swift plugin. The iOS project has not been compiled yet (it needs Xcode 26 or later).
+- **Art:** `npm run icons` redraws the icons, launch images and share preview (`tools/make-icons.py`, needs Pillow).
+- **Store material:** `release/app-store-listing.md` (text, Game Center IDs, screenshot notes), `release/screenshots/`, `release/achievements/`, and `release/CHECKLIST.md` (the steps that need your accounts).
+
 ## Layout
 
 ```
@@ -90,6 +97,7 @@ src/
   game/packs.ts       the list of levels (one entry per song)
   game/level.ts       sections and timeline of a level
   game/extras.ts      orbs and badges
+  native.ts           haptics, Game Center, backgrounding (through Capacitor in the app)
   record.ts           Record Mode (dev server only)
 levels/
   manifest.json       tracks, credit lines, licence note
@@ -99,6 +107,9 @@ levels/
   <id>/presses.json   hand-recorded bars (kept by every tool)
   <id>/audit.json     presses moved to stronger sounds
 public/audio/         the cut excerpts
+plugins/game-center/  the Game Center plugin for the iPhone app (Swift)
+ios/                  the Xcode project (Capacitor)
+release/              store listing, screenshots, checklist
 tools/                Python and dev tools (see tools/README.md)
 tests/
 ```

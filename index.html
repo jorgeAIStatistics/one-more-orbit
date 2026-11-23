@@ -4,7 +4,27 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#05060f" />
+  <meta name="description" content="A one-button rhythm game. Tap on the beat to hop from ring to ring, stay in flow and charge the drop." />
+  <!-- installable web app: home-screen icon, full screen, launch image -->
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="One More Orbit" />
+  <!-- the preview shown when the link is shared (iMessage, WhatsApp, and so on) -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="ONE MORE ORBIT" />
+  <meta property="og:title" content="ONE MORE ORBIT" />
+  <meta property="og:description" content="A one-button rhythm game. Tap on the beat, charge the drop. Can you clear all four levels?" />
+  <meta property="og:url" content="%VITE_SITE_URL%" />
+  <meta property="og:image" content="%VITE_SITE_URL%icons/share.png" />
+  <meta property="og:image:type" content="image/png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="ONE MORE ORBIT: a one-button rhythm game" />
+  <meta name="twitter:card" content="summary_large_image" />
   <title>ONE MORE ORBIT</title>
 </head>
 <body>
@@ -45,6 +65,7 @@
       <nav class="tabs" aria-label="More">
         <button id="orbsBtn" class="tab" type="button" data-icon="orb"><span>Orbs</span></button>
         <button id="badgesBtn" class="tab" type="button" data-icon="badge"><span>Badges</span></button>
+        <button id="ranksBtn" class="tab hidden" type="button" data-icon="trophy"><span>Ranks</span></button>
         <button id="settingsBtn" class="tab" type="button" data-icon="gear"><span>Settings</span></button>
       </nav>
     </div>
@@ -108,10 +129,14 @@
       <p id="setInfo" class="note"></p>
       <h3>Display</h3>
       <div class="two"><button id="setMotion" class="btn secondary toggle" type="button">Reduced motion</button><button id="setSync" class="btn secondary toggle" type="button">Sync overlay</button></div>
+      <div class="two"><button id="setHaptics" class="btn secondary toggle" type="button">Haptics</button><button id="gcBtn" class="btn secondary hidden" type="button">Game Center</button></div>
+      <p id="installNote" class="note hidden">Install it: tap Share in Safari, then Add to Home Screen. It opens full screen and works offline.</p>
+      <button id="installBtn" class="btn secondary hidden" type="button">Install as an app</button>
       <h3>About</h3>
       <p class="note">ONE MORE ORBIT. Music by the artists below, used here for private testing.</p>
       <div id="creditList" class="credits"></div>
       <p id="licenceNote" class="note"></p>
+      <p class="note">No data is collected. <a id="privacyLink" href="./privacy.html" target="_blank" rel="noopener">Privacy policy</a></p>
       <h3>Playtest</h3>
       <div class="two"><button id="setUnlock" class="btn secondary toggle" type="button">All levels open</button><button id="botBtn" class="btn secondary" type="button">Watch autoplay</button></div>
       <button id="replayTutorial" class="btn secondary" type="button">Replay the tutorial</button>

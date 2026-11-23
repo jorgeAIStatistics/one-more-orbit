@@ -17,7 +17,8 @@ const ICONS: Record<string, string> = {
   sync: '<path d="M4 12a8 8 0 0 1 13.7-5.6M20 12a8 8 0 0 1-13.7 5.6M18 3v4h-4M6 21v-4h4"/>',
   check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>',
-  skip: '<path d="M5 5l9 7-9 7zM18 5v14"/>'
+  skip: '<path d="M5 5l9 7-9 7zM18 5v14"/>',
+  trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H4.5a3.5 3.5 0 0 0 3.6 3.6M16 6h3.5a3.5 3.5 0 0 1-3.6 3.6M12 13v4M8.5 20h7M10 17h4"/>'
 };
 
 export const icon = (name: string) => `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] ?? ''}</svg>`;

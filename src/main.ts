@@ -5,6 +5,7 @@ import { PACKS as ALL_PACKS, SLICE, creditLine, manifest, type LevelPack } from 
 import { refreshBars } from './gd/presses';
 import { GdRenderer as Renderer } from './gd/render';
 import { GdRun as Run, TUTORIAL_BEATS } from './gd/run';
+import { canHaptics, feel, fullScreen, gameCenter, isNative, watchBackground } from './native';
 import { initRecord } from './record';
 import { bestFor, persist, save } from './save';
 import { LEVEL_UI, icon, levelArt } from './ui/art';
@@ -356,7 +357,7 @@ function onRunEnd(r: Run): void {
       if (cp <= r.t0 + 0.01) startRun(-1, true); else startRun(cp);
       return;
     }
-    if (counted && pct > prev.pct) { save.bests[id] = { ...prev, pct }; persist(); session.newBest = true; }
+    if (counted && pct > prev.pct) { save.bests[id] = { ...prev, pct }; persist(); session.newBest = true; gameCenter.best(id, pct); }
     startRun(-1, true);
     return;
   }
@@ -377,8 +378,11 @@ function showResults(r: Run, cleared: boolean, reached = r.pct): void {
     const onBeatPct = r.sim.judged ? (r.sim.onBeat / r.sim.judged) * 100 : 0;
     const fresh = earned(id, { onBeatPct, dropPower: r.dropPower, bestStreak: r.sim.bestStreak, attempts: bestFor(id).attempts, practised: !!save.practiced[id] }, done).filter((b) => !save.badges[b]);
     if (first && levelIdx + 1 < PACKS.length && !save.unlockAll) unlocks.push(`<div class="unlock">${icon('play')}<div>NEXT LEVEL UNLOCKED<small>${shortTitle(PACKS[levelIdx + 1])} · ${PACKS[levelIdx + 1].level.difficulty}</small></div></div>`);
+    gameCenter.best(id, 100);
+    gameCenter.flow(id, onBeatPct);
     for (const bid of fresh) {
       save.badges[bid] = true;
+      gameCenter.badge(bid);
       const b = BADGES.find((x) => x.id === bid);
       if (b) unlocks.push(`<div class="unlock">${icon('badge')}<div>BADGE: ${b.name.toUpperCase()}<small>${b.desc}</small></div></div>`);
       for (const o of ORBS) if (o.needs === bid) unlocks.push(`<div class="unlock"><span class="dot" style="background:rgb(${o.rgb.join(',')})"></span><div>ORB: ${o.name.toUpperCase()}<small>Equip it under Orbs</small></div></div>`);
@@ -466,7 +470,7 @@ window.addEventListener('pointerdown', (e) => {
   audioReady = true;
   const btn = (e.target as HTMLElement).closest('button');
   if (btn && screen !== 'play' && audio.ctx) audio.hit('tap', 0.5); // every button answers with a click
-  if (screen === 'title') { e.preventDefault(); audio.ensure(); audio.setVolumes(save.music, save.sfx); show('levels'); return; }
+  if (btn && screen !== 'play') feel('pick');
   if (screen !== 'play' || btn) return;
   e.preventDefault();
   tap(stamp(e));
@@ -474,6 +478,9 @@ window.addEventListener('pointerdown', (e) => {
 // iOS Safari only lets sound start from the end of a touch (or a click), not from its start: wake the audio there too.
 // The same call brings it back after a phone call or a trip to another app.
 for (const type of ['pointerup', 'touchend', 'click'] as const) window.addEventListener(type, () => { if (audio.ctx && !audio.running && !(run && (run.state === 'paused' || run.state === 'resuming'))) void audio.resume(); }, { capture: true, passive: true });
+// The title opens on the finished tap (a click), not on the touch going down: a touch that changes the screen under the
+// finger would land its click on whatever appears there, and start a level. A click is also what lets iOS start the sound.
+$('title').addEventListener('click', () => { if (screen !== 'title') return; audio.ensure(); audio.setVolumes(save.music, save.sfx); show('levels'); });
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 
 window.addEventListener('keydown', (e) => {
@@ -537,10 +544,33 @@ function buildStart(): number {
   }
   return -1;
 }
-document.addEventListener('visibilitychange', () => { if (document.hidden) { pause(); record.halt(); audio.stopPreview(0.2); } else queuePreview(); });
+/** The game left the screen (another tab or app, the home screen, a call): stop the run and the music, and save. */
+function away(): void {
+  pause();
+  record.halt();
+  audio.stopPreview(0.2);
+  persist();
+  if (!(run && (screen === 'play' || screen === 'pause'))) void audio.suspend(); // nothing keeps playing behind another app
+}
+function back(): void {
+  if (screen === 'levels') queuePreview();
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) away(); else back(); });
+window.addEventListener('pagehide', persist);
+watchBackground(away, back);
 window.addEventListener('resize', () => { renderer.resize(); show(screen); });
 
 // ------------------------------------------------------------------ settings
+// Installing the website as an app: Chrome and Android offer a prompt; on an iPhone it is done from Safari's Share menu.
+type InstallEvent = Event & { prompt: () => Promise<unknown> };
+let installEvent: InstallEvent | null = null;
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvent = e as InstallEvent; });
+function installHint(): boolean {
+  if (isNative) return false;
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const installed = window.matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  return ios && !installed;
+}
 function renderSettings(): void {
   $<HTMLInputElement>('setMusic').value = String(save.music);
   $<HTMLInputElement>('setSfx').value = String(save.sfx);
@@ -551,6 +581,11 @@ function renderSettings(): void {
   $('setMotion').classList.toggle('on', save.reducedMotion);
   $('setSync').classList.toggle('on', save.syncOverlay);
   $('setUnlock').classList.toggle('on', save.unlockAll);
+  $('setHaptics').classList.toggle('on', save.haptics);
+  $('setHaptics').classList.toggle('hidden', !canHaptics);
+  $('gcBtn').classList.toggle('hidden', !gameCenter.available);
+  $('installNote').classList.toggle('hidden', !installHint());
+  $('installBtn').classList.toggle('hidden', !installEvent);
   $('syncBtn').textContent = !save.calibrated ? 'Sync check needed' : deviceChanged ? 'Audio changed: check' : 'Sync check · 10 s';
   $('recordBtn').classList.toggle('hidden', !import.meta.env.DEV);
   const lat = Math.round(audio.latency() * 1000);
@@ -579,7 +614,7 @@ function nudge(key: 'audioOffset' | 'visualOffset', by: number): void {
   persist();
   renderSettings();
 }
-function toggle(key: 'reducedMotion' | 'syncOverlay' | 'unlockAll'): void {
+function toggle(key: 'reducedMotion' | 'syncOverlay' | 'unlockAll' | 'haptics'): void {
   save[key] = !save[key];
   persist();
   renderSettings();
@@ -769,6 +804,12 @@ $('voPlus').addEventListener('click', () => nudge('visualOffset', 5));
 $('setMotion').addEventListener('click', () => toggle('reducedMotion'));
 $('setSync').addEventListener('click', () => toggle('syncOverlay'));
 $('setUnlock').addEventListener('click', () => toggle('unlockAll'));
+$('setHaptics').addEventListener('click', () => { toggle('haptics'); feel('big'); });
+$('gcBtn').addEventListener('click', () => void gameCenter.show());
+$('ranksBtn').addEventListener('click', () => void gameCenter.show());
+$('ranksBtn').classList.toggle('hidden', !gameCenter.available);
+$('installBtn').addEventListener('click', () => { void installEvent?.prompt(); installEvent = null; renderSettings(); });
+$<HTMLAnchorElement>('privacyLink').href = isNative ? `${import.meta.env.VITE_SITE_URL}privacy.html` : './privacy.html';
 $('syncBtn').addEventListener('click', () => { audio.ensure(); audio.setVolumes(save.music, save.sfx); openCalib(true); });
 $('calibBtn').addEventListener('click', () => openCalib(false));
 $('botBtn').addEventListener('click', () => { botMode = true; practice = false; session.far = session.onBeat = session.judged = session.streak = session.attempts = 0; session.drop = -1; startRun(); });
@@ -796,6 +837,12 @@ function tick(now: number): void {
   lastFrame = now;
   if (run && (screen === 'play' || screen === 'pause')) {
     run.frame(now);
+    if (!run.opts.bot) for (const ev of run.events) {
+      if (ev.kind === 'hop' || ev.kind === 'flip') feel(ev.smash || ev.sling ? 'big' : 'tap');
+      else if (ev.kind === 'drop') feel('big');
+      else if (ev.kind === 'crash') feel('crash');
+      else if (ev.kind === 'finale') feel('win');
+    }
     renderer.draw(run, now, dt);
     updateHud(run);
   } else if (screen === 'calib' && cal.mode === 'visual') {
@@ -809,6 +856,18 @@ function tick(now: number): void {
 function loop(now: number): void {
   tick(now);
   requestAnimationFrame(loop);
+}
+
+// The App Store build: full screen, and Game Center gets everything already earned on this device.
+fullScreen();
+void gameCenter.signIn().then((ok) => {
+  if (!ok) return;
+  for (const [id, b] of Object.entries(save.bests)) if (b.pct > 0) gameCenter.best(id, b.pct);
+  for (const id of Object.keys(save.badges)) if (save.badges[id]) gameCenter.badge(id);
+});
+// The website keeps a copy of itself, so it opens with no connection after the first visit.
+if (import.meta.env.PROD && import.meta.env.MODE !== 'single' && !isNative && 'serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+  window.addEventListener('load', () => { void navigator.serviceWorker.register('./sw.js').catch(() => undefined); });
 }
 
 buildCards();

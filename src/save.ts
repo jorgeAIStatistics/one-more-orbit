@@ -41,10 +41,12 @@ export interface SaveData {
   tutorialDone: boolean;
   /** playtest: every level open, whatever has been cleared */
   unlockAll: boolean;
+  /** touches you can feel on taps, the drop, a crash and a clear */
+  haptics: boolean;
 }
 
 const defaults = (): SaveData => ({
-  music: 0.8, sfx: 0.7, audioOffset: 0, visualOffset: 0, reducedMotion: false, hardcore: false, errorBar: true, level: 0, skin: 'cyan', badges: {}, practiced: {}, bests: {}, teachSeen: {}, core: 4, calibrated: false, calLatency: -1, syncOverlay: false, hitVol: 1, tutorialDone: false, unlockAll: true
+  music: 0.8, sfx: 0.7, audioOffset: 0, visualOffset: 0, reducedMotion: false, hardcore: false, errorBar: true, level: 0, skin: 'cyan', badges: {}, practiced: {}, bests: {}, teachSeen: {}, core: 4, calibrated: false, calLatency: -1, syncOverlay: false, hitVol: 1, tutorialDone: false, unlockAll: true, haptics: true
 });
 
 function load(): SaveData {
