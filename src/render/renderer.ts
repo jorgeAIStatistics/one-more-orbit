@@ -24,6 +24,9 @@ const WHITE: RGB = [255, 244, 214];
 const RED: RGB = [255, 72, 60];
 const JUDGE_COL: Record<string, RGB> = { perfect: [255, 214, 90], great: [0, 245, 255], good: [196, 181, 253], miss: [255, 90, 120] };
 const TWO_PI = Math.PI * 2;
+const MODE_NAME: Record<string, string> = { tap: 'TAP', hold: 'HOLD', colour: 'TWO COLOURS', dodge: 'DODGE', spinner: 'SPIN', dual: 'DUAL ORBIT' };
+const R_IN = 0.58; // dual orbit: cyan ring
+const R_OUT = 1.02; // dual orbit: pink ring
 
 const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -163,12 +166,22 @@ export class Renderer {
     c.beginPath(); c.arc(x, y, r * 1.25, 0, TWO_PI); c.stroke();
   }
 
-  private gate(cx: number, cy: number, r: number, ang: number, len: number, col: RGB, alpha: number): void {
+  private gate(cx: number, cy: number, r: number, ang: number, len: number, col: RGB, alpha: number, accent = false, hand = 'A'): void {
     const c = this.ctx;
     const ca = Math.cos(ang);
     const sa = Math.sin(ang);
     c.lineCap = 'round';
-    c.lineWidth = Math.max(4, len * 0.26);
+    const lw = Math.max(4, Math.min(9, len * 0.26));
+    if (accent) {
+      // accent: a white halo behind the gate so big hits read from a distance
+      c.lineWidth = lw * 2.3;
+      c.strokeStyle = `rgba(255,255,255,${0.85 * alpha})`;
+      c.beginPath();
+      c.moveTo(cx + ca * (r - len / 2), cy + sa * (r - len / 2));
+      c.lineTo(cx + ca * (r + len / 2), cy + sa * (r + len / 2));
+      c.stroke();
+    }
+    c.lineWidth = lw;
     c.strokeStyle = this.col(col, alpha);
     c.shadowColor = this.col(col, alpha);
     c.shadowBlur = 12;
@@ -177,6 +190,18 @@ export class Renderer {
     c.lineTo(cx + ca * (r + len / 2), cy + sa * (r + len / 2));
     c.stroke();
     c.shadowBlur = 0;
+    // shape as well as colour: cyan gates carry a dot on their inner end, pink gates a diamond on their outer end
+    if (hand === 'L') {
+      c.fillStyle = this.col(col, alpha);
+      c.beginPath(); c.arc(cx + ca * (r - len / 2), cy + sa * (r - len / 2), lw * 0.95, 0, TWO_PI); c.fill();
+    } else if (hand === 'R') {
+      c.save();
+      c.translate(cx + ca * (r + len / 2), cy + sa * (r + len / 2));
+      c.rotate(ang + Math.PI / 4);
+      c.fillStyle = this.col(col, alpha);
+      c.fillRect(-lw * 0.95, -lw * 0.95, lw * 1.9, lw * 1.9);
+      c.restore();
+    }
   }
 
   draw(run: Run, now: number, dt: number): void {
@@ -241,8 +266,8 @@ export class Renderer {
     const dual = seg.mode === 'dual';
     const dodge = seg.mode === 'dodge';
     const split = dual ? ease((t - seg.t0) / 0.35 + (level.segments[seg.index - 1]?.mode === 'dual' ? 1 : 0)) : 0;
-    const rInner = R * lerp(ringScale, 0.64, split);
-    const rOuter = R * lerp(ringScale, 1.02, split);
+    const rInner = R * lerp(ringScale, R_IN, split);
+    const rOuter = R * lerp(ringScale, R_OUT, split);
     const laneR = [R * 0.82, R * 1.0];
     const radiusOf = (n: RNote): number => (dual || level.segments[n.seg].mode === 'dual' ? (n.ring === 1 ? rOuter : rInner) : R * ringScale);
     const ringGlow = 0.5 + pulse * 0.5;
@@ -291,9 +316,12 @@ export class Renderer {
     }
 
     // --- notes
-    const gateLen = R * 0.2;
+    // Where a gate sits across the ring says which hand it is for, in every mode: cyan toward the centre, pink
+    // toward the outside (the sides the two rings take in dual orbit). White spans the ring.
+    const gateLen = R * (dual ? 0.15 : 0.2);
     for (const n of run.notes) {
-      const lookBeats = Math.min(level.segments[n.seg].lap * 0.75, 6);
+      const nseg = level.segments[n.seg];
+      const lookBeats = Math.min(nseg.lap * 0.75, 6);
       const lookSec = lookBeats * level.spb;
       if (n.t - t > lookSec) break;
       if (n.t1 < t - 0.3) continue;
@@ -303,7 +331,7 @@ export class Renderer {
       if (n.kind === 'haz') {
         if (t - n.t > 0.22) continue;
         const a = level.angleAt(0, n.beat);
-        const half = (TWO_PI * 0.16) / level.segments[n.seg].lap;
+        const half = (TWO_PI * 0.16) / nseg.lap;
         const near = clamp(1 - (n.t - t) / level.spb, 0, 1);
         const after = t > n.t ? clamp((t - n.t) / 0.22, 0, 1) : 0;
         c.lineCap = 'butt';
@@ -316,7 +344,10 @@ export class Renderer {
         continue;
       }
       const col = n.hand === 'L' ? CYAN : n.hand === 'R' ? PINK : WHITE;
-      const rr = radiusOf(n);
+      const twoRings = dual || nseg.mode === 'dual';
+      const sided = !twoRings && n.hand !== 'A';
+      const rr = radiusOf(n) + (sided ? (n.hand === 'L' ? -1 : 1) * R * 0.06 : 0);
+      const len = (sided ? gateLen * 0.62 : gateLen) * (n.accent ? 1.45 : 1);
       if (n.kind === 'hold') {
         if (n.tailDone && t - n.t1 > 0.05) continue;
         const held = n.heldBy !== null;
@@ -324,7 +355,7 @@ export class Renderer {
         const b1 = Math.min(n.beat1, beat + lookBeats);
         if (b1 > b0) {
           c.lineCap = 'round';
-          c.lineWidth = R * (held ? 0.12 : 0.085);
+          c.lineWidth = R * (held ? 0.1 : 0.07);
           c.strokeStyle = this.col(col, (held ? 0.85 : n.headDone && !held ? 0.2 : 0.5) * appear);
           c.shadowColor = this.col(col, 0.9);
           c.shadowBlur = held ? 18 : 0;
@@ -337,18 +368,26 @@ export class Renderer {
           c.stroke();
           c.shadowBlur = 0;
         }
-        if (n.beat1 <= beat + lookBeats && !n.tailDone) this.gate(0, 0, rr, level.angleAt(n.ring, n.beat1), gateLen * 0.8, col, 0.9 * appear);
+        if (n.beat1 <= beat + lookBeats && !n.tailDone) this.gate(0, 0, rr, level.angleAt(n.ring, n.beat1), len * 0.8, col, 0.9 * appear);
         if (n.headDone) continue;
       } else if (n.headDone) continue;
       const a = level.angleAt(n.ring, n.beat);
       const late = t > n.t ? clamp(1 - (t - n.t) / 0.12, 0, 1) : 1;
-      this.gate(0, 0, rr, a, gateLen, col, appear * late);
-      // approach ring closes on the gate as its beat arrives
-      const gx = Math.cos(a) * rr;
-      const gy = Math.sin(a) * rr;
-      c.lineWidth = 2;
-      c.strokeStyle = this.col(col, 0.7 * appear * (1 - rem) * late);
-      c.beginPath(); c.arc(gx, gy, R * 0.07 * (1 + 1.6 * rem), 0, TWO_PI); c.stroke();
+      this.gate(0, 0, rr, a, len, col, appear * late, n.accent, n.hand);
+      // approach cue: an arc that closes in on the gate and lands on it exactly on the beat.
+      // Cyan cues come from inside the ring, pink and white from outside, so the two hands never cross.
+      if (rem > 0.001) {
+        const inward = n.hand === 'L';
+        const dist = R * 0.24 * rem;
+        const ar = rr + (inward ? -(len / 2 + dist) : len / 2 + dist);
+        if (ar > R * 0.1) {
+          const hw = Math.min(0.1, ((TWO_PI * 0.25) / nseg.lap) * 0.4);
+          c.lineCap = 'round';
+          c.lineWidth = n.accent ? 4 : 2.5;
+          c.strokeStyle = this.col(col, 0.9 * appear * late * (1 - rem * 0.55));
+          c.beginPath(); c.arc(0, 0, ar, a - hw, a + hw); c.stroke();
+        }
+      }
     }
 
     // --- balls and trails
@@ -422,6 +461,17 @@ export class Renderer {
       const f = (t - seg.t0) / level.spb - k;
       const label = ['3', '2', '1', ''][Math.min(3, k)];
       if (label) this.text(label, cx, cy, R * (0.7 - 0.25 * f), [255, 255, 255], 1 - f * 0.8);
+    }
+    // heads-up before the game changes mode: label plus a pulsing frame in the next section's colour, two beats ahead
+    const nextSeg = level.segments[seg.index + 1];
+    if (nextSeg && nextSeg.mode !== seg.mode && !seg.count && t >= 0 && nextSeg.t0 - t <= 2 * level.spb) {
+      const k = 1 - (nextSeg.t0 - t) / (2 * level.spb);
+      const np = PALETTES[nextSeg.look.palette] || PALETTES.deep;
+      const beatPulse = Math.exp(-phase * 4);
+      const edge = 5 + 9 * beatPulse;
+      c.fillStyle = `rgba(${np.ring[0]},${np.ring[1]},${np.ring[2]},${0.35 + 0.5 * beatPulse})`;
+      c.fillRect(0, 0, this.w, edge); c.fillRect(0, this.h - edge, this.w, edge); c.fillRect(0, 0, edge, this.h); c.fillRect(this.w - edge, 0, edge, this.h);
+      this.text(`NEXT  ${MODE_NAME[nextSeg.mode] || ''}`, cx, Math.max(104, cy - R * Math.min(zoom, 1.25) - 46), Math.max(15, Math.min(22, this.w * 0.05)) * (1 + 0.12 * beatPulse), [255, 255, 255], 0.55 + 0.45 * k);
     }
     if (this.flash > 0) { c.fillStyle = `rgba(255,255,255,${Math.min(rm ? 0.2 : 0.85, this.flash)})`; c.fillRect(0, 0, this.w, this.h); }
     if (t < 0 && run.state === 'playing') this.text('GET READY', cx, cy, R * 0.13, [255, 255, 255], 0.9);
@@ -537,12 +587,19 @@ export class Renderer {
     if (kind === 'spin') { this.burst(0, 0, 50, JUDGE_COL.perfect, R * 2.4); return; }
     if (kind === 'haz') return;
     const seg = level.segments[n.seg];
-    const rr = seg.mode === 'dual' ? (n.ring === 1 ? R * 1.02 : R * 0.64) : R;
+    const rr = seg.mode === 'dual' ? (n.ring === 1 ? R * R_OUT : R * R_IN) : R;
     const a = level.angleAt(n.ring, kind === 'tail' ? n.beat1 : n.beat);
     const col = n.hand === 'L' ? CYAN : n.hand === 'R' ? PINK : WHITE;
     const x = Math.cos(a) * rr;
     const y = Math.sin(a) * rr;
     this.burst(x, y, judge === 'perfect' ? 16 : 7, judge === 'perfect' ? JUDGE_COL.perfect : col, R * (judge === 'perfect' ? 1.5 : 0.9));
+    if (n.accent && kind !== 'tail') {
+      // big hits land harder: extra sparks, a wave off the ring and a short kick of the camera
+      this.burst(x, y, 26, col, R * 2.2);
+      this.shocks.push({ r: rr, max: rr * 1.5, alpha: 0.7, col, w: 4 });
+      this.flash = Math.max(this.flash, 0.16);
+      this.punch = save.reducedMotion ? this.punch : Math.min(this.punch, -0.035);
+    }
     if (judge === 'perfect') this.shocks.push({ r: rr * 0.98, max: rr * 1.1, alpha: 0.35, col, w: 2 });
   }
 }

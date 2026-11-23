@@ -25,8 +25,6 @@ export interface SegmentDef {
   dir?: number;
   revEvery?: number;
   counter?: boolean;
-  swap?: boolean;
-  holds?: boolean;
   teach?: string;
   enter?: string;
   blackout?: boolean;
@@ -61,12 +59,15 @@ export interface NoteDef {
   d?: number;
   lane?: number;
   n?: number;
+  a?: number; // 1 = accent: a big hit, drawn larger with an impact sound
 }
 
 export interface ChartFile {
   level: string;
   difficulty: Difficulty;
   stars: number;
+  /** beats per lap for each section, chosen by the chart tool so dense passages spread out */
+  laps?: Record<string, number>;
   notes: NoteDef[];
 }
 
@@ -100,6 +101,7 @@ export interface RNote {
   need: number;
   seg: number;
   ring: number;
+  accent: boolean;
   // judging state
   headDone: boolean;
   tailDone: boolean;

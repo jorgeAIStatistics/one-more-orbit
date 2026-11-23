@@ -51,12 +51,13 @@ The original songs are not in the repo. `tools/tracks.json` points at them (`sou
    tools/.venv/bin/python tools/chart.py <id>
    ```
 
-   It prints note counts per section and the star rating for each difficulty. Re-run it whenever the layout changes, then run `npm test`.
+   It prints note counts, star ratings and any note with no measured sound under it. Re-run it whenever the layout changes, then run `npm test`.
 
 ## How charts follow the music
 
-- Cyan / left follows low sounds (kick, bass). Pink / right follows high sounds (clap, snare, lead, arpeggio).
-- A note is only placed where that bar has a measured hit in the layer it follows, on the grid the difficulty allows.
-- Hold arcs cover runs of four or more consecutive 16th-note hits: press on the first, release on the last.
+- Cyan / left / inner follows low sounds (kick, bass). Pink / right / outer follows high sounds (lead, arpeggio, clap). White is the melody while it is the only voice.
+- Sections that share a `motif` name are one repeating figure. The tool finds, per voice, the 16th-note positions that are hit hard in most repeats: that is the motif. Weaker or occasional hits are ornaments.
+- Each bar's `plan` says how each voice is played (`beat`, `8`, `16`, `all`, `half`, `tail`, `off`, `hold`, or an explicit shape `@x.x.xxx.x.x.xxx.`), plus `stack`, `acc`, `solo`, `run=`, `minRun=`. A motif or shape note is only kept in a bar where the audio really has that sound.
+- The result is `levels/<id>/sheet.json`. Hand-edit any bar and mark it `"by": "hand"`; the tool will not touch it again.
 - Dodge hazards land on kicks. The spinner covers the whole spinner section.
-- `gen` in the layout sets, per difficulty, the finest note value (`grid`), notes per bar (`n`, `nL`, `nR`), the longest burst (`run`), whether hands alternate (`alt`) or may hit together (`chords`).
+- Ring speed per section is chosen from the densest gap so neighbouring gates stay at least 22.5 degrees apart (`lapFixed` in the layout keeps a section's own speed).

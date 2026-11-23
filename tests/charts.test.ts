@@ -4,7 +4,7 @@ import { Level, buildNotes } from '../src/game/level';
 import { DIFFICULTIES } from '../src/game/rules';
 import type { SegmentDef } from '../src/game/types';
 
-const lookKey = (s: SegmentDef) => JSON.stringify([s.mode, s.lap, s.dir ?? 0, s.revEvery ?? 0, !!s.counter, !!s.swap, !!s.holds, s.look.palette, s.look.rot ?? 0, s.look.zoom ?? 0]);
+const lookKey = (s: SegmentDef) => JSON.stringify([s.mode, s.lap, s.dir ?? 0, s.revEvery ?? 0, !!s.counter, s.look.palette, s.look.rot ?? 0, s.look.zoom ?? 0]);
 
 for (const pack of PACKS) {
   const level = new Level(pack.level, pack.audio);
@@ -35,6 +35,7 @@ for (const pack of PACKS) {
 
   for (const d of DIFFICULTIES) {
     const chart = pack.charts[d];
+    const level = new Level(pack.level, pack.audio, chart.laps);
     const notes = buildNotes(level, chart);
     describe(`${pack.level.id} ${d}: chart`, () => {
       it('every note is on the 16th-note grid and inside the excerpt', () => {
@@ -63,6 +64,21 @@ for (const pack of PACKS) {
             if (prev.kind === 'hold') expect(mine[i].t, `note during hold at ${mine[i].t.toFixed(2)}s`).toBeGreaterThan(prev.t1 + minGap * 0.99);
           }
         }
+      });
+      it('gates never crowd: neighbours on a ring are at least 22 degrees apart', () => {
+        for (const hand of ['A', 'L', 'R'] as const) {
+          const mine = notes.filter((n) => (n.kind === 'tap' || n.kind === 'hold') && n.hand === hand);
+          for (let i = 1; i < mine.length; i++) {
+            if (mine[i].seg !== mine[i - 1].seg) continue;
+            const deg = ((mine[i].beat - mine[i - 1].beat) / level.segments[mine[i].seg].lap) * 360;
+            expect(deg, `bar ${Math.floor(mine[i].beat / 4) + 1}`).toBeGreaterThanOrEqual(22);
+          }
+        }
+      });
+      it('big hits are marked: the drop starts with an accent', () => {
+        const first = notes.filter((n) => Math.abs(n.t - level.dropTime) < 0.01);
+        expect(first.length).toBeGreaterThan(0);
+        expect(first.every((n) => n.accent)).toBe(true);
       });
       it('dodge sections can be solved with unhurried hops', () => {
         for (const seg of level.segments.filter((s) => s.mode === 'dodge')) {

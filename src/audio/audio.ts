@@ -15,7 +15,7 @@ export interface LoadedTrack {
   exact: boolean;
 }
 
-type HitName = 'tap' | 'L' | 'R' | 'sparkle' | 'sparkleHi' | 'miss' | 'spin' | 'hop' | 'release' | 'click' | 'clickHi';
+type HitName = 'impact' | 'tap' | 'L' | 'R' | 'sparkle' | 'sparkleHi' | 'miss' | 'spin' | 'hop' | 'release' | 'click' | 'clickHi';
 
 /**
  * Web Audio wrapper. The audio context's clock is the game clock: `ctxTimeAt()` maps an input
@@ -225,6 +225,7 @@ export class AudioEngine {
     this.hits.R = make(0.06, (t) => hpNoise() * Math.exp(-t * 95) * 0.6 + Math.sin(TAU * 2300 * t) * Math.exp(-t * 130) * 0.3);
     this.hits.sparkle = make(0.16, (t) => (Math.sin(TAU * hz * 4 * t) * 0.5 + Math.sin(TAU * hz * 6 * t) * 0.3) * Math.exp(-t * 26) * 0.5);
     this.hits.sparkleHi = make(0.2, (t) => (Math.sin(TAU * hz * 4 * t) * 0.4 + Math.sin(TAU * hz * 6 * t) * 0.35 + Math.sin(TAU * hz * 8 * t) * 0.25) * Math.exp(-t * 20) * 0.55);
+    this.hits.impact = make(0.4, (t) => Math.sin(TAU * (55 * t + (110 * (1 - Math.exp(-t * 28))) / 28)) * Math.exp(-t * 8) * 0.85 + hpNoise() * Math.exp(-t * 13) * 0.3);
     this.hits.miss = make(0.16, (t) => Math.sin(TAU * (70 * t - 60 * t * t)) * Math.exp(-t * 22) * 0.8);
     this.hits.spin = make(0.025, (t) => hpNoise() * Math.exp(-t * 260) * 0.45);
     this.hits.hop = make(0.07, (t) => Math.sin(TAU * (600 * t + 2500 * t * t)) * Math.exp(-t * 55) * 0.4);

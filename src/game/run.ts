@@ -51,8 +51,8 @@ export class Run {
   private ended = false;
 
   constructor(readonly pack: LevelPack, readonly difficulty: Difficulty, readonly opts: RunOptions, private onEnd: (run: Run) => void) {
-    this.level = new Level(pack.level, pack.audio);
     this.chart = pack.charts[difficulty];
+    this.level = new Level(pack.level, pack.audio, this.chart.laps);
     this.notes = buildNotes(this.level, this.chart);
     this.engine = new Engine(this.level, this.notes, difficulty, { hardcore: opts.hardcore, noFail: opts.bot });
     if (opts.bot) this.bot = botEvents(this.level, this.notes);
@@ -133,6 +133,7 @@ export class Run {
     else if (ev.kind === 'tap' || ev.kind === 'head') {
       audio.hit(ev.note.hand === 'A' ? 'tap' : ev.note.hand, j === 'good' ? 0.55 : 1);
       if (j === 'perfect') audio.hit(inDrop ? 'sparkleHi' : 'sparkle', inDrop ? 0.8 : 0.6);
+      if (ev.note.accent) audio.hit('impact', j === 'good' ? 0.5 : 0.9); // big hits get their own sound
     } else if (ev.kind === 'tail') {
       audio.hit('release', j === 'good' ? 0.5 : 0.9);
       if (j === 'perfect') audio.hit('sparkle', 0.5);

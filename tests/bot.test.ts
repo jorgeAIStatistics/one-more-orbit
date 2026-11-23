@@ -9,7 +9,7 @@ import type { Difficulty } from '../src/game/types';
 /** Plays a chart with the given inputs, stepping the engine like 120 fps frames between them. */
 function play(packIndex: number, d: Difficulty, jitter = 0, seed = 1) {
   const pack = PACKS[packIndex];
-  const level = new Level(pack.level, pack.audio);
+  const level = new Level(pack.level, pack.audio, pack.charts[d].laps);
   const notes = buildNotes(level, pack.charts[d]);
   const engine = new Engine(level, notes, d);
   let s = seed;

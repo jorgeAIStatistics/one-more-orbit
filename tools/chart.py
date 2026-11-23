@@ -1,140 +1,269 @@
 #!/usr/bin/env python3
-"""Compose the NORMAL / HARD / INSANE charts for a level from its layout and the measured audio.
+"""Pattern composer: builds a level's charts from the song's motifs, then compiles them for the game.
 
-  python tools/chart.py skyhigh
+  python tools/chart.py skyhigh                 # compose (keeps hand-edited bars), compile, validate
+  python tools/chart.py skyhigh --explain hard 26 41   # bar-by-bar: pattern used and what each note follows
+  python tools/chart.py skyhigh --motifs        # print the motifs it found
 
-Reads levels/<id>/level.json (segments + 'gen' rules) and tools/cache/<id>.features.npz (from analyze.py).
-Writes levels/<id>/normal.json, hard.json, insane.json. Every note sits on a grid position where that bar
-really has a hit in the layer it follows: cyan/left = low sounds (kick, bass), pink/right = high sounds
-(clap, snare, lead, arpeggio), hold arcs = runs of fast notes (press on the first, release on the last).
-
-Note format (positions in ticks, 12 per beat, counted from bar 1):
-  {"t": tick, "k": "t"}                  tap     ("h": "L" | "R" | "A" = which side; A = either)
-  {"t": tick, "k": "h", "d": ticks}      hold    (press at t, release at t + d)
-  {"t": tick, "k": "z", "lane": 0 | 1}   hazard  (dodge sections: be in the other lane at t)
-  {"t": tick, "k": "s", "d": ticks, "n": taps}   spinner"""
+How it works
+  1. MOTIFS. Sections that share a "motif" name in level.json are one musical idea (e.g. the four drop phrases).
+     For each voice the tool finds the figure that repeats every `cycle` bars: a 16th-note position belongs to
+     the motif when most repeats have a hit there.
+  2. VOICES -> GATES, always the same:  cyan (left, inner)  = bass / kick      pink (right, outer) = lead / arpeggio / clap
+     white = the melody while it is the only voice (either hand).   hold arc = a run of fast notes.
+     hazard = kick (dodge sections).   accent (bigger gate, impact sound) = a marked big hit.
+  3. PATTERNS. Each bar's plan in level.json names how each voice is played, from a small vocabulary:
+       beat   motif notes that fall on beats           8     motif notes on the 8th-note grid
+       16     the whole motif                          all   every measured hit (ornaments included: streams)
+       half   8th-grid motif notes in beats 1-3        tail  8th-grid motif notes in beats 3-4 (the riff's tail)
+       off    off-beat 8ths                            hold  runs of 4+ sixteenths become one hold arc
+       -      rest
+     plus "acc" (accent on beat 1), "stack" (both hands accent beat 1), "solo" (never two hands at once).
+     A bar's plan is e.g. "C=16 P=beat stack" and is recorded with the bar, so the chart reads as named shapes.
+  4. SHEET. The result is levels/<id>/sheet.json: one line per bar per difficulty, in a notation you can edit:
+       x tap   X accent   [ - ] hold start / body / release   . rest      lanes: W white, C cyan, P pink, Z hazards (0/1)
+     Change a bar, set its "by" to "hand", and re-running this tool will never overwrite it.
+  5. COMPILE. The sheet becomes normal.json / hard.json / insane.json. Every note is checked against the audio and
+     the tool reports any note with no measured sound under it."""
 import json, sys, pathlib
 import numpy as np
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-GRID = {4: 12, 8: 6, 16: 3}
 NAMES = {'N': 'normal', 'H': 'hard', 'I': 'insane'}
-STAR_BASE = {'N': 0.0, 'H': 0.6, 'I': 1.2}
+STAR_BASE = {'N': 0.3, 'H': 0.9, 'I': 1.5}
+THR = 0.33     # a 16th counts as "hit" in a layer at this strength
+MOTIF_THR = 0.6  # ...and as part of a motif when it is this strong in most repeats
+SOUND = {'kick': 'kick/bass', 'snare': 'clap/arpeggio', 'lead': 'lead', 'full': 'full mix'}
 
-def bonus(t, pen=0.08):
-    if t % 48 == 0: return 0.25
-    if t % 12 == 0: return 0.12
-    if t % 6 == 0: return 0.05
-    return -pen
+def load(tid):
+    level = json.load(open(ROOT / f'levels/{tid}/level.json')); audio = json.load(open(ROOT / f'levels/{tid}/audio.json'))
+    F = dict(np.load(ROOT / f'tools/cache/{tid}.features.npz'))
+    S = {k: F[k][::3] for k in ('kick', 'snare', 'lead', 'full')}       # one value per 16th
+    return level, audio, S
 
-def greedy(strength, cand, k, gap, run, taken, thr):
-    """strongest-first pick of up to k ticks, keeping a minimum gap and capping bursts at grid speed"""
-    sel = list(taken); out = []
-    def chain_ok(t):
-        pts = sorted(set(sel + [t])); best = cur = 1
-        for a, b in zip(pts[:-1], pts[1:]):
-            cur = cur + 1 if b - a <= gap else 1
-            best = max(best, cur)
-        return best <= run
-    for t in sorted(cand, key=lambda q: -(strength[q] + bonus(q))):
-        if len(out) >= k: break
-        if strength[t] < thr: continue
-        if any(abs(t - s) < gap for s in sel): continue
-        if not chain_ok(t): continue
-        sel.append(t); out.append(t)
+def seg_bars(level):
+    out = []; bar = 0
+    for s in level['segments']:
+        out.append((s, bar, bar + s['bars'])); bar += s['bars']
     return out
 
-def select(strength, t0, t1, grid, n, run=1, thr=0.3, first=0, blocked=(), force=()):
-    step = GRID[grid]; chosen = [t0 + f for f in force]
-    for b in range((t1 - t0 + 47) // 48):
-        if b < first: continue
-        k = int(n) + (1 if (n % 1 >= 0.5 and b % 2 == 1) or (0 < n % 1 < 0.5 and b % 4 == 3) else 0)
-        cand = [t for t in range(t0 + b * 48, min(t0 + (b + 1) * 48, t1)) if t % step == 0 and t < len(strength)
-                and not any(a <= t <= c for a, c in blocked)]
-        chosen += greedy(strength, cand, k - sum(1 for f in chosen if t0 + b * 48 <= f < t0 + (b + 1) * 48), step, run, chosen, thr)
-    return sorted(set(chosen))
+def voice_layers(seg):
+    """which measured layer each voice follows in this section"""
+    return {'C': seg.get('cyan', 'kick'), 'P': seg.get('pink', 'lead'), 'W': seg.get('white', 'snare')}
 
-def runs(strength, t0, t1, min_run, thr=0.33, max_len=24):
-    """stretches of consecutive 16th-note hits: these become hold arcs"""
-    out = []; t = t0
-    while t < min(t1, len(strength)):
-        if strength[t] >= thr:
-            e = t
-            while e + 3 < min(t1, len(strength)) and strength[e + 3] >= thr and e + 3 - t <= max_len - 3: e += 3
-            if (e - t) // 3 + 1 >= min_run:
-                out.append((t, e)); t = e + 12; continue
-            t = e + 3
-        else: t += 3
+def find_motifs(level, S):
+    """motif[name][voice] = list (one per bar of the cycle) of sets of 16th positions"""
+    groups = {}
+    for seg, b0, b1 in seg_bars(level):
+        if seg.get('motif'): groups.setdefault(seg['motif'], []).append((seg, b0, b1))
+    motifs = {}
+    for name, segs in groups.items():
+        cyc = segs[0][0].get('cycle', 4); lay = voice_layers(segs[0][0]); bars = [b for _, b0, b1 in segs for b in range(b0, b1)]
+        motifs[name] = {'cycle': cyc, 'bars': bars}
+        for v, layer in lay.items():
+            rows = []
+            for j in range(cyc):
+                reps = [S[layer][b * 16:b * 16 + 16] for i, b in enumerate(bars) if i % cyc == j and (b + 1) * 16 <= len(S[layer])]
+                # in the motif = hit hard in most repeats (a weak or occasional hit is an ornament, not the figure)
+                strong = np.mean([r >= MOTIF_THR for r in reps], axis=0) if reps else np.zeros(16)
+                rows.append({i for i in range(16) if strong[i] >= 0.6})
+            motifs[name][v] = rows
+    return motifs
+
+def runs(pos, min_run):
+    out = []; p = sorted(pos); i = 0
+    while i < len(p):
+        j = i
+        while j + 1 < len(p) and p[j + 1] == p[j] + 1: j += 1
+        if j - i + 1 >= min_run: out.append((p[i], p[j]))
+        i = j + 1
     return out
 
-def two_hand(seg, g, t0, t1, F, neutral=False):
-    low = F['kick']; high = np.maximum(F['snare'], F['lead'])
-    if seg.get('swap'): low, high = high, low
-    notes = []; blockedR = []
-    hold_hand = g.get('hand', 'R')
-    if (seg['mode'] == 'hold' or seg.get('holds')) and g.get('minRun'):
-        for a, e in runs(high, t0, t1, g['minRun']):
-            notes.append({'t': a, 'k': 'h', 'h': 'A' if neutral else hold_hand, 'd': e - a}); blockedR.append((a - 9, e + 9))
-    thr = g.get('thr', 0.3); run = g.get('run', 1)
-    R = select(high, t0, t1, g['grid'], g.get('nR', g.get('n', 0)), run, thr, g.get('first', 0), blockedR, g.get('forceR', ()))
-    L = [] if neutral else select(low, t0, t1, g['grid'], g.get('nL', 0), run, thr, g.get('first', 0), (), g.get('forceL', ()))
-    if not g.get('chords'): L = [t for t in L if t not in R or low[t] >= high[t]]; R = [t for t in R if t not in L]
-    merged = sorted([(t, 'L') for t in L] + [(t, 'R') for t in R])
-    if g.get('alt'):                      # NORMAL: one clear stream, never two things at once
-        step = GRID[g['grid']]; keep = []
-        for t, h in merged:
-            s = (low if h == 'L' else high)[t]
-            if any(a <= t <= c for a, c in blockedR): continue
-            if keep and t - keep[-1][0] < step:
-                if s > keep[-1][2]: keep[-1] = (t, h, s)
-                continue
-            keep.append((t, h, s))
-        merged = [(t, h) for t, h, _ in keep]
-    for t, h in merged: notes.append({'t': t, 'k': 't', 'h': 'A' if neutral else h})
-    return notes
+def voice_row(kind, v, seg, bar, b_in_motif, motif, S, opts):
+    """one bar of one voice as 16 chars"""
+    layer = voice_layers(seg)[v]; actual = S[layer][bar * 16:bar * 16 + 16]
+    if len(actual) < 16: actual = np.pad(actual, (0, 16 - len(actual)))
+    heard = {i for i in range(16) if actual[i] >= THR}
+    m = motif[v][b_in_motif % motif['cycle']] if motif else heard
+    live = {i for i in m if actual[i] >= 0.25}          # a motif note only plays in bars where it really sounds
+    if kind.startswith('@'):                             # an explicit shape: kept wherever the bar really has that sound
+        tpl = list(kind[1:].ljust(16, '.'))
+        for i, ch in enumerate(tpl):
+            if ch in 'xX' and actual[i] < 0.15: tpl[i] = '.'
+        return ''.join(tpl)
+    if kind == '-': pos = set()
+    elif kind == 'beat': pos = {i for i in live if i % 4 == 0}
+    elif kind == '8': pos = {i for i in live if i % 2 == 0}
+    elif kind == '16': pos = set(live)
+    elif kind == 'all': pos = live | {i for i in range(16) if actual[i] >= 0.5}
+    elif kind == 'half': pos = {i for i in live if i % 2 == 0 and i <= 8}
+    elif kind == 'tail': pos = {i for i in live if i % 2 == 0 and i >= 10}
+    elif kind == 'off': pos = {i for i in (2, 6, 10, 14) if max(actual[max(0, i - 1):i + 2]) >= 0.25}
+    elif kind == 'hold': pos = set(live)
+    else: raise ValueError(f'unknown pattern "{kind}"')
+    row = ['.'] * 16
+    if kind == 'hold':
+        for a, e in runs(pos, opts.get('minRun', 4)):
+            e = min(e, a + opts.get('maxHold', 8))
+            row[a] = '['; row[e] = ']'
+            for i in range(a + 1, e): row[i] = '-'
+            pos -= set(range(a - 1, e + 3))
+        pos = {i for i in pos if i % 2 == 0}
+    cap = opts.get('run', 16); streak = 0
+    for i in range(16):
+        if i in pos and row[i] == '.':
+            streak = streak + 1 if (i > 0 and row[i - 1] == 'x') else 1
+            if streak <= cap: row[i] = 'x'
+        elif row[i] == '.': streak = 0
+    return ''.join(row)
 
-def m_tap(seg, g, t0, t1, F):
-    s = np.maximum.reduce([F['lead'], 0.9 * F['snare'], 0.6 * F['kick'], 0.5 * F['full']])
-    return [{'t': t, 'k': 't', 'h': 'A'} for t in select(s, t0, t1, g['grid'], g['n'], g.get('run', 1), g.get('thr', 0.3), g.get('first', 0), (), g.get('force', ()))]
+def compose_bar(seg, plan, bar, b_in_motif, motif, S, D):
+    row = {'W': '.' * 16, 'C': '.' * 16, 'P': '.' * 16, 'Z': '.' * 16}
+    opts = {}; flags = set()
+    for tok in plan.split():
+        if '=' in tok:
+            k, val = tok.split('=');
+            if k not in 'WCP': opts[k] = int(val)
+        else: flags.add(tok)
+    # options written after a voice still apply: recompute once all are known
+    for tok in plan.split():
+        if '=' in tok and tok[0] in 'WCP': row[tok[0]] = voice_row(tok.split('=')[1], tok[0], seg, bar, b_in_motif, motif, S, opts)
+    full = S['full'][bar * 16] if bar * 16 < len(S['full']) else 0
+    def put(k, i, ch):
+        r = list(row[k]);
+        if r[i] in '.x': r[i] = ch
+        row[k] = ''.join(r)
+    if 'stack' in flags and full >= 0.2: put('C', 0, 'X'); put('P', 0, 'X')
+    if 'acc' in flags and full >= 0.2:
+        k = 'W' if row['W'].strip('.') else ('C' if row['C'].strip('.') else 'P'); put(k, 0, 'X')
+    if 'solo' in flags:      # one thing at a time: where both hands land together keep the accent or the cyan note
+        c = list(row['C']); p = list(row['P'])
+        for i in range(16):
+            if c[i] != '.' and p[i] != '.' and not (c[i] == 'X' and p[i] == 'X'):
+                if p[i] in '[-]' or p[i] == 'X': c[i] = '.'
+                elif c[i] in 'xX': p[i] = '.'
+            # and never a tap on one hand in the 16th right next to a tap on the other
+            if i > 0 and c[i] == 'x' and p[i - 1] == 'x': c[i] = '.'
+            if i > 0 and p[i] == 'x' and c[i - 1] == 'x': p[i] = '.'
+        row['C'] = ''.join(c); row['P'] = ''.join(p)
+    return row
 
-def m_hold(seg, g, t0, t1, F): return two_hand(seg, g, t0, t1, F, neutral=g.get('hand') == 'A')
-def m_colour(seg, g, t0, t1, F): return two_hand(seg, g, t0, t1, F)
+def compose_dodge(seg, plan, bar, S, first, lane_state):
+    opts = dict(t.split('=') for t in plan.split() if '=' in t)
+    grid = int(opts.get('grid', 4)); pat = opts.get('lanes', '10'); k = S['kick'][bar * 16:bar * 16 + 16]
+    row = ['.'] * 16
+    for i in range(0, 16, 16 // grid):
+        if first and i < 4: continue
+        if k[i] >= float(opts.get('thr', 0.3)):
+            row[i] = pat[lane_state[0] % len(pat)]; lane_state[0] += 1
+    return ''.join(row)
 
-def m_dodge(seg, g, t0, t1, F):
-    s = np.maximum(F['kick'], 0.5 * F['full'])
-    ticks = select(s, t0, t1, g['grid'], g['n'], 99, g.get('thr', 0.3), 0, [(t0, t0 + 11)])
-    pat = g.get('pattern', '10')
-    return [{'t': t, 'k': 'z', 'lane': int(pat[i % len(pat)])} for i, t in enumerate(ticks)]
+def compose(tid, level, audio, S, old):
+    motifs = find_motifs(level, S); sheet = {}
+    for D, name in NAMES.items():
+        rows = []; prev = {r['bar']: r for r in old.get(name, [])}
+        for seg, b0, b1 in seg_bars(level):
+            plans = seg.get('plan', {}).get(D, ['-']); motif = motifs.get(seg.get('motif')); lane_state = [0]
+            for bar in range(b0, b1):
+                keep = prev.get(bar + 1)
+                if keep and keep.get('by') == 'hand': rows.append(keep); continue
+                plan = plans[(bar - b0) % len(plans)]
+                r = {'bar': bar + 1, 'sec': seg['id'], 'pat': plan}
+                if seg['mode'] == 'spinner': r.update(W='.' * 16, C='.' * 16, P='.' * 16, Z='.' * 16)
+                elif seg['mode'] == 'dodge': r.update(W='.' * 16, C='.' * 16, P='.' * 16, Z=compose_dodge(seg, plan, bar, S, bar == b0, lane_state))
+                else:
+                    b_in = motif['bars'].index(bar) if motif and bar in motif['bars'] else 0
+                    r.update(compose_bar(seg, plan, bar, b_in, motif, S, D))
+                r['by'] = 'tool'; rows.append(r)
+        sheet[name] = rows
+    return sheet, motifs
 
-def m_spinner(seg, g, t0, t1, F, spb):
-    d = t1 - t0 - 6
-    return [{'t': t0, 'k': 's', 'd': d, 'n': int(round(g['rate'] * d / 12 * spb))}]
+def write_sheet(tid, sheet):
+    with open(ROOT / f'levels/{tid}/sheet.json', 'w') as f:
+        f.write('{\n  "_doc": "One line per bar. x tap, X accent, [ - ] hold, . rest. Lanes: W white, C cyan, P pink, Z hazards. Set by to hand after editing a bar; tools/chart.py then leaves it alone.",\n')
+        for i, (name, rows) in enumerate(sheet.items()):
+            f.write(f'  "{name}": [\n' + ',\n'.join('    ' + json.dumps(r, separators=(', ', ': ')) for r in rows) + '\n  ]' + (',\n' if i < len(sheet) - 1 else '\n'))
+        f.write('}\n')
+
+def compile_chart(level, audio, S, rows, D):
+    spb = 60 / audio['bpm']; notes = []; warn = []; segs = seg_bars(level); end = audio['length'] - audio['offset'] - 0.3
+    for seg, b0, b1 in segs:
+        if seg['mode'] == 'spinner':
+            d = (b1 - b0) * 48 - 6; notes.append({'t': b0 * 48, 'k': 's', 'd': d, 'n': int(round(seg['rate'][D] * d / 12 * spb))})
+    seg_of = {b: seg for seg, b0, b1 in segs for b in range(b0, b1)}
+    for r in rows:
+        bar = r['bar'] - 1; seg = seg_of[bar]; lay = voice_layers(seg)
+        for lane, hand in (('W', 'A'), ('C', 'L'), ('P', 'R')):
+            row = r[lane]; i = 0
+            while i < 16:
+                ch = row[i]; t = bar * 48 + i * 3
+                if ch in 'xX':
+                    n = {'t': t, 'k': 't', 'h': hand}
+                    if ch == 'X': n['a'] = 1
+                    notes.append(n)
+                elif ch == '[':
+                    j = row.index(']', i); notes.append({'t': t, 'k': 'h', 'h': hand, 'd': (j - i) * 3}); i = j
+                if ch in 'xX[':
+                    idx = bar * 16 + (t - bar * 48) // 3
+                    heard = max(S[k][idx] if idx < len(S[k]) else 0 for k in ('kick', 'snare', 'lead', 'full'))
+                    if heard < 0.15: warn.append(f"bar {bar + 1} {lane} step {(t - bar * 48) // 3 + 1}")
+                i += 1
+        for i, ch in enumerate(r['Z']):
+            if ch in '01': notes.append({'t': bar * 48 + i * 3, 'k': 'z', 'lane': int(ch)})
+    notes = [n for n in notes if (n['t'] + n.get('d', 0)) / 12 * spb < end]
+    notes.sort(key=lambda n: (n['t'], n.get('h', '')))
+    # ring speed per section: denser passages get faster laps, so neighbouring gates never crowd (22.5 degrees per 16th at most)
+    laps = {}
+    for seg, b0, b1 in segs:
+        ts = sorted({n['t'] for n in notes if b0 * 48 <= n['t'] < b1 * 48 and n['k'] in 'th'})
+        gap = min([b - a for a, b in zip(ts[:-1], ts[1:])], default=48)
+        fit = 4 if gap <= 3 else 8
+        laps[seg['id']] = seg['lap'] if seg.get('lapFixed') else min(seg['lap'], fit) if seg['mode'] != 'dual' else min(seg['lap'], 4)
+    return notes, laps, warn
 
 def stars(notes, spb, D):
-    ts = sorted(n['t'] / 12 * spb for n in notes if n['k'] in 'th')
+    ts = np.array(sorted(n['t'] / 12 * spb for n in notes if n['k'] in 'th'))
     if len(ts) < 2: return 1.0
-    ts = np.array(ts); peak = max(np.sum((ts >= t) & (ts < t + 4)) for t in ts) / 4
-    gaps = np.diff(ts); fast = float(np.mean(gaps < 0.14)); chords = float(np.mean(gaps < 0.01))
-    kinds = len({n['k'] for n in notes}) + (1 if any(n.get('h') in 'LR' for n in notes if 'h' in n) else 0)
-    return round(float(np.clip(0.55 * peak + 2.2 * fast + 1.5 * chords + 0.15 * kinds + STAR_BASE[D], 1, 10)), 1)
+    peak = max(np.sum((ts >= t) & (ts < t + 4)) for t in ts) / 4; avg = len(ts) / (ts[-1] - ts[0])
+    gaps = np.diff(ts); fast = float(np.mean((gaps > 0.01) & (gaps < 0.14))); chords = float(np.mean(gaps < 0.01))
+    holds = sum(1 for n in notes if n['k'] == 'h') / len(notes)
+    return round(float(np.clip(0.32 * peak + 0.25 * avg + 3.0 * fast + 1.2 * chords + 2 * holds + STAR_BASE[D], 1, 10)), 1)
 
-def main(tid):
-    level = json.load(open(ROOT / f'levels/{tid}/level.json')); audio = json.load(open(ROOT / f'levels/{tid}/audio.json'))
-    F = dict(np.load(ROOT / f'tools/cache/{tid}.features.npz')); spb = 60 / audio['bpm']
-    modes = {'tap': m_tap, 'hold': m_hold, 'colour': m_colour, 'dual': m_colour, 'dodge': m_dodge}
+def explain(tid, level, audio, S, sheet, name, a, b):
+    seg_of = {bb: seg for seg, b0, b1 in seg_bars(level) for bb in range(b0, b1)}
+    print(f"{tid} {name}: bars {a}-{b}   (C cyan/left, P pink/right; 16 steps per bar)")
+    for r in sheet[name]:
+        if not a <= r['bar'] <= b: continue
+        seg = seg_of[r['bar'] - 1]; lay = voice_layers(seg); bar = r['bar'] - 1
+        def follows(lane):
+            hits = [i for i, ch in enumerate(r[lane]) if ch in 'xX[']
+            if not hits: return ''
+            layer = lay[lane]; ok = sum(1 for i in hits if S[layer][bar * 16 + i] >= 0.15)
+            return f"{SOUND[layer]} ({ok}/{len(hits)} on a measured hit)"
+        print(f"  bar {r['bar']:2d} [{seg['id']:6s}] C {r['C']}  P {r['P']}  | {r['pat']:28s} | {r['by']:4s} | C: {follows('C')}; P: {follows('P')}")
+
+def main(argv):
+    tid = argv[0]; level, audio, S = load(tid); spb = 60 / audio['bpm']
+    path = ROOT / f'levels/{tid}/sheet.json'
+    old = json.load(open(path)) if path.exists() else {}
+    sheet, motifs = compose(tid, level, audio, S, old)
+    if '--motifs' in argv:
+        for name, m in motifs.items():
+            print(f"motif '{name}' ({m['cycle']}-bar cycle over bars {m['bars'][0] + 1}-{m['bars'][-1] + 1})")
+            for v in 'CPW':
+                print(f"   {v}: " + '  '.join(''.join('x' if i in row else '.' for i in range(16)) for row in m[v]))
+        return
+    write_sheet(tid, sheet)
     for D, name in NAMES.items():
-        notes = []; t0 = 0; per = []
-        for seg in level['segments']:
-            t1 = t0 + seg['bars'] * 48; g = seg['gen'][D]
-            got = m_spinner(seg, g, t0, t1, F, spb) if seg['mode'] == 'spinner' else modes[seg['mode']](seg, g, t0, t1, F)
-            got = [n for n in got if (n['t'] + n.get('d', 0)) / 12 * spb < audio['length'] - audio['offset'] - 0.3]
-            per.append(f"{seg['id']}:{len(got)}"); notes += got; t0 = t1
-        notes.sort(key=lambda n: (n['t'], n.get('h', '')))
-        chart = dict(level=tid, difficulty=name, stars=stars(notes, spb, D), notes=notes)
+        notes, laps, warn = compile_chart(level, audio, S, sheet[name], D)
+        st = stars(notes, spb, D); hand = sum(1 for r in sheet[name] if r.get('by') == 'hand')
         with open(ROOT / f'levels/{tid}/{name}.json', 'w') as f:
-            f.write('{\n  "level": "%s", "difficulty": "%s", "stars": %s,\n  "notes": [\n' % (tid, name, chart['stars']))
+            f.write('{\n  "level": "%s", "difficulty": "%s", "stars": %s,\n  "laps": %s,\n  "notes": [\n' % (tid, name, st, json.dumps(laps)))
             f.write(',\n'.join('    ' + json.dumps(n, separators=(', ', ': ')) for n in notes)); f.write('\n  ]\n}\n')
         kinds = {k: sum(1 for n in notes if n['k'] == k) for k in 'thzs'}
-        print(f"{tid} {name}: {len(notes)} notes {kinds}, stars {chart['stars']}  [" + ' '.join(per) + ']')
+        print(f"{tid} {name}: {len(notes)} notes {kinds}, accents {sum(1 for n in notes if n.get('a'))}, stars {st}, hand-edited bars {hand}, laps {laps}")
+        if warn: print(f"   !! {len(warn)} notes with no measured sound: " + '; '.join(warn[:12]))
+    if '--explain' in argv:
+        i = argv.index('--explain'); explain(tid, level, audio, S, sheet, argv[i + 1], int(argv[i + 2]), int(argv[i + 3]))
 
 if __name__ == '__main__':
-    for tid in sys.argv[1:]: main(tid)
+    main(sys.argv[1:])

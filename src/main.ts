@@ -371,7 +371,7 @@ const list = $('creditList');
 for (const t of manifest.tracks) { const d = document.createElement('div'); d.className = 'credit'; d.textContent = creditLine(t); list.appendChild(d); }
 $('licenceNote').textContent = manifest.licenceNote;
 
-function loop(now: number): void {
+function tick(now: number): void {
   const dt = Math.min(0.05, (now - lastFrame) / 1000);
   lastFrame = now;
   if (run && (screen === 'play' || screen === 'pause')) {
@@ -381,6 +381,9 @@ function loop(now: number): void {
   } else if (screen === 'calib' && cal.mode === 'visual') {
     renderer.drawMetronome(now, cal.running ? Math.max(0, (now - cal.startPerf) / 1000 / CAL_PERIOD) % 1 : 0);
   } else renderer.drawIdle(now);
+}
+function loop(now: number): void {
+  tick(now);
   requestAnimationFrame(loop);
 }
 
@@ -388,4 +391,4 @@ show('menu');
 requestAnimationFrame(loop);
 
 // Hooks for tests and debugging; the game itself never reads these.
-Object.assign(window, { __omo: { audio, save, get run() { return run; }, start: (d: Difficulty, bot: boolean) => { save.difficulty = d; botMode = bot; startRun(); } } });
+Object.assign(window, { __omo: { audio, save, get run() { return run; }, tick, start: (d: Difficulty, bot: boolean) => { save.difficulty = d; botMode = bot; startRun(); } } });

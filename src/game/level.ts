@@ -15,7 +15,7 @@ export class Level {
   readonly dropTime: number; // song time of the main drop
   private orbit: OrbitPiece[][] = [[], []];
 
-  constructor(readonly file: LevelFile, readonly audio: AudioMeta) {
+  constructor(readonly file: LevelFile, readonly audio: AudioMeta, laps?: Record<string, number>) {
     this.id = file.id;
     this.title = file.title;
     this.artist = file.artist;
@@ -24,7 +24,7 @@ export class Level {
     file.segments.forEach((s, index) => {
       const beat0 = bar * 4;
       const beat1 = beat0 + s.bars * 4;
-      this.segments.push({ ...s, index, bar0: bar, beat0, beat1, t0: beat0 * this.spb, t1: beat1 * this.spb });
+      this.segments.push({ ...s, lap: laps?.[s.id] ?? s.lap, index, bar0: bar, beat0, beat1, t0: beat0 * this.spb, t1: beat1 * this.spb });
       bar += s.bars;
     });
     this.totalBeats = bar * 4;
@@ -102,6 +102,7 @@ export function buildNotes(level: Level, chart: ChartFile): RNote[] {
       need: n.n ?? 0,
       seg: seg.index,
       ring: seg.mode === 'dual' && hand === 'R' ? 1 : 0,
+      accent: n.a === 1,
       headDone: false,
       tailDone: false,
       headJudge: null,

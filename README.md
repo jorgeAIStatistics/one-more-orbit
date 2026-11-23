@@ -2,7 +2,7 @@
 
 A rhythm game on a ring: a ball orbits in time with the music and you tap, hold, dodge and spin exactly on the beat.
 
-**Status: vertical slice.** One level (Sky High) with NORMAL / HARD / INSANE charts and every mechanic, for playtesting. Not yet in: the other three levels, mods, practice mode, skins and badges.
+**Status: vertical slice.** One level (Sky High) with NORMAL / HARD / INSANE charts and every mechanic, for playtesting. Still planned, not built yet: the other three levels, practice mode with checkpoints, mods (Hidden, Sudden Death, Mirror, Double Time), skins and badges, and the art-direction pass.
 
 **Music licence.** The tracks are NCS releases and are here for private testing only. Releasing the game needs a game licence from NoCopyrightSounds (ncs.io). Credits and that note are in `levels/manifest.json` and shown in the game.
 
@@ -31,7 +31,7 @@ It prints a `Network:` address such as `http://192.168.1.20:4173`. Open that on 
 npm test
 ```
 
-- `tests/charts.test.ts`: every note on the grid, no overlaps, hazards and spinners in the right sections, level at most 2:00, the variety rules (enough mechanics for the length, something new at least every 20 s, no 4-bar pattern repeated unchanged).
+- `tests/charts.test.ts`: every note on the grid, no overlaps, gates at least 22 degrees apart, accents on the drop, hazards and spinners in the right sections, level at most 2:00, the variety rules (enough mechanics for the length, something new at least every 20 s, no 4-bar pattern repeated unchanged).
 - `tests/bot.test.ts`: the autoplay bot plays every chart and must score 100% PERFECT with zero error; a player within ±20 ms must clear without a miss; doing nothing must fail.
 
 ## Build it
@@ -62,20 +62,33 @@ levels/
   manifest.json       tracks, credit lines, licence note
   <id>/level.json     the layout you edit: sections, modes, looks, chart rules
   <id>/audio.json     generated: bar-1 offset, length, sample count, drop time
-  <id>/normal.json    generated charts (hard.json, insane.json)
+  <id>/sheet.json     the charts as readable bars: composed by the tool, hand-edited bars are kept
+  <id>/normal.json    compiled charts (hard.json, insane.json)
 public/audio/         the cut excerpts
 tools/                Python: cut excerpts, measure audio, compose charts, audit sync (see tools/README.md)
 tests/                chart checks and the autoplay bot
 ```
 
-## Tuning a level's pacing
+## How charts are made
 
-Open `levels/<id>/level.json`. Each section has `bars` (its length), `mode` (tap, hold, colour, dodge, spinner, dual), `lap` (beats per trip round the ring), a `look`, and `gen` rules per difficulty. Change `bars` to make a set piece longer or shorter (keep the total the same), then regenerate the charts:
+Charts are designed from the song's motifs, not picked note by note.
+
+1. `levels/<id>/level.json` is the layout: sections (`bars`, `mode`, `look`) and, per difficulty, a `plan` with one named pattern per bar, e.g. `"C=16 P=8 stack run=3"` (cyan plays the whole bass riff, pink plays the lead on 8ths, both hands accent beat 1). The vocabulary is listed at the top of `tools/chart.py`.
+2. `python tools/chart.py <id>` finds the motifs, composes every bar from the plan and writes `levels/<id>/sheet.json`: one readable line per bar per difficulty (`x` tap, `X` accent, `[--]` hold; lanes `W` white, `C` cyan, `P` pink, `Z` hazards).
+3. Edit any bar in the sheet by hand and set its `"by"` to `"hand"`. Re-running the tool keeps hand-edited bars and recomposes the rest.
+4. The tool compiles the sheet to `normal.json` / `hard.json` / `insane.json`, checks every note against the audio, picks each section's ring speed so gates never crowd, and prints star ratings.
+
+Sounds map to gates the same way everywhere: cyan (left, inner) = bass and kick; pink (right, outer) = lead, arpeggio, clap; white = the melody while it is the only voice; hold = a run of fast notes; accent = a big hit.
 
 ```bash
-python tools/chart.py skyhigh
-npm test
+python tools/chart.py skyhigh                      # compose + compile
+python tools/chart.py skyhigh --motifs             # show the motifs it found
+python tools/chart.py skyhigh --explain hard 26 41 # bar by bar: pattern and what each note follows
 ```
+
+## Tuning a level's pacing
+
+Each section in `level.json` has `bars` (its length). Change it to make a set piece longer or shorter (keep the total the same), re-run `tools/chart.py`, then `npm test`.
 
 ## Adding a level
 
