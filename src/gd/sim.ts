@@ -95,6 +95,9 @@ export class Sim {
   starBeat: number[];
   private si = 0;
 
+  /** taps that met nothing at all (free taps), over the whole attempt */
+  strays = 0;
+
   /** forgiving: nothing ends the run. A missed mark is taken for the player and an early tap is ignored (the tutorial). */
   constructor(readonly c: Course, start: number, private autoUntil = -Infinity, private forgiving = false) {
     this.beat = start;
@@ -262,6 +265,7 @@ export class Sim {
     const hit = nf && Math.abs(nf.d) <= nf.f.tol * spb && !this.used.has(nf.f.beat) ? nf.f : null;
     const free = (): TapResult => {
       this.slip(t); // a tap that met nothing: in a star trail that is a slip
+      this.strays++;
       if (this.mode !== 'ground') return { kind: 'none' };
       this.skip(t, p ? p.beat - p.tol : Infinity);
       return { kind: 'skip' };

@@ -1,7 +1,9 @@
 import './style.css';
 import { audio } from './audio/audio';
-import { BADGES, ORBS, earned } from './game/extras';
-import { PACKS as ALL_PACKS, SLICE, creditLine, manifest, type LevelPack } from './game/packs';
+import { BADGES, ORBS, earned, type Orb } from './game/extras';
+import { BSIDES, PACKS as ALL_PACKS, SLICE, creditLine, manifest, type LevelPack } from './game/packs';
+import { QUESTS, questSet, questsEarned, questsFor } from './game/quests';
+import { GATE_STARS, NODES, TIERS, maxStars, nodeOf, nodeState, playable, totalStars, type MapNode, type Progress } from './game/world';
 import { refreshBars } from './gd/presses';
 import { GdRenderer as Renderer } from './gd/render';
 import { GdRun as Run, TUTORIAL_BEATS } from './gd/run';
@@ -11,17 +13,34 @@ import { bestFor, persist, save, starCount, starsFor } from './save';
 import { LEVEL_UI, icon, levelArt } from './ui/art';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-type Screen = 'title' | 'levels' | 'play' | 'pause' | 'results' | 'settings' | 'calib' | 'orbs' | 'badges' | 'record';
-const SCREENS: Screen[] = ['title', 'levels', 'pause', 'results', 'settings', 'calib', 'orbs', 'badges', 'record'];
+type Screen = 'title' | 'levels' | 'play' | 'pause' | 'results' | 'settings' | 'calib' | 'orbs' | 'badges' | 'quests' | 'record';
+const SCREENS: Screen[] = ['title', 'levels', 'pause', 'results', 'settings', 'calib', 'orbs', 'badges', 'quests', 'record'];
 
 const PACKS = ALL_PACKS.filter((p) => SLICE.includes(p.level.id));
 const shortTitle = (p: LevelPack) => p.level.title.replace(/ \(.*/, '');
 /** Each level's own palette (its drop's), for the scene behind the menus. */
 const levelPalette = (p: LevelPack) => (p.level.segments.find((s) => s.core?.smash) ?? p.level.segments[0]).look.palette;
-let levelIdx = Math.max(0, Math.min(PACKS.length - 1, save.level || 0));
-let pack = PACKS[levelIdx];
-/** The setlist is the difficulty curve: clearing a level unlocks the next. (Playtest builds can open them all in Settings.) */
-const levelOpen = (i: number) => save.unlockAll || /[?&]unlock=1/.test(location.search) || i === 0 || bestFor(PACKS[i - 1].level.id).cleared;
+/** Every level there is: the four planets and their B-sides (the moons). */
+const ALL = [...PACKS, ...BSIDES];
+const packOf = (id: string) => ALL.find((p) => p.level.id === id);
+/** The level a pack is a version of: itself, or for a B-side its planet's. */
+const baseOf = (p: LevelPack) => p.level.side?.of ?? p.level.id;
+/** What the map's rules read: clears, stars, and the playtest switch that opens every planet and shows every moon. */
+const progress: Progress = { cleared: (id) => bestFor(id).cleared, stars: starsFor, get unlockAll() { return save.unlockAll || /[?&]unlock=1/.test(location.search); } };
+/** Where the player is on the map; `pack` is the level there (for the gate, the last one looked at). */
+let at: MapNode = nodeOf(save.at || PACKS[Math.max(0, Math.min(PACKS.length - 1, save.level || 0))].level.id);
+let levelIdx = Math.min(PACKS.length - 1, at.index);
+let pack = packOf(at.id) ?? PACKS[levelIdx];
+const levelOpen = (i: number) => playable(nodeOf(PACKS[i].level.id), progress);
+const canPlay = () => playable(at, progress);
+/** "LEVEL 2 · SKY HIGH · HIGH ORBIT", or "B-SIDE · SKY HIGH" for a moon. */
+const levelLabel = (p: LevelPack) => (p.level.side ? `B-SIDE · ${shortTitle(p)}` : `LEVEL ${PACKS.indexOf(p) + 1} · ${shortTitle(p)} · ${TIERS[p.level.id] ?? ''}`).toUpperCase();
+/** An orb is yours from the start, or for a badge, or for both quests of a level, or for clearing its B-side. */
+const owned = (o: Orb): boolean => {
+  if (!o.needs) return true;
+  const [kind, lvl] = o.needs.split(':');
+  return kind === 'quests' ? questSet(lvl, save.quests) : kind === 'moon' ? bestFor(`${lvl}-b`).cleared : !!save.badges[o.needs];
+};
 
 const renderer = new Renderer($<HTMLCanvasElement>('stage'));
 let screen: Screen = 'title';
@@ -62,107 +81,224 @@ function show(s: Screen): void {
   $('levels').classList.remove('launch');
   // the scene behind the menus: beside the wordmark on a wide title screen, centred otherwise, in the focused level's colours
   placeScene(s);
-  renderer.idlePal = s === 'title' ? 'deep' : levelPalette(pack);
-  if (s === 'levels') { renderCards(); queuePreview(); }
+  renderer.idleBare = s !== 'title'; // the map draws its own planets; only the title has the living orbit
+  renderer.idlePal = s === 'title' ? 'deep' : at.kind === 'gate' ? 'void' : levelPalette(pack);
+  if (s === 'levels') { layoutMap(); renderMap(); queuePreview(); }
   if (s === 'title' || s === 'play') audio.stopPreview(s === 'play' ? 0.9 : 0.4);
 }
 
-// ------------------------------------------------------------------ level select
+// ------------------------------------------------------------------ the world map
 const STARS3 = `<i>${icon('star')}</i>`.repeat(3);
 /** Fills a row of three stars: `kept` are gold, `got` (just collected) glow, `lost` are dimmed. */
 function paintStars(el: Element, state: (i: number) => '' | 'kept' | 'got' | 'lost'): void {
   if (!el.children.length || el.children[0].tagName !== 'I') el.insertAdjacentHTML('afterbegin', STARS3);
   for (let i = 0; i < 3; i++) { const cls = state(i); if (el.children[i].className !== cls) el.children[i].className = cls; }
 }
-const cards = $('cards');
-function buildCards(): void {
-  cards.innerHTML = '';
-  $('dots').innerHTML = '';
-  PACKS.forEach((p, i) => {
-    const ui = LEVEL_UI[p.level.id] ?? { col: '#19e3ff', dots: 1 };
+// Where everything sits, as fractions of the map's width and height. Tall: the route climbs the screen, labels to the
+// side. Wide: it zigzags left to right, labels under the low planets and over the high ones, each moon on the far side.
+type XY = [number, number];
+type Side = 'left' | 'right' | 'below' | 'above';
+const LAYOUT: Record<'tall' | 'wide', { planets: XY[]; moons: XY[]; gate: XY; sides: Side[]; gateSide: Side }> = {
+  tall: { planets: [[0.27, 0.87], [0.72, 0.67], [0.3, 0.46], [0.7, 0.26]], moons: [[0.08, 0.775], [0.91, 0.545], [0.09, 0.345], [0.9, 0.14]], gate: [0.4, 0.075], sides: ['right', 'left', 'right', 'left'], gateSide: 'right' },
+  wide: { planets: [[0.14, 0.68], [0.36, 0.36], [0.58, 0.68], [0.8, 0.36]], moons: [[0.14, 0.27], [0.36, 0.8], [0.58, 0.27], [0.8, 0.8]], gate: [0.93, 0.66], sides: ['below', 'above', 'below', 'above'], gateSide: 'above' }
+};
+const mapEl = $('map');
+const nodeEls = new Map<string, HTMLElement>();
+const labEls = new Map<string, HTMLElement>();
+/** places that have just changed (a planet unlocked, a moon found, the gate opened): they pop once when the map is next shown */
+const freshNodes = new Set<string>();
+function buildMap(): void {
+  for (const n of NODES) {
     const el = document.createElement('button');
     el.type = 'button';
-    el.className = `card${i === PACKS.length - 1 ? ' final' : ''}`;
-    el.style.setProperty('--tint', ui.col);
-    el.dataset.i = String(i);
-    el.innerHTML = `<div class="art">${levelArt(p.level.id)}<span class="lvl">LEVEL ${i + 1}</span>${i === PACKS.length - 1 ? '<span class="tag">FINAL LEVEL</span>' : ''}<div class="lock hidden">${icon('lock')}<span></span></div></div>
-      <div class="info"><h2></h2><div class="by"></div>
-      <div class="diff">${Array.from({ length: 5 }, (_, k) => `<i class="${k < ui.dots ? 'on' : ''}"></i>`).join('')}<span></span></div>
-      <div class="stars3">${STARS3}<span></span></div>
-      <div class="adds"></div>
-      <div class="meter"><span>BEST</span><div><i></i></div><b></b></div>
-      <div class="meter p"><span>PRACTICE</span><div><i></i></div><b></b></div>
-      <div class="tries"></div></div>`;
-    el.querySelector('h2')!.textContent = shortTitle(p);
-    el.querySelector('.by')!.textContent = p.level.artist;
-    el.querySelector('.diff span')!.textContent = (p.level.difficulty ?? '').toUpperCase();
-    el.querySelector('.adds')!.textContent = p.level.adds ?? '';
-    el.addEventListener('click', () => { if (i === levelIdx) begin(false); else focusLevel(i, true); });
-    cards.appendChild(el);
-    $('dots').appendChild(document.createElement('i'));
+    el.className = `node ${n.kind}`;
+    el.dataset.id = n.id;
+    el.innerHTML = '<span class="orbit"></span><span class="glyph"></span>';
+    const lab = document.createElement('div');
+    lab.className = 'lab';
+    lab.dataset.id = n.id;
+    mapEl.append(el, lab);
+    nodeEls.set(n.id, el);
+    labEls.set(n.id, lab);
+  }
+  mapEl.addEventListener('click', (e) => {
+    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-id]');
+    if (!el) return;
+    // a second tap on the planet you are at goes in
+    if (el.dataset.id === at.id && el.classList.contains('node') && canPlay()) begin(false); else select(el.dataset.id!);
   });
 }
-function renderCards(): void {
-  [...cards.children].forEach((node, i) => {
-    const el = node as HTMLElement;
-    const p = PACKS[i];
-    const b = bestFor(p.level.id);
-    const open = levelOpen(i);
-    const best = b.cleared ? 100 : b.pct;
-    const prac = Math.max(b.prac ?? 0, 0);
-    el.classList.toggle('focus', i === levelIdx);
-    el.classList.toggle('locked', !open);
-    el.setAttribute('aria-label', `Level ${i + 1}, ${shortTitle(p)}, ${p.level.difficulty}${open ? `, best ${best} percent` : ', locked'}`);
-    const lock = el.querySelector<HTMLElement>('.lock')!;
-    lock.classList.toggle('hidden', open);
-    if (!open) lock.querySelector('span')!.textContent = `Clear ${shortTitle(PACKS[i - 1])} to unlock`;
-    const meters = el.querySelectorAll<HTMLElement>('.meter');
-    meters[0].querySelector<HTMLElement>('i')!.style.width = `${best}%`;
-    meters[0].querySelector('b')!.textContent = `${best}%`;
-    meters[1].querySelector<HTMLElement>('i')!.style.width = `${prac}%`;
-    meters[1].querySelector('b')!.textContent = `${prac}%`;
-    const kept = starsFor(p.level.id);
-    const row = el.querySelector('.stars3')!;
-    paintStars(row, (k) => (kept[k] ? 'kept' : ''));
-    row.querySelector('span')!.textContent = `${kept.filter(Boolean).length} / 3 STARS`;
-    el.querySelector('.tries')!.innerHTML = b.attempts ? `<b>${b.attempts}</b> attempt${b.attempts === 1 ? '' : 's'}${b.cleared ? ' · <b>cleared</b>' : ''}` : 'Not played yet';
-    ($('dots').children[i] as HTMLElement).classList.toggle('on', i === levelIdx);
-  });
-  $('starTotal').innerHTML = `${icon('star')}${starCount()}/${PACKS.length * 3}`;
-  $('starTotal').setAttribute('aria-label', `${starCount()} of ${PACKS.length * 3} stars`);
-  const open = levelOpen(levelIdx);
-  $<HTMLButtonElement>('playBtn').disabled = !open;
-  $<HTMLButtonElement>('practiceBtn').disabled = !open;
-  $('playBtn').textContent = open ? 'PLAY' : 'LOCKED';
+/** Puts every place, label and stretch of route where the map's current size wants it. */
+function layoutMap(): void {
+  const w = mapEl.clientWidth;
+  const h = mapEl.clientHeight;
+  if (!w || !h) return;
+  const wideMap = w > h * 1.3;
+  mapEl.classList.toggle('compact', wideMap && w < 640); // a phone on its side: names only
+  const L = wideMap ? LAYOUT.wide : LAYOUT.tall;
+  const r = Math.max(14, Math.min(wideMap ? 34 : 31, wideMap ? Math.min(h * 0.085, w * 0.05) : Math.min(h * 0.07, w * 0.078)));
+  const xy = (n: MapNode): XY => { const [x, y] = n.kind === 'gate' ? L.gate : n.kind === 'moon' ? L.moons[n.index] : L.planets[n.index]; return [x * w, y * h]; };
+  for (const n of NODES) {
+    const [x, y] = xy(n);
+    const rr = n.kind === 'planet' ? r : n.kind === 'moon' ? Math.max(10, r * 0.45) : r * 0.8;
+    const el = nodeEls.get(n.id)!;
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
+    el.style.setProperty('--r', `${rr}px`);
+    const lab = labEls.get(n.id)!;
+    const side = n.kind === 'moon' ? 'below' : n.kind === 'gate' ? L.gateSide : L.sides[n.index];
+    const reach = rr * (n.kind === 'planet' ? 1.6 : n.kind === 'gate' ? (side === 'right' ? 2.1 : 1.3) : 1.3) + 8;
+    lab.className = `lab ${side}`;
+    lab.style.left = `${side === 'right' ? x + reach : side === 'left' ? x - reach : x}px`;
+    lab.style.top = `${side === 'below' ? y + reach - 2 : side === 'above' ? y - reach + 2 : y}px`;
+  }
+  // the route: planet to planet and on to the gate, each stretch its own path so the travelled part can light up
+  const stops = [...NODES.filter((n) => n.kind === 'planet'), nodeOf('gate')].map(xy);
+  let d = '';
+  for (let i = 0; i + 1 < stops.length; i++) {
+    const [x0, y0] = stops[i];
+    const [x1, y1] = stops[i + 1];
+    const c = wideMap ? `${(x0 + x1) / 2} ${y0}, ${(x0 + x1) / 2} ${y1}` : `${x0} ${(y0 + y1) / 2}, ${x1} ${(y0 + y1) / 2}`;
+    d += `<path data-seg="${i}" d="M${x0} ${y0} C ${c}, ${x1} ${y1}"/>`;
+  }
+  for (const n of NODES.filter((m) => m.kind === 'moon')) {
+    const [x0, y0] = stops[n.index];
+    const [x1, y1] = xy(n);
+    d += `<path data-moon="${n.id}" class="side" d="M${x0} ${y0} L${x1} ${y1}"/>`;
+  }
+  const svg = $('mapRoute');
+  svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+  svg.innerHTML = d;
 }
-function focusLevel(i: number, scroll: boolean): void {
-  i = Math.max(0, Math.min(PACKS.length - 1, i));
-  const changed = i !== levelIdx;
-  levelIdx = i;
-  pack = PACKS[i];
-  if (changed) { save.level = i; persist(); }
-  renderCards();
-  renderer.idlePal = levelPalette(pack);
-  if (scroll) (cards.children[i] as HTMLElement).scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
-  if (changed) queuePreview();
+/** Every place's state (open, cleared, locked, hidden), the route travelled so far, the star total and the panel. */
+function renderMap(): void {
+  for (const n of NODES) {
+    const st = nodeState(n, progress);
+    const el = nodeEls.get(n.id)!;
+    const lab = labEls.get(n.id)!;
+    const side = lab.className.split(' ').find((c) => c === 'left' || c === 'right' || c === 'below' || c === 'above') ?? 'right';
+    const p = packOf(n.id);
+    const title = p ? shortTitle(p) : '';
+    // a moon nobody has found shows as a "?" beside a planet that is open, and not at all beside a locked one
+    const unseen = n.kind === 'moon' && st === 'hidden' && nodeState(nodeOf(n.planet), progress) === 'locked';
+    el.className = `node ${n.kind} ${st === 'hidden' ? 'hidden-moon' : st}${n.id === at.id ? ' sel' : ''}${freshNodes.has(n.id) ? ' fresh' : ''}${unseen ? ' hidden' : ''}`;
+    el.querySelector('.glyph')!.innerHTML = st === 'cleared' ? icon('check') : st === 'locked' && n.kind === 'planet' ? icon('lock') : st === 'hidden' ? '?' : '';
+    if (n.kind === 'planet') {
+      const ui = LEVEL_UI[n.id] ?? { col: '#19e3ff', dots: 1 };
+      const b = bestFor(n.id);
+      el.style.setProperty('--c', ui.col);
+      el.setAttribute('aria-label', `Level ${n.index + 1}, ${title}, ${TIERS[n.id]}${st === 'locked' ? ', locked' : st === 'cleared' ? ', cleared' : `, best ${b.pct} percent`}`);
+      const sub = st === 'locked' ? `Clear ${shortTitle(PACKS[n.index - 1])}` : st === 'open' && b.pct > 0 ? `Best ${b.pct}%` : TIERS[n.id];
+      lab.className = `lab ${side}${st === 'locked' ? ' dim' : ''}`;
+      lab.innerHTML = `<b></b><span class="sub">${st === 'locked' ? '' : '<span class="stars3"></span>'}<span></span></span>${st === 'locked' ? '' : `<span class="gems">${questsFor(n.id).map((q) => `<i class="${save.quests[q.id] ? 'on' : ''}"></i>`).join('')}</span>`}`;
+      lab.querySelector('b')!.textContent = title;
+      lab.querySelector('.sub > span:last-child')!.textContent = sub;
+      const kept = starsFor(n.id);
+      const row = lab.querySelector('.stars3');
+      if (row) paintStars(row, (k) => (kept[k] ? 'kept' : ''));
+    } else if (n.kind === 'moon') {
+      el.style.setProperty('--c', 'var(--gold)');
+      el.setAttribute('aria-label', st === 'hidden' ? `Something hidden near ${title}` : `B-side of ${title}${st === 'cleared' ? ', cleared' : ''}`);
+      lab.className = `lab ${side} gold`;
+      lab.textContent = st === 'hidden' ? '' : 'B-side';
+    } else {
+      el.setAttribute('aria-label', st === 'open' ? 'The gate, open' : `The gate, needs ${GATE_STARS} stars`);
+      lab.className = `lab ${side}${st === 'open' ? '' : ' dim'}`;
+      lab.innerHTML = st === 'open' ? '<b>The gate</b><span>Open</span>' : `<b>???</b><span>Needs ${GATE_STARS} stars</span>`;
+    }
+  }
+  freshNodes.clear();
+  for (const path of $('mapRoute').querySelectorAll<SVGPathElement>('path')) {
+    if (path.dataset.seg !== undefined) path.setAttribute('class', bestFor(PACKS[Number(path.dataset.seg)].level.id).cleared ? 'done' : 'todo');
+    else if (path.dataset.moon) {
+      const m = nodeOf(path.dataset.moon);
+      path.setAttribute('class', `side${nodeState(m, progress) === 'hidden' ? '' : ' found'}${nodeState(nodeOf(m.planet), progress) === 'locked' ? ' hidden' : ''}`);
+    }
+  }
+  $('starTotal').innerHTML = `${icon('star')}${starCount()} / ${maxStars}`;
+  $('starTotal').setAttribute('aria-label', `${starCount()} of ${maxStars} stars`);
+  renderSheet();
 }
-let scrollTick = 0;
-cards.addEventListener('scroll', () => {
-  cancelAnimationFrame(scrollTick);
-  scrollTick = requestAnimationFrame(() => {
-    const mid = cards.scrollLeft + cards.clientWidth / 2;
-    let best = levelIdx;
-    let dist = Infinity;
-    [...cards.children].forEach((n, i) => { const el = n as HTMLElement; const d = Math.abs(el.offsetLeft + el.offsetWidth / 2 - mid); if (d < dist) { dist = d; best = i; } });
-    if (best !== levelIdx) focusLevel(best, false);
-  });
-}, { passive: true });
+/** The panel under the map: the place you are at, how you have done there, and PLAY. */
+function renderSheet(): void {
+  const st = nodeState(at, progress);
+  const sheet = $('sheet');
+  const best = $('shBest');
+  const meter = (label: string, pct: number, text: string) => {
+    best.classList.remove('hidden');
+    best.querySelector('span')!.textContent = label;
+    best.querySelector<HTMLElement>('i')!.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+    best.querySelector('b')!.textContent = text;
+  };
+  const play = $<HTMLButtonElement>('playBtn');
+  const prac = $<HTMLButtonElement>('practiceBtn');
+  const art = $('shArt');
+  const artOf = at.kind === 'gate' ? 'gate' : at.planet;
+  if (art.dataset.of !== artOf) { art.dataset.of = artOf; art.innerHTML = levelArt(artOf); }
+  art.style.filter = at.kind === 'moon' ? (st === 'hidden' ? 'grayscale(1) brightness(0.3)' : 'saturate(0.5) brightness(0.62)') : at.kind === 'gate' ? 'none' : st === 'locked' ? 'grayscale(0.85) brightness(0.45)' : 'none';
+  $('shLine').classList.remove('hidden');
+  $('shStars').classList.remove('hidden');
+  $('shQuests').innerHTML = '';
+  $('shTries').textContent = '';
+  if (at.kind === 'gate') {
+    const n = totalStars(progress);
+    sheet.style.setProperty('--tint', 'var(--pink)');
+    $('shTitle').textContent = st === 'open' ? 'The gate' : '???';
+    $('shTier').textContent = st === 'open' ? 'Open' : 'Locked';
+    $('shMeta').textContent = st === 'open' ? 'The gate is open. The last level of World 1 lies beyond it, and it is still being built.' : `Something waits past ${shortTitle(PACKS[PACKS.length - 1])}. It opens on ${GATE_STARS} stars.`;
+    meter('STARS', (n / GATE_STARS) * 100, `${Math.min(n, GATE_STARS)}/${GATE_STARS}`);
+    $('shLine').classList.add('hidden');
+    play.disabled = prac.disabled = true;
+    play.textContent = st === 'open' ? 'SOON' : 'LOCKED';
+    return;
+  }
+  const planet = PACKS[at.index];
+  const b = bestFor(at.id);
+  const kept = starsFor(planet.level.id);
+  const open = st === 'open' || st === 'cleared';
+  play.disabled = prac.disabled = !open;
+  play.textContent = open ? 'PLAY' : st === 'hidden' ? 'HIDDEN' : 'LOCKED';
+  const tries = b.attempts ? `<b>${b.attempts}</b> attempt${b.attempts === 1 ? '' : 's'}${b.cleared ? ' · <b>cleared</b>' : (b.prac ?? 0) > 0 ? ` · practice <b>${b.prac}%</b>` : ''}` : 'Not played yet';
+  if (at.kind === 'moon') {
+    sheet.style.setProperty('--tint', 'var(--gold)');
+    $('shTitle').textContent = st === 'hidden' ? '???' : shortTitle(planet);
+    $('shTier').textContent = st === 'hidden' ? 'Hidden' : 'B-side';
+    $('shMeta').textContent = st === 'hidden' ? `Keep all three stars on ${shortTitle(planet)} and something will appear here.` : `${planet.level.artist} · ${pack.level.adds ?? ''}`;
+    if (st === 'hidden') { best.classList.add('hidden'); paintStars($('shStars'), (k) => (kept[k] ? 'kept' : '')); $('shTries').textContent = `${kept.filter(Boolean).length} of 3 stars kept`; } else { meter('BEST', b.cleared ? 100 : b.pct, `${b.cleared ? 100 : b.pct}%`); $('shStars').classList.add('hidden'); $('shTries').innerHTML = tries; }
+    return;
+  }
+  sheet.style.setProperty('--tint', (LEVEL_UI[at.id] ?? { col: '#19e3ff' }).col);
+  $('shTitle').textContent = shortTitle(planet);
+  $('shTier').textContent = TIERS[at.id] ?? '';
+  $('shMeta').textContent = st === 'locked' ? `Clear ${shortTitle(PACKS[at.index - 1])} to open the way here.` : `${planet.level.artist} · ${planet.level.adds ?? ''}`;
+  meter('BEST', b.cleared ? 100 : b.pct, `${b.cleared ? 100 : b.pct}%`);
+  paintStars($('shStars'), (k) => (kept[k] ? 'kept' : ''));
+  $('shTries').innerHTML = tries;
+  $('shQuests').innerHTML = questsFor(at.id).map((q) => `<span class="qchip${save.quests[q.id] ? ' on' : ''}" title="${q.desc}">${icon(save.quests[q.id] ? 'check' : 'quest')}${q.name}</span>`).join('');
+}
+/** Moves to a place on the map. */
+function select(id: string, quiet = false): void {
+  const n = nodeOf(id);
+  const changed = n.id !== at.id;
+  at = n;
+  if (n.kind !== 'gate') { levelIdx = Math.min(PACKS.length - 1, n.index); pack = packOf(n.id) ?? PACKS[levelIdx]; }
+  if (changed) { save.at = n.id; save.level = levelIdx; persist(); }
+  renderMap();
+  renderer.idlePal = n.kind === 'gate' ? 'void' : levelPalette(pack);
+  if (changed && !quiet) queuePreview();
+}
+/** Moves to a planet by its place on the route (0 = the first level). */
+function focusLevel(i: number, _scroll = false): void {
+  select(PACKS[Math.max(0, Math.min(PACKS.length - 1, i))].level.id);
+}
 /** The focused level's song plays quietly from its drop: the preview. It needs one tap first (browsers hold audio until then). */
 let audioReady = false;
 let previewTimer = 0;
 function queuePreview(): void {
   clearTimeout(previewTimer);
   if (!audioReady || screen !== 'levels') return;
+  // nothing to hear at the gate, or at a moon nobody has found
+  if (at.kind === 'gate' || nodeState(at, progress) === 'hidden') { audio.stopPreview(0.4); return; }
   previewTimer = window.setTimeout(() => {
     if (screen !== 'levels') return;
     audio.setVolumes(save.music, save.sfx);
@@ -173,7 +309,7 @@ function queuePreview(): void {
 // ------------------------------------------------------------------ starting a level
 /** PLAY or PRACTICE from the level select: sync check on a first run, the tutorial before level 1, then the card opens into the level. */
 function begin(asPractice: boolean): void {
-  if (!levelOpen(levelIdx) || $('levels').classList.contains('launch')) return;
+  if (!canPlay() || $('levels').classList.contains('launch')) return;
   practice = asPractice;
   botMode = false;
   audio.ensure();
@@ -199,7 +335,7 @@ function go(): void {
 
 /** Starts an attempt. `from` is a song time (practice restarts from a checkpoint); `quick` is the instant restart after a crash. */
 function startRun(from = -1, quick = false): void {
-  if (!levelOpen(levelIdx)) return;
+  if (!canPlay()) return;
   audio.ensure();
   audio.setVolumes(save.music, save.sfx);
   audio.stopPreview(0.6);
@@ -228,7 +364,7 @@ function startRun(from = -1, quick = false): void {
   const card = $('titleCard');
   card.classList.remove('show');
   if (from < 0 && !quick) {
-    $('tcLevel').textContent = `LEVEL ${levelIdx + 1} · ${(pack.level.difficulty ?? '').toUpperCase()}${practice ? ' · PRACTICE' : ''}`;
+    $('tcLevel').textContent = `${pack.level.side ? 'B-SIDE' : `LEVEL ${levelIdx + 1} · ${(TIERS[pack.level.id] ?? '').toUpperCase()}`}${practice ? ' · PRACTICE' : ''}`;
     $('tcSong').textContent = shortTitle(pack);
     $('tcArtist').textContent = pack.level.artist;
     void card.offsetWidth;
@@ -370,7 +506,7 @@ function onRunEnd(r: Run): void {
       if (cp <= r.t0 + 0.01) startRun(-1, true); else startRun(cp);
       return;
     }
-    if (counted && pct > prev.pct) { save.bests[id] = { ...prev, pct }; persist(); session.newBest = true; gameCenter.best(id, pct); }
+    if (counted && pct > prev.pct) { save.bests[id] = { ...prev, pct }; persist(); session.newBest = true; if (!r.pack.level.side) gameCenter.best(id, pct); }
     startRun(-1, true);
     return;
   }
@@ -387,36 +523,63 @@ function showResults(r: Run, cleared: boolean, reached = r.pct): void {
   const unlocks: string[] = [];
   let newStars = [false, false, false];
   if (cleared && counted) {
+    const moon = !!r.pack.level.side;
+    const row = (ico: string, head: string, small: string) => `<div class="unlock">${ico}<div>${head}<small>${small}</small></div></div>`;
+    const dot = (o: Orb) => `<span class="dot" style="background:rgb(${o.rgb.join(',')})"></span>`;
+    // how the map stood before this clear, to tell what it has just changed
+    const gateWas = nodeState(nodeOf('gate'), progress) === 'open';
+    const moonWas = moon || nodeState(nodeOf(`${id}-b`), progress) !== 'hidden';
+    const orbsWas = new Set(ORBS.filter(owned).map((o) => o.id));
     save.bests[id] = { ...prev, pct: 100, cleared: true };
-    const done = ALL_PACKS.map((p) => p.level.id).filter((x) => bestFor(x).cleared);
     const onBeatPct = r.sim.judged ? (r.sim.onBeat / r.sim.judged) * 100 : 0;
-    const fresh = earned(id, { onBeatPct, dropPower: r.dropPower, bestStreak: r.sim.bestStreak, attempts: bestFor(id).attempts, practised: !!save.practiced[id] }, done).filter((b) => !save.badges[b]);
-    if (first && levelIdx + 1 < PACKS.length && !save.unlockAll) unlocks.push(`<div class="unlock">${icon('play')}<div>NEXT LEVEL UNLOCKED<small>${shortTitle(PACKS[levelIdx + 1])} · ${PACKS[levelIdx + 1].level.difficulty}</small></div></div>`);
-    // stars are kept when the run that collected them clears the level
-    const had = starsFor(id);
-    const now = had.map((k, i) => k || r.sim.stars[i] === 1);
-    const gained = now.filter(Boolean).length - had.filter(Boolean).length;
-    if (gained > 0) {
-      save.stars[id] = now;
-      newStars = now.map((k, i) => k && !had[i]);
-      const all = now.every(Boolean);
-      unlocks.push(`<div class="unlock">${icon('star')}<div>${all ? 'ALL THREE STARS' : `${gained} NEW STAR${gained === 1 ? '' : 'S'}`}<small>${all ? `Every star trail in ${shortTitle(r.pack)} played clean` : `${now.filter(Boolean).length} of 3 kept on ${shortTitle(r.pack)}`}</small></div></div>`);
+    if (!moon) {
+      const done = ALL_PACKS.map((p) => p.level.id).filter((x) => bestFor(x).cleared);
+      const fresh = earned(id, { onBeatPct, dropPower: r.dropPower, bestStreak: r.sim.bestStreak, attempts: bestFor(id).attempts, practised: !!save.practiced[id] }, done).filter((b) => !save.badges[b]);
+      if (first && levelIdx + 1 < PACKS.length) {
+        freshNodes.add(PACKS[levelIdx + 1].level.id);
+        if (!progress.unlockAll) unlocks.push(row(icon('play'), 'NEXT LEVEL UNLOCKED', `${shortTitle(PACKS[levelIdx + 1])} · ${TIERS[PACKS[levelIdx + 1].level.id]}`));
+      }
+      // stars are kept when the run that collected them clears the level
+      const had = starsFor(id);
+      const now = had.map((k, i) => k || r.sim.stars[i] === 1);
+      const gained = now.filter(Boolean).length - had.filter(Boolean).length;
+      if (gained > 0) {
+        save.stars[id] = now;
+        newStars = now.map((k, i) => k && !had[i]);
+        const all = now.every(Boolean);
+        unlocks.push(row(icon('star'), all ? 'ALL THREE STARS' : `${gained} NEW STAR${gained === 1 ? '' : 'S'}`, all ? `Every star trail in ${shortTitle(r.pack)} played clean` : `${now.filter(Boolean).length} of 3 kept on ${shortTitle(r.pack)}`));
+      }
+      // what the stars have just done to the map
+      if (!moonWas && nodeState(nodeOf(`${id}-b`), progress) !== 'hidden') {
+        freshNodes.add(`${id}-b`);
+        unlocks.push(row(icon('orb'), 'A MOON APPEARS', `${shortTitle(r.pack)} has a B-side: find it on the map`));
+      }
+      if (!gateWas && nodeState(nodeOf('gate'), progress) === 'open') {
+        freshNodes.add('gate');
+        unlocks.push(row(icon('flag'), 'THE GATE IS OPEN', `${GATE_STARS} stars: the way past ${shortTitle(PACKS[PACKS.length - 1])} is clear`));
+      }
+      // side quests this clear completes
+      for (const q of questsEarned(id, { onBeatPct, dropPower: r.dropPower, bestStreak: r.sim.bestStreak, holdsFull: r.sim.holdsFull, holds: r.course.holds.length, strays: r.sim.strays }, save.quests)) {
+        save.quests[q.id] = true;
+        unlocks.push(row(icon('quest'), `QUEST: ${q.name.toUpperCase()}`, q.desc));
+      }
+      gameCenter.best(id, 100);
+      gameCenter.flow(id, onBeatPct);
+      for (const bid of fresh) {
+        save.badges[bid] = true;
+        gameCenter.badge(bid);
+        const b = BADGES.find((x) => x.id === bid);
+        if (b) unlocks.push(row(icon('badge'), `BADGE: ${b.name.toUpperCase()}`, b.desc));
+      }
     }
-    gameCenter.best(id, 100);
-    gameCenter.flow(id, onBeatPct);
-    for (const bid of fresh) {
-      save.badges[bid] = true;
-      gameCenter.badge(bid);
-      const b = BADGES.find((x) => x.id === bid);
-      if (b) unlocks.push(`<div class="unlock">${icon('badge')}<div>BADGE: ${b.name.toUpperCase()}<small>${b.desc}</small></div></div>`);
-      for (const o of ORBS) if (o.needs === bid) unlocks.push(`<div class="unlock"><span class="dot" style="background:rgb(${o.rgb.join(',')})"></span><div>ORB: ${o.name.toUpperCase()}<small>Equip it under Orbs</small></div></div>`);
-    }
+    // orbs this clear has earned: by a badge, by both quests of a level, or by a B-side
+    for (const o of ORBS) if (owned(o) && !orbsWas.has(o.id)) unlocks.push(row(dot(o), `ORB: ${o.name.toUpperCase()}`, 'Equip it under Orbs'));
   }
   if (cleared && r.opts.practice) save.bests[id] = { ...bestFor(id), prac: 100 };
   persist();
   const pct = cleared ? 100 : Math.max(session.far, reached);
   $('results').querySelector('.results')!.classList.toggle('clear', cleared);
-  $('resLevel').textContent = `LEVEL ${levelIdx + 1} · ${shortTitle(r.pack)} · ${(r.pack.level.difficulty ?? '').toUpperCase()}${r.opts.bot ? ' · AUTOPLAY' : r.opts.practice ? ' · PRACTICE' : ''}`;
+  $('resLevel').textContent = `${levelLabel(r.pack)}${r.opts.bot ? ' · AUTOPLAY' : r.opts.practice ? ' · PRACTICE' : ''}`;
   $('resPct').textContent = String(pct);
   const callout = $('resCallout');
   const says = first ? 'FIRST CLEAR' : !cleared && session.newBest ? 'NEW BEST' : '';
@@ -445,13 +608,13 @@ function showResults(r: Run, cleared: boolean, reached = r.pct): void {
     if (cleared && r.course.holds.length) notes.push(`Gold holds collected in full: ${r.sim.holdsFull} of ${r.course.holds.length}.`);
     if (r.opts.practice && carried) notes.push('Practice runs do not keep stars.');
     else if (!cleared && carried) notes.push('A star is kept when the run that collected it clears the level.');
-    else if (cleared && !keptNow.every(Boolean)) notes.push('Stars: play a star trail clean (all its gold, no extra taps) and clear the level to keep it.');
+    else if (cleared && r.course.stars.length && !keptNow.every(Boolean)) notes.push('Stars: play a star trail clean (all its gold, no extra taps) and clear the level to keep it.');
   }
   $('resNote').textContent = notes.join(' ');
   console.log(`[one more orbit] ${r.opts.bot ? 'autoplay' : 'run'} ${cleared ? 'cleared' : 'left'} ${r.level.title}: ${r.sim.onBeat}/${r.sim.judged} taps on the beat, best streak ${r.sim.bestStreak}, drop at ${Math.round(r.dropPower * 100)}%. Movement check: ${sm.frames} frames, clock speed never more than ${sm.worstPct.toFixed(2)}% off (average ${sm.meanPct.toFixed(3)}%)`);
   showSync('resSyncText', 'resSyncFix');
   const next = $<HTMLButtonElement>('nextBtn');
-  next.disabled = !(levelIdx + 1 < PACKS.length && levelOpen(levelIdx + 1));
+  next.disabled = !!r.pack.level.side || !(levelIdx + 1 < PACKS.length && levelOpen(levelIdx + 1));
   next.style.opacity = next.disabled ? '0.4' : '1';
   botMode = false;
   show('results');
@@ -543,7 +706,8 @@ window.addEventListener('keydown', (e) => {
   if (screen === 'record') { if (record.key(e)) e.preventDefault(); return; }
   if (screen === 'title') { e.preventDefault(); audio.ensure(); show('levels'); return; }
   if (screen === 'levels') {
-    if (e.code === 'ArrowLeft') focusLevel(levelIdx - 1, true); else if (e.code === 'ArrowRight') focusLevel(levelIdx + 1, true);
+    const step = e.code === 'ArrowLeft' || e.code === 'ArrowDown' ? -1 : e.code === 'ArrowRight' || e.code === 'ArrowUp' ? 1 : 0;
+    if (step) { e.preventDefault(); select(NODES[Math.max(0, Math.min(NODES.length - 1, NODES.indexOf(at) + step))].id); }
     else if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); begin(false); } else if (e.code === 'KeyP') begin(true); else if (back) show('title');
     return;
   }
@@ -792,7 +956,7 @@ function renderOrbs(): void {
   const list = $('orbList');
   list.innerHTML = '';
   for (const o of ORBS) {
-    const open = !o.needs || !!save.badges[o.needs];
+    const open = owned(o);
     const el = document.createElement('button');
     el.type = 'button';
     el.className = `tile${save.skin === o.id ? ' on' : ''}${open ? '' : ' locked'}`;
@@ -823,10 +987,31 @@ function renderBadges(): void {
   $('badgeCount').textContent = `${got} of ${BADGES.length} earned. Each one says how to earn it.`;
 }
 
+function renderQuests(): void {
+  const list = $('questList');
+  list.innerHTML = '';
+  let done = 0;
+  for (const p of PACKS) {
+    const id = p.level.id;
+    const both = questSet(id, save.quests);
+    const orb = ORBS.find((o) => o.needs === `quests:${id}`);
+    const g = document.createElement('div');
+    g.className = 'qgroup';
+    g.style.setProperty('--tint', (LEVEL_UI[id] ?? { col: '#19e3ff' }).col);
+    const rows = questsFor(id).map((q) => {
+      const on = !!save.quests[q.id];
+      if (on) done++;
+      return `<div class="qrow${on ? ' on' : ''}">${icon('quest')}<div><b>${q.name}</b>${q.desc}</div><span class="state">${on ? 'DONE' : ''}</span></div>`;
+    });
+    g.innerHTML = `<h4><span></span><small>${TIERS[id] ?? ''}</small></h4>${rows.join('')}${orb ? `<div class="qreward${both ? ' on' : ''}"><span class="dot" style="background:rgb(${orb.rgb.join(',')})"></span>${both ? `Both done: the ${orb.name} orb is yours` : `Both quests: the ${orb.name} orb`}</div>` : ''}`;
+    g.querySelector('h4 span')!.textContent = shortTitle(p);
+    list.appendChild(g);
+  }
+  $('questCount').textContent = `${done} of ${QUESTS.length} done. A quest is completed by a clear that counts: not practice, not autoplay.`;
+}
+
 // ------------------------------------------------------------------ wiring
 $('lvBack').addEventListener('click', () => show('title'));
-$('lvPrev').addEventListener('click', () => focusLevel(levelIdx - 1, true));
-$('lvNext').addEventListener('click', () => focusLevel(levelIdx + 1, true));
 $('playBtn').addEventListener('click', () => begin(false));
 $('practiceBtn').addEventListener('click', () => begin(true));
 $('orbsBtn').addEventListener('click', () => { renderOrbs(); show('orbs'); });
@@ -834,6 +1019,8 @@ $('badgesBtn').addEventListener('click', () => { renderBadges(); show('badges');
 $('settingsBtn').addEventListener('click', () => openSettings('levels'));
 $('orbsClose').addEventListener('click', () => show('levels'));
 $('badgesClose').addEventListener('click', () => show('levels'));
+$('questsBtn').addEventListener('click', () => { renderQuests(); show('quests'); });
+$('questsClose').addEventListener('click', () => show('levels'));
 $('pauseBtn').addEventListener('click', pause);
 $('resumeBtn').addEventListener('click', resume);
 $('pauseRestartBtn').addEventListener('click', () => startRun(-1, true));
@@ -843,7 +1030,7 @@ $('pauseSettingsBtn').addEventListener('click', () => openSettings('pause'));
 $('pauseQuitBtn').addEventListener('click', quit);
 $('pauseSyncCal').addEventListener('click', () => { run?.stop(); run = null; openCalib(true); });
 $('retryBtn').addEventListener('click', () => { session.far = 0; session.newBest = false; startRun(); });
-$('nextBtn').addEventListener('click', () => { if (levelIdx + 1 < PACKS.length && levelOpen(levelIdx + 1)) { run?.stop(); run = null; focusLevel(levelIdx + 1, false); show('levels'); focusLevel(levelIdx, true); } });
+$('nextBtn').addEventListener('click', () => { if (levelIdx + 1 < PACKS.length && levelOpen(levelIdx + 1)) { run?.stop(); run = null; focusLevel(levelIdx + 1); show('levels'); } });
 $('resLevelsBtn').addEventListener('click', toLevels);
 $('resSyncCal').addEventListener('click', () => { run?.stop(); run = null; openCalib(true); });
 $('tutorSkip').addEventListener('click', () => { run?.stop(); endTutorial(); });
@@ -877,7 +1064,7 @@ $('calClose').addEventListener('click', closeCalib);
 $('calPad').addEventListener('pointerdown', (e) => { e.preventDefault(); calTap(stamp(e)); });
 
 const record = initRecord({
-  pack: () => pack,
+  pack: () => PACKS[levelIdx],
   show: (s) => { if (s === 'record') show('record'); else { renderSettings(); show('settings'); } },
   play: (from) => { botMode = false; practice = true; startRun(from); }
 });
@@ -920,7 +1107,7 @@ function loop(now: number): void {
 fullScreen();
 void gameCenter.signIn().then((ok) => {
   if (!ok) return;
-  for (const [id, b] of Object.entries(save.bests)) if (b.pct > 0) gameCenter.best(id, b.pct);
+  for (const [id, b] of Object.entries(save.bests)) if (b.pct > 0 && !id.includes('-')) gameCenter.best(id, b.pct);
   for (const id of Object.keys(save.badges)) if (save.badges[id]) gameCenter.badge(id);
 });
 // The website keeps a copy of itself, so it opens with no connection after the first visit.
@@ -928,18 +1115,17 @@ if (import.meta.env.PROD && import.meta.env.MODE !== 'single' && !isNative && 's
   window.addEventListener('load', () => { void navigator.serviceWorker.register('./sw.js').catch(() => undefined); });
 }
 
-buildCards();
+buildMap();
 document.body.classList.add('boot');
 show('title');
 window.setTimeout(() => document.body.classList.remove('boot'), 400);
-requestAnimationFrame(() => (cards.children[levelIdx] as HTMLElement | undefined)?.scrollIntoView({ inline: 'center', block: 'nearest' }));
 requestAnimationFrame(loop);
 
 // Hooks for tests and debugging; the game itself never reads these.
 Object.assign(window, {
   __omo: {
     audio, save, renderer, session, sync, get run() { return run; }, get screen() { return screen; }, tick, show,
-    level: (i: number) => focusLevel(i, false),
+    level: (i: number) => focusLevel(i), select: (id: string) => select(id, true), quests: () => { renderQuests(); show('quests'); },
     start: (bot: boolean, prac = false, from = -1) => { botMode = bot; practice = prac; startRun(from); },
     tutorial: startTutorial, results: (cleared: boolean) => { if (run) showResults(run, cleared, run.pct); }, orbs: () => { renderOrbs(); show('orbs'); }, badges: () => { renderBadges(); show('badges'); }, settings: () => openSettings('levels')
   }

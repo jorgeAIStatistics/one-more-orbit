@@ -281,7 +281,7 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
     const next = i + 1 < ground.length ? ground[i + 1] - beat : 99;
     const isSmash = smash.has(beat);
     const after = afters.has(beat);
-    const tol = clamp(0.45 * Math.min(prev, next) * spb, TOL_MIN_S, isSmash || after ? TOL_SMASH_S : TOL_S) / spb;
+    const tol = clamp(0.45 * Math.min(prev, next) * spb, TOL_MIN_S, isSmash || after ? TOL_SMASH_S : level.file.side?.tol ?? TOL_S) / spb;
     const seg = level.segAt((beat + 1e-6) * spb);
     const cfg = barAt(beat);
     const sling = slings.has(beat);
@@ -419,7 +419,8 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
   });
 
   // angle round the core, bar by bar: `turn` reverses the orbit at the bar line, the speed words change its rate
-  let dir = 1;
+  let dir = level.file.side?.mirror ? -1 : 1;
+  const quick = level.file.side?.speed ?? 1;
   const turns: number[] = [];
   const portals: Array<{ beat: number; faster: boolean }> = [];
   const twins: Array<[number, number]> = [];
@@ -432,7 +433,7 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
       const last = twins[twins.length - 1];
       if (last && last[1] === beat) last[1] = beat + 4; else twins.push([beat, beat + 4]);
     }
-    return dir * (TWO_PI / LAP) * b.speed;
+    return dir * (TWO_PI / LAP) * b.speed * quick;
   });
   for (const s of segs) { if (s.core?.charge) first(s.beat0, 'charge'); if (s.core?.smash) first(s.beat0, 'smash'); }
   const a0: number[] = [];

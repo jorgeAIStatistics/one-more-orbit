@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PACKS, SLICE } from '../src/game/packs';
+import { BSIDES, PACKS, SLICE } from '../src/game/packs';
 import { Level } from '../src/game/level';
 import { SmoothClock } from '../src/gd/clock';
 import { autoLayers, buildCourse, HOLD_MAX, HOLD_MIN, landingGrace, LINE_TIGHT, SLING_FLIGHT, TOL_S } from '../src/gd/course';
@@ -8,8 +8,12 @@ import { Sim } from '../src/gd/sim';
 
 const rng = (seed: number) => { let s = seed; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296 - 0.5; }; };
 
-for (const pack of PACKS.filter((p) => SLICE.includes(p.level.id))) {
+for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), ...BSIDES]) {
   const id = pack.level.id;
+  /** the level it is a version of: its own id, or for a B-side its planet's */
+  const base = pack.level.side?.of ?? id;
+  /** half-width of the ordinary openings, in ms: 120, or 90 on a B-side */
+  const TOL_MS = (pack.level.side?.tol ?? TOL_S) * 1000;
   const level = new Level(pack.level, pack.audio, pack.chart);
   const course = buildCourse(level, layers(pack), pitchLookup(pack), pack.level.lab, accentBeats(pack));
   const ms = (x: number) => x / 1000 / course.spb; // milliseconds as beats
@@ -50,11 +54,11 @@ for (const pack of PACKS.filter((p) => SLICE.includes(p.level.id))) {
       expect(secs).toBeLessThanOrEqual(120);
     });
 
-    it('survival presses are strong beats only: never closer than a beat and never faster than 2.5 a second, openings at least ±120 ms', () => {
+    it('survival presses are strong beats only: never closer than a beat and never faster than 2.5 a second, openings at least ±120 ms (±90 on a B-side)', () => {
       const gaps = pressBeats.slice(1).map((b, i) => b - pressBeats[i]);
       expect(Math.min(...gaps)).toBeGreaterThanOrEqual(1 - 1e-9);
       expect(1 / (Math.min(...gaps) * course.spb)).toBeLessThanOrEqual(2.5);
-      for (const p of course.presses) expect(p.tol * course.spb).toBeGreaterThanOrEqual(TOL_S - 1e-9);
+      for (const p of course.presses) expect(p.tol * course.spb * 1000).toBeGreaterThanOrEqual(TOL_MS - 1e-6);
     });
 
     it('every note of the chart is played in exactly one layer; flights land on the next press or within two beats', () => {
@@ -106,14 +110,15 @@ for (const pack of PACKS.filter((p) => SLICE.includes(p.level.id))) {
       }
     });
 
-    it('survival is forgiving: every tap 100 ms early or late still clears; uneven timing clears', () => {
-      for (const off of [-100, -70, 70, 100]) {
+    it('survival is forgiving: every tap 100 ms early or late still clears (70 on a B-side); uneven timing clears', () => {
+      const wide = TOL_MS - 20;
+      for (const off of [-wide, -70, 70, wide]) {
         const s = run(course.taps.map((b) => b + ms(off)));
         expect(s.crashed, `${off} ms: ${s.crashKind} at ${s.crashBeat.toFixed(2)}`).toBe(false);
       }
       for (let seed = 1; seed <= 25; seed++) {
         const rnd = rng(seed);
-        const a = run(pressBeats.map((b) => b + ms(rnd() * 200)));
+        const a = run(pressBeats.map((b) => b + ms(rnd() * 2 * wide)));
         expect(a.crashed, `presses, seed ${seed}: ${a.crashKind} at beat ${a.crashBeat.toFixed(2)}`).toBe(false);
         const b = run(course.taps.map((t) => t + ms(rnd() * 90)));
         expect(b.crashed, `all taps, seed ${seed}: ${b.crashKind} at beat ${b.crashBeat.toFixed(2)}`).toBe(false);
@@ -164,18 +169,18 @@ for (const pack of PACKS.filter((p) => SLICE.includes(p.level.id))) {
       });
       expect(worst).toBeLessThanOrEqual(8);
       const kindsOf = (s: { bar0: number; bars: number }) => new Set(course.bars.slice(s.bar0, s.bar0 + s.bars).map((b) => b.token)).size;
-      const first = id === 'heroes';
+      const first = base === 'heroes';
       for (const s of level.segments) {
         if (s.core?.charge || s.bars < 4 || s.label === 'INTRO' || s.label === 'END') continue;
         expect(kindsOf(s), `section ${s.id}`).toBeGreaterThanOrEqual(first ? 2 : 3);
       }
-      const star = { heroes: 'sling', skyhigh: 'weave', blank: 'spin', invincible: 'twin' }[id] as 'sling' | 'weave' | 'spin' | 'twin';
+      const star = { heroes: 'sling', skyhigh: 'weave', blank: 'spin', invincible: 'twin' }[base] as 'sling' | 'weave' | 'spin' | 'twin';
       const has = (p: (typeof course.presses)[number]) => (star === 'twin' ? !!p.twin : p[star]);
       const inDrop = course.presses.filter((p) => p.beat >= course.dropBeat && has(p)).length;
       const before = course.presses.filter((p) => p.beat < course.dropBeat && has(p)).length;
       expect(before, 'introduced before the drop').toBeGreaterThanOrEqual(1);
       expect(inDrop, 'stars in the drop').toBeGreaterThanOrEqual(star === 'sling' ? 3 : 8);
-      if (id !== 'invincible') expect(course.presses.some((p) => p.twin)).toBe(false); // the twin orbit stays in the last level
+      if (base !== 'invincible') expect(course.presses.some((p) => p.twin)).toBe(false); // the twin orbit stays in the last level
     });
 
     it('transitions are fair: every planet hop launches on a strong beat at a phrase boundary, and after it lands the next press is at least 1.5 beats away, on the ring you landed on, and extra wide', () => {
@@ -257,6 +262,7 @@ for (const pack of PACKS.filter((p) => SLICE.includes(p.level.id))) {
     });
 
     it('three star trails: a clean run collects them all; a stray tap, a missed gold note, a hold let go or mashing loses that star and nothing else', () => {
+      if (pack.level.side) { expect(course.stars).toEqual([]); return; } // a B-side has no star trails
       const perfect = play(course.script);
       expect(course.stars.length).toBe(3);
       expect(perfect.stars).toEqual([1, 1, 1]);
@@ -387,5 +393,36 @@ describe('smooth clock', () => {
     }
     expect(worst).toBeLessThan(0.006);
     expect(drift).toBeLessThan(0.02);
+  });
+});
+
+describe('B-sides: the same song on the night side', () => {
+  it('each level has one: same audio and notes, no star trails, tighter openings, less warning, a mirrored and faster orbit', () => {
+    expect(BSIDES.length).toBe(PACKS.length);
+    BSIDES.forEach((b, i) => {
+      const base = PACKS[i];
+      expect(b.level.id).toBe(`${base.level.id}-b`);
+      expect(b.level.side?.of).toBe(base.level.id);
+      expect(b.audio).toBe(base.audio);
+      expect(b.chart).toBe(base.chart);
+      expect(b.level.stars).toBeUndefined();
+      expect(b.level.side!.tol!).toBeLessThan(TOL_S);
+      expect(b.level.side!.tol!).toBeGreaterThanOrEqual(0.085);
+      expect(b.level.side!.ahead!).toBeLessThan(3);
+      const build = (p: typeof b) => buildCourse(new Level(p.level, p.audio, p.chart), layers(p), pitchLookup(p), p.level.lab, accentBeats(p));
+      const night = build(b);
+      const day = build(base);
+      // the orbit runs the other way, and faster
+      expect(Math.sign(night.angle(2))).toBe(-Math.sign(day.angle(2)));
+      expect(Math.abs(night.angle(2))).toBeGreaterThan(Math.abs(day.angle(2)));
+      // its bars are its own: at least half of them play differently from the level's
+      const differ = night.bars.filter((x, n) => x.token !== day.bars[n].token).length;
+      expect(differ / night.bars.length, `${b.level.id}: bars that differ`).toBeGreaterThanOrEqual(0.4);
+      // 70 ms off on every press clears; 105 ms off does not (it would on the level itself)
+      const sim = (c: typeof night, off: number) => { const s = new Sim(c, c.start - 3); for (const p of c.presses) { if (s.crashed) break; s.press(p.beat + off / 1000 / c.spb); s.release(p.beat + off / 1000 / c.spb + 0.1); } s.advance(c.end); return s; };
+      expect(sim(night, 70).crashed).toBe(false);
+      expect(sim(night, 105).crashed).toBe(true);
+      expect(sim(day, 105).crashed).toBe(false);
+    });
   });
 });

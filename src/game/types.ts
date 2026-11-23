@@ -75,6 +75,12 @@ export interface LevelFile {
   lab?: [number, number];
   /** holds: long hops become gold rails to hold through, and empty stretches of ring get gold lines to float along */
   holds?: boolean;
+  /**
+   * A B-side: this level played on the night side of its planet. Same song and notes as the level `of`, harder rules:
+   * tol = half-width of the openings in seconds, ahead = beats of course shown ahead of the ball, mirror = the orbit
+   * runs the other way, speed = how much faster it turns.
+   */
+  side?: { of: string; tol?: number; ahead?: number; mirror?: boolean; speed?: number };
   /** star trails: [from, to] in beats. Play each stretch clean (every piece of gold, no stray taps) for its star. */
   stars?: Array<[number, number]>;
   segments: SegmentDef[];

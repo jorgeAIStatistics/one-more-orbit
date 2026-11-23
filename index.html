@@ -53,18 +53,24 @@
   </section>
 
   <section id="levels" class="screen">
-    <header class="topbar"><button id="lvBack" class="icon" type="button" data-icon="back" aria-label="Back to the title"></button><span class="label">CHOOSE A LEVEL</span><span id="starTotal" class="star-total"></span></header>
-    <div class="carousel">
-      <button id="lvPrev" class="icon nav" type="button" data-icon="left" aria-label="Previous level"></button>
-      <div id="cards" class="cards"></div>
-      <button id="lvNext" class="icon nav" type="button" data-icon="right" aria-label="Next level"></button>
-    </div>
-    <div id="dots" class="dots" aria-hidden="true"></div>
+    <header class="topbar"><button id="lvBack" class="icon" type="button" data-icon="back" aria-label="Back to the title"></button><div class="world"><small>WORLD 1</small><b>FIRST ORBIT</b></div><span id="starTotal" class="star-total"></span></header>
+    <div id="map" class="map" role="group" aria-label="World map"><svg id="mapRoute" class="route" aria-hidden="true"></svg></div>
     <div class="foot">
-      <div class="actions"><button id="playBtn" class="btn primary" type="button">PLAY</button><button id="practiceBtn" class="btn secondary" type="button">PRACTICE</button></div>
+      <div id="sheet" class="sheet" aria-live="polite">
+        <div id="shArt" class="art" aria-hidden="true"></div>
+        <div class="sh-body">
+          <div class="sh-row"><h2 id="shTitle"></h2><span id="shTier" class="tier"></span></div>
+          <p id="shMeta" class="sh-meta"></p>
+          <div id="shBest" class="meter"><span>BEST</span><div><i></i></div><b></b></div>
+          <div id="shLine" class="sh-line"><div id="shStars" class="stars3"></div><span id="shTries"></span></div>
+          <div id="shQuests" class="sh-quests"></div>
+          <div class="actions"><button id="playBtn" class="btn primary" type="button">PLAY</button><button id="practiceBtn" class="btn secondary" type="button">PRACTICE</button></div>
+        </div>
+      </div>
       <nav class="tabs" aria-label="More">
         <button id="orbsBtn" class="tab" type="button" data-icon="orb"><span>Orbs</span></button>
         <button id="badgesBtn" class="tab" type="button" data-icon="badge"><span>Badges</span></button>
+        <button id="questsBtn" class="tab" type="button" data-icon="quest"><span>Quests</span></button>
         <button id="ranksBtn" class="tab hidden" type="button" data-icon="trophy"><span>Ranks</span></button>
         <button id="settingsBtn" class="tab" type="button" data-icon="gear"><span>Settings</span></button>
       </nav>
@@ -108,7 +114,7 @@
         <p id="resNote" class="note"></p>
         <div class="res-actions">
           <button id="retryBtn" class="btn primary" type="button">RETRY</button>
-          <div class="two"><button id="nextBtn" class="btn secondary" type="button">NEXT LEVEL</button><button id="resLevelsBtn" class="btn secondary" type="button">LEVELS</button></div>
+          <div class="two"><button id="nextBtn" class="btn secondary" type="button">NEXT LEVEL</button><button id="resLevelsBtn" class="btn secondary" type="button">MAP</button></div>
         </div>
       </div>
     </div>
@@ -165,6 +171,14 @@
       <header class="topbar"><button id="orbsClose" class="icon" type="button" data-icon="back" aria-label="Back"></button><span class="label">ORBS</span><span class="icon ghost"></span></header>
       <p class="note">Your ball's colour. Earn more by clearing levels and playing in flow.</p>
       <div id="orbList" class="grid"></div>
+    </div>
+  </section>
+
+  <section id="quests" class="screen veil">
+    <div class="panel wide scroll">
+      <header class="topbar"><button id="questsClose" class="icon" type="button" data-icon="back" aria-label="Back"></button><span class="label">QUESTS</span><span class="icon ghost"></span></header>
+      <p id="questCount" class="note"></p>
+      <div id="questList" class="quest-list"></div>
     </div>
   </section>
 

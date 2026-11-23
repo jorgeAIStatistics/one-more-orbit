@@ -22,6 +22,10 @@ import invAudio from '../../levels/invincible/audio.json';
 import invChart from '../../levels/invincible/chart.json';
 import invPresses from '../../levels/invincible/presses.json';
 import invAudit from '../../levels/invincible/audit.json';
+import heroesB from '../../levels/heroes/bside.json';
+import skyB from '../../levels/skyhigh/bside.json';
+import blankB from '../../levels/blank/bside.json';
+import invB from '../../levels/invincible/bside.json';
 
 export interface LevelPack {
   level: LevelFile;
@@ -49,3 +53,24 @@ export const PACKS: LevelPack[] = [
   pack(blankLevel, blankAudio, blankChart, blankPresses, blankAudit),
   pack(invLevel, invAudio, invChart, invPresses, invAudit)
 ];
+
+/** What a level's bside.json holds: the harder rules, and how each section's bars play on the night side. */
+interface BSideFile { difficulty: string; adds: string; side: { tol?: number; ahead?: number; mirror?: boolean; speed?: number }; bars: Record<string, string[]> }
+
+/** A level's B-side: the same song, notes and holds, with the night side's rules and bars. No star trails. */
+function bside(base: LevelPack, file: unknown): LevelPack {
+  const b = file as BSideFile;
+  const level: LevelFile = {
+    ...base.level,
+    id: `${base.level.id}-b`,
+    difficulty: b.difficulty,
+    adds: b.adds,
+    side: { of: base.level.id, ...b.side },
+    stars: undefined,
+    segments: base.level.segments.map((s) => (b.bars[s.id] && s.core ? { ...s, core: { ...s.core, bars: b.bars[s.id] } } : s))
+  };
+  return { ...base, level };
+}
+
+/** The hidden levels: one B-side per level, in the same order. */
+export const BSIDES: LevelPack[] = [bside(PACKS[0], heroesB), bside(PACKS[1], skyB), bside(PACKS[2], blankB), bside(PACKS[3], invB)];

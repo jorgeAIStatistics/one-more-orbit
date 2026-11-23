@@ -6,6 +6,7 @@ const ICONS: Record<string, string> = {
   orb: '<circle cx="12" cy="12" r="4"/><ellipse cx="12" cy="12" rx="10" ry="4.5" transform="rotate(-25 12 12)"/>',
   badge: '<path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z"/>',
   star: '<path d="M12 2.6l2.9 5.9 6.5 1-4.7 4.6 1.1 6.5L12 17.5l-5.8 3.1 1.1-6.5L2.6 9.5l6.5-1z"/>',
+  quest: '<path d="M12 2.8l8 9.2-8 9.2-8-9.2z"/><path d="M12 8.2l3.3 3.8-3.3 3.8-3.3-3.8z"/>',
   left: '<path d="M15 5l-7 7 7 7"/>',
   right: '<path d="M9 5l7 7-7 7"/>',
   back: '<path d="M11 5l-7 7 7 7M4 12h16"/>',
@@ -115,8 +116,21 @@ function invincible(): string {
   );
 }
 
+/** The gate at the end of the world: a black disc in a tilted ring of light, pulling a few stars toward it. */
+function gate(): string {
+  const cx = 200, cy = 150;
+  let pulled = '';
+  for (let i = 0; i < 16; i++) { const a = i * 2.4; const d = 70 + ((i * 37) % 150); pulled += `<line x1="${(cx + Math.cos(a) * d).toFixed(0)}" y1="${(cy + Math.sin(a) * d * 0.7).toFixed(0)}" x2="${(cx + Math.cos(a + 0.12) * (d - 16)).toFixed(0)}" y2="${(cy + Math.sin(a + 0.12) * (d - 16) * 0.7).toFixed(0)}" stroke="#ffd0e0" stroke-width="1.6" stroke-linecap="round" opacity="${(0.25 + (i % 4) * 0.12).toFixed(2)}"/>`; }
+  return wrap(
+    `<radialGradient id="g1" cx="50%" cy="50%" r="70%"><stop offset="0" stop-color="#3a0d2a"/><stop offset=".55" stop-color="#12061a"/><stop offset="1" stop-color="#040208"/></radialGradient><rect width="400" height="300" fill="url(#g1)"/>${stars(20, '#ff9ac0')}${pulled}` +
+    `<ellipse cx="${cx}" cy="${cy}" rx="150" ry="40" fill="none" stroke="#ff3d8b" stroke-opacity=".25" stroke-width="3" transform="rotate(-14 ${cx} ${cy})"/><ellipse cx="${cx}" cy="${cy}" rx="112" ry="29" fill="none" stroke="#ff3d8b" stroke-opacity=".6" stroke-width="5" transform="rotate(-14 ${cx} ${cy})"/>` +
+    `<circle cx="${cx}" cy="${cy}" r="52" fill="#020208" stroke="#ff3d8b" stroke-width="4"/><path d="M${cx - 108} ${cy + 27}A112 29 -14 0 0 ${cx + 108} ${cy - 27}" fill="none" stroke="#ff7fb0" stroke-width="5" stroke-linecap="round" transform="rotate(0)"/>`,
+    '#040208'
+  );
+}
+
 export function levelArt(id: string): string {
-  return id === 'heroes' ? heroes() : id === 'skyhigh' ? skyhigh() : id === 'blank' ? blank() : id === 'invincible' ? invincible() : wrap('', '#0d1022');
+  return id === 'heroes' ? heroes() : id === 'skyhigh' ? skyhigh() : id === 'blank' ? blank() : id === 'invincible' ? invincible() : id === 'gate' ? gate() : wrap('', '#0d1022');
 }
 
 /** Each level's colour for its card details (difficulty dots, Best bar) and where its song preview starts. */

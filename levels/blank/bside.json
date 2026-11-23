@@ -1,0 +1,18 @@
+{
+  "_doc": "The B-side of this level: the same song and notes, played on the night side. 'side' sets the harder rules (tol = half-width of the openings in seconds, ahead = beats of course shown, mirror, speed); 'bars' replaces core.bars section by section.",
+  "difficulty": "B-side",
+  "adds": "Night side: mirrored and faster, tighter openings, less warning, more weave and more turns",
+  "side": {"tol": 0.09, "ahead": 2, "mirror": true, "speed": 1.2},
+  "bars": {
+    "verse": ["down", "weave", "up+sling", "turn+up"],
+    "verse2": ["weave", "turn+down", "spin+long", "up"],
+    "theme": ["weave", "spin", "up+sling", "turn+down", "weave", "spin", "turn+up", "spin"],
+    "theme2": ["spin", "fast+weave", "down", "spin", "weave", "turn+spin", "normal+up", "weave"],
+    "spikes": ["weave", "up+long", "turn+spin", "down+long"],
+    "heavy": ["spin", "turn+weave", "spin", "slow+down"],
+    "heavy2": ["normal+weave", "spin", "spin+sling", "turn+up"],
+    "mel": ["weave", "fast+spin", "up+sling", "turn+weave", "spin", "weave", "turn+spin", "down"],
+    "mel2": ["weave", "spin", "turn+down", "spin", "up+sling", "weave", "normal+spin", "turn+up"],
+    "end": ["up"]
+  }
+}
