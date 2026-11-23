@@ -9,6 +9,8 @@
     "blank": { "source": "Disfigure - Blank [NCS Release].mp3", "title": "Blank", "artist": "Disfigure",
       "bpm": 140, "sourceOffset": 2.852, "segments": [[8, 65]], "pickupBars": 1, "fadeOut": 1.7143, "dropBar": 40 },
     "invincible": { "source": "DEAF KEV - Invincible [NCS Release].mp3", "title": "Invincible", "artist": "DEAF KEV",
-      "bpm": 100, "sourceOffset": 1.2007, "segments": [[12, 24], [80, 108]], "pickupBars": 1, "tail": 6.7, "fadeOut": 1.8, "dropBar": 84 }
+      "bpm": 100, "sourceOffset": 1.2007, "segments": [[12, 24], [80, 108]], "pickupBars": 1, "tail": 6.7, "fadeOut": 1.8, "dropBar": 84 },
+    "royalty": { "source": "Egzod, Maestro Chives, Neoni - Royalty [NCS Release].mp3", "title": "Royalty", "artist": "Egzod, Maestro Chives, Neoni",
+      "bpm": 160, "sourceOffset": 0.0195, "segments": [[16, 80]], "pickupBars": 1, "fadeOut": 1.5, "dropBar": 64 }
   }
 }
