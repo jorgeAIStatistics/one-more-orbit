@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ONE MORE ORBIT: galaxy design</title>
+<style>
+  :root { --bg: #120c2e; --panel: #1c1444; --line: #33276a; --text: #f6ecd6; --mute: #b9add6; --gold: #ffd36b; --coral: #ff8f7a; --aqua: #8fe9ff; --ink: #9a7dff; }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.55 ui-rounded, "SF Pro Rounded", "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-text-size-adjust: 100%; }
+  main { max-width: 780px; margin: 0 auto; padding: 28px 16px 72px; }
+  h1 { font-size: 30px; line-height: 1.15; margin: 0 0 6px; letter-spacing: .01em; }
+  h2 { font-size: 22px; margin: 44px 0 10px; color: var(--gold); }
+  h3 { font-size: 17px; margin: 22px 0 6px; }
+  p { margin: 8px 0; }
+  .lede { color: var(--mute); margin: 0 0 18px; }
+  .tag { display: inline-block; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--bg); background: var(--gold); border-radius: 99px; padding: 2px 10px; margin-bottom: 12px; font-weight: 700; }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; margin: 14px 0; }
+  .box p:first-child { margin-top: 0; } .box p:last-child { margin-bottom: 0; }
+  ul, ol { margin: 8px 0; padding-left: 22px; } li { margin: 5px 0; }
+  b, strong { color: #fff8e6; }
+  .new { color: var(--aqua); font-weight: 700; } .now { color: var(--mute); }
+  figure { margin: 16px 0; }
+  figure svg { display: block; width: 100%; height: auto; border-radius: 18px; }
+  figcaption { color: var(--mute); font-size: 14px; margin-top: 8px; }
+  .scroll { overflow-x: auto; margin: 12px 0; border: 1px solid var(--line); border-radius: 14px; }
+  table { border-collapse: collapse; width: 100%; min-width: 600px; font-size: 14px; }
+  th, td { text-align: left; vertical-align: top; padding: 9px 11px; border-bottom: 1px solid var(--line); }
+  th { color: var(--mute); font-weight: 600; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; background: #171040; }
+  tr:last-child td { border-bottom: 0; }
+  td.n { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .forms { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 16px 0; }
+  .forms figure { margin: 0; } .forms figcaption { font-size: 13px; text-align: center; }
+  .forms figcaption b { display: block; font-size: 15px; }
+  @media (max-width: 640px) { .forms { grid-template-columns: repeat(2, 1fr); } h1 { font-size: 25px; } }
+  .calls li { margin: 10px 0; } .rec { color: var(--gold); font-weight: 700; }
+  svg text { font-family: ui-rounded, "SF Pro Rounded", "Nunito", system-ui, sans-serif; }
+</style>
+</head>
+<body>
+
+<!-- shared drawing parts -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<defs>
+  <radialGradient id="gSky" cx="50%" cy="34%" r="85%"><stop offset="0" stop-color="#3b2575"/><stop offset=".55" stop-color="#1d1349"/><stop offset="1" stop-color="#0c0824"/></radialGradient>
+  <radialGradient id="gDusk" cx="38%" cy="55%" r="90%"><stop offset="0" stop-color="#7a2f52"/><stop offset=".5" stop-color="#3d1846"/><stop offset="1" stop-color="#160a2c"/></radialGradient>
+  <radialGradient id="gEko" cx="38%" cy="32%" r="75%"><stop offset="0" stop-color="#fffdf0"/><stop offset=".55" stop-color="#ffe391"/><stop offset="1" stop-color="#ffab4a"/></radialGradient>
+  <radialGradient id="gAura"><stop offset="0" stop-color="#ffe9a6" stop-opacity=".6"/><stop offset="1" stop-color="#ffe9a6" stop-opacity="0"/></radialGradient>
+  <radialGradient id="gAuraC"><stop offset="0" stop-color="#8fe9ff" stop-opacity=".6"/><stop offset="1" stop-color="#8fe9ff" stop-opacity="0"/></radialGradient>
+  <radialGradient id="gAuraV"><stop offset="0" stop-color="#c9a8ff" stop-opacity=".6"/><stop offset="1" stop-color="#c9a8ff" stop-opacity="0"/></radialGradient>
+  <radialGradient id="gAuraO"><stop offset="0" stop-color="#ffb37a" stop-opacity=".55"/><stop offset="1" stop-color="#ffb37a" stop-opacity="0"/></radialGradient>
+  <radialGradient id="gAuraP"><stop offset="0" stop-color="#ff8fe6" stop-opacity=".5"/><stop offset="1" stop-color="#ff8fe6" stop-opacity="0"/></radialGradient>
+  <radialGradient id="gAuraB"><stop offset="0" stop-color="#b5d2ff" stop-opacity=".5"/><stop offset="1" stop-color="#b5d2ff" stop-opacity="0"/></radialGradient>
+  <radialGradient id="gComet" cx="40%" cy="34%" r="75%"><stop offset="0" stop-color="#ffffff"/><stop offset=".55" stop-color="#c4f3ff"/><stop offset="1" stop-color="#5ccfff"/></radialGradient>
+  <radialGradient id="gPulsar" cx="40%" cy="34%" r="75%"><stop offset="0" stop-color="#ffffff"/><stop offset=".55" stop-color="#ead9ff"/><stop offset="1" stop-color="#a67bff"/></radialGradient>
+  <linearGradient id="gTail" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a6edff" stop-opacity=".95"/><stop offset="1" stop-color="#a6edff" stop-opacity="0"/></linearGradient>
+  <linearGradient id="gBeamUp" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#e2ceff" stop-opacity=".95"/><stop offset="1" stop-color="#e2ceff" stop-opacity="0"/></linearGradient>
+  <linearGradient id="gBeamDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e2ceff" stop-opacity=".95"/><stop offset="1" stop-color="#e2ceff" stop-opacity="0"/></linearGradient>
+  <linearGradient id="gWake" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ff8f4a" stop-opacity="0"/><stop offset="1" stop-color="#ffb24d" stop-opacity=".95"/></linearGradient>
+  <radialGradient id="gEmber" cx="36%" cy="30%" r="80%"><stop offset="0" stop-color="#ffe0a3"/><stop offset=".55" stop-color="#ff9a55"/><stop offset="1" stop-color="#c2513a"/></radialGradient>
+  <radialGradient id="gCirra" cx="36%" cy="30%" r="80%"><stop offset="0" stop-color="#ffd3f4"/><stop offset=".55" stop-color="#ff78df"/><stop offset="1" stop-color="#9a3fb4"/></radialGradient>
+  <radialGradient id="gGlass" cx="36%" cy="30%" r="80%"><stop offset="0" stop-color="#f2f8ff"/><stop offset=".55" stop-color="#a6c8ff"/><stop offset="1" stop-color="#4c6bd0"/></radialGradient>
+  <radialGradient id="gVerd" cx="36%" cy="30%" r="80%"><stop offset="0" stop-color="#e4ffa6"/><stop offset=".55" stop-color="#84dc4e"/><stop offset="1" stop-color="#2a7a3c"/></radialGradient>
+  <radialGradient id="gHollow" cx="40%" cy="34%" r="80%"><stop offset="0" stop-color="#34226a"/><stop offset=".6" stop-color="#1a1038"/><stop offset="1" stop-color="#0a0618"/></radialGradient>
+  <linearGradient id="gHush" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#35226e"/><stop offset="1" stop-color="#140b2e"/></linearGradient>
+  <filter id="soft" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="14"/></filter>
+  <clipPath id="cp50"><circle r="50"/></clipPath>
+  <pattern id="stars" width="210" height="190" patternUnits="userSpaceOnUse">
+    <g fill="#fff6d6">
+      <circle cx="18" cy="26" r="1.5" opacity=".9"/><circle cx="64" cy="92" r="1" opacity=".6"/><circle cx="112" cy="18" r="1.2" opacity=".7"/>
+      <circle cx="156" cy="66" r="1.7" opacity=".85"/><circle cx="196" cy="140" r="1" opacity=".6"/><circle cx="38" cy="150" r="1.3" opacity=".75"/>
+      <circle cx="96" cy="170" r="1" opacity=".5"/><circle cx="140" cy="122" r="1.1" opacity=".6"/><circle cx="178" cy="22" r=".9" opacity=".5"/>
+      <path d="M84 52 l2 6 6 2 -6 2 -2 6 -2 -6 -6 -2 6 -2z" opacity=".85"/><path d="M170 172 l1.5 4.5 4.5 1.5 -4.5 1.5 -1.5 4.5 -1.5 -4.5 -4.5 -1.5 4.5 -1.5z" opacity=".7"/>
+    </g>
+  </pattern>
+  <pattern id="quilt" width="52" height="52" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+    <path d="M0 1H52M1 0V52" stroke="#5a44a8" stroke-width="2" stroke-dasharray="5 7" opacity=".55" fill="none"/>
+  </pattern>
+
+  <!-- Eko's face, sized for a body of radius 52 -->
+  <g id="face">
+    <ellipse cx="-31" cy="15" rx="9" ry="6" fill="#ff8f7a" opacity=".6"/><ellipse cx="31" cy="15" rx="9" ry="6" fill="#ff8f7a" opacity=".6"/>
+    <ellipse cx="-17" cy="-4" rx="8" ry="11" fill="#2a1b4d"/><ellipse cx="17" cy="-4" rx="8" ry="11" fill="#2a1b4d"/>
+    <circle cx="-14" cy="-8" r="3.2" fill="#fff"/><circle cx="20" cy="-8" r="3.2" fill="#fff"/>
+    <path d="M-8 17 Q0 25 8 17" stroke="#2a1b4d" stroke-width="3.6" fill="none" stroke-linecap="round"/>
+  </g>
+  <!-- Eko: the ring takes the current colour -->
+  <g id="eko">
+    <circle r="96" fill="url(#gAura)"/>
+    <g transform="rotate(-18)"><path d="M-80 6 A80 23 0 0 1 80 6" stroke="currentColor" stroke-width="7" fill="none" opacity=".5"/></g>
+    <path d="M-12 -46 C-26 -68 -6 -78 -8 -98 C10 -86 14 -74 8 -63 C18 -69 22 -80 20 -88 C36 -72 28 -54 14 -44 Z" fill="#ffd36b"/>
+    <path d="M-2 -50 C-8 -62 2 -68 0 -80 C10 -72 10 -60 6 -50 Z" fill="#fff6c8"/>
+    <circle r="52" fill="url(#gEko)"/>
+    <use href="#face"/>
+    <g transform="rotate(-18)"><path d="M-80 6 A80 23 0 0 0 80 6" stroke="currentColor" stroke-width="7" fill="none" stroke-linecap="round"/><circle cx="58" cy="21.5" r="8" fill="#fff"/></g>
+  </g>
+  <!-- a lens shard -->
+  <g id="shard"><path d="M0 -14 L10 5 L-3 13 L-11 -2 Z" fill="#c9f6ff" stroke="#ffd36b" stroke-width="2.2" stroke-linejoin="round"/><path d="M-1 -8 L-6 -1" stroke="#fff" stroke-width="2" stroke-linecap="round"/></g>
+  <g id="shard0"><path d="M0 -14 L10 5 L-3 13 L-11 -2 Z" fill="none" stroke="#b9add6" stroke-width="2" stroke-linejoin="round" opacity=".7"/></g>
+
+  <!-- planets, radius 50 -->
+  <g id="pl-ember">
+    <circle r="72" fill="url(#gAuraO)"/><circle r="50" fill="url(#gEmber)"/>
+    <g clip-path="url(#cp50)"><path d="M-50 6 Q-26 -10 0 4 T50 2 V50 H-50Z" fill="#e9683f" opacity=".7"/><path d="M-50 26 Q-20 10 6 24 T50 18 V50 H-50Z" fill="#b8452f" opacity=".8"/></g>
+    <g stroke="#7a2f28" stroke-width="2"><path d="M-22 -6 V-18"/><path d="M12 -4 V-17"/><path d="M-2 20 V8"/></g>
+    <g fill="#fff3b0"><circle cx="-22" cy="-20" r="4.5"/><circle cx="12" cy="-19" r="4.5"/><circle cx="-2" cy="6" r="4.5"/><circle cx="28" cy="22" r="2.4"/><circle cx="-32" cy="18" r="2.4"/></g>
+  </g>
+  <g id="pl-cirra">
+    <circle r="72" fill="url(#gAuraP)"/><circle r="50" fill="url(#gCirra)"/>
+    <g fill="#fff4fb"><circle cx="-40" cy="-6" r="11"/><circle cx="-26" cy="-13" r="14"/><circle cx="-10" cy="-7" r="11"/><rect x="-46" y="-8" width="44" height="12" rx="6"/></g>
+    <g fill="#ffe3f7"><circle cx="16" cy="24" r="10"/><circle cx="30" cy="17" r="13"/><circle cx="46" cy="24" r="10"/><rect x="10" y="22" width="44" height="11" rx="5.5"/></g>
+    <g fill="#fff4fb" opacity=".8"><circle cx="-8" cy="36" r="6"/><circle cx="2" cy="34" r="7"/><rect x="-12" y="35" width="20" height="7" rx="3.5"/></g>
+  </g>
+  <g id="pl-glass">
+    <circle r="72" fill="url(#gAuraB)"/>
+    <g fill="#e6f2ff"><path d="M-10 -48 L0 -76 L10 -48Z"/><path d="M30 -40 L52 -58 L44 -30Z"/><path d="M-44 -26 L-66 -34 L-48 -12Z"/><path d="M46 14 L70 20 L44 30Z"/></g>
+    <circle r="50" fill="url(#gGlass)"/>
+    <g fill="#ffffff" opacity=".35"><path d="M-30 -20 L-6 -34 L4 -10 L-18 4Z"/><path d="M10 6 L34 -4 L30 24 L12 30Z"/><path d="M-26 18 L-8 14 L-12 36Z"/></g>
+  </g>
+  <g id="pl-verd">
+    <circle r="72" fill="url(#gAuraC)" opacity=".5"/>
+    <path d="M6 -48 C2 -70 22 -78 30 -66 C36 -56 26 -50 22 -56" stroke="#2a7a3c" stroke-width="5" fill="none" stroke-linecap="round"/><path d="M4 -62 C-8 -74 -20 -66 -14 -56 C-8 -52 0 -54 4 -62Z" fill="#84dc4e"/>
+    <circle r="50" fill="url(#gVerd)"/>
+    <g fill="none" stroke="#2a7a3c" stroke-width="5" stroke-linecap="round" opacity=".75"><path d="M-32 -8 C-20 -26 8 -22 4 -4 C2 6 -12 4 -10 -6"/><path d="M8 26 C18 8 42 14 34 30"/><path d="M-34 22 C-26 12 -12 16 -14 28"/></g>
+    <g fill="#f2ffb8"><circle cx="20" cy="-22" r="3"/><circle cx="-6" cy="18" r="2.6"/><circle cx="30" cy="6" r="2.2"/><circle cx="-26" cy="-26" r="2.2"/></g>
+  </g>
+  <g id="pl-hollow">
+    <circle r="50" fill="url(#gHollow)"/><circle r="50" fill="none" stroke="#7a5cff" stroke-width="2" opacity=".7"/>
+    <path d="M-24 -6 Q-6 -16 14 -6" stroke="#e9e0ff" stroke-width="3" fill="none" stroke-linecap="round" opacity=".75"/>
+    <g stroke="#e9e0ff" stroke-width="2" opacity=".45" stroke-linecap="round"><path d="M-18 16 l3 7"/><path d="M-6 19 l1 7"/><path d="M6 19 l-1 7"/><path d="M18 16 l-3 7"/></g>
+    <path d="M-24 17 Q0 26 24 17" stroke="#0a0618" stroke-width="3" fill="none"/>
+  </g>
+  <!-- the Lantern -->
+  <g id="lantern">
+    <ellipse cx="0" cy="20" rx="66" ry="30" fill="#5b4a86"/><ellipse cx="-24" cy="14" rx="11" ry="4" fill="#48396f"/><ellipse cx="30" cy="26" rx="14" ry="5" fill="#48396f"/>
+    <g transform="rotate(-6)">
+      <circle cx="0" cy="-90" r="44" fill="url(#gAura)"/>
+      <path d="M-16 4 L16 4 L10 -78 L-10 -78Z" fill="#fff1d6"/>
+      <path d="M-14.6 -18 L14.6 -18 L13.4 -34 L-13.4 -34Z" fill="#ff8f7a"/><path d="M-12.2 -50 L12.2 -50 L11.1 -64 L-11.1 -64Z" fill="#ff8f7a"/>
+      <rect x="-4.5" y="-10" width="9" height="14" rx="4.5" fill="#5b4a86"/>
+      <rect x="-15" y="-83" width="30" height="5.5" rx="2.5" fill="#3b2c66"/>
+      <rect x="-9" y="-99" width="18" height="16" rx="3" fill="#ffe9a6"/>
+      <path d="M-13 -99 L0 -116 L13 -99Z" fill="#ff8f7a"/><circle cx="0" cy="-117" r="2.6" fill="#fff1d6"/>
+    </g>
+  </g>
+
+  <!-- forms -->
+  <g id="f-comet">
+    <path d="M-16 -30 C-70 2 -122 52 -152 98 C-96 78 -48 62 -2 36 Z" fill="url(#gTail)"/>
+    <g fill="#fff"><circle cx="-84" cy="46" r="2.6"/><circle cx="-112" cy="80" r="2"/><circle cx="-62" cy="12" r="2"/><circle cx="-124" cy="52" r="1.6"/></g>
+    <circle r="54" fill="url(#gAuraC)"/><path d="M-22 -26 C-40 -34 -50 -26 -62 -30 C-52 -18 -40 -14 -28 -16Z" fill="#e8fbff"/>
+    <circle r="34" fill="url(#gComet)"/><use href="#face" transform="scale(.62)"/>
+  </g>
+  <g id="f-pulsar">
+    <g transform="rotate(24)"><path d="M-10 -26 L0 -124 L10 -26Z" fill="url(#gBeamUp)"/><path d="M-10 26 L0 124 L10 26Z" fill="url(#gBeamDn)"/></g>
+    <circle r="62" fill="url(#gAuraV)"/><circle r="50" fill="none" stroke="#e2ceff" stroke-width="2" opacity=".55"/><circle r="66" fill="none" stroke="#e2ceff" stroke-width="2" opacity=".25"/>
+    <circle r="32" fill="url(#gPulsar)"/><use href="#face" transform="scale(.58)"/>
+  </g>
+  <g id="f-sat">
+    <path d="M-150 44 L-116 10 L-82 44 L-50 14" stroke="#ffd36b" stroke-width="6" opacity=".55" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+    <g transform="rotate(-12)">
+      <path d="M-40 0 H40" stroke="#fff1d6" stroke-width="5"/>
+      <rect x="-92" y="-16" width="52" height="32" rx="6" fill="#4f8ff0"/><path d="M-75 -16 V16 M-57 -16 V16 M-92 0 H-40" stroke="#bcd8ff" stroke-width="2"/>
+      <rect x="40" y="-16" width="52" height="32" rx="6" fill="#4f8ff0"/><path d="M57 -16 V16 M75 -16 V16 M40 0 H92" stroke="#bcd8ff" stroke-width="2"/>
+    </g>
+    <path d="M6 -28 L16 -52" stroke="#fff1d6" stroke-width="4" stroke-linecap="round"/><path d="M0 -58 Q18 -44 32 -62 Q16 -66 0 -58Z" fill="#fff1d6"/><circle cx="16" cy="-52" r="4" fill="#ff8f7a"/>
+    <circle r="31" fill="url(#gEko)"/><use href="#face" transform="scale(.56)"/>
+  </g>
+  <g id="f-meteor">
+    <path d="M-8 -32 C-82 -44 -134 -14 -166 18 C-116 12 -96 22 -126 52 C-74 38 -42 42 -4 32 Z" fill="url(#gWake)"/>
+    <path d="M-10 -18 C-60 -24 -96 -8 -118 10 C-84 8 -70 14 -86 30 C-52 22 -30 24 -6 18 Z" fill="#fff0b0" opacity=".7"/>
+    <path d="M-32 -14 L-12 -36 L18 -34 L36 -10 L32 20 L8 36 L-22 32 L-36 8 Z" fill="#a94c38" stroke="#7a2f28" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M-12 -36 L-18 -22 M36 -10 L26 -14 M8 36 L4 26 M-36 8 L-26 10" stroke="#ffd36b" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="2" cy="0" r="22" fill="#ffd9a0"/><use href="#face" transform="translate(2,1) scale(.42)"/>
+    <path d="M-10 -11 L-2 -8 M14 -11 L6 -8" stroke="#2a1b4d" stroke-width="2.4" stroke-linecap="round"/>
+  </g>
+</defs>
+</svg>
+
+<main>
+<span class="tag">Stage 1 of 4 · design for your OK</span>
+<h1>ONE MORE ORBIT: the galaxy design</h1>
+<p class="lede">One touch. Follow the song. Bring the music back. Easy to start on the first planet; by the last one, a game of timing measured in a few hundredths of a second.</p>
+
+<div class="box">
+  <p><b>Where this starts from.</b> Your brief describes the game as four levels. Since then the live game gained holds on every level, three stars per level, the World 1 map, B-side moons, quests, and a fifth level (Royalty) with tethers. This design keeps all of that and gives it a world; nothing is thrown away. Section 8 lists what is re-dressed and what is new. Six things need your decision; they are in section 9.</p>
+</div>
+
+<h2>1. Story</h2>
+<p>At the middle of a small galaxy stands <b>the Lantern</b>, a crooked lighthouse on a rock. Its lamp does not only shine: it hums, and every planet hums its own song back. <b>Marlow</b>, an old lampmoth, keeps it lit. <b>Eko</b> is the youngest spark of that lamp.</p>
+<p>One night <b>the Hush</b> drifts in: a moon-sized quilt of fog that cannot bear noise. It stitches each planet's song into a jar, cracks the Lantern's lens, takes Marlow so the lamp can never be relit, and settles on <b>the Hollow</b>, the dark planet at the edge of the map.</p>
+<p>Eko slipped out through the crack. One spark, one beat. Each planet Eko clears gets its song and its light back, and the Lantern's beam gains that planet's colour, until the beam is strong enough to reach the Hollow.</p>
+<p><b>Ending.</b> The Hush is not destroyed. Unstitched, it turns out to be small and very tired. Marlow gives it the quietest song in the galaxy, and it falls asleep beside the lamp.</p>
+
+<h3>Characters</h3>
+<figure>
+<svg viewBox="0 0 640 400" role="img" aria-label="Eko, the hero: a round warm spark with a flame tuft, big eyes and an orbit ring worn round the middle">
+  <rect width="640" height="400" fill="url(#gSky)"/><rect width="640" height="400" fill="url(#stars)"/>
+  <ellipse cx="150" cy="330" rx="210" ry="60" fill="#ff8fe6" opacity=".12" filter="url(#soft)"/>
+  <path d="M40 330 C90 250 120 240 170 250" stroke="#ffe9a6" stroke-width="5" stroke-dasharray="1 16" stroke-linecap="round" fill="none" opacity=".7"/>
+  <use href="#eko" transform="translate(245,205) scale(1.75)" style="color:#8fe9ff"/>
+  <use href="#eko" transform="translate(500,95) scale(.62)" style="color:#ff8fe6"/>
+  <use href="#eko" transform="translate(545,205) scale(.62)" style="color:#b6ff6e"/>
+  <use href="#eko" transform="translate(500,315) scale(.62)" style="color:#ffd36b"/>
+  <text x="24" y="42" fill="#f6ecd6" font-size="26" font-weight="700">Eko</text>
+</svg>
+<figcaption><b>Eko, the hero.</b> A spark from the Lantern's lamp: a round, warm body, a flame tuft that flickers on the beat, and an orbit ring worn like a hoop. The ring is the same ring Eko rides in play, and it carries the colour you pick (today's "orbs" become Eko's <b>Glows</b>, right). Eko is deliberately round, with a mouth, cheeks and a ring, and is not star-shaped, to stay well clear of any existing star character.</figcaption>
+</figure>
+
+<figure>
+<svg viewBox="0 0 640 440" role="img" aria-label="Marlow, the lampmoth keeper, held under a glass bell jar with his lantern">
+  <rect width="640" height="440" fill="url(#gSky)"/><rect width="640" height="440" fill="url(#stars)"/>
+  <circle cx="395" cy="305" r="150" fill="url(#gAura)"/>
+  <g transform="translate(320,256) scale(.9)">
+    <g id="mw">
+      <path d="M-18 -30 C-70 -150 -205 -135 -190 -40 C-182 6 -90 18 -18 2 Z" fill="#a591e6"/>
+      <path d="M-30 -34 C-75 -120 -170 -112 -165 -46 C-160 -12 -90 0 -30 -8 Z" fill="#c8baf5" opacity=".55"/>
+      <circle cx="-128" cy="-62" r="20" fill="#ffe9b8"/><circle cx="-128" cy="-62" r="10" fill="#5b3f9e"/>
+      <path d="M-18 0 C-100 6 -150 70 -112 118 C-76 150 -34 86 -14 44 Z" fill="#f4b79c"/>
+      <circle cx="-88" cy="80" r="10" fill="#ffe9b8" opacity=".85"/>
+    </g>
+    <use href="#mw" transform="scale(-1,1)"/>
+    <path d="M-12 104 l-5 16 M12 104 l5 16" stroke="#caa678" stroke-width="4" stroke-linecap="round"/>
+    <ellipse cx="0" cy="34" rx="40" ry="72" fill="#f0dcc0"/>
+    <g stroke="#d6b98f" stroke-width="5" fill="none" stroke-linecap="round"><path d="M-37 42 Q0 54 37 42"/><path d="M-34 64 Q0 76 34 64"/><path d="M-27 85 Q0 95 27 85"/></g>
+    <g fill="#fff6e6"><circle cx="-30" cy="-6" r="14"/><circle cx="-15" cy="0" r="15"/><circle cx="0" cy="2" r="15"/><circle cx="15" cy="0" r="15"/><circle cx="30" cy="-6" r="14"/></g>
+    <g fill="none" stroke-linecap="round">
+      <path d="M-14 -98 C-28 -140 -62 -152 -86 -138" stroke="#caa678" stroke-width="15" stroke-dasharray="2.5 5" stroke-linecap="butt"/><path d="M-14 -98 C-28 -140 -62 -152 -86 -138" stroke="#8d6b4a" stroke-width="3"/>
+      <path d="M14 -98 C28 -140 62 -152 86 -138" stroke="#caa678" stroke-width="15" stroke-dasharray="2.5 5" stroke-linecap="butt"/><path d="M14 -98 C28 -140 62 -152 86 -138" stroke="#8d6b4a" stroke-width="3"/>
+    </g>
+    <circle cx="0" cy="-62" r="40" fill="#f3e2c8"/>
+    <ellipse cx="-31" cy="-44" rx="7" ry="4.5" fill="#ff9c8a" opacity=".55"/><ellipse cx="31" cy="-44" rx="7" ry="4.5" fill="#ff9c8a" opacity=".55"/>
+    <circle cx="-19" cy="-64" r="9" fill="#2a1b4d"/><circle cx="19" cy="-64" r="9" fill="#2a1b4d"/><circle cx="-22" cy="-67" r="3" fill="#fff"/><circle cx="16" cy="-67" r="3" fill="#fff"/>
+    <path d="M-31 -72 Q-19 -80 -7 -72 M7 -72 Q19 -80 31 -72" stroke="#f3e2c8" stroke-width="7" fill="none"/>
+    <g fill="rgba(255,255,255,.14)" stroke="#d8973f" stroke-width="3"><circle cx="-19" cy="-64" r="15"/><circle cx="19" cy="-64" r="15"/></g><path d="M-4 -65 Q0 -69 4 -65" stroke="#d8973f" stroke-width="3" fill="none"/>
+    <path d="M-9 -40 Q0 -33 9 -40" stroke="#8d5a3a" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <path d="M-38 -32 Q0 -14 38 -32 L36 -15 Q0 4 -36 -15 Z" fill="#3fc1b0"/><path d="M-22 -14 L-36 40 L-14 42 L-6 -8 Z" fill="#3fc1b0"/>
+    <g stroke="#2a8f86" stroke-width="3"><path d="M-20 -22 l-2 14 M0 -16 v15 M20 -22 l2 14"/><path d="M-27 6 l19 2 M-31 24 l18 2"/></g>
+    <path d="M32 22 Q62 26 82 44" stroke="#e6d0ae" stroke-width="8" fill="none" stroke-linecap="round"/>
+    <circle cx="84" cy="50" r="6" fill="none" stroke="#d8973f" stroke-width="3"/>
+    <path d="M72 62 h24 l-4 -8 h-16 Z" fill="#d8973f"/><rect x="73" y="62" width="22" height="30" rx="5" fill="#fff1b8"/><ellipse cx="84" cy="79" rx="4" ry="7.5" fill="#ffab4a"/><rect x="71" y="92" width="26" height="6" rx="2" fill="#d8973f"/>
+    <circle cx="84" cy="78" r="46" fill="url(#gAura)"/>
+  </g>
+  <path d="M112 396 V196 C112 66 528 66 528 196 V396 Z" fill="rgba(190,244,255,.06)" stroke="#c9f6ff" stroke-width="4" opacity=".75"/>
+  <path d="M146 300 V206 C146 150 190 118 236 106" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round" opacity=".35"/>
+  <circle cx="320" cy="86" r="13" fill="rgba(190,244,255,.1)" stroke="#c9f6ff" stroke-width="4" opacity=".75"/>
+  <rect x="92" y="392" width="456" height="24" rx="12" fill="#3b2c66"/>
+  <g stroke="#e9e0ff" stroke-width="4" stroke-linecap="round" opacity=".8"><path d="M150 398 l6 12 M190 398 l6 12 M230 398 l6 12 M410 398 l-6 12 M450 398 l-6 12 M490 398 l-6 12"/></g>
+  <text x="24" y="42" fill="#f6ecd6" font-size="26" font-weight="700">Marlow</text>
+</svg>
+<figcaption><b>Marlow, keeper of the Lantern</b> (the one to rescue). An elderly lampmoth: woolly collar, round spectacles, a knitted scarf, and a hand lantern he never puts down. The Hush keeps him under a bell jar stitched to the Hollow. In the last phase of the boss fight his lantern throws Eko a second spark (the dual mode).</figcaption>
+</figure>
+
+<figure>
+<svg viewBox="0 0 640 470" role="img" aria-label="The Hush, the boss: a huge dark quilted fog creature with one sleepy eye, a stitched mouth and a finger held to it, with jars of stolen songs hanging from its hem">
+  <rect width="640" height="470" fill="url(#gSky)"/><rect width="640" height="470" fill="url(#stars)"/>
+  <ellipse cx="330" cy="400" rx="300" ry="50" fill="#6a4fc0" opacity=".3" filter="url(#soft)"/>
+  <g transform="translate(335,212) scale(.82)">
+    <g stroke="#b9a4e6" stroke-width="2" opacity=".8"><path d="M-188 200 V236 M-94 200 V262 M0 200 V240 M94 200 V268 M188 200 V232"/></g>
+    <g>
+      <g transform="translate(-188,236)"><rect x="-12" y="0" width="24" height="30" rx="8" fill="#ffb37a" fill-opacity=".3" stroke="#d9d0ff" stroke-width="2"/><rect x="-7" y="-5" width="14" height="7" rx="2" fill="#c9a57a"/><circle cy="16" r="6" fill="#ffb37a"/></g>
+      <g transform="translate(-94,262)"><rect x="-12" y="0" width="24" height="30" rx="8" fill="#ff78df" fill-opacity=".3" stroke="#d9d0ff" stroke-width="2"/><rect x="-7" y="-5" width="14" height="7" rx="2" fill="#c9a57a"/><circle cy="16" r="6" fill="#ff78df"/></g>
+      <g transform="translate(0,240)"><rect x="-12" y="0" width="24" height="30" rx="8" fill="#a6c8ff" fill-opacity=".3" stroke="#d9d0ff" stroke-width="2"/><rect x="-7" y="-5" width="14" height="7" rx="2" fill="#c9a57a"/><circle cy="16" r="6" fill="#a6c8ff"/></g>
+      <g transform="translate(94,268)"><rect x="-12" y="0" width="24" height="30" rx="8" fill="#a8ff5a" fill-opacity=".3" stroke="#d9d0ff" stroke-width="2"/><rect x="-7" y="-5" width="14" height="7" rx="2" fill="#c9a57a"/><circle cy="16" r="6" fill="#a8ff5a"/></g>
+      <g transform="translate(188,232)"><rect x="-12" y="0" width="24" height="30" rx="8" fill="#ffe9a6" fill-opacity=".3" stroke="#d9d0ff" stroke-width="2"/><rect x="-7" y="-5" width="14" height="7" rx="2" fill="#c9a57a"/><circle cy="16" r="6" fill="#ffe9a6"/></g>
+    </g>
+    <path d="M-235 205 C-262 40 -190 -195 0 -200 C190 -195 262 40 235 205 Q212 165 188 205 Q164 165 141 205 Q118 165 94 205 Q70 165 47 205 Q24 165 0 205 Q-24 165 -47 205 Q-70 165 -94 205 Q-118 165 -141 205 Q-164 165 -188 205 Q-212 165 -235 205 Z" fill="url(#gHush)"/>
+    <path d="M-235 205 C-262 40 -190 -195 0 -200 C190 -195 262 40 235 205 Q212 165 188 205 Q164 165 141 205 Q118 165 94 205 Q70 165 47 205 Q24 165 0 205 Q-24 165 -47 205 Q-70 165 -94 205 Q-118 165 -141 205 Q-164 165 -188 205 Q-212 165 -235 205 Z" fill="url(#quilt)"/>
+    <path d="M-235 205 C-262 40 -190 -195 0 -200 C190 -195 262 40 235 205" fill="none" stroke="#7a5cff" stroke-width="3" opacity=".6"/>
+    <ellipse cx="0" cy="-70" rx="80" ry="52" fill="#efe6ff"/><circle cx="6" cy="-60" r="31" fill="#8a6cf0"/><circle cx="6" cy="-60" r="15" fill="#150c30"/><circle cx="-5" cy="-71" r="6" fill="#fff"/>
+    <path d="M-88 -64 C-74 -176 74 -176 88 -64 C44 -90 -44 -90 -88 -64 Z" fill="#3b2878"/>
+    <path d="M-88 -64 C-44 -90 44 -90 88 -64" stroke="#1a1038" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <path d="M-62 -10 Q0 8 62 -10" stroke="#1a1038" stroke-width="5" fill="none" opacity=".6" stroke-linecap="round"/>
+    <path d="M-95 50 Q0 85 95 50" stroke="#100826" stroke-width="7" fill="none" stroke-linecap="round"/>
+    <g stroke="#efe6ff" stroke-width="4.5" stroke-linecap="round"><path d="M-73 47 l6 22 M-45 53 l5 22 M-17 56 l3 22 M17 56 l-3 22 M45 53 l-5 22 M73 47 l-6 22"/></g>
+    <path d="M214 196 C150 206 70 190 34 118" stroke="#4d3a98" stroke-width="34" fill="none" stroke-linecap="round"/>
+    <circle cx="32" cy="112" r="25" fill="#4d3a98"/>
+    <path d="M27 104 L23 20" stroke="#4d3a98" stroke-width="22" stroke-linecap="round"/>
+    <path d="M18 22 L21 62" stroke="#8a76d8" stroke-width="3" stroke-linecap="round" opacity=".7"/>
+    <path d="M46 96 q10 8 8 22 M12 128 q10 10 24 8" stroke="#35226e" stroke-width="3" fill="none" stroke-linecap="round" opacity=".8"/>
+  </g>
+  <use href="#eko" transform="translate(64,410) scale(.27)" style="color:#8fe9ff"/>
+  <text x="24" y="42" fill="#f6ecd6" font-size="26" font-weight="700">The Hush</text>
+</svg>
+<figcaption><b>The Hush, the boss.</b> A moon-sized quilt of fog with one heavy-lidded eye, a mouth it has stitched shut, and a finger always at its lips. The five stolen songs hang from its hem in jars (four planets and the Lantern's own). Each phase of the fight pops stitches; colour and sound leak out of it. Eko is bottom left, for scale.</figcaption>
+</figure>
+
+<h3>Story cards (12 frames, each skippable with one tap)</h3>
+<ul>
+  <li><b>Opening, 3 frames:</b> the Lantern humming, planets answering · the Hush arrives, jars, Marlow taken · Eko slips out through the cracked lens.</li>
+  <li><b>After each planet, 1 frame:</b> the planet lights up and one line from someone who lives there (four frames).</li>
+  <li><b>Before the Hollow, 2 frames:</b> the beam reaches the dark planet · Marlow's jar, and the Hush opening its eye.</li>
+  <li><b>Ending, 3 frames:</b> the jars open · Marlow and Eko at the lamp · the Hush asleep, very small.</li>
+</ul>
+
+<h2>2. Forms</h2>
+<p>A <b>lens</b> is a round pane of glass on the course (the Lantern's own kind). Flying through one changes Eko's form. Every form uses the same one button and keeps Eko's face, so you always know where you are.</p>
+
+<div class="forms">
+  <figure><svg viewBox="0 0 200 250" role="img" aria-label="Orb form"><rect width="200" height="250" fill="url(#gSky)"/><use href="#eko" transform="translate(100,82) scale(.66)" style="color:#8fe9ff"/>
+    <g stroke="#b9add6" stroke-width="3" opacity=".8" fill="none"><path d="M20 222 H180"/><path d="M20 186 H104 M130 186 H180"/></g>
+    <path d="M26 222 H96 Q112 222 117 186" stroke="#ffe391" stroke-width="3.5" stroke-dasharray="1 7" stroke-linecap="round" fill="none"/><rect x="94" y="213" width="5" height="18" rx="2.5" fill="#fff"/><path d="M104 186 v-7 M130 186 v-7" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>
+    <figcaption><b>Orb</b>Tap on the white mark: hop to the next ring.</figcaption></figure>
+  <figure><svg viewBox="0 0 200 250" role="img" aria-label="Meteor form"><rect width="200" height="250" fill="url(#gSky)"/><use href="#f-meteor" transform="translate(128,84) scale(.72)"/>
+    <path d="M20 204 H180" stroke="#b9add6" stroke-width="3" opacity=".8"/>
+    <g fill="#1a1038" stroke="#9a7dff" stroke-width="2"><rect x="84" y="184" width="9" height="40" rx="3"/><rect x="140" y="184" width="9" height="40" rx="3"/></g>
+    <path d="M72 204 H106 M128 204 H162" stroke="#ffb24d" stroke-width="7" stroke-linecap="round"/><rect x="68" y="195" width="5" height="18" rx="2.5" fill="#fff"/><rect x="124" y="195" width="5" height="18" rx="2.5" fill="#fff"/></svg>
+    <figcaption><b>Meteor</b>Tap: a short dash that breaks the barrier on the beat.</figcaption></figure>
+  <figure><svg viewBox="0 0 200 250" role="img" aria-label="Satellite form"><rect width="200" height="250" fill="url(#gSky)"/><use href="#f-sat" transform="translate(112,84) scale(.72)"/>
+    <g stroke="#b9add6" stroke-width="3" opacity=".8"><path d="M20 180 H180"/><path d="M20 228 H180"/></g>
+    <path d="M22 222 L60 186 L100 222 L140 186 L178 222" stroke="#ffe391" stroke-width="3.5" stroke-dasharray="1 7" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <g fill="#fff"><rect x="58" y="172" width="5" height="16" rx="2.5"/><rect x="98" y="220" width="5" height="16" rx="2.5"/><rect x="138" y="172" width="5" height="16" rx="2.5"/></g></svg>
+    <figcaption><b>Satellite</b>Each tap turns the zig-zag the other way.</figcaption></figure>
+  <figure><svg viewBox="0 0 200 250" role="img" aria-label="Pulsar form"><rect width="200" height="250" fill="url(#gSky)"/><use href="#f-pulsar" transform="translate(100,84) scale(.7)"/>
+    <path d="M20 204 H180" stroke="#b9add6" stroke-width="3" opacity=".8"/>
+    <g fill="#1a1038" stroke="#9a7dff" stroke-width="2"><rect x="52" y="188" width="16" height="16" rx="3"/><rect x="92" y="204" width="16" height="16" rx="3"/><rect x="132" y="188" width="16" height="16" rx="3"/></g>
+    <path d="M22 213 H80 V195 H120 V213 H178" stroke="#ffe391" stroke-width="3.5" stroke-dasharray="1 7" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <g fill="#fff"><rect x="78" y="196" width="5" height="16" rx="2.5"/><rect x="118" y="196" width="5" height="16" rx="2.5"/></g></svg>
+    <figcaption><b>Pulsar</b>Each tap flips Eko to the other side of the ring.</figcaption></figure>
+  <figure><svg viewBox="0 0 200 250" role="img" aria-label="Comet form"><rect width="200" height="250" fill="url(#gSky)"/><use href="#f-comet" transform="translate(126,62) scale(.72)"/>
+    <g stroke="#b9add6" stroke-width="3" opacity=".8"><path d="M20 176 H180"/><path d="M20 230 H180"/></g>
+    <g fill="#1a1038" stroke="#9a7dff" stroke-width="2"><circle cx="70" cy="190" r="10"/><circle cx="112" cy="216" r="10"/><circle cx="154" cy="190" r="10"/></g>
+    <path d="M22 206 C45 206 55 216 72 216 C90 216 95 190 112 190 C130 190 134 216 154 216 L178 216" stroke="#8fe9ff" stroke-width="3.5" stroke-linecap="round" fill="none"/></svg>
+    <figcaption><b>Comet</b>Hold to climb away from the planet, let go to fall back.</figcaption></figure>
+</div>
+
+<div class="scroll"><table>
+  <tr><th>Form</th><th>The button</th><th>Look and sound</th><th>First seen</th><th>Grows out of</th></tr>
+  <tr><td><b>Orb</b></td><td>Tap on a white mark: hop to the next ring</td><td>Eko as is; the pluck you hear today</td><td>Planet 1</td><td class="now">Today's game</td></tr>
+  <tr><td><b>Meteor</b></td><td>Tap: a dash along the ring that breaks a barrier standing on the beat</td><td>Curled into a glowing rock with a blazing wake; a low thump and a crack</td><td>Planet 1, in the drop</td><td class="now">Today's "smash" at each drop</td></tr>
+  <tr><td><b>Satellite</b></td><td>Each tap reverses a diagonal zig-zag between two rings</td><td>Two little panels and a dish; a two-note radio blip, high and low</td><td>Planet 2</td><td class="now">Today's weave</td></tr>
+  <tr><td><b>Pulsar</b></td><td>Each tap flips Eko between the inside and the outside of one ring</td><td>A bright core with two beams that blink on every flip; a lighthouse "tick"</td><td>Planet 3</td><td class="new">New</td></tr>
+  <tr><td><b>Comet</b></td><td>Hold to climb, release to fall, through a field of drifting rocks</td><td>A teardrop with a long sparkling tail; a gliding tone that follows the height</td><td>Planet 4</td><td class="now">Today's holds (rails and lines)</td></tr>
+</table></div>
+
+<p><b>Safe introduction, the same for every form.</b> The first lens of a form is followed by four beats where nothing can end the run, a ghost of Eko shows the move once, and the first two obstacles have double-size windows.</p>
+<p><b>One colour rule for danger.</b> Today white means "tap here" and gold means "optional". Forms add things you must not touch (barriers, rocks, blocks). All of them are drawn in one way: Hush-ink, a dark violet shape with a pale violet rim, as in the small diagrams above. Red stays for tethers.</p>
+
+<h2>3. Gates, pads and chimes</h2>
+<ul>
+  <li><b>Tempo gates:</b> the orbit runs at 0.5×, 0.75×, 1.25×, 1.5× or 2× (today only 0.8× and 1.25×).</li>
+  <li><b>Flip gate</b> (hops go inward instead of outward) and <b>reverse gate</b> (the orbit turns round): both exist today as bar rules; they become visible gates.</li>
+  <li><b>Mirror gate:</b> the whole view flips left to right mid-song (today only the B-sides are mirrored, from the start).</li>
+  <li><b>Telegraph rule for all gates:</b> they sit on a bar line, are on screen for the full look-ahead, the change is eased over half a beat (already built), and the first press after one has the wide ±160 ms window.</li>
+  <li><b>Springboard</b> (no tap): throws Eko two beats through the air to a far ring or the next planetoid. Today's planet hop, without the press.</li>
+  <li><b>Tide pad</b> (no tap): flips which way Eko hops, like a flip gate but placed on the ring.</li>
+  <li><b>Chime</b> (tap): hangs between two rings. Tap as Eko passes through it to hop again without landing.</li>
+  <li><b>Slipstream</b> (tap): tap on it and Eko is carried along its arrow for one beat.</li>
+</ul>
+<p><b>Combos</b> put these on consecutive notes of a hook: hop, chime, slipstream on three notes in a row. On planets 1 and 2 chimes and slipstreams appear only on optional shard branches; from planet 3 they are part of the main course.</p>
+<p><b>Rules that stay:</b> the same music always gives the same pattern; survival presses only on clearly audible strong beats; the build-up is a charge where nothing can end the run; restarts are instant; practice restarts from the section you reached; the foreground is drawn last on a clean band.</p>
+
+<h2>4. Planets and the escalation curve</h2>
+<div class="scroll"><table>
+  <tr><th>Planet</th><th>Song</th><th>Look</th><th>New here</th><th>Also uses</th></tr>
+  <tr><td><b>1 · Emberwick</b></td><td>Heroes Tonight</td><td>Warm lantern hills at dusk</td><td>Orb, springboards, <b>Meteor</b> in the drop</td><td>—</td></tr>
+  <tr><td><b>2 · Cirra</b></td><td>Sky High</td><td>A pink planet wrapped in clouds</td><td><b>Satellite</b>, tide pads, tempo gate 1.5×</td><td>Meteor</td></tr>
+  <tr><td><b>3 · Glassmere</b></td><td>Blank</td><td>Blue ice and crystal, turning rings</td><td><b>Pulsar</b>, chimes, reverse and mirror gates, tempo 0.5× to 2×, spin gates</td><td>Meteor, Satellite</td></tr>
+  <tr><td><b>4 · Verdance</b></td><td>Invincible</td><td>A glowing overgrown jungle</td><td><b>Comet</b>, slipstreams, <b>dual</b> (Eko and Eko's echo, mirrored)</td><td>Every form</td></tr>
+  <tr><td><b>5 · The Hollow</b></td><td>Royalty</td><td>The dark planet; the Hush</td><td><b>Boss fight</b>, tethers as the Hush's threads, dual with two different forms</td><td>Everything</td></tr>
+</table></div>
+
+<h3>Window sizes (how far either side of the note a press still counts)</h3>
+<div class="scroll"><table>
+  <tr><th>Planet</th><th>BPM</th><th>Survival press</th><th>Today</th><th>Shard branch</th><th>Course shown ahead</th><th>Presses per second, at most</th></tr>
+  <tr><td>1 · Emberwick</td><td class="n">128</td><td class="n"><b>±140 ms</b></td><td class="n now">±120</td><td class="n">±90 ms</td><td class="n">3.5 beats</td><td class="n">2.1</td></tr>
+  <tr><td>2 · Cirra</td><td class="n">128</td><td class="n"><b>±120 ms</b></td><td class="n now">±120</td><td class="n">±80 ms</td><td class="n">3 beats</td><td class="n">2.1</td></tr>
+  <tr><td>3 · Glassmere</td><td class="n">140</td><td class="n"><b>±105 ms</b></td><td class="n now">±120</td><td class="n">±70 ms</td><td class="n">3 beats</td><td class="n">2.3</td></tr>
+  <tr><td>4 · Verdance</td><td class="n">100</td><td class="n"><b>±90 ms</b></td><td class="n now">±120</td><td class="n">±60 ms</td><td class="n">2.5 beats</td><td class="n">2.5 (pairs of eighth notes allowed)</td></tr>
+  <tr><td>5 · The Hollow</td><td class="n">160</td><td class="n"><b>±80 ms</b></td><td class="n now">±100</td><td class="n">±55 ms</td><td class="n">2.5 beats</td><td class="n">2.7</td></tr>
+  <tr><td>Moons (B-sides) 1 to 4</td><td class="n">same</td><td class="n"><b>±100 / 90 / 80 / 70 ms</b></td><td class="n now">±90 all</td><td class="n">none</td><td class="n">2 beats</td><td class="n">as the planet</td></tr>
+</table></div>
+<ul>
+  <li><b>The same on every planet:</b> flow notes count as on the beat within ±40 ms (this is the mastery ceiling and it never loosens); the first press after a lens, gate, springboard or the drop's big press has ±160 ms.</li>
+  <li>For scale: ±80 ms is about ten frames in total on a 60 Hz phone. Windows that tight depend on the sync check being right, so the Hollow asks for it again if the audio output changed.</li>
+</ul>
+
+<h2>5. Mastery: shards, moons and badges</h2>
+<ul>
+  <li><b>Lens shards</b> replace today's stars: three per planet, fifteen in all. They are the pieces of the Lantern's cracked lens. Today a star is "play this stretch clean". A shard sits on a <b>branch</b>: a dotted gold path that leaves the safe line for two to four beats of harder presses in that planet's form, then rejoins.</li>
+  <li><b>A shard never blocks or ends anything.</b> Miss a branch press and Eko simply stays on the safe line. A shard is kept only when that run clears the planet (as stars are today). Stars already in a save become shards.</li>
+  <li><b>What shards do:</b> all three on a planet reveal its moon (the B-side, as today); they unlock Glows; all fifteen mend the lens and add a last frame to the ending.</li>
+  <li><b>Three badges per planet,</b> shown as three pips on its card: <b>Restored</b> (cleared in one run from the start; practice checkpoints never count), <b>In Tune</b> (every flow note on the beat, 100%), <b>Lens Mender</b> (all three shards). Today's badges and quests stay.</li>
+</ul>
+
+<figure>
+<svg viewBox="0 0 640 460" role="img" aria-label="Concept of play on Emberwick: the planet sits at the centre of its rings; Eko rides a ring toward a white mark, with gold notes, a lens and a shard on a dotted branch">
+  <rect width="640" height="460" fill="url(#gDusk)"/><rect width="640" height="460" fill="url(#stars)" opacity=".7"/>
+  <g fill="#ffd9a0" opacity=".22" filter="url(#soft)"><circle cx="560" cy="330" r="30"/><circle cx="600" cy="250" r="16"/><circle cx="520" cy="410" r="20"/><circle cx="596" cy="402" r="10"/></g>
+  <use href="#pl-cirra" transform="translate(572,92) scale(.5)"/>
+  <g fill="none" stroke="#ffcf9a" stroke-linecap="round">
+    <circle cx="250" cy="250" r="120" stroke-width="5" opacity=".6"/>
+    <circle cx="250" cy="250" r="170" stroke-width="5" opacity=".6" stroke-linecap="butt" stroke-dasharray="1024 44" stroke-dashoffset="-22"/>
+    <circle cx="250" cy="250" r="220" stroke-width="5" opacity=".42"/>
+  </g>
+  <path d="M250 174 A76 76 0 0 1 320 220" stroke="#ffd36b" stroke-width="5" fill="none" stroke-linecap="round" opacity=".9"/>
+  <use href="#pl-ember" transform="translate(250,250) scale(1.24)"/>
+  <g stroke="#fff" stroke-width="5" stroke-linecap="round"><path d="M360 250 H380"/><path d="M418.6 228 l12 -2 M418.6 272 l12 2"/></g>
+  <g fill="#ffd36b"><circle cx="358.8" cy="199.3" r="6"/><circle cx="367.4" cy="225" r="6"/></g>
+  <use href="#eko" transform="translate(341.9,172.9) scale(.3)" style="color:#8fe9ff"/>
+  <path d="M312 150 C300 136 286 130 268 128" stroke="#ffe9a6" stroke-width="4" stroke-dasharray="1 10" stroke-linecap="round" fill="none" opacity=".7"/>
+  <path d="M414 294 C452 300 462 330 440 360 C426 380 398 390 380 397" stroke="#ffd36b" stroke-width="4" stroke-dasharray="1 10" stroke-linecap="round" fill="none"/>
+  <use href="#shard" transform="translate(446,352) scale(1.25)"/>
+  <g transform="translate(380,359)"><circle r="23" fill="rgba(201,246,255,.16)" stroke="#c9f6ff" stroke-width="3.5"/><path d="M-13 -9 A16 16 0 0 1 3 -16" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" opacity=".8"/><use href="#f-meteor" transform="translate(5,1) scale(.2)"/></g>
+  <g font-size="19" font-weight="700" fill="#2a1140"><circle cx="402" cy="222" r="13" fill="#fff"/><text x="396.5" y="228.5">1</text><circle cx="336" cy="214" r="13" fill="#ffd36b"/><text x="330.5" y="220.5">2</text><circle cx="344" cy="380" r="13" fill="#c9f6ff"/><text x="338.5" y="386.5">3</text><circle cx="478" cy="330" r="13" fill="#ffd36b"/><text x="472.5" y="336.5">4</text></g>
+  <rect x="170" y="22" width="300" height="8" rx="4" fill="#fff" opacity=".18"/><rect x="170" y="22" width="112" height="8" rx="4" fill="#ffd36b"/>
+  <text x="320" y="58" text-anchor="middle" fill="#f6ecd6" font-size="22" font-weight="700">37%</text>
+  <use href="#shard" transform="translate(34,34)"/><use href="#shard0" transform="translate(62,34)"/><use href="#shard0" transform="translate(90,34)"/>
+</svg>
+<figcaption><b>One planet in play: Emberwick.</b> The planet takes the place of today's equalizer core and pulses with the music; the gold arc round it is the flow meter. <b>1</b> the white mark and the opening in the next ring: tap here. <b>2</b> gold flow notes, optional. <b>3</b> a lens (this one turns Eko into Meteor). <b>4</b> a shard on its dotted branch. The far planet and the soft lights stay in the background; the rings, marks and Eko are drawn last.</figcaption>
+</figure>
+
+<h2>6. Galaxy map, screens and look</h2>
+<p><b>Flow:</b> title (the galaxy, with Eko circling the Lantern) → galaxy map → planet card → play. Moving between screens is one camera flight through the same scene, not a cut.</p>
+
+<figure>
+<svg viewBox="0 0 640 620" role="img" aria-label="Galaxy map concept: the Lantern lighthouse in the middle with its beam on two restored planets, Eko flying to a third, a locked dark planet, and the Hollow looming at the edge">
+  <rect width="640" height="620" fill="url(#gSky)"/><rect width="640" height="620" fill="url(#stars)"/>
+  <ellipse cx="170" cy="330" rx="200" ry="150" fill="#ff78df" opacity=".1" filter="url(#soft)"/><ellipse cx="470" cy="420" rx="170" ry="110" fill="#5ccfff" opacity=".08" filter="url(#soft)"/>
+  <path d="M311 232 L62 430 L150 520 Z" fill="#ffb37a" opacity=".16"/><path d="M311 232 L70 178 L128 290 Z" fill="#ff78df" opacity=".16"/>
+  <path d="M120 472 C18 400 18 310 112 236 C160 160 236 116 330 116 C452 116 524 250 512 404 C560 330 596 236 590 130" stroke="#f6ecd6" stroke-width="3.5" stroke-dasharray="1 12" stroke-linecap="round" fill="none" opacity=".6"/>
+  <use href="#pl-hollow" transform="translate(604,96) scale(1.9)"/>
+  <use href="#lantern" transform="translate(320,340)"/>
+  <use href="#pl-ember" transform="translate(120,472) scale(.9)"/>
+  <circle cx="190" cy="426" r="11" fill="#efe6ff"/><circle cx="187" cy="423" r="3" fill="#cfc4ee"/>
+  <use href="#pl-cirra" transform="translate(112,236) scale(.8)"/>
+  <circle cx="170" cy="196" r="10" fill="none" stroke="#b9add6" stroke-width="2" stroke-dasharray="3 4"/>
+  <use href="#pl-glass" transform="translate(330,116) scale(.8)"/>
+  <circle cx="330" cy="116" r="52" fill="none" stroke="#fff" stroke-width="3" stroke-dasharray="2 9" stroke-linecap="round" opacity=".85"/>
+  <use href="#pl-verd" transform="translate(512,404) scale(.86)"/><circle cx="512" cy="404" r="44" fill="#140d32" opacity=".78"/><path d="M517 363 C514 344 531 337 538 347 C543 356 534 361 531 356" stroke="#140d32" stroke-width="6" fill="none" stroke-linecap="round" opacity=".78"/><ellipse cx="507" cy="351" rx="11" ry="7" fill="#140d32" opacity=".78"/>
+  <path d="M500 398 h8 l8 -7 v22 l-8 -7 h-8z M522 397 l10 14 M532 397 l-10 14" stroke="#b9add6" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M150 190 C178 160 205 150 230 146" stroke="#ffe9a6" stroke-width="4" stroke-dasharray="1 10" stroke-linecap="round" fill="none" opacity=".8"/>
+  <use href="#eko" transform="translate(250,140) scale(.3)" style="color:#8fe9ff"/>
+  <g fill="#ffe9a6" font-size="20"><text x="64" y="418">♪</text><text x="168" y="512">♫</text><text x="52" y="204">♪</text></g>
+  <g fill="#f6ecd6" font-size="17" font-weight="700" text-anchor="middle">
+    <text x="120" y="548">EMBERWICK</text><text x="112" y="302">CIRRA</text><text x="330" y="196">GLASSMERE</text><text x="512" y="476" fill="#b9add6">VERDANCE</text><text x="446" y="50" fill="#c9b8ff">THE HOLLOW</text><text x="320" y="398" fill="#ffe9a6">THE LANTERN</text>
+  </g>
+  <g fill="#b9add6" font-size="15" text-anchor="middle"><text x="102" y="570">100%</text><text x="100" y="324">100%</text><text x="512" y="496">silent</text></g>
+  <use href="#shard" transform="translate(134,565) scale(.62)"/><use href="#shard" transform="translate(150,565) scale(.62)"/><use href="#shard" transform="translate(166,565) scale(.62)"/>
+  <use href="#shard" transform="translate(132,319) scale(.62)"/><use href="#shard" transform="translate(148,319) scale(.62)"/><use href="#shard0" transform="translate(164,319) scale(.62)"/>
+  <use href="#shard" transform="translate(34,36)"/><text x="54" y="43" fill="#f6ecd6" font-size="20" font-weight="700">5 / 15</text>
+  <g transform="translate(212,516)"><rect width="330" height="84" rx="18" fill="#1c1444" stroke="#4a3a8c" stroke-width="2" opacity=".96"/>
+    <text x="18" y="32" fill="#f6ecd6" font-size="18" font-weight="700">GLASSMERE · Blank</text><text x="18" y="60" fill="#b9add6" font-size="16">best 64% · practice 88% · flow 71%</text>
+    <use href="#shard" transform="translate(222,26) scale(.7)"/><use href="#shard0" transform="translate(240,26) scale(.7)"/><use href="#shard0" transform="translate(258,26) scale(.7)"/>
+    <rect x="236" y="-14" width="80" height="30" rx="15" fill="#ffd36b"/><text x="276" y="7" fill="#2a1140" font-size="16" font-weight="700" text-anchor="middle">PLAY</text></g>
+</svg>
+<figcaption><b>The galaxy map.</b> The Lantern is the hub in the middle; its beam lands on each restored planet in that planet's colour. Restored planets glow and play their song softly when Eko is near; a locked planet is dark and marked silent. Eko flies along the dotted route. The Hollow looms at the edge from the first visit. A found moon sits beside Emberwick; Cirra's is still a dotted outline. The planet card shows the song, best %, practice %, flow % and shards, with PLAY (the phone layout stacks the same things in portrait, as the World 1 map does today).</figcaption>
+</figure>
+
+<ul>
+  <li><b>Look:</b> a storybook galaxy. A deep indigo sky instead of black, round illustrated planets with soft glows, cream text, a rounded display typeface bundled with the game, gentle bobbing and blinking. Play keeps its clean band and its colour rules.</li>
+  <li><b>Kept and restyled:</b> pause, results, settings, badges, quests, the sync check, and the orbs screen as <b>Glows</b> (the colour of Eko's ring and light).</li>
+  <li><b>Each planet's look follows its song:</b> the planet sits at the centre of the rings (above), with its own sky, background shapes and drop set piece.</li>
+</ul>
+
+<h2>7. Boss fight: the Hush</h2>
+<p>On the Hollow, to <b>Royalty</b> (see decision 1). Nothing is random: every attack is written to the song, lands on a beat, and is answered with the one button. The Hush has a health bar in three segments, one per phase.</p>
+<div class="scroll"><table>
+  <tr><th>Phase</th><th>In the song</th><th>The Hush does</th><th>Eko answers with</th><th>Ends with</th></tr>
+  <tr><td><b>1 · It wakes</b></td><td class="n">0:01 to 0:49<br>verses and build</td><td><b>Shush:</b> ink blots land on Eko's ring on the beat. <b>Unravel:</b> the ring frays behind Eko.</td><td>Orb, Meteor, Satellite, one at a time, each through its own lens</td><td>The build is the charge; the big press at the drop pops the first stitches</td></tr>
+  <tr><td><b>2 · It reaches</b></td><td class="n">0:49 to 1:12<br>first drops</td><td>Adds <b>Sweep</b> (a beam of silence turning like a clock hand) and <b>Threads</b> (today's red tethers: hold on or be shaken off)</td><td>Pulsar and Comet join; a new lens every two bars</td><td>A Meteor dash through its hand</td></tr>
+  <tr><td><b>3 · It unravels</b></td><td class="n">1:13 to 1:37<br>last drops</td><td>Two attacks at once, a mirror gate, rings collapsing inward</td><td><b>Dual:</b> Marlow's lantern throws Eko a second spark; Eko as Orb, the spark as Pulsar, one button</td><td>The last press: the mouth comes unstitched</td></tr>
+</table></div>
+<ul>
+  <li><b>Counterattacks.</b> After each attack pattern the Hush breathes in and its stitches loosen for two bars. The gold notes in that window are <b>light notes</b>: each one hit on the beat takes health off the current segment and makes Eko glow brighter.</li>
+  <li><b>Surviving always wins.</b> The press that ends a phase removes whatever is left of that segment, so flow notes still never decide whether you finish. If the segment was already empty, the phase is a <b>clean break</b>: that is how the Hollow's three shards are earned.</li>
+  <li><b>Practice</b> starts at any of the three phases.</li>
+  <li><b>Victory:</b> the jars open, the Hollow floods with the four planets' colours, Marlow's jar lifts, and the song plays out over the ending cards.</li>
+</ul>
+
+<h2>8. What is re-dressed and what is new</h2>
+<div class="box">
+  <p><b>Already in the game, renamed or re-dressed:</b> hops, the two note layers, the charge and the drop, instant restart, practice by section; stars (become shards); B-side moons; quests; the map (becomes the galaxy map); planet hops (springboards); weave (Satellite); the drop's smash (Meteor); flips, turns and tempo changes (gates); twin orbit (dual); tethers (the Hush's threads); orbs (Glows); badges.</p>
+  <p><b>New to build:</b> Pulsar and Comet; Meteor and Satellite as full forms with lenses and safe introductions; chimes, slipstreams and tide pads; the mirror gate and the wider tempo range; dual with two different forms; shard branches; per-planet windows; the world itself (characters, story cards, title, galaxy map, restyled screens, the planet at the centre of play); the boss fight.</p>
+</div>
+
+<h2>9. Six decisions for you</h2>
+<ol class="calls">
+  <li><b>The boss song.</b> <span class="rec">I recommend Royalty,</span> not Invincible. It is already the last level, it is the fastest track (160 BPM), its sections split cleanly into three phases, and its tethers become the Hush's threads. Invincible stays planet 4, where every form meets. The other way round also works: Invincible as the boss, Royalty as planet 4.</li>
+  <li><b>Comet uses holding.</b> You asked to be checked with. <span class="rec">I recommend keeping it:</span> the live game already asks you to hold on every level (rails and lines), so Comet gives holding a face instead of adding a new kind of input.</li>
+  <li><b>What opens the Hollow.</b> Today the gate needs 9 stars. Your brief says collectibles never block progress, so <span class="rec">the Hollow would open when the four planets are cleared,</span> and shards do the things in section 5 instead.</li>
+  <li><b>Dual outside Invincible.</b> You earlier ruled that the twin orbit stays in Invincible. This design uses it once more, in the boss's last phase. <span class="rec">OK to lift that rule for the boss only?</span></li>
+  <li><b>Tighter windows.</b> Planet 1 gets easier (±140 ms); Verdance and the Hollow get clearly harder than today (±90 and ±80 ms, from ±120 and ±100). <span class="rec">These are starting numbers</span> to tune after your playtest.</li>
+  <li><b>Names and looks.</b> Eko, Marlow, the Hush, the Lantern, Emberwick, Cirra, Glassmere, Verdance, the Hollow, lens shards, Glows. Change any of them now and it costs nothing.</li>
+</ol>
+<p class="lede" style="margin-top:22px">These are concept drawings. In the game the same shapes are drawn on the canvas and animated. I have not heard the songs, so "each planet's look matches its song" is based on their titles, tempo and today's level colours; say where it feels wrong.</p>
+</main>
+</body>
+</html>
