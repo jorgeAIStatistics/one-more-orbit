@@ -30,7 +30,7 @@ export function handBars(pack: LevelPack): PressFile {
 /** Both layers as ticks (12 per beat, from the start of the level): hand bars where they exist, the chart elsewhere. */
 export function layerTicks(pack: LevelPack): { survival: number[]; flow: number[] } {
   const hand = handBars(pack).bars;
-  const auto = autoLayers(pack.chart.notes.map((n) => n.t / 12));
+  const auto = autoLayers(pack.chart.notes.map((n) => n.t / 12), accentBeats(pack));
   const isHand = (tick: number) => !!hand[String(Math.floor(tick / TICKS))];
   const survival = auto.survival.map((b) => Math.round(b * 12)).filter((t) => !isHand(t));
   const flow = auto.flow.map((b) => Math.round(b * 12)).filter((t) => !isHand(t));
@@ -41,6 +41,9 @@ export function layerTicks(pack: LevelPack): { survival: number[]; flow: number[
   const sort = (a: number[]) => [...new Set(a)].sort((x, y) => x - y);
   return { survival: sort(survival), flow: sort(flow) };
 }
+
+/** The chart's accents (its biggest hits), in beats. */
+export const accentBeats = (pack: LevelPack): number[] => pack.chart.notes.filter((n) => n.a === 1).map((n) => n.t / 12);
 
 /** The layers in beats, ready for the course builder. */
 export function layers(pack: LevelPack): Layers {

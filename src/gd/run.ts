@@ -4,13 +4,13 @@ import type { LevelPack } from '../game/packs';
 import { save } from '../save';
 import { SmoothClock } from './clock';
 import { buildCourse, type Course } from './course';
-import { layers, pitchLookup } from './presses';
+import { accentBeats, layers, pitchLookup } from './presses';
 import { Sim, type TapResult } from './sim';
 
 export type RunState = 'loading' | 'playing' | 'paused' | 'resuming' | 'failed' | 'done' | 'error';
 /** partial: started part-way through from the menu ("start at the build-up"); plays like a normal run but is not saved */
 export interface RunOptions { bot?: boolean; practice?: boolean; partial?: boolean; startAt?: number; leadIn?: number }
-export interface RunEvent { kind: 'hop' | 'flip' | 'spark' | 'skip' | 'land' | 'crash' | 'drop'; flow?: boolean; charge?: boolean; full?: boolean; power?: number }
+export interface RunEvent { kind: 'hop' | 'flip' | 'spark' | 'skip' | 'land' | 'crash' | 'drop'; flow?: boolean; charge?: boolean; accent?: boolean; smash?: boolean; sling?: boolean; full?: boolean; power?: number }
 
 const RESUME_COUNT = 1.2;
 
@@ -48,7 +48,7 @@ export class GdRun {
   constructor(readonly pack: LevelPack, readonly opts: RunOptions, private onEnd: (run: GdRun) => void) {
     this.level = new Level(pack.level, pack.audio, pack.chart);
     const spb = this.level.spb;
-    this.course = buildCourse(this.level, layers(pack), pitchLookup(pack), pack.level.lab);
+    this.course = buildCourse(this.level, layers(pack), pitchLookup(pack), pack.level.lab, accentBeats(pack));
     this.t0 = this.course.start * spb;
     this.t1 = Math.min(this.course.end * spb, this.level.endTime);
     this.startAt = Math.max(this.t0, opts.startAt ?? this.t0);
@@ -119,7 +119,8 @@ export class GdRun {
       const k = Math.min(14, Math.floor(this.sim.charge * 14));
       audio.pluck(60 + 12 * Math.floor(k / scale.length) + scale[k % scale.length], 0.4);
     }
-    this.events.push({ kind: r.kind, flow: !!r.flow || !!r.auto, charge: !!r.charge });
+    const press = r.kind === 'spark' ? null : this.course.presses[this.sim.ni - 1];
+    this.events.push({ kind: r.kind, flow: !!r.flow || !!r.auto, charge: !!r.charge, accent: !!press?.accent, smash: !!press?.smash, sling: !!press?.sling });
   }
 
   /** The one button. The tap is applied at the moment it happened, not when the next frame runs. */

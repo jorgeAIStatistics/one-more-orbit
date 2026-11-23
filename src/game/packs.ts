@@ -9,12 +9,15 @@ import skyPresses from '../../levels/skyhigh/presses.json';
 import heroesLevel from '../../levels/heroes/level.json';
 import heroesAudio from '../../levels/heroes/audio.json';
 import heroesChart from '../../levels/heroes/chart.json';
+import heroesPresses from '../../levels/heroes/presses.json';
 import blankLevel from '../../levels/blank/level.json';
 import blankAudio from '../../levels/blank/audio.json';
 import blankChart from '../../levels/blank/chart.json';
+import blankPresses from '../../levels/blank/presses.json';
 import invLevel from '../../levels/invincible/level.json';
 import invAudio from '../../levels/invincible/audio.json';
 import invChart from '../../levels/invincible/chart.json';
+import invPresses from '../../levels/invincible/presses.json';
 
 export interface LevelPack {
   level: LevelFile;
@@ -24,8 +27,8 @@ export interface LevelPack {
   presses?: { bars: Record<string, { by: 'hand'; t: number[]; f?: number[] }> };
 }
 
-/** Levels built for the ring-hop core so far (Sky High is a feel lab: its `lab` range only). */
-export const SLICE = ['skyhigh'];
+/** Levels built for the ring-hop core. */
+export const SLICE = ['heroes', 'skyhigh', 'blank', 'invincible'];
 
 export interface TrackCredit { id: string; title: string; artist: string; release: string; playable: boolean }
 export const manifest = manifestJson as { licenceNote: string; creditSuffix: string; tracks: TrackCredit[] };
@@ -35,8 +38,8 @@ export const creditLine = (t: TrackCredit) => `${t.title} – ${t.artist} [${t.r
 const pack = (level: unknown, audio: unknown, chart: unknown, presses?: unknown): LevelPack => ({ level: level as LevelFile, audio: audio as AudioMeta, chart: chart as ChartFile, presses: presses as LevelPack['presses'] });
 
 export const PACKS: LevelPack[] = [
-  pack(heroesLevel, heroesAudio, heroesChart),
+  pack(heroesLevel, heroesAudio, heroesChart, heroesPresses),
   pack(skyLevel, skyAudio, skyChart, skyPresses),
-  pack(blankLevel, blankAudio, blankChart),
-  pack(invLevel, invAudio, invChart)
+  pack(blankLevel, blankAudio, blankChart, blankPresses),
+  pack(invLevel, invAudio, invChart, invPresses)
 ];

@@ -31,11 +31,13 @@ export interface SegmentDef {
   pads?: boolean;
   chain?: number;
   /**
-   * ring-hop core. pulse: marks breathe with the kick. speed: orbit speed (1 = a lap per 8 beats). flip: gravity turns
-   * over on the section's first press. charge: nothing here can end the run; every note is a flow note that charges the drop.
-   * launch: the section opens with a press the game takes itself (the launch into the drop).
+   * ring-hop core. pulse: marks breathe with the kick. charge: nothing here can end the run; every note is a flow note
+   * that charges the drop. smash: the section opens with the drop's big press on its first beat (launch: the game takes
+   * that press itself). flip: gravity turns over on the section's first press. sling: its first press is a slingshot to a
+   * new planet. reverse: the orbit turns round at the section's start. speed: orbit speed (1 = a lap per 8 beats).
+   * twin: twin orbit, a mirrored second ball; one tap moves both.
    */
-  core?: { pulse?: boolean; speed?: number; flip?: boolean; charge?: boolean; launch?: boolean };
+  core?: { pulse?: boolean; speed?: number; flip?: boolean; charge?: boolean; launch?: boolean; smash?: boolean; sling?: boolean; reverse?: boolean; twin?: boolean };
   hazard?: string; // 'beam': hops clear a sweeping beam instead of a spike
   reverse?: boolean;
   /** the one sound this section's taps follow: arp, kick, snare or lead */
@@ -62,6 +64,10 @@ export interface LevelFile {
   swing?: boolean;
   /** pitch classes of the song's scale, lowest first (used for the rising notes while the drop charges) */
   scale?: number[];
+  /** shown on the level card: Easy, Normal, Hard, Insane... */
+  difficulty?: string;
+  /** what this level adds, for the level card */
+  adds?: string;
   /** ring-hop core: the stretch of the level (in beats) that is built so far */
   lab?: [number, number];
   segments: SegmentDef[];

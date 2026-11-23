@@ -1,6 +1,6 @@
 import './style.css';
 import { audio } from './audio/audio';
-import { BADGES, ORBS } from './game/extras';
+import { BADGES, ORBS, earned } from './game/extras';
 import { PACKS as ALL_PACKS, SLICE, creditLine, manifest } from './game/packs';
 import { GdRenderer as Renderer } from './gd/render';
 import { refreshBars } from './gd/presses';
@@ -16,7 +16,8 @@ const PACKS = ALL_PACKS.filter((p) => SLICE.includes(p.level.id));
 let levelIdx = Math.max(0, Math.min(PACKS.length - 1, save.level || 0));
 let pack = PACKS[levelIdx];
 /** The setlist is the difficulty curve: clearing a level unlocks the next. */
-const levelOpen = (i: number) => unlockAll || i === 0 || bestFor(PACKS[i - 1].level.id).cleared;
+const PLAYTEST_OPEN = true; // playtest build: every level is open; set to false for the unlock chain
+const levelOpen = (i: number) => PLAYTEST_OPEN || unlockAll || i === 0 || bestFor(PACKS[i - 1].level.id).cleared;
 function selectLevel(i: number): void {
   levelIdx = (i + PACKS.length) % PACKS.length;
   pack = PACKS[levelIdx];
@@ -63,9 +64,9 @@ function renderMenu(): void {
   $('trackName').textContent = (open ? '' : 'Locked: ') + pack.level.title;
   const spb = 60 / pack.audio.bpm;
   const lab = pack.level.lab;
-  $('menuTag').textContent = lab ? `FEEL LAB · ${fmtTime(lab[0] * spb)} TO ${fmtTime(lab[1] * spb)} OF THE SONG` : 'ONE MORE ORBIT';
-  $('trackMeta').textContent = `${pack.level.artist} · ${pack.audio.bpm} BPM · ${lab ? `build-up into the first drop · ${Math.round((lab[1] - lab[0]) * spb)} s` : fmtTime(pack.audio.length)}`;
-  $('levelRating').textContent = `★ ${pack.chart.stars.toFixed(1)}`;
+  $('menuTag').textContent = lab ? `FEEL LAB · ${fmtTime(lab[0] * spb)} TO ${fmtTime(lab[1] * spb)} OF THE SONG` : PLAYTEST_OPEN ? 'PLAYTEST BUILD · ALL FOUR LEVELS OPEN' : 'ONE MORE ORBIT';
+  $('trackMeta').textContent = `${pack.level.artist} · ${pack.audio.bpm} BPM · ${fmtTime(pack.audio.length - pack.audio.offset)} · drop at ${fmtTime(pack.audio.dropTime - pack.audio.offset)}`;
+  $('levelRating').textContent = `${(pack.level.difficulty ?? '').toUpperCase()}${pack.level.adds ? ` · ${pack.level.adds}` : ''}`;
   $('levelBest').textContent = b.attempts === 0
     ? 'Not played yet'
     : `Best ${b.cleared ? 100 : b.pct}% · ${b.attempts} attempt${b.attempts === 1 ? '' : 's'}${b.cleared ? ' · CLEARED' : ''}`;
@@ -141,10 +142,18 @@ function onRunEnd(r: Run): void {
     startRun(-1, true);
     return;
   }
-  if (counted) save.bests[id] = { ...prev, pct: 100, cleared: true };
+  const fresh: string[] = [];
+  if (counted) {
+    save.bests[id] = { ...prev, pct: 100, cleared: true };
+    const cleared = ALL_PACKS.map((p) => p.level.id).filter((x) => bestFor(x).cleared);
+    // grade, no-miss and hardcore badges belonged to the judged game; a clear here earns the clear badges
+    for (const bid of earned(id, 'B', 1, false, !!save.practiced[id], cleared)) if (!save.badges[bid]) { save.badges[bid] = true; fresh.push(bid); }
+  }
   persist();
   const s = r.sim;
-  $('resUnlocks').textContent = '';
+  const news = fresh.map((bid) => BADGES.find((x) => x.id === bid)?.name || bid).map((n) => `Badge: ${n}`);
+  for (const o of ORBS) if (o.needs && fresh.includes(o.needs)) news.push(`Orb: ${o.name}`);
+  $('resUnlocks').textContent = news.length ? `Unlocked  ${news.join(' · ')}` : '';
   $('resTag').textContent = r.opts.bot ? 'AUTOPLAY · NOT SAVED' : r.opts.practice ? 'PRACTICE · NOT SAVED' : r.opts.partial ? 'FROM THE BUILD-UP · NOT SAVED' : prev.cleared ? `ATTEMPT ${prev.attempts}` : '★ FIRST CLEAR ★';
   $('resTitle').textContent = r.pack.level.lab ? 'LAB COMPLETE' : 'LEVEL COMPLETE';
   $('resSub').textContent = r.level.title;
@@ -412,7 +421,7 @@ const record = initRecord({
   show: (s) => show(s),
   play: (from) => { botMode = false; practice = true; startRun(from); }
 });
-void refreshBars(pack);
+for (const p of PACKS) void refreshBars(p);
 
 const list = $('creditList');
 for (const t of manifest.tracks) { const d = document.createElement('div'); d.className = 'credit'; d.textContent = creditLine(t); list.appendChild(d); }

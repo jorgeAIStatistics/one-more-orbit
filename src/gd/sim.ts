@@ -19,6 +19,7 @@ const SKIP = 0.3; // beats a free hop lasts
 const DEBOUNCE_S = 0.03;
 const GRACE_S = 0.25; // a tap this soon after a flow note is never punished (nor is one before a flow note still to come)
 const GAIN = 1 / 10; // flow per on-beat tap
+const MASH_TAPS = 9; // this many taps inside a second is mashing: it keeps you alive where the level allows, but earns nothing
 const MISS = 1 / 40; // flow lost when a flow note goes by untapped (nothing else happens)
 
 /**
@@ -44,6 +45,8 @@ export class Sim {
   private needJudge = false;
   private used = new Set<number>();
   private fi = 0;
+  private recent: number[] = [];
+  private mashing = false;
   crashed = false;
   crashBeat = -1;
   crashKind: 'edge' | 'early' | '' = '';
@@ -113,6 +116,7 @@ export class Sim {
   }
 
   private gain(): void {
+    if (this.mashing) return;
     this.onBeat++;
     this.streak++;
     this.bestStreak = Math.max(this.bestStreak, this.streak);
@@ -172,6 +176,11 @@ export class Sim {
     const spb = this.c.spb;
     if (this.crashed || (t - this.lastTap) * spb < DEBOUNCE_S) return { kind: 'none' };
     this.lastTap = t;
+    // mashing (outside a charge) is read as off-beat tapping: flow drains and the music muffles, whatever it happens to hit
+    this.recent.push(t);
+    if (this.recent.length > MASH_TAPS) this.recent.shift();
+    this.mashing = this.recent.length === MASH_TAPS && (t - this.recent[0]) * spb < 1 && !this.c.inCharge(t);
+    if (this.mashing) this.off();
     const p = this.c.presses[this.ni];
     const d = p ? t - p.beat : -Infinity;
     const nf = this.nearFlow(t);

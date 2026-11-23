@@ -6,19 +6,33 @@ A one-button rhythm game: a ball orbits a ring in time with the music, you tap a
 
 **Music licence.** The tracks are NCS releases and are here for private testing only. Releasing the game needs a game licence from NoCopyrightSounds (ncs.io). Credits and that note are in `levels/manifest.json` and shown in the game.
 
-## Ring-hop core on the `gd-core` branch (Sky High feel lab)
+## Ring-hop core on the `gd-core` branch (four levels)
 
-The current direction mixes Geometry Dash's forgiving survival structure with the orbit rhythm game. Built so far: a feel lab, Sky High from 0:30 to 1:02 (the build-up into the first drop), plus Record Mode.
+The current direction mixes Geometry Dash's forgiving survival structure with the orbit rhythm game. All four levels are built for it, each adding to the one before:
+
+| Level | Difficulty | Adds |
+|---|---|---|
+| Heroes Tonight | Easy | The basics: ring hops, gold flow notes, charging the drop, the drop's smash |
+| Sky High | Normal | Gravity flip, the slingshot |
+| Blank | Hard | Reversals, speed portals |
+| Invincible | Insane | Twin orbit (a mirrored second ball; one tap moves both), plus everything before |
+
+`python tools/intensity.py` measures each excerpt (loudness, bass, hits per second, tempo, drop impact) for the setlist order.
 
 - **Two layers of notes.** *Survival presses* (white marks) are the strong beats only, never closer than a beat: a tap on one hops the ball to the next ring, and the flight lasts until the next press (two beats at most, then it rides). *Flow notes* (gold) are every faster note in the music: optional taps on the ring or in mid-flight that can never end the run.
 - **Survival is geometry.** An opening is clearable within ±120 ms of its note. Ride past the mark and the ring ends; tap too early near an opening with no flow note around and the ball hits the ring above. Taps far from any opening, or anywhere near a flow note, are free. A crash restarts at once; practice restarts from the section, and the game plays the run-in for you.
 - **Flow is rhythm.** Taps within ±40 ms of a note of either layer build the flow meter (the gold arc round the core) and sparkle. An off-beat press takes a notch off; a flow note that goes by untapped costs a sliver. After three off-beat presses in a row the music starts to muffle and the colours drain, a step per further one; two on-beat taps clear it. On hook sections an on-beat tap also plays the hook's pitch.
 - **The build-up is a charge.** In sections marked `charge` nothing can end the run. Every note is a flow note, and each one you touch fills the drop's charge (the white arc round the core; three notes in four fills it) while the ring, core and equalizer wind up. Mashing is safe there but leaks charge.
-- **The drop is as big as you made it.** A section marked `launch` opens with a press the game takes itself, so the drop cannot be missed. Its size is charge times flow: full gives the flash, shockwave, shattering rings and camera kick; less gives less.
+- **The drop is as big as you made it.** Its size is charge times flow, and it scales everything in the set piece: the flash, three shockwaves, every ring shattering into turning shards, the camera thrown back, light rays and bloom behind the course. Through the drop the equalizer's bars reach across the screen on the kick, kicks throw bursts off the core and bump the camera, snares flicker the colour (reduced motion tones all of it down). On-beat taps in the loud parts fire a shockwave and light the rings. Marks, ceilings, flow notes and the ball are always drawn last, on top.
+- **Big hits.** The first press of each half of a drop phrase and the chart's accents are drawn bigger with a ring closing in on them; they are ordinary presses with the usual opening. Mashing (nine taps inside a second, outside a charge) earns no flow and muffles the music.
 - **Generated layers.** For bars without a hand recording, `autoLayers` in `src/gd/course.ts` picks the presses: notes on the beat first, then off-beat accents with a clear beat either side; everything else becomes a flow note.
-- **Per-section settings** live in `levels/<id>/level.json` under `core`: `pulse` (marks breathe with the kick), `charge`, `launch`, `flip` (gravity turns over on the section's first press: you ride the inside and hop inward), `speed` (orbit speed; unused in the lab). `lab` at the top of the file is the stretch that is built.
+- **Per-section settings** live in `levels/<id>/level.json` under `core`: `pulse` (marks breathe with the kick), `charge`, `smash` (the section opens with the drop's big gold press, ±160 ms; `launch` makes the game take it), `flip` (gravity turns over on the section's first press), `sling` (its first press is a slingshot several rings out), `reverse` (the orbit turns round at the section's start), `speed` (orbit speed), `twin` (twin orbit: marks alternate between the two balls, big hits on both). Three of the layouts are generated by `tools/_levels.py` (its `core=` argument); Sky High's is hand-kept.
 - **Start at the build-up** on the menu starts runs at the first charge section (not saved), to reach the drop quickly.
 - Code: `src/gd/course.ts` (notes to rings), `src/gd/sim.ts` (fixed 240 Hz steps, survival, flow and charge), `src/gd/clock.ts` (smooth clock), `src/gd/run.ts`, `src/gd/render.ts`. `tests/gd.test.ts` covers autoplay in full flow, press spacing and window sizes, "nothing can crash in the build-up", the charge, flow notes never hurting, uneven timing, the muffle steps, mash bots at 8, 10 and 12 taps a second, and the clock.
+
+### Listening previews
+
+`npx vite-node tools/export-layers.ts` writes each level's two layers as the game builds them (and prints a section-by-section summary); `python tools/preview.py <id>` then renders `../v4-chart-previews/<id>.mp3` with a bright click on every survival press and a soft low tick on every flow note.
 
 ### Record Mode (dev tool)
 

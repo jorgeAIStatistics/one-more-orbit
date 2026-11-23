@@ -25,14 +25,14 @@ export interface SaveData {
   practiced: Record<string, boolean>;
   bests: Record<string, LevelBest>;
   teachSeen: Record<string, boolean>;
-  /** which core the bests belong to: 3 = the ring-hop core (progress and attempts, no grades) */
+  /** which core the bests belong to: 4 = the ring-hop levels (progress and attempts, no grades) */
   core: number;
   /** the quick sync check has been done (or skipped) on this device */
   calibrated: boolean;
 }
 
 const defaults = (): SaveData => ({
-  music: 0.8, sfx: 0.7, audioOffset: 0, visualOffset: 0, reducedMotion: false, hardcore: false, errorBar: true, level: 0, skin: 'cyan', badges: {}, practiced: {}, bests: {}, teachSeen: {}, core: 3, calibrated: false
+  music: 0.8, sfx: 0.7, audioOffset: 0, visualOffset: 0, reducedMotion: false, hardcore: false, errorBar: true, level: 0, skin: 'cyan', badges: {}, practiced: {}, bests: {}, teachSeen: {}, core: 4, calibrated: false
 });
 
 function load(): SaveData {
@@ -44,8 +44,8 @@ function load(): SaveData {
       Object.assign(d, p, { bests: {}, teachSeen: { ...(p.teachSeen || {}) }, badges: { ...(p.badges || {}) }, practiced: { ...(p.practiced || {}) } });
       // bests are per level now; entries from the three-difficulty build ("skyhigh:hard") are dropped
       // ...and so are bests from the judged one-button build: its progress and clears say nothing about this core
-      if (p.core === 3) for (const [k, v] of Object.entries(p.bests || {})) if (!k.includes(':')) d.bests[k] = v as LevelBest;
-      d.core = 3;
+      if (p.core === 4) for (const [k, v] of Object.entries(p.bests || {})) if (!k.includes(':')) d.bests[k] = v as LevelBest;
+      d.core = 4;
     }
   } catch { /* storage unavailable: play with defaults */ }
   d.audioOffset = Math.max(-200, Math.min(400, Math.round(Number(d.audioOffset) || 0)));
