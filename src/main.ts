@@ -235,7 +235,7 @@ const LESSONS: Array<[number, string]> = [
   [-9, 'The ball orbits <i>by itself</i>, in time with the music.'],
   [2.6, 'TAP anywhere as it crosses a <i>white mark</i>. A little early or late still counts.'],
   [12, '<b>Gold notes</b> are bonus taps. On the beat they build <b>flow</b>: the gold arc round the core.'],
-  [18.5, 'Miss a white mark and the run restarts at once. That is all there is to it.']
+  [17, '<b>Gold rails</b>: keep your finger down to ride along them. Only a missed <i>white mark</i> restarts the run.']
 ];
 function startTutorial(): void {
   run?.stop();
@@ -410,7 +410,7 @@ function showResults(r: Run, cleared: boolean, reached = r.pct): void {
   $('resCharge').textContent = session.drop < 0 ? '–' : `${Math.round(session.drop * 100)}%`;
   $('resUnlocks').innerHTML = unlocks.join('');
   const sm = r.smoothness();
-  $('resNote').textContent = r.opts.bot ? `Autoplay. Movement check: ${sm.frames} frames, clock speed never more than ${sm.worstPct.toFixed(2)}% off.` : cleared && r.dropFull === false ? `The drop played at ${Math.round(r.dropPower * 100)}%. Tap the roll's notes and arrive in flow for the full one.` : '';
+  $('resNote').textContent = r.opts.bot ? `Autoplay. Movement check: ${sm.frames} frames, clock speed never more than ${sm.worstPct.toFixed(2)}% off.` : cleared && r.dropFull === false ? `The drop played at ${Math.round(r.dropPower * 100)}%. Tap the roll's notes and arrive in flow for the full one.` : cleared && r.course.holds.length ? `Gold holds collected in full: ${r.sim.holdsFull} of ${r.course.holds.length}.` : '';
   console.log(`[one more orbit] ${r.opts.bot ? 'autoplay' : 'run'} ${cleared ? 'cleared' : 'left'} ${r.level.title}: ${r.sim.onBeat}/${r.sim.judged} taps on the beat, best streak ${r.sim.bestStreak}, drop at ${Math.round(r.dropPower * 100)}%. Movement check: ${sm.frames} frames, clock speed never more than ${sm.worstPct.toFixed(2)}% off (average ${sm.meanPct.toFixed(3)}%)`);
   showSync('resSyncText', 'resSyncFix');
   const next = $<HTMLButtonElement>('nextBtn');
@@ -473,8 +473,19 @@ window.addEventListener('pointerdown', (e) => {
   if (btn && screen !== 'play') feel('pick');
   if (screen !== 'play' || btn) return;
   e.preventDefault();
+  fingers.add(e.pointerId);
   tap(stamp(e));
 }, { passive: false });
+// Holds: the button is down while any finger (or key) is. Letting the last one go is the release.
+const fingers = new Set<number>();
+const keysDown = new Set<string>();
+function letGo(t: number): void {
+  if (fingers.size || keysDown.size) return;
+  if (run && screen === 'play' && !run.opts.bot) run.release(t);
+}
+for (const type of ['pointerup', 'pointercancel'] as const) window.addEventListener(type, (e) => { if (fingers.delete(e.pointerId)) letGo(stamp(e)); });
+window.addEventListener('keyup', (e) => { if (keysDown.delete(e.code)) letGo(stamp(e)); });
+window.addEventListener('blur', () => { fingers.clear(); keysDown.clear(); letGo(performance.now()); });
 // iOS Safari only lets sound start from the end of a touch (or a click), not from its start: wake the audio there too.
 // The same call brings it back after a phone call or a trip to another app.
 for (const type of ['pointerup', 'touchend', 'click'] as const) window.addEventListener(type, () => { if (audio.ctx && !audio.running && !(run && (run.state === 'paused' || run.state === 'resuming'))) void audio.resume(); }, { capture: true, passive: true });
@@ -496,7 +507,7 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (screen === 'play') {
-    if (back || e.code === 'KeyP') pause(); else if (e.code === 'KeyR' && !run?.opts.tutorial) startRun(-1, true); else if (e.code !== 'Tab') { e.preventDefault(); tap(stamp(e)); } // any key is the button
+    if (back || e.code === 'KeyP') pause(); else if (e.code === 'KeyR' && !run?.opts.tutorial) startRun(-1, true); else if (e.code !== 'Tab') { e.preventDefault(); keysDown.add(e.code); tap(stamp(e)); } // any key is the button
     return;
   }
   if (screen === 'pause') { if (back || e.code === 'Space' || e.code === 'Enter') resume(); else if (e.code === 'KeyR') startRun(-1, true); return; }
@@ -506,6 +517,9 @@ window.addEventListener('keydown', (e) => {
 
 function pause(): void {
   if (!run || screen !== 'play' || run.state !== 'playing' || run.finale) return;
+  fingers.clear();
+  keysDown.clear();
+  run.release(performance.now()); // a held button does not stay held through a pause
   run.pause();
   showSync('pauseSyncText', 'pauseSyncFix');
   const tut = !!run.opts.tutorial;
@@ -839,6 +853,7 @@ function tick(now: number): void {
     run.frame(now);
     if (!run.opts.bot) for (const ev of run.events) {
       if (ev.kind === 'hop' || ev.kind === 'flip') feel(ev.smash || ev.sling ? 'big' : 'tap');
+      else if (ev.kind === 'tick') feel('tap'); // gold along a hold: a light tick under the thumb
       else if (ev.kind === 'drop') feel('big');
       else if (ev.kind === 'crash') feel('crash');
       else if (ev.kind === 'finale') feel('win');

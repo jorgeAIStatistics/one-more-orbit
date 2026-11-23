@@ -29,13 +29,19 @@ for (const [lvl, beat0, secs, how] of RUNS) {
     // a person: taps land 0 to 45 ms either side of the note, and each reaches the game up to a frame late
     let k = 0; let seed = 7;
     const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
-    let offs = [];
+    // follows the level's own script of button moves (taps, and holds kept down to their end)
+    const offs = [];
     const feed = bot ? 0 : setInterval(() => {
       const run = o.run; if (!run || run.state !== 'playing') return;
-      const taps = run.course.taps;
-      while (k < taps.length && taps[k] * spb < Math.max(run.startAt, run.time - 0.3)) k++;
-      if (offs[k] === undefined) offs[k] = (rnd() - 0.5) * 0.09;
-      if (k < taps.length && run.clock.at(performance.now()) >= taps[k] * spb + offs[k]) { run.tap(performance.now() - rnd() * 16); k++; }
+      const moves = run.course.script;
+      while (k < moves.length && moves[k][0] * spb < Math.max(run.startAt, run.time - 0.3)) k++;
+      if (k >= moves.length) return;
+      const [at, down] = moves[k];
+      if (down && offs[k] === undefined) offs[k] = (rnd() - 0.5) * 0.09; // a person: 0 to 45 ms either side of the note
+      // a finger comes up before it goes down again: if the next tap is due, the one before is let go first
+      const due = (i) => run.clock.at(performance.now()) >= moves[i][0] * spb + (offs[i] ?? 0);
+      if (!down && (due(k) || (k + 1 < moves.length && due(k + 1)))) { run.release(performance.now()); k++; return; }
+      if (down && due(k)) { run.tap(performance.now() - rnd() * 16); k++; }
     }, 2);
     const pts = [];
     await new Promise((res) => {

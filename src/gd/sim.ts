@@ -1,8 +1,10 @@
-import { FLOW_S, NEAR, arc, rise, smoothstep, type Course, type FlowNote, type Press } from './course';
+import { FLOW_S, FLOW_TOL_S, NEAR, arc, rise, smoothstep, type Course, type FlowNote, type Hold, type Press } from './course';
 
 export interface TapResult {
-  /** hop / flip: a survival press. spark: a flow note. skip: a free tap. */
-  kind: 'hop' | 'flip' | 'spark' | 'skip' | 'none' | 'crash';
+  /** hop / flip: a survival press. spark: a flow note. skip: a free tap. tick: gold collected along a hold. held: a hold has gone by. release: let go right on a hold's end. */
+  kind: 'hop' | 'flip' | 'spark' | 'skip' | 'none' | 'crash' | 'tick' | 'held' | 'release';
+  /** held: every piece of gold along the hold was collected */
+  full?: boolean;
   /** seconds from the note (negative = early), for taps that met a note */
   err?: number;
   /** true if the tap was close enough to the note to build flow */
@@ -21,6 +23,7 @@ const GRACE_S = 0.25; // a tap this soon after a flow note is never punished (no
 const GAIN = 1 / 10; // flow per on-beat tap
 const MASH_TAPS = 9; // this many taps inside a second is mashing: it keeps you alive where the level allows, but earns nothing
 const MISS = 1 / 40; // flow lost when a flow note goes by untapped (nothing else happens)
+const TICK_GAIN = 1 / 20; // flow per piece of gold collected along a hold
 
 /**
  * Fixed-timestep simulation of the ball. Deterministic: the same taps give the same run at any frame rate.
@@ -69,6 +72,19 @@ export class Sim {
 
   /** times the game stepped in for the player (tutorial only) */
   helped = 0;
+  // ---- holds
+  /** is the button down right now */
+  down = false;
+  private downAt = -99;
+  private upAt = -99;
+  private hi = 0;
+  private ti = 0;
+  private got = 0;
+  private ticked = new Set<number>();
+  private let = new Set<number>();
+  /** holds that have gone by, and how many of them were collected in full */
+  holdsSeen = 0;
+  holdsFull = 0;
 
   /** forgiving: nothing ends the run. A missed mark is taken for the player and an early tap is ignored (the tutorial). */
   constructor(readonly c: Course, start: number, private autoUntil = -Infinity, private forgiving = false) {
@@ -76,6 +92,7 @@ export class Sim {
     const ps = c.presses;
     while (this.ni < ps.length && ps[this.ni].beat + ps[this.ni].tol < start) this.ni++;
     while (this.fi < c.flow.length && c.flow[this.fi].beat < Math.max(start, autoUntil)) this.fi++;
+    while (this.hi < c.holds.length && c.holds[this.hi].b < start) this.hi++;
     const prev = ps[this.ni - 1];
     const next = ps[this.ni];
     this.lv = next ? next.from : prev ? prev.to : 0;
@@ -121,6 +138,21 @@ export class Sim {
 
   noteUsed(beat: number): boolean {
     return this.used.has(beat);
+  }
+
+  /** Has this piece of gold on a hold been collected (or gone by). */
+  tickGone(beat: number): boolean {
+    return this.ticked.has(beat);
+  }
+
+  /** The hold the ball is on at a beat, if any. */
+  holdAt(t: number): Hold | null {
+    for (let i = Math.max(0, this.hi - 1); i < this.c.holds.length; i++) {
+      const h = this.c.holds[i];
+      if (h.a > t + 0.3) break;
+      if (t >= h.a - 0.3 && t <= h.b + 1e-6) return h;
+    }
+    return null;
   }
 
   private gain(): void {
@@ -184,6 +216,7 @@ export class Sim {
   press(t: number): TapResult {
     this.advance(t);
     const spb = this.c.spb;
+    if (!this.down) { this.down = true; this.downAt = t; }
     if (this.crashed || (t - this.lastTap) * spb < DEBOUNCE_S) return { kind: 'none' };
     if (t < this.autoUntil) return { kind: 'none' }; // the game is still playing the run-in: taps do nothing until it hands over
     this.lastTap = t;
@@ -227,6 +260,7 @@ export class Sim {
       if (this.needJudge) { this.needJudge = false; const err = (t - this.doneBeat) * spb; return { kind: 'none', err, flow: this.judge(err) }; }
       return { kind: 'none' };
     }
+    if (this.holdAt(t)) return free(); // picking a hold up part-way along: never punished
     if (this.c.inCharge(t)) {
       // charging the drop: tap away, nothing here can end the run; taps that miss the roll just leak a little charge
       this.charge = Math.max(0, this.charge - 0.4 / Math.max(1, 0.75 * this.c.chargeNotes));
@@ -238,6 +272,27 @@ export class Sim {
     if (d < -NEAR) { this.off(); return free(); } // far from any opening: free, though it is not on the beat
     if (this.forgiving) return free();
     return this.crash('early', t); // went for the opening too soon and hit the ring
+  }
+
+  /** The button comes up at beat-time t. Letting go right on a hold's end counts like an on-beat tap; nothing else happens. */
+  release(t: number): TapResult {
+    this.advance(t);
+    if (!this.down) return { kind: 'none' };
+    this.down = false;
+    this.upAt = t;
+    if (this.crashed || t < this.autoUntil) return { kind: 'none' };
+    const spb = this.c.spb;
+    for (let i = Math.max(0, this.hi - 1); i < this.c.holds.length && i <= this.hi + 1; i++) {
+      const h = this.c.holds[i];
+      const err = (t - h.b) * spb;
+      if (Math.abs(err) > FLOW_TOL_S || this.let.has(h.i) || (t - this.downAt) < 0.5) continue;
+      this.let.add(h.i);
+      this.judged++;
+      const ok = Math.abs(err) <= FLOW_S + 1e-9;
+      if (ok) this.gain();
+      return { kind: 'release', err, flow: ok };
+    }
+    return { kind: 'none' };
   }
 
   private skip(t: number, before: number): void {
@@ -256,6 +311,29 @@ export class Sim {
       while (this.fi < fl.length && fl[this.fi].beat + fl[this.fi].tol < nb) {
         const f = fl[this.fi++];
         if (!this.used.has(f.beat) && !f.charge) this.flow = Math.max(0, this.flow - MISS);
+      }
+      // gold along a hold: yours if the button is down as the ball reaches it (or came up only just before)
+      const g = FLOW_TOL_S / this.c.spb;
+      while (this.hi < this.c.holds.length) {
+        const h = this.c.holds[this.hi];
+        while (this.ti < h.ticks.length && h.ticks[this.ti] + g < nb) {
+          const tk = h.ticks[this.ti++];
+          this.ticked.add(tk);
+          if (tk < this.autoUntil) { this.got++; continue; }
+          if ((this.down && this.downAt <= tk + g) || (!this.down && this.upAt >= tk - g && this.downAt <= tk + g)) {
+            this.got++;
+            if (!this.mashing) this.flow = Math.min(1, this.flow + TICK_GAIN);
+            this.out.push({ kind: 'tick' });
+          } else this.flow = Math.max(0, this.flow - MISS);
+        }
+        if (this.ti < h.ticks.length || nb <= h.b + g) break;
+        this.holdsSeen++;
+        const full = this.got === h.ticks.length;
+        if (full) this.holdsFull++;
+        if (h.b >= this.autoUntil) this.out.push({ kind: 'held', full });
+        this.hi++;
+        this.ti = 0;
+        this.got = 0;
       }
       if (this.mode === 'flight' && this.fl && nb >= this.fl.t1) {
         this.lv = this.fl.to;

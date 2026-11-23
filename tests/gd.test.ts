@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { PACKS, SLICE } from '../src/game/packs';
 import { Level } from '../src/game/level';
 import { SmoothClock } from '../src/gd/clock';
-import { autoLayers, buildCourse, landingGrace, SLING_FLIGHT, TOL_S } from '../src/gd/course';
+import { autoLayers, buildCourse, HOLD_MAX, HOLD_MIN, landingGrace, LINE_CLEAR, SLING_FLIGHT, TOL_S } from '../src/gd/course';
 import { accentBeats, layerTicks, layers, pitchLookup } from '../src/gd/presses';
 import { Sim } from '../src/gd/sim';
 
@@ -15,17 +15,20 @@ for (const pack of PACKS.filter((p) => SLICE.includes(p.level.id))) {
   const ms = (x: number) => x / 1000 / course.spb; // milliseconds as beats
   const pressBeats = course.presses.map((p) => p.beat);
 
-  /** Plays the level with taps at the given beat-times, stepping like 60 fps frames. */
-  const run = (taps: number[], start = course.start - 3, until = course.end) => {
+  /** Plays the level from a list of button moves ([beat, down?]), stepping like 60 fps frames. */
+  const play = (moves: Array<[number, boolean]>, start = course.start - 3, until = course.end) => {
     const sim = new Sim(course, start);
     let i = 0;
-    while (i < taps.length && taps[i] < start) i++;
+    while (i < moves.length && moves[i][0] < start) i++;
     for (let b = start; b < until && !sim.crashed; b += 1 / 60 / course.spb) {
-      while (i < taps.length && taps[i] <= b) sim.press(taps[i++]);
+      while (i < moves.length && moves[i][0] <= b) { const [t, down] = moves[i++]; if (down) sim.press(t); else sim.release(t); }
       sim.advance(b);
     }
     return sim;
   };
+  /** Quick taps at the given beat-times: each is let go a moment later (so no hold is ever held). */
+  const run = (taps: number[], start = course.start - 3, until = course.end) =>
+    play(taps.flatMap((t, i): Array<[number, boolean]> => [[t, true], [Math.min(t + 0.12, i + 1 < taps.length ? Math.max(t, taps[i + 1] - 0.02) : t + 0.12), false]]), start, until);
   const spam = (from: number, rate: number, phase = 0, to = course.end) => {
     const out: number[] = [];
     for (let b = from + phase / rate / course.spb; b < to; b += 1 / rate / course.spb) out.push(b);
@@ -34,12 +37,13 @@ for (const pack of PACKS.filter((p) => SLICE.includes(p.level.id))) {
 
   describe(`${id}: ring-hop level`, () => {
     it('autoplay clears it in full flow, with a full charge and the full drop', () => {
-      const s = run(course.taps);
+      const s = play(course.script);
       const secs = (course.end - course.start) * course.spb;
       const kinds = (k: string) => course.presses.filter((p) => (p as unknown as Record<string, unknown>)[k]).length;
       console.log(`LEVEL ${id}: ${secs.toFixed(0)} s at ${pack.audio.bpm} BPM, drop at ${(course.dropBeat * course.spb).toFixed(1)} s; ${course.presses.length} survival presses (${(course.presses.length / secs).toFixed(2)}/s; ${kinds('smash')} smash, ${kinds('accent')} accents, ${kinds('sling')} planet hops, ${kinds('weave')} weave, ${course.presses.filter((p) => p.kind === 'flip' && !p.weave).length} other flips, ${kinds('spin')} spin gates, ${course.presses.filter((p) => p.twin).length} twin), ${course.flow.length} flow notes (${course.chargeNotes} charge); turns ${course.turns.length}, speed changes ${course.portals.length}, planets ${course.presses[course.presses.length - 1].planetTo + 1}`);
       expect(s.crashed, `${s.crashKind} at ${s.crashBeat}`).toBe(false);
-      expect(s.onBeat).toBe(course.taps.length);
+      expect(s.onBeat).toBe(course.taps.length + course.holds.length); // every tap, and every hold let go on its end
+      expect(s.holdsFull).toBe(course.holds.length);
       expect(s.flow).toBe(1);
       expect(s.charge).toBe(1);
       expect(s.muffle).toBe(0);
@@ -55,7 +59,7 @@ for (const pack of PACKS.filter((p) => SLICE.includes(p.level.id))) {
 
     it('every note of the chart is played in exactly one layer; flights land on the next press or within two beats', () => {
       const chart = pack.chart.notes.map((n) => n.t / 12).filter((b) => b >= course.start && b < course.end - 0.5);
-      const got = new Set(course.taps.map((b) => b.toFixed(3)));
+      const got = new Set([...course.taps, ...course.holds.flatMap((h) => h.ticks)].map((b) => b.toFixed(3))); // a tap, or gold along a hold
       for (const b of chart) expect(got.has(b.toFixed(3)), `note ${b}`).toBe(true);
       expect(new Set(course.taps).size).toBe(course.taps.length);
       course.presses.forEach((p, i) => {
@@ -199,6 +203,57 @@ for (const pack of PACKS.filter((p) => SLICE.includes(p.level.id))) {
         expect(run([...before, ...spam(p.beat + 0.3, 10, 0, next.beat - next.tol - 0.1)], course.start - 3, next.beat - next.tol - 0.05).crashed, `mashing after the hop at ${p.beat}`).toBe(false);
       }
       console.log(`HOPS ${id}: ${hops.length} planet hops at beats ${hops.map((p) => p.beat).join(', ')}; landing grace ${landingGrace(course.spb)} beats (${(landingGrace(course.spb) * course.spb).toFixed(2)} s)`);
+    });
+
+    it('holds can never end the run, leave time to let go, and swallow the notes they cover', () => {
+      if (!level.file.holds) { expect(course.holds).toEqual([]); return; }
+      expect(course.holds.length).toBeGreaterThan(8);
+      course.holds.forEach((h, i) => {
+        expect(h.b - h.a, `hold at ${h.a}`).toBeGreaterThanOrEqual(HOLD_MIN - 1e-9);
+        expect(h.b - h.a, `hold at ${h.a}`).toBeLessThanOrEqual(HOLD_MAX + 1e-9);
+        if (i > 0) expect(h.a - course.holds[i - 1].b, `gap before the hold at ${h.a}`).toBeGreaterThanOrEqual(0.5 - 1e-9);
+        // after a hold ends there is time to let go before the next white mark
+        const next = course.presses.find((p) => p.beat > h.a + 1e-6);
+        if (next) expect(next.beat - h.b, `after the hold at ${h.a}`).toBeGreaterThanOrEqual((h.rail ? 0.5 : LINE_CLEAR) - 1e-9);
+        // a rail starts on a white mark, a line on a gold note; nothing else asks for a tap inside either
+        if (h.rail) expect(pressBeats.includes(h.a)).toBe(true); else expect(course.flow.some((f) => f.beat === h.a && f.hold === i)).toBe(true);
+        expect(course.taps.filter((t) => t > h.a + 1e-6 && t <= h.b + 1e-6), `taps inside the hold at ${h.a}`).toEqual([]);
+        expect(course.inCharge(h.a) || course.inCharge(h.b)).toBe(false);
+      });
+      // never holding at all clears (quick taps), with no gold from the holds
+      const taps = run(course.taps);
+      expect(taps.crashed).toBe(false);
+      expect(taps.holdsFull).toBe(0);
+      // holding everything (the button stays down from each tap until just before the next) clears too
+      const legato = play(course.taps.flatMap((t, i): Array<[number, boolean]> => [[t, true], [i + 1 < course.taps.length ? course.taps[i + 1] - 0.08 : t + 0.5, false]]));
+      expect(legato.crashed, `held throughout: ${legato.crashKind} at ${legato.crashBeat.toFixed(2)}`).toBe(false);
+      // letting go 150 ms early or late on every hold costs a little gold at most, never the run
+      for (const off of [-150, 150]) {
+        const s = play(course.script.map(([t, down]): [number, boolean] => [down || !course.holds.some((h) => h.b === t) ? t : t + ms(off), down]).sort((x, y) => x[0] - y[0] || Number(x[1]) - Number(y[1])));
+        expect(s.crashed, `let go ${off} ms off`).toBe(false);
+        expect(s.holdsFull, `let go ${off} ms off`).toBeGreaterThanOrEqual(off > 0 ? course.holds.length : 0);
+      }
+      // starting every hold 120 ms late still collects nearly all of it
+      const late = play(course.script.map(([t, down]): [number, boolean] => [down && course.holds.some((h) => !h.rail && h.a === t) ? t + ms(120) : t, down]));
+      expect(late.crashed).toBe(false);
+      console.log(`HOLDS ${id}: ${course.holds.filter((h) => h.rail).length} rails and ${course.holds.filter((h) => !h.rail).length} lines; late starts collected ${late.holdsFull} of ${course.holds.length} in full`);
+    });
+
+    it('a drop keeps you busy: never more than two beats with nothing to do, and no bar rhythm more than twice running', () => {
+      if (!level.file.holds) return;
+      for (const s of level.segments.filter((x) => x.label === 'DROP')) {
+        // things to do: taps, and the whole length of every hold
+        const marks = [s.beat0, ...course.taps.filter((t) => t >= s.beat0 && t < s.beat1), s.beat1];
+        const busy = (from: number, to: number) => course.holds.filter((h) => h.b > from && h.a < to).reduce((left, h) => Math.max(0, left - (Math.min(h.b, to) - Math.max(h.a, from))), to - from);
+        let worst = 0;
+        for (let i = 1; i < marks.length; i++) worst = Math.max(worst, busy(marks[i - 1], marks[i]));
+        expect(worst, `longest wait in ${s.id}`).toBeLessThanOrEqual(2 + 1e-9);
+        const acts = course.taps.filter((t) => t >= s.beat0 && t < s.beat1).length;
+        expect(acts / ((s.beat1 - s.beat0) * course.spb), `actions a second in ${s.id}`).toBeGreaterThanOrEqual(1);
+        const sig = (bar: number) => [...course.taps.filter((t) => Math.floor(t / 4 + 1e-6) === bar).map((t) => (t - bar * 4).toFixed(2)), ...course.holds.filter((h) => Math.floor(h.a / 4 + 1e-6) === bar).map((h) => `h${(h.a - bar * 4).toFixed(2)}-${(h.b - h.a).toFixed(1)}`)].join(' ');
+        let same = 1;
+        for (let bar = s.bar0 + 1; bar < s.bar0 + s.bars; bar++) { same = sig(bar) === sig(bar - 1) ? same + 1 : 1; expect(same, `bar ${bar} of ${s.id}`).toBeLessThanOrEqual(2); }
+      }
     });
 
     it('same music, same pattern: sections sharing a motif have the same presses and flow notes', () => {

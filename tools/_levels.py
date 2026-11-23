@@ -4,7 +4,7 @@ from _mk import seg, write
 def L(p, bg='stars', eq='bars', **k): return dict(palette=p, bg=bg, eq=eq, **k)
 
 # ---- 1. Heroes Tonight: the basics. Gates, doubles, one reverse, a speed jump and rocket at the drop. Circles only.
-write('heroes', dict(id='heroes', title='Heroes Tonight (feat. Johnning)', artist='Janji', release='NCS Release', hitsoundNote=68, scale=[8, 10, 0, 1, 3, 5, 7], difficulty='Easy', adds='Planet hop: slingshots from planet to planet'), [
+write('heroes', dict(id='heroes', title='Heroes Tonight (feat. Johnning)', artist='Janji', release='NCS Release', hitsoundNote=68, scale=[8, 10, 0, 1, 3, 5, 7], difficulty='Easy', adds='Planet hop: slingshots from planet to planet', holds=True), [
   seg('calm', 4, 'INTRO', 16, 'arp', ['L=8'], L('dawn', zoom=[0.9, 1]), lead='snare', motif='calm', cycle=4, teach='TAP as the ball crosses each gate'),
   seg('calm2', 4, 'INTRO', 16, 'arp', ['L=8'], L('sky'), lead='snare', motif='calm', cycle=4),
   seg('build', 2, 'BUILD', 8, 'kick', ['B=@x...x...x...x...'], L('dusk', bg='tunnel', zoom=[1, 1.04]), warn='BUILD-UP'),

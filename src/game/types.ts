@@ -73,6 +73,8 @@ export interface LevelFile {
   adds?: string;
   /** ring-hop core: the stretch of the level (in beats) that is built so far */
   lab?: [number, number];
+  /** holds: long hops become gold rails to hold through, and empty stretches of ring get gold lines to float along */
+  holds?: boolean;
   segments: SegmentDef[];
 }
 

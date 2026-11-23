@@ -17,6 +17,7 @@
   "scale": [8, 10, 0, 1, 3, 5, 7],
   "difficulty": "Easy",
   "adds": "Planet hop: slingshots from planet to planet",
+ "holds": true,
   "segments": [
     {"id": "calm", "core": {"bars": ["up"], "record": true}, "bars": 4, "label": "INTRO", "lap": 16, "follow": "arp", "lead": "snare", "motif": "calm", "cycle": 4, "teach": "TAP as the ball crosses each gate", "look": {"palette": "dawn", "bg": "stars", "eq": "bars", "zoom": [0.9, 1]},
       "plan": ["L=8"] },

@@ -47,11 +47,26 @@ export interface Press {
   pitch: number | null;
   seg: number;
 }
-/** An optional note: on a ring or in mid-flight, wherever the ball is at that moment. */
-export interface FlowNote { beat: number; tol: number; pitch: number | null; charge: boolean; rho: number; side: number; air: boolean; twin: 'a' | 'b' | 'both' | null; planet: number }
+/** An optional note: on a ring or in mid-flight, wherever the ball is at that moment. `hold`: it starts that gold line. */
+export interface FlowNote { beat: number; tol: number; pitch: number | null; charge: boolean; rho: number; side: number; air: boolean; twin: 'a' | 'b' | 'both' | null; planet: number; hold: number }
+/**
+ * A hold: keep the button down from `a` to `b` and the gold along it is yours. It can never end the run.
+ * A rail rides a long hop: press on the white mark as usual, and keep holding through the flight.
+ * A line floats above an empty stretch of ring: press on its first gold note and the ball lifts to ride along it.
+ */
+export interface Hold {
+  i: number;
+  a: number;
+  b: number;
+  rail: boolean;
+  /** gold along it, in beats: every half beat, plus the music's own notes in the stretch. Collected while held. */
+  ticks: number[];
+  /** points along it, for drawing */
+  path: Array<{ beat: number; rho: number; side: number; planet: number }>;
+}
 export interface Layers { survival: number[]; flow: number[] }
 /** Things a level can ask of the player; the first time each appears it gets a hint. */
-export type Feature = 'smash' | 'charge' | 'flip' | 'weave' | 'spin' | 'sling' | 'reverse' | 'faster' | 'slower' | 'twin';
+export type Feature = 'smash' | 'charge' | 'flip' | 'weave' | 'spin' | 'sling' | 'reverse' | 'faster' | 'slower' | 'twin' | 'rail' | 'line';
 /** How one bar plays. */
 export interface BarCfg { token: string; mode: 'up' | 'down' | 'weave'; spin: boolean; twin: boolean; sling: boolean; turn: boolean; speed: number }
 
@@ -64,6 +79,10 @@ export interface Course {
   flow: FlowNote[];
   /** every tap of a perfect run, in beats (presses and flow notes) */
   taps: number[];
+  /** the holds, in order; they never overlap */
+  holds: Hold[];
+  /** a perfect run as the button sees it: [beat, true] = down, [beat, false] = up */
+  script: Array<[number, boolean]>;
   checkpoints: number[];
   /** stretches where nothing can end the run and on-beat taps charge the drop: [from, to] in beats */
   charges: Array<[number, number]>;
@@ -94,6 +113,12 @@ export const FLOW_S = 0.04; // taps this close to a note build flow
 export const MIN_GAP = 1; // beats between generated survival presses: quarter notes at most
 export const SLING_FLIGHT = 2; // beats a planet hop spends in the air
 export const COUNT_IN = 4; // beats at the very start of a level with no survival press: the 3, 2, 1
+export const LIFT = 0.42; // ring levels a held ball floats above its ring
+export const HOLD_MIN = 1; // beats: no hold is shorter
+export const HOLD_MAX = 2; // ...and no gold line longer
+export const HOLDS_FROM = 16; // beats: a level's opening bars are taps only
+export const RAIL_FLIGHT = 2; // a hop that flies this long becomes a rail
+export const LINE_CLEAR = 0.75; // beats between the end of a gold line and the next white mark: time to let go and tap
 /** Beats after a planet hop lands in which nothing can end the run: at least 1.5, and at least 0.85 s at any tempo. */
 export const landingGrace = (spb: number) => Math.max(1.5, Math.ceil((0.85 / spb) * 2) / 2);
 const TWO_PI = Math.PI * 2;
@@ -261,10 +286,62 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
     if (sling) planet++;
   });
 
+  // ---- holds (levels that have them): rails on long hops, gold lines over empty stretches of ring
+  const holds: Hold[] = [];
+  const flowStart = new Map<number, number>(); // beat of a line's first note -> hold index
+  let free = flowBeats;
+  if (level.file.holds) {
+    const half = (b: number) => Math.round(b * 2) / 2;
+    const okAt = (b: number) => b >= Math.max(HOLDS_FROM, start + COUNT_IN) - 1e-6 && !inCharge(b) && !barAt(b).twin;
+    const mk = (a: number, b: number, rail: boolean, pos: (beat: number) => { rho: number; side: number; planet: number }): void => {
+      const eat = free.filter((f) => f > a + 1e-6 && f <= b + 1e-6);
+      free = free.filter((f) => !(f > a + 1e-6 && f <= b + 1e-6));
+      const grid: number[] = [];
+      for (let t = a + 0.5; t <= b + 1e-6; t += 0.5) grid.push(snap(t));
+      const ticks = [...new Set([...grid, ...eat])].sort((x, y) => x - y);
+      const path: Hold['path'] = [];
+      const n = Math.max(2, Math.round((b - a) * 8));
+      for (let k = 0; k <= n; k++) { const beat = a + ((b - a) * k) / n; path.push({ beat, ...pos(beat) }); }
+      holds.push({ i: 0, a, b, rail, ticks, path });
+      first(a, rail ? 'rail' : 'line');
+    };
+    presses.forEach((p, i) => {
+      const next = presses[i + 1];
+      // a rail: the hop is long enough to hold through. It ends on the landing, or half a beat before it when the
+      // next white mark is right there, so there is always time to let go and tap again.
+      if (p.kind === 'hop' && !p.auto && !p.twin && okAt(p.beat) && p.land - p.beat >= RAIL_FLIGHT - 1e-6) {
+        let b = next && next.beat - p.land < LINE_CLEAR - 1e-6 ? p.land - 0.5 : p.land;
+        // a charge roll starting under the hop: let go half a beat before it, to be ready to tap
+        const roll = charges.find(([c0]) => c0 > p.beat && c0 <= b + 1e-6);
+        if (roll) b = roll[0] - 0.5;
+        if (b - p.beat >= HOLD_MIN - 1e-6) {
+          mk(p.beat, b, true, (beat) => ({ rho: flightRho(p, beat), side: p.side, planet: p.sling ? p.planet + smoothstep((beat - p.beat) / (p.land - p.beat)) : p.planetTo }));
+        }
+      }
+      // a line: the ball has landed and nothing asks for a tap for a while
+      if (!next) return;
+      const sideNow = p.kind === 'flip' ? -p.side : p.side;
+      const railed = holds.length && holds[holds.length - 1].a === p.beat ? holds[holds.length - 1].b : -Infinity;
+      let a = half(Math.max(p.land, railed) + 0.5 + 0.249);
+      const lim = next.beat - LINE_CLEAR;
+      // start it on a note of the music if one is there
+      const lead = free.find((f) => f >= Math.max(p.land, railed) + 0.25 - 1e-6 && f <= a + 1e-6);
+      if (lead !== undefined) a = lead;
+      const b = Math.min(half(lim - 0.249), a + HOLD_MAX);
+      if (b - a < HOLD_MIN - 1e-6 || !okAt(a) || !okAt(b) || barAt(a).spin) return;
+      mk(a, b, false, (beat) => ({ rho: p.to + sideNow * LIFT * smoothstep((beat - a) / 0.35), side: sideNow, planet: p.planetTo }));
+      flowStart.set(a, holds.length - 1);
+      if (!free.includes(a)) free = [...free, a].sort((x, y) => x - y);
+    });
+    holds.sort((x, y) => x.a - y.a);
+    holds.forEach((h, i) => { h.i = i; });
+    for (const [beat] of flowStart) flowStart.set(beat, holds.findIndex((h) => !h.rail && h.a === beat));
+  }
+
   // where the ball is when each flow note comes round: on a ring, or somewhere along a flight
-  const all = [...ground, ...flowBeats].sort((a, b) => a - b);
+  const all = [...ground, ...free].sort((a, b) => a - b);
   let k = -1;
-  const flow: FlowNote[] = flowBeats.map((beat) => {
+  const flow: FlowNote[] = free.map((beat) => {
     while (k + 1 < presses.length && presses[k + 1].beat <= beat) k++;
     const p = presses[k];
     const air = !!p && beat < p.land - 1e-6;
@@ -275,7 +352,14 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
     const nextP = presses[k + 1];
     const tw = barAt(beat).twin ? (nextP && nextP.twin ? nextP.twin : 'a') : null;
     const pl = p ? (air && p.sling ? p.planet + smoothstep((beat - p.beat) / (p.land - p.beat)) : p.planetTo) : 0;
-    return { beat, tol: Math.min(FLOW_TOL_S, 0.45 * gap) / spb, pitch: pitchAt(beat), charge: inCharge(beat), rho, side: sd, air, twin: tw, planet: pl };
+    return { beat, tol: Math.min(FLOW_TOL_S, 0.45 * gap) / spb, pitch: pitchAt(beat), charge: inCharge(beat), rho, side: sd, air, twin: tw, planet: pl, hold: flowStart.get(beat) ?? -1 };
+  });
+  // a perfect run, as the button sees it: down on every tap, up again at once, or at the end of the hold it starts
+  const endOf = new Map(holds.map((h) => [h.a, h.b]));
+  const script: Array<[number, boolean]> = [];
+  all.forEach((t, j) => {
+    script.push([t, true]);
+    script.push([endOf.get(t) ?? Math.min(t + 0.15, j + 1 < all.length ? all[j + 1] - 0.03 : t + 0.15), false]);
   });
 
   // angle round the core, bar by bar: `turn` reverses the orbit at the bar line, the speed words change its rate
@@ -305,7 +389,7 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
   };
 
   return {
-    spb, start, end, dropBeat: level.dropTime / spb, presses, flow, taps: all,
+    spb, start, end, dropBeat: level.dropTime / spb, presses, flow, taps: all, holds, script,
     checkpoints: segs.map((s) => s.beat0).filter((b) => b >= start && b < end),
     charges, chargeNotes: flow.filter((f) => f.charge).length, inCharge, angle, turns, portals, twins, firsts, bars
   };

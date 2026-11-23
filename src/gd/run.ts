@@ -13,7 +13,7 @@ export type RunState = 'loading' | 'playing' | 'paused' | 'resuming' | 'failed' 
 export interface RunOptions { bot?: boolean; practice?: boolean; partial?: boolean; tutorial?: boolean; startAt?: number; leadIn?: number }
 /** beats the tutorial lasts */
 export const TUTORIAL_BEATS = 24;
-export interface RunEvent { kind: 'hop' | 'flip' | 'spark' | 'skip' | 'land' | 'crash' | 'drop' | 'finale'; flow?: boolean; charge?: boolean; accent?: boolean; smash?: boolean; sling?: boolean; full?: boolean; power?: number }
+export interface RunEvent { kind: 'hop' | 'flip' | 'spark' | 'skip' | 'land' | 'crash' | 'drop' | 'finale' | 'tick' | 'held' | 'release'; flow?: boolean; charge?: boolean; accent?: boolean; smash?: boolean; sling?: boolean; full?: boolean; power?: number }
 
 const RESUME_COUNT = 1.2;
 
@@ -46,6 +46,7 @@ export class GdRun {
   private latency = 0;
   private music: { stop: (fade?: number) => void } | null = null;
   private bi = 0;
+  private tickRun = 0;
   private ended = false;
   private lastNow = 0;
   private seenLand = -99;
@@ -65,7 +66,7 @@ export class GdRun {
     this.sim = new Sim(this.course, this.time / spb, this.startAt > this.t0 ? this.startAt / spb : -Infinity, !!opts.tutorial);
     const lastPress = this.course.presses[this.course.presses.length - 1];
     if (lastPress && !opts.tutorial) this.finaleAt = lastPress.land * spb;
-    while (this.bi < this.course.taps.length && this.course.taps[this.bi] * spb < this.startAt) this.bi++;
+    while (this.bi < this.course.script.length && this.course.script[this.bi][0] * spb < this.startAt) this.bi++;
     if (this.startAt / spb > this.course.dropBeat) this.dropFull = true;
   }
 
@@ -124,6 +125,16 @@ export class GdRun {
   private react(r: TapResult): void {
     if (r.kind === 'none' || r.kind === 'crash') return;
     if (r.kind === 'skip') { audio.hit('stray', 0.3); this.events.push({ kind: 'skip' }); return; }
+    if (r.kind === 'tick') {
+      // gold along a hold: each piece plays the next step up the song's scale, so a full hold is a little run of notes
+      const scale = this.pack.level.scale ?? [0, 2, 4, 5, 7, 9, 11];
+      const k = this.tickRun++ % 8;
+      audio.pluck(72 + 12 * Math.floor(k / scale.length) + scale[k % scale.length], 0.32 * save.hitVol);
+      this.events.push({ kind: 'tick' });
+      return;
+    }
+    if (r.kind === 'held') { this.tickRun = 0; this.events.push({ kind: 'held', full: !!r.full }); if (r.full) audio.hit('hit', 0.5 * save.hitVol); return; }
+    if (r.kind === 'release') { if (r.flow) audio.hit('hit', 0.6 * save.hitVol); this.events.push({ kind: 'release', flow: !!r.flow }); return; }
     // one hit sound for every tap that meets a note; on the beat in a hook section it also plays the hook's pitch
     audio.hit('hit', (r.auto ? 0.55 : r.kind === 'spark' ? 0.8 : 1) * save.hitVol);
     const hook = this.level.segAt(Math.max(0, this.time)).follow === 'lead';
@@ -144,6 +155,12 @@ export class GdRun {
     this.react(this.sim.press(this.clock.at(perfMs) / this.level.spb));
   }
 
+  /** The button comes up. Only holds care. */
+  release(perfMs: number): void {
+    if (this.state !== 'playing' || this.finale) { this.sim.down = false; return; }
+    this.react(this.sim.release(this.clock.at(perfMs) / this.level.spb));
+  }
+
   frame(now: number): void {
     audio.tick(now);
     if (this.state === 'resuming' && now >= this.resumeAt) { this.state = 'playing'; this.clock.reset(); this.lastNow = 0; void audio.resume(); }
@@ -159,7 +176,7 @@ export class GdRun {
     this.time = t;
     this.viewTime = t + save.visualOffset / 1000;
     const beat = t / this.level.spb;
-    if (this.opts.bot) while (this.bi < this.course.taps.length && this.course.taps[this.bi] <= beat) this.react(this.sim.press(this.course.taps[this.bi++]));
+    if (this.opts.bot) while (this.bi < this.course.script.length && this.course.script[this.bi][0] <= beat) { const [at, down] = this.course.script[this.bi++]; this.react(down ? this.sim.press(at) : this.sim.release(at)); }
     this.sim.advance(beat);
     while (this.sim.out.length) this.react(this.sim.out.shift()!);
     if (this.sim.landedAt !== this.seenLand) { this.seenLand = this.sim.landedAt; this.events.push({ kind: 'land' }); }
