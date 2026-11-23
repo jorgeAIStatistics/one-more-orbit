@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#04061a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>ONE MORE ORBIT</title>
+</head>
+<body>
+  <canvas id="stage" aria-label="One More Orbit"></canvas>
+
+  <div id="hud" class="hidden">
+    <div class="health" aria-label="Health"><div id="healthFill"></div></div>
+    <div class="hud-row">
+      <div class="hud-left"><div id="score">0</div><div id="section">INTRO</div></div>
+      <div class="hud-mid"><div id="combo">0</div><small>COMBO</small></div>
+      <div class="hud-right"><div id="acc">100.00%</div><button id="pauseBtn" class="icon" type="button" aria-label="Pause">❚❚</button></div>
+    </div>
+    <div class="progress" aria-hidden="true"><div id="progFill"></div><i id="dropMark"></i></div>
+  </div>
+
+  <section id="menu" class="screen">
+    <div class="shell">
+      <div class="eyebrow">VERTICAL SLICE · PLAYTEST BUILD</div>
+      <h1 class="logo">ONE MORE<br />ORBIT</h1>
+      <div class="track">
+        <div class="track-name">Sky High</div>
+        <div class="track-meta">Elektronomia · 128 BPM · 1:20 · drop at 0:47</div>
+      </div>
+      <div id="diffs" class="diffs"></div>
+      <button id="playBtn" class="primary" type="button">PLAY</button>
+      <div class="row">
+        <button id="hardcoreBtn" class="pill toggle" type="button">Hardcore: one miss fails</button>
+        <button id="botBtn" class="pill toggle" type="button">Watch autoplay</button>
+      </div>
+      <div class="row">
+        <button id="settingsBtn" class="pill" type="button">Settings &amp; sync</button>
+        <button id="creditsBtn" class="pill" type="button">Music credits</button>
+      </div>
+      <p class="hint">Left half of the screen (or D / F) = cyan. Right half (or J / K) = pink. White gates take either. R restarts, Esc pauses.</p>
+      <p class="hint dim">Heroes Tonight, Blank and Invincible follow after this playtest.</p>
+    </div>
+  </section>
+
+  <section id="pause" class="screen dim-bg hidden">
+    <div class="card">
+      <h2>PAUSED</h2>
+      <button id="resumeBtn" class="primary" type="button">RESUME</button>
+      <div class="row">
+        <button id="pauseRestartBtn" class="pill" type="button">Restart (R)</button>
+        <button id="pauseSettingsBtn" class="pill" type="button">Settings</button>
+        <button id="pauseQuitBtn" class="pill" type="button">Quit</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="results" class="screen dim-bg hidden">
+    <div class="card">
+      <div id="resTag" class="eyebrow"></div>
+      <div id="resGrade" class="grade">S</div>
+      <h2 id="resTitle">LEVEL COMPLETE</h2>
+      <div id="resSub" class="sub"></div>
+      <div class="stats">
+        <div><b id="resAcc">0%</b><small>Accuracy</small></div>
+        <div><b id="resScore">0</b><small>Score</small></div>
+        <div><b id="resCombo">0</b><small>Max combo</small></div>
+      </div>
+      <div class="judges">
+        <span class="j-p">PERFECT <b id="resP">0</b></span><span class="j-g">GREAT <b id="resG">0</b></span><span class="j-o">GOOD <b id="resO">0</b></span><span class="j-m">MISS <b id="resM">0</b></span>
+      </div>
+      <div class="timeline" aria-hidden="true"><div id="tlFill"></div><div id="tlMarks"></div><i id="tlDrop"><span>DROP</span></i></div>
+      <div id="resTiming" class="sub"></div>
+      <div id="resOffset" class="offset-box hidden"><span id="resOffsetText"></span><button id="resOffsetApply" class="pill" type="button">Apply</button></div>
+      <button id="retryBtn" class="primary" type="button">RETRY (R)</button>
+      <div class="row"><button id="resMenuBtn" class="pill" type="button">Menu</button></div>
+    </div>
+  </section>
+
+  <section id="settings" class="screen dim-bg hidden">
+    <div class="card wide">
+      <h2>SETTINGS &amp; SYNC</h2>
+      <label class="set"><span>Music volume</span><input id="setMusic" type="range" min="0" max="1" step="0.05" /></label>
+      <label class="set"><span>Hitsound volume</span><input id="setSfx" type="range" min="0" max="1" step="0.05" /></label>
+      <div class="set"><span>Audio offset<small>Raise it if your taps read LATE (Bluetooth, TV speakers)</small></span>
+        <div class="stepper"><button id="aoMinus" class="icon" type="button">−</button><b id="aoVal">0 ms</b><button id="aoPlus" class="icon" type="button">+</button></div></div>
+      <div class="set"><span>Visual offset<small>Raise it if the ball looks behind the music</small></span>
+        <div class="stepper"><button id="voMinus" class="icon" type="button">−</button><b id="voVal">0 ms</b><button id="voPlus" class="icon" type="button">+</button></div></div>
+      <button id="calibBtn" class="primary small" type="button">CALIBRATE BY TAPPING</button>
+      <div class="row wrap">
+        <button id="setErrorBar" class="pill toggle" type="button">Hit-error bar</button>
+        <button id="setMotion" class="pill toggle" type="button">Reduced motion</button>
+        <button id="setHardcore" class="pill toggle" type="button">Hardcore</button>
+        <button id="setUnlock" class="pill toggle" type="button">Unlock all (playtest)</button>
+      </div>
+      <div id="setInfo" class="sub"></div>
+      <div class="row"><button id="settingsClose" class="pill" type="button">Done</button></div>
+    </div>
+  </section>
+
+  <section id="calib" class="screen hidden">
+    <div class="card wide calib-card">
+      <h2>CALIBRATION</h2>
+      <div class="row">
+        <button id="calAudioTab" class="pill toggle on" type="button">1 · Audio</button>
+        <button id="calVisualTab" class="pill toggle" type="button">2 · Visual</button>
+      </div>
+      <p id="calText" class="sub"></p>
+      <div id="calDots" class="dots"></div>
+      <div id="calResult" class="cal-result"></div>
+      <button id="calPad" class="pad" type="button">TAP</button>
+      <div class="row"><button id="calStart" class="pill" type="button">Start</button><button id="calClose" class="pill" type="button">Done</button></div>
+    </div>
+  </section>
+
+  <section id="credits" class="screen dim-bg hidden">
+    <div class="card wide">
+      <h2>MUSIC</h2>
+      <div id="creditList"></div>
+      <p id="licenceNote" class="sub"></p>
+      <div class="row"><button id="creditsClose" class="pill" type="button">Done</button></div>
+    </div>
+  </section>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
