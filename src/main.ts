@@ -11,6 +11,7 @@ import { canHaptics, feel, fullScreen, gameCenter, isNative, watchBackground } f
 import { initRecord } from './record';
 import { bestFor, persist, save, starCount, starsFor } from './save';
 import { LEVEL_UI, icon } from './ui/art';
+import { SkyMap, type SkyInfo, type SkyNode } from './ui/skymap';
 import { PLANETS, STORY, cardPic, ekoPic, hollowPic, lanternPic, planetName, planetPic, titlePic, type Frame } from './ui/galaxy';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -44,6 +45,8 @@ const owned = (o: Orb): boolean => {
 };
 
 const renderer = new Renderer($<HTMLCanvasElement>('stage'));
+/** the galaxy map: one painted sky you tap things in */
+const sky = new SkyMap($<HTMLCanvasElement>('stage'));
 let screen: Screen = 'title';
 let settingsFrom: Screen = 'levels';
 let run: Run | null = null;
@@ -89,6 +92,7 @@ function show(s: Screen): void {
   renderer.idleColour = bestFor(FINAL_ID).cleared ? 1 : home.length * 0.12;
   if (s === 'title') $('titleArt').innerHTML = `<img alt="" src="${titlePic(bestFor(FINAL_ID).cleared ? PACKS.map((p) => p.level.id) : home)}"><span class="title-eko"><img alt="" src="${ekoPic(orbColour(save.skin))}"></span>`;
   if (s === 'levels') {
+    sky.settle();
     renderMap(); queuePreview();
     if (starCount() >= maxStars && save.story.end && !save.story.lens) window.setTimeout(() => { if (screen === 'levels') playStory('lens', () => show('levels')); }, 600);
   }
@@ -323,7 +327,41 @@ function renderMap(): void {
   }
   $('starTotal').innerHTML = `${icon('star')}${starCount()} / ${maxStars}`;
   $('starTotal').setAttribute('aria-label', `${starCount()} of ${maxStars} lens shards`);
+  sky.info = skyInfo();
+  sky.chosen = at.id;
 }
+/** What the painted map shows: every place that can be seen, how it stands, and the two quiet counts. */
+function skyInfo(): SkyInfo {
+  const nodes: SkyNode[] = [];
+  for (const n of NODES) {
+    const st = nodeState(n, progress);
+    if (st === 'hidden') continue; // a moon nobody has found is not in the sky yet
+    const p = n.kind === 'gate' ? FINAL : packOf(n.id) ?? PACKS[0];
+    const lid = n.kind === 'gate' ? FINAL_ID : n.id;
+    const b = bestFor(lid);
+    nodes.push({
+      id: n.id, kind: n.kind === 'gate' ? 'hollow' : n.kind, of: n.planet, name: n.kind === 'moon' ? `${planetName(n.planet)}\u2019s moon` : planetName(lid), song: shortTitle(p), by: p.level.artist,
+      state: st === 'cleared' ? 'home' : st === 'open' ? 'open' : 'dark', best: b.cleared ? 100 : b.pct, shards: starsFor(n.kind === 'moon' ? n.planet : lid),
+      why: n.kind === 'gate' ? 'restore the four planets first' : n.index > 0 ? `restore ${planetName(PACKS[n.index - 1].level.id)} first` : ''
+    });
+  }
+  const got = Object.keys(save.badges).filter((k) => save.badges[k]).length;
+  return { nodes, lens: `lens: ${starCount()} of ${maxStars} shards`, lit: `${got} constellation${got === 1 ? '' : 's'} lit` };
+}
+// Taps on the map go to whatever is painted there: a world, the Lantern, the constellations, or the open sky.
+$('levels').addEventListener('click', (e) => {
+  if (screen !== 'levels' || $('levels').classList.contains('launch')) return;
+  const hit = sky.hit(e.clientX, e.clientY);
+  if (hit.kind === 'node') {
+    if (hit.id === 'lantern') { sky.chosen = sky.chosen === 'lantern' ? null : 'lantern'; return; }
+    if (hit.id === at.id && sky.chosen === hit.id) { if (canPlay()) begin(false); } else select(hit.id); // a second tap on the chosen world flies in
+  } else if (hit.kind === 'practise') { if (canPlay()) begin(true); }
+  else if (hit.kind === 'glows') { renderOrbs(); show('orbs'); }
+  else if (hit.kind === 'settings') openSettings('levels');
+  else if (hit.kind === 'badges') { renderBadges(); show('badges'); }
+  else if (hit.kind === 'quests') { renderQuests(); show('quests'); }
+  else sky.chosen = null; // the open sky: step back and see all of it
+});
 /** The panel under the map: the place you are at, how you have done there, and PLAY. */
 function renderSheet(): void {
   const st = nodeState(at, progress);
@@ -441,6 +479,7 @@ function enter(): void {
   if (screen === 'levels') {
     // the chosen card zooms open over one beat while the preview fades into the level's own music
     $('levels').classList.add('launch');
+    sky.launch();
     audio.stopPreview(0.9);
     window.setTimeout(go, 430);
   } else go();
@@ -1222,7 +1261,7 @@ function tick(now: number): void {
     renderer.drawMetronome(now, cal.running ? Math.max(0, (now - cal.startPerf) / 1000 / CAL_PERIOD) % 1 : 0);
   } else {
     audio.tick(now);
-    renderer.drawIdle(now, dt);
+    if (screen === 'levels') sky.draw(now, dt); else renderer.drawIdle(now, dt);
     if (screen === 'record') record.tick(now);
   }
 }
@@ -1253,7 +1292,7 @@ requestAnimationFrame(loop);
 // Hooks for tests and debugging; the game itself never reads these.
 Object.assign(window, {
   __omo: {
-    audio, save, renderer, session, sync, get run() { return run; }, get screen() { return screen; }, tick, show,
+    audio, save, renderer, sky, session, sync, get run() { return run; }, get screen() { return screen; }, tick, show,
     level: (i: number) => focusLevel(i), select: (id: string) => select(id, true), quests: () => { renderQuests(); show('quests'); },
     start: (bot: boolean, prac = false, from = -1) => { botMode = bot; practice = prac; startRun(from); },
     story: (k: string) => playStory(k, () => show('levels'), true),

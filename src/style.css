@@ -532,3 +532,8 @@ body { font-weight: 600; }
 .title-art { width: min(96vw, 66vh, 640px); }
 .title-art > img { aspect-ratio: 5 / 4; object-fit: cover; }
 .title-eko { left: 31%; right: 31%; top: 9%; bottom: 31%; }
+
+/* ================= Afterglow, screen 1: the galaxy map is one painted sky on the canvas =================
+   The old map's pieces (top bar, nodes, the planet card, the tab bar) are not shown; the picture is tapped directly. */
+#levels { cursor: pointer; }
+#levels .topbar, #levels .map, #levels .foot { display: none; }
