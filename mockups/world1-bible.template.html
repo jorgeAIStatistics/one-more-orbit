@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ONE MORE ORBIT · World 1: story bible and world plan</title>
+<style>
+  @font-face { font-family: 'Cormorant Garamond'; font-weight: 500; font-style: italic; src: url('../node_modules/@fontsource/cormorant-garamond/files/cormorant-garamond-latin-500-italic.woff2') format('woff2'); }
+  @font-face { font-family: 'Source Sans 3'; font-weight: 600; src: url('../node_modules/@fontsource/source-sans-3/files/source-sans-3-latin-600-normal.woff2') format('woff2'); }
+  :root { --bg: #0f0d22; --panel: #171433; --line: #2c2756; --text: #efe6d2; --mute: #b3a9c9; --gold: #f2c97a; --rose: #f0a0c8; --aqua: #9fd8e8; }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16.5px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-text-size-adjust: 100%; }
+  main { max-width: 860px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1, h2, h3 { font-family: 'Cormorant Garamond', 'Hoefler Text', Georgia, serif; font-style: italic; font-weight: 500; text-wrap: balance; }
+  h1 { font-size: 44px; line-height: 1.05; margin: 0 0 8px; }
+  h2 { font-size: 31px; margin: 56px 0 10px; color: var(--gold); border-top: 1px solid var(--line); padding-top: 26px; }
+  h3 { font-size: 24px; margin: 28px 0 6px; }
+  p { margin: 9px 0; max-width: 68ch; }
+  .lede { color: var(--mute); margin: 0 0 20px; }
+  .tag { display: inline-block; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--gold); border: 1px solid var(--line); border-radius: 99px; padding: 3px 12px; margin-bottom: 14px; }
+  ul, ol { margin: 8px 0; padding-left: 22px; max-width: 70ch; } li { margin: 5px 0; }
+  b, strong { color: #fff6e2; }
+  .q { font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; font-size: 20px; color: #fff1d8; }
+  .note { border-left: 2px solid var(--gold); padding: 4px 0 4px 14px; margin: 14px 0; color: var(--mute); }
+  .note b { color: var(--text); }
+  .cast { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 0 28px; }
+  .cast div { border-top: 1px solid var(--line); padding: 12px 0 8px; }
+  .cast h3 { margin: 0 0 2px; } .cast small { color: var(--mute); display: block; margin-bottom: 6px; }
+  .cast p { margin: 5px 0; font-size: 15.5px; }
+  figure { margin: 18px -8px; }
+  figure img { display: block; width: 100%; height: auto; border-radius: 6px; }
+  figcaption { color: var(--mute); font-size: 14px; margin: 8px 8px 0; }
+  .scroll { overflow-x: auto; margin: 14px 0; }
+  table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 14.5px; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line); }
+  th { color: var(--mute); font-weight: 600; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+  td.n { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--gold); }
+  .page { background: #1c1838; border: 1px solid var(--line); padding: 22px 26px; margin: 16px 0; max-width: 520px; font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; font-size: 21px; line-height: 1.45; color: #f6ead0; }
+  .page p { margin: 0 0 12px; } .page p:last-child { margin: 0; }
+  .toc { columns: 2; column-gap: 32px; font-size: 15px; color: var(--mute); padding-left: 20px; }
+  @media (max-width: 640px) { h1 { font-size: 34px; } h2 { font-size: 26px; } .toc { columns: 1; } }
+</style>
+</head>
+<body>
+<main>
+<span class="tag">Step 1 of 5 · for your OK · nothing here is built yet</span>
+<h1>World 1: the Lantern</h1>
+<p class="lede">Story bible and world plan. A first-time player should be playing within thirty seconds, care about someone within ninety, and know from the first two minutes where this ends.</p>
+
+<ol class="toc">
+  <li>What changes, at a glance</li><li>Premise and tone</li><li>The cast</li><li>The four planets</li><li>The ambush</li><li>The finale</li><li>The hub that grows</li><li>The Keeper's logbook</li><li>Stars, shards and gates</li><li>The first session, minute by minute</li><li>One more try</li><li>What it takes to build</li><li>Nine decisions for you</li><li>Storyboards</li>
+</ol>
+
+<h2>1. What changes, at a glance</h2>
+<ul>
+  <li><b>First launch is a playable prologue,</b> not a title screen. The title is written into the sky when the prologue ends.</li>
+  <li><b>Every planet has a soul, a gift and one idea.</b> The form a level introduces is that planet's gift to Eko, given in the level itself. It is played out in four beats (introduce, develop, twist, climax) and then retired until the finale.</li>
+  <li><b>The Lantern becomes a hub that relights room by room,</b> with a logbook that gains a chapter per clear and an original theme that gains a voice per planet.</li>
+  <li><b>Stars become the one currency.</b> Five ways to play each planet, one star each. The dark planet opens on the four planets plus a few stars.</li>
+  <li><b>An ambush after the second planet,</b> and Royalty rebuilt as a three-phase fight with the Hush.</li>
+</ul>
+<p class="note"><b>One reversal to be aware of.</b> The last pass made earlier forms come back on later planets (the Meteor on Cirra, and so on). "A gimmick is then retired, returning only in the final level" undoes that: each planet keeps to its own gift. What still grows from planet to planet is the shared language: pads, orbs and combos, gates, twins. I recommend the new rule; it is decision 1 below.</p>
+
+<h2>2. Premise and tone</h2>
+<p>A small galaxy keeps time by a lighthouse. The Lantern's lamp hums, every planet hums back in its own colour, and the humming is what holds the dark apart. Its keeper, Marlow, a lampmoth, once struck the wick too hard; a spark came off it and did not go out. He named it Eko, because it answers.</p>
+<p>Before the lamp there was only the quiet. The quiet has a shape, the Hush, and it has not slept since the humming began. One dusk it comes. It takes every planet's song, and their colour goes with it. It takes the keeper too, and leaves the lamp with one spark on its wick.</p>
+<p>The game is that spark carrying four songs home, and then going up to fetch its keeper.</p>
+<p><b>The Hush is not a monster.</b> It is a neighbour who cannot sleep. The ending is not a killing: it is given the quietest song there is, the lullaby from the first minute of the game, and at last it sleeps. That turn is what the logbook quietly prepares.</p>
+<h3>Tone rules</h3>
+<ul>
+  <li><b>No faces, no speech bubbles.</b> Characters are light, posture and silhouette. Words are a few italic lines written into the picture.</li>
+  <li><b>Nobody explains a feeling.</b> Marlow counts, complains about the glass, and says "go". The player does the rest.</li>
+  <li><b>Humour is dry and short.</b> One line per scene at most.</li>
+  <li><b>Music tells the plot.</b> The Hush has no voice; its presence is the song being pressed flat.</li>
+</ul>
+
+<h2>3. The cast</h2>
+<figure><img src="{{cast}}" alt="The cast in silhouette: Eko, Marlow, Ossa, Sèo, Vell, Morrow, the Snuffer, the Hush"><figcaption>To scale with each other. Storyboard quality: the final paintings come planet by planet.</figcaption></figure>
+<div class="cast">
+  <div><h3>Eko</h3><small>the spark · the player</small><p>A flame with a seed of light and a ring he wears. Never speaks. His character is in how he moves: he leans into everything, overshoots, and looks back for Marlow.</p><p>Each gift changes his trim and his trail, so the finale's Eko visibly carries all four.</p></div>
+  <div><h3>Marlow</h3><small>the Keeper · a lampmoth</small><p>Old, exact, dry, kinder than he lets on. He taught Eko to fly by counting. Under glass on the Hollow he still taps the beat: one, two, three, four.</p><p class="q">"With the beat, little spark. Not before it."</p></div>
+  <div><h3>The Hush</h3><small>the Hollow · the quiet itself</small><p>Curtains of fog hung from above and, in its hood, an eclipse. It cannot bear a sound and keeps the songs in jars on threads. It wants rest, not ruin.</p><p>It never speaks. When it is near, the music is muffled.</p></div>
+  <div><h3>Ossa</h3><small>Emberwick · Heroes Tonight</small><p>A great slow beast of cooled slag with a fire banked in its chest and antlers like tuning forks. The smith who cast the Lantern's first glass. Gruff, proud, owes nobody.</p><p class="q">"Take it. It does not stop for walls."</p></div>
+  <div><h3>Sèo</h3><small>Cirra · Sky High</small><p>Tall, thin, all angles, made of folded sailcloth. Keeps kites, which are how Cirra sings. Restless, starts sentences and abandons them, laughs first.</p><p class="q">"Turn when the line pulls. You'll feel it. Probably."</p></div>
+  <div><h3>Vell</h3><small>Glassmere · Blank</small><p>Lives on the other side of the water and is seen only as a reflection, standing under whoever stands above. Formal, precise, very dry.</p><p class="q">"You look well. From here, everyone does."</p></div>
+  <div><h3>Morrow</h3><small>Verdance · Invincible</small><p>A huge slow climber with a mossed back where the seed-lights live. Says little and means it. The oldest thing in the galaxy after the quiet.</p><p class="q">"Hold on. Now let go. Both are the work."</p></div>
+  <div><h3>The Snuffer</h3><small>the Hush's hand · the ambush</small><p>A brass cap on a long crooked pole, fog hanging from its mouth, a sliver of the eclipse inside. It rides the Lantern's beam and puts lights out, one window at a time.</p><p>Never speaks. Beaten, it leaves its cap behind.</p></div>
+</div>
+
+<h2>4. The four planets</h2>
+<p>Each planet is one short story told three times in a few seconds: a painted scene before the level (what is wrong), the soul appearing during it (at the gift, and in the drop), and a payoff after the first clear. Then a few words from Marlow along the Lantern's beam, and the next planet stirs.</p>
+<figure><img src="{{arc}}" alt="Emberwick's arc in four panels"><figcaption>One planet's arc: Emberwick.</figcaption></figure>
+
+<h3>Emberwick · the first gift</h3>
+<p><b>What is wrong.</b> The forge-hills used to ring. Without the song the fires went out, and Ossa lies banked like a dead coal.</p>
+<p><b>During.</b> The first eight bars are the flying lesson continued: hops, gold, one spring pad, one planet hop. On the drop's downbeat the big press strikes Ossa's anvil-hill and it wakes. It shows the dash once, then it is yours.</p>
+<p><b>After.</b> Colour floods the sky (the Daybreak results). Ossa's forks ring; it gives Eko the coal to keep.</p>
+<div class="scroll"><table>
+<tr><th>Beat</th><th>Bars</th><th>The Meteor: tap to dash through a wall</th></tr>
+<tr><td>Introduce</td><td class="n">18–20</td><td>One bar shown by Ossa, then two real bars with wide openings</td></tr>
+<tr><td>Develop</td><td class="n">25–27</td><td>Three bars running, gold between the walls</td></tr>
+<tr><td>Twist</td><td class="n">29–30</td><td>Straight out of a spring pad's landing into two walls on consecutive beats</td></tr>
+<tr><td>Climax</td><td class="n">31–32</td><td>A wall on every beat; Ossa strikes each one as it breaks</td></tr>
+</table></div>
+<p><b>Marlow:</b> <span class="q">"I heard that. All the way up here."</span> &nbsp; <b>Hook:</b> <span class="q">Cirra is waking…</span></p>
+
+<h3>Cirra · the second gift</h3>
+<p><b>What is wrong.</b> No song, no wind. The kites lie in the cloud and Sèo sits tangled in its own lines.</p>
+<p><b>During.</b> The gift is the Satellite: a kite's tack, turning on every tap between two lines. Sèo's kites go up one by one behind the course as the level builds, and all of them are flying in the drop.</p>
+<p><b>After.</b> Wind. Sèo ties a kite to Eko's ring; it will hang from the Lantern's gallery.</p>
+<div class="scroll"><table>
+<tr><th>Beat</th><th>Bars</th><th>The Satellite: each tap turns the zig-zag</th></tr>
+<tr><td>Introduce</td><td class="n">13–14</td><td>One bar shown, one real</td></tr>
+<tr><td>Develop</td><td class="n">17–18</td><td>Gold strung along the zig-zag</td></tr>
+<tr><td>Twist</td><td class="n">28–30</td><td>At 1.5×, with the orbit reversing mid-run</td></tr>
+<tr><td>Climax</td><td class="n">39–41</td><td>The long tack: every turn on a hook note, out through a planet hop</td></tr>
+</table></div>
+<p><b>New in the shared language here:</b> tide pads, jump and dash orbs, the first combos, reversals, tempo gates.</p>
+<p><b>Marlow:</b> <span class="q">"Two. It hates the sound. Good."</span> &nbsp; <b>Hook:</b> the beam flickers. <span class="q">Something is on the light.</span></p>
+
+<h3>Glassmere · the third gift</h3>
+<p><b>What is wrong.</b> The water has gone blank: it reflects nothing. Vell is shut out beneath it, and knocks.</p>
+<p><b>During.</b> The gift is the Pulsar: step through to the other side of your ring. Mirror and upside-down gates belong to this planet; from the drop the water reflects again and Vell walks under Eko, step for step.</p>
+<p><b>After.</b> The lake holds the whole sky. Vell hands up a sliver of mirror for the Lantern's lens.</p>
+<div class="scroll"><table>
+<tr><th>Beat</th><th>Bars</th><th>The Pulsar: each tap flips to the other side of the ring</th></tr>
+<tr><td>Introduce</td><td class="n">6–7</td><td>One bar shown, one real</td></tr>
+<tr><td>Develop</td><td class="n">13–14, 19–20</td><td>Through an upside-down gate, then a mirror gate</td></tr>
+<tr><td>Twist</td><td class="n">35–36</td><td>At half speed in the heavy drop: slow, wide, and inverted</td></tr>
+<tr><td>Climax</td><td class="n">46–47, 51–52</td><td>At double then 1.5×, mirrored</td></tr>
+</table></div>
+<p><b>New in the shared language here:</b> gravity orbs, three-orb combos, mirror and upside-down gates.</p>
+<p><b>Marlow:</b> <span class="q">"Colder now. Keep the beat for both of us."</span> &nbsp; <b>Hook:</b> <span class="q">Verdance is listening…</span></p>
+
+<h3>Verdance · the fourth gift</h3>
+<p><b>What is wrong.</b> The canopy lights are out. Morrow let go, and sleeps at the foot of the tallest tree.</p>
+<p><b>During.</b> The gift is the Comet: hold to climb, let go to fall. Morrow climbs as you do; each seed-light it passes comes back on. <b>Once, in the first drop, the Hush's shadow crosses the level:</b> for two beats the music is pressed flat and the colour drains, then both snap back on the downbeat. Every tap is still on a sound you can hear.</p>
+<p><b>After.</b> The whole wood is lit. Morrow sets a seed-light on Eko's ring.</p>
+<div class="scroll"><table>
+<tr><th>Beat</th><th>Bars</th><th>The Comet: press and hold to climb, let go to fall</th></tr>
+<tr><td>Introduce</td><td class="n">7–8</td><td>One bar shown, one real</td></tr>
+<tr><td>Develop</td><td class="n">25–26</td><td>At 1.5×</td></tr>
+<tr><td>Twist</td><td class="n">27</td><td>The orbit reverses in the middle of a climb</td></tr>
+<tr><td>Climax</td><td class="n">33–35</td><td>The long climb, through an upside-down gate</td></tr>
+</table></div>
+<p><b>New in the shared language here:</b> Eko's echo in step, then out of step through the final drop.</p>
+<p><b>Marlow:</b> <span class="q">"…one, two, three—"</span> (the fourth tap does not come.) &nbsp; <b>Hook:</b> the road is lit to the top. <span class="q">The Hollow is open.</span></p>
+
+<h3>Five ways to play each planet</h3>
+<div class="scroll"><table>
+<tr><th>Star</th><th>What it asks</th><th>Opens</th><th>In the game today</th></tr>
+<tr><td>Restore</td><td>Clear it</td><td>From the start</td><td>Yes</td></tr>
+<tr><td>Shard run</td><td>All three shards in one clear, on the precise routes</td><td>After the first clear</td><td>Shards exist; "all in one run" is new</td></tr>
+<tr><td>Daredevil</td><td>One attempt per flight: a crash sends you home</td><td>After the first clear</td><td>New</td></tr>
+<tr><td>Rhythm master</td><td>Clear it touching every flow note</td><td>After the first clear</td><td>Exists as a badge</td></tr>
+<tr><td>Night side</td><td>Clear the harder B-side</td><td>After the first clear</td><td>Yes (today it opens with shards)</td></tr>
+</table></div>
+
+<h2>5. The ambush</h2>
+<figure><img src="{{ambush}}" alt="The Snuffer on the Lantern's beam"><figcaption>After the second planet: the Snuffer comes down the beam.</figcaption></figure>
+<ul>
+  <li><b>When.</b> On the way home from Cirra's first clear. It cannot be skipped the first time; it is 48 seconds long.</li>
+  <li><b>What happens.</b> The Snuffer comes down the beam putting out the Lantern's windows. You fight it off with both gifts so far: the Meteor through the fog it hangs in your way, the Satellite between its threads.</li>
+  <li><b>Light notes.</b> Each four-bar phrase ends on one wide bright press. On the beat, the cap is knocked back up the beam and a window relights. A short roll before each charges the blow, as before a drop.</li>
+  <li><b>It previews the finale:</b> the same light notes, the same song family, a first sight of the eclipse inside the cap.</li>
+  <li><b>Stars:</b> one for beating it, one for doing it without losing a window.</li>
+</ul>
+<p class="note"><b>Music.</b> I propose a 32-bar cut of Royalty that the finale does not use, so the Hush has a theme you hear again at the end. That needs your ear: I have never heard the tracks, only measured them. It is decision 5.</p>
+
+<h2>6. The finale</h2>
+<h3>Which song</h3>
+<p><b>Royalty is the fight; Invincible stays the fourth planet.</b></p>
+<ul>
+  <li><b>Its shape is already three acts:</b> a 24-bar verse and break, a first drop, one bar of silence, a second drop.</li>
+  <li><b>It is the fastest and tightest level</b> (160 BPM, ±80 ms), and already charted with every form and the Hush's red tethers.</li>
+  <li><b>Invincible is the right last planet:</b> slow, heavy and swung, which is what a hold-and-let-go gift needs, and its title is the mood to walk into the Hollow with.</li>
+</ul>
+<figure><img src="{{finale}}" alt="The finale in four panels"><figcaption>Three phases and the ending.</figcaption></figure>
+<div class="scroll"><table>
+<tr><th>Phase</th><th>Bars</th><th>What you do</th><th>What the Hush does</th></tr>
+<tr><td>One: the curtains</td><td class="n">1–24</td><td>Each gift in the order you earned it, a few bars each, in its planet's colour</td><td>Eye shut. Five jars hang on threads: four songs and one small lantern</td></tr>
+<tr><td>The gathering</td><td class="n">25–32</td><td>Tap the roll to charge. Four lights rise from below: Ossa, Sèo, Vell, Morrow</td><td>Stirs</td></tr>
+<tr><td>Two: the eye opens</td><td class="n">33–47</td><td>A light note at the head of each phrase cuts a thread; that planet's song joins the music and its soul takes its own gift's bars with you</td><td>Red tethers: hold on or the run ends</td></tr>
+<tr><td>The last word</td><td class="n">48</td><td>The song stops for one bar. One mark. Your tap is the only sound, as in the prologue</td><td>Total quiet</td></tr>
+<tr><td>Three: unstitching</td><td class="n">49–63</td><td>Two sparks on one tap: the freed Keeper flies beside you. All four gifts in rotation; the last light note relights the lamp</td><td>Its seam comes undone stitch by stitch</td></tr>
+</table></div>
+<p><b>The ending</b> (about 35 seconds, skippable). The lullaby from the prologue returns. The Hush, small after all, settles beside the lamp and sleeps. Colour floods the galaxy planet by planet. Marlow trims the wick. <span class="q">"One more orbit, Eko?"</span> Then, far off on the horizon, another lamp, unlit, under a light that is not ours. <span class="q">"That one is not ours."</span> A beat. <span class="q">"…Shall we?"</span></p>
+<p><b>The finale is teased all the way:</b> the Hollow grows on the map with every clear; Marlow's messages weaken; the ambush; and the Hush's shadow crossing Verdance.</p>
+<h3>The secret level</h3>
+<p>All twelve shards mend the Lantern's lens, and through it you can see a hidden moon. I recommend it be <b>the lullaby itself, played at last as a level</b>: original music, about 70 seconds, every gift, almost no sound but your own taps. No new licensed song is needed. (The alternative is a sixth track of your choosing; decision 6.)</p>
+
+<h2>7. The hub that grows</h2>
+<figure><img src="{{hub}}" alt="The hub at zero, two and four planets restored"><figcaption>The Lantern at nothing restored, two, and four. The galaxy map is its sky.</figcaption></figure>
+<div class="scroll"><table>
+<tr><th>Restored</th><th>Relit</th><th>Opens</th><th>The hub's music gains</th><th>On the map</th></tr>
+<tr><td class="n">0</td><td>Only the wick</td><td>The logbook on the desk (chapter 0)</td><td>A low drone, and four faint taps from far up</td><td>Road dark. Emberwick a dull red, an anvil heard through a wall</td></tr>
+<tr><td class="n">1</td><td>The hearth</td><td>Glows (Eko's trims, by the fire). Chapter 1</td><td>Ossa's voice: struck metal, low</td><td>Beam reaches Cirra; a fallen kite drifts by. The Hollow is nearer</td></tr>
+<tr><td class="n">2</td><td>The gallery</td><td>The star chart on the rail. The ambush, then chapters 2 and 3</td><td>Sèo's voice: a breathy reed</td><td>The Snuffer's cap hangs by the door. Curtains stir</td></tr>
+<tr><td class="n">3</td><td>The lens room</td><td>The lens (shards mend it); look through it at any planet. Chapter 4</td><td>Vell's voice: glass, bowed</td><td>The hidden moon shows as a dark dot. The eye is a quarter open</td></tr>
+<tr><td class="n">4</td><td>The lamp room</td><td>The beam can be turned on the Hollow. Chapter 5</td><td>Morrow's voice: wood, slow. The theme is whole</td><td>Road lit to the top. Marlow's taps are audible again</td></tr>
+<tr><td class="n">End</td><td>Dawn</td><td>Marlow at the lamp. Chapter 6. The other lamp on the horizon</td><td>The lullaby</td><td>Every planet in colour, singing softly as you pass</td></tr>
+</table></div>
+<ul>
+  <li><b>The hub theme is original music in four voices,</b> one per soul, built on the lullaby's harmony. I recommend this over layering the planets' real songs, which are in different keys and tempos and would clash; each planet's own song is still heard, muffled, when you drift near it.</li>
+  <li><b>Coming home is a small ceremony:</b> Eko carries the gift down the beam, the room relights, its voice joins the theme. Under ten seconds, skippable.</li>
+  <li><b>Small surprises:</b> the tokens each say one line that changes with your progress; tap the lamp four times in time and four taps answer from the Hollow.</li>
+  <li><b>The next planet always teases itself:</b> its silhouette in the beam, its song through a wall, a glimpse of its soul.</li>
+</ul>
+
+<h2>8. The Keeper's logbook</h2>
+<p>A lighthouse keeper's log, painted pages, one chapter per clear. Optional, under a minute, three to five pages of no more than ninety words. Nothing in it is the only place a plot beat lives.</p>
+<div class="scroll"><table>
+<tr><th>Chapter</th><th>Opens after</th><th>What it quietly adds</th></tr>
+<tr><td>0. The spark</td><td>The prologue</td><td>How Eko came off the wick, and why Marlow counts</td></tr>
+<tr><td>1. What Ossa is owed</td><td>Emberwick</td><td>Who cast the Lantern's glass, and what it cost</td></tr>
+<tr><td>2. Kite weather</td><td>Cirra</td><td>Sèo taught Marlow to feel a beat before hearing it</td></tr>
+<tr><td>3. The hand</td><td>The ambush</td><td>Marlow knew the quiet before he knew the lamp. The lamp was lit in its house</td></tr>
+<tr><td>4. The other side</td><td>Glassmere</td><td>What Vell sees of the Lantern from underneath</td></tr>
+<tr><td>5. Holding on</td><td>Verdance</td><td>The night Marlow nearly let the lamp go out, and who would not let him</td></tr>
+<tr><td>6. The quietest song</td><td>The finale</td><td>The lullaby was never for the lamp. He had been singing it to the Hush all along</td></tr>
+<tr><td>7. The other lamp</td><td>Every star</td><td>World 2</td></tr>
+</table></div>
+<p>A sample page, for the voice:</p>
+<div class="page">
+  <p>Dusk. Lamp trimmed, glass wiped, nothing to report.</p>
+  <p>Struck the wick too hard. A spark came off it and did not go out. It sat on the sill and looked at the lamp as though the lamp owed it something.</p>
+  <p>I have named it Eko, because it answers.</p>
+  <p>It cannot keep time yet. Neither could I.</p>
+</div>
+
+<h2>9. Stars, shards and gates</h2>
+<div class="scroll"><table>
+<tr><th>Where</th><th>Stars</th><th>Notes</th></tr>
+<tr><td>Four planets</td><td class="n">20</td><td>Five each</td></tr>
+<tr><td>The ambush</td><td class="n">2</td><td>Beat it; beat it without losing a window</td></tr>
+<tr><td>The finale</td><td class="n">3</td><td>Beat it; Daredevil; Rhythm master</td></tr>
+<tr><td>The hidden moon</td><td class="n">1</td><td></td></tr>
+<tr><td><b>World 1</b></td><td class="n">26</td><td></td></tr>
+</table></div>
+<div class="scroll"><table>
+<tr><th>Gate</th><th>Opens on</th></tr>
+<tr><td>Cirra, Glassmere, Verdance</td><td>The planet (or ambush) before it: no stars needed</td></tr>
+<tr><td>The Hollow</td><td>Four planets restored and <b>7 stars</b>. The main route alone gives 5, so two more from any challenge</td></tr>
+<tr><td>The hidden moon</td><td>All 12 shards</td></tr>
+<tr><td>The last Glow and chapter 7</td><td>All 26 stars</td></tr>
+</table></div>
+<ul>
+  <li><b>Stars are lit in the sky:</b> each planet has a five-star constellation, read from the gallery's star chart. No counter in a corner.</li>
+  <li><b>Today's eight quests and the badges fold into the stars,</b> so there is one thing to collect, not three. Glows are earned from stars and hub rooms.</li>
+  <li><b>Shards:</b> twelve, three a planet. The finale's three go; the lens needs only the planets'.</li>
+  <li><b>Your brief pulls two ways on the Hollow's gate</b> ("never the finale itself" and "plus a modest star count"). I followed the second with 7; if you want no star count at all, it is one number (decision 3).</li>
+</ul>
+
+<h2>10. The first session, minute by minute</h2>
+<figure><img src="{{prologue}}" alt="The prologue in six panels"><figcaption>The prologue, 75 seconds, playable from the tenth second.</figcaption></figure>
+<div class="scroll"><table>
+<tr><th>Time</th><th>What happens</th><th>What the player does</th></tr>
+<tr><td class="n">0:00</td><td>Dusk fades in on the Lantern. A lullaby begins. No title, no menu</td><td>Watches for five seconds</td></tr>
+<tr><td class="n">0:08</td><td>Marlow lifts the lamp; a ring of lamplight and one white mark</td><td>First tap: Eko leaves the wick</td></tr>
+<tr><td class="n">0:10–0:40</td><td>Flying lesson. Marlow flies alongside, drawing ring after ring. One line: "With the beat, little spark. Not before it."</td><td>Twelve slow taps, nothing can go wrong yet</td></tr>
+<tr><td class="n">0:40–0:55</td><td>Higher. The four planets hum back, one colour and one note each</td><td>Taps land on the planets' notes; first gold</td></tr>
+<tr><td class="n">0:55</td><td>Mid-phrase the lullaby is cut off. Colour drains planet by planet; threads, jars. Marlow says "Go" and throws Eko clear</td><td>One tap: the first planet hop is his throw</td></tr>
+<tr><td class="n">1:05</td><td>Silence. One mark left</td><td>The tap is the only sound in the galaxy</td></tr>
+<tr><td class="n">1:12</td><td>Pull back: four dark planets, and far up one small light under glass, tapping. "Four songs. One keeper. A long way up." The title writes itself</td><td>Sees where this ends</td></tr>
+<tr><td class="n">1:25</td><td>The wick's faint beam finds Emberwick</td><td>Taps the planet: flies in</td></tr>
+<tr><td class="n">1:30</td><td>Six seconds: Ossa, banked and dark</td><td>(or taps to skip)</td></tr>
+<tr><td class="n">1:36–4:15</td><td>Emberwick, 67 seconds a run. Ossa wakes at the drop and gives the Meteor</td><td>Clears it in one to three tries</td></tr>
+<tr><td class="n">4:15</td><td>Colour floods; the gift; Marlow's first words; "Cirra is waking…"</td><td>Taps to go on</td></tr>
+<tr><td class="n">4:40</td><td>Home. The hearth relights, Ossa's voice joins the hub. Cirra stirs in the beam; the logbook has a chapter</td><td>Flies to Cirra, or reads, or goes again</td></tr>
+</table></div>
+
+<h2>11. One more try</h2>
+<ul>
+  <li><b>A crash restarts at once,</b> as now.</li>
+  <li><b>A near miss is said, briefly:</b> from 80%, or within two bars of your best, the sky reads "so close: 87%" for a second as the run restarts.</li>
+  <li><b>Practice is offered, never pushed:</b> after five crashes in the same four bars, one quiet line, "practise this part?", that fades if ignored.</li>
+  <li><b>Story never blocks a returning player:</b> every scene skips on a tap; the prologue plays once and lives in the logbook after.</li>
+  <li><b>The results end on the hook,</b> not on numbers: the Daybreak screen's last line becomes the next planet stirring.</li>
+</ul>
+
+<h2>12. What it takes to build</h2>
+<div class="scroll"><table>
+<tr><th>Piece</th><th>Already there</th><th>New work</th></tr>
+<tr><td>Prologue</td><td>The Horizon painting, Marlow, the Hush, planet hops</td><td>The lullaby (original, synthesised), a scripted 75-second stage, the throw</td></tr>
+<tr><td>Souls</td><td>Each planet's ground and sky (Daybreak)</td><td>Four characters painted in two or three poses each; their moments in the levels</td></tr>
+<tr><td>Gifts and four beats</td><td>All four forms, lenses, played-for-you bars</td><td>Re-lay each planet's bars to the four beats; take earlier forms back out</td></tr>
+<tr><td>Stars and challenges</td><td>Shards, B-sides, the gold-count rule</td><td>Daredevil, the all-in-one shard run, the star chart; retire quests and badges</td></tr>
+<tr><td>Hub</td><td>The Ascent map, the Lantern as a place</td><td>Four rooms, the homecoming, tokens, the four-voice theme</td></tr>
+<tr><td>Logbook</td><td>The painted-scene story player</td><td>Eight chapters of pages and their paintings</td></tr>
+<tr><td>Ambush</td><td>Smash and charge mechanics</td><td>The stage, the Snuffer, a new audio cut</td></tr>
+<tr><td>Finale</td><td>Royalty charted with every form and tethers; dual mode</td><td>Three phases, light notes, the souls' help, phase checkpoints, the ending</td></tr>
+</table></div>
+<ul>
+  <li><b>Performance.</b> The last pass held 60 frames a second with the processor slowed four times. Souls are painted once per pose and moved procedurally (breathing, turning toward Eko, flaring on the kick), so they cost a sprite each.</li>
+  <li><b>On character animation, plainly:</b> this gives expressive posture and light, not hand-drawn frame animation. If you want the second, that is an animator's work on top of these designs.</li>
+</ul>
+
+<h2>13. Nine decisions for you</h2>
+<ol>
+  <li><b>Retire each gift after its planet</b> (undoing the reuse from the last pass)? I recommend yes.</li>
+  <li><b>Royalty as the fight, Invincible as the fourth planet?</b> I recommend yes.</li>
+  <li><b>The Hollow's gate:</b> four planets and 7 stars, or four planets only? I recommend 7.</li>
+  <li><b>Prologue music:</b> an original synthesised lullaby (which then returns as the ending and the secret level), or a cut of a licensed song? I recommend the lullaby; you would judge its sound in step 2.</li>
+  <li><b>Ambush music:</b> another cut of Royalty, or something else? Needs your ear.</li>
+  <li><b>The secret level:</b> the lullaby as a level, or a sixth song you pick?</li>
+  <li><b>The fight restarts from the start of its phase</b> in the main run (Daredevil is the whole thing in one go)? I recommend yes; it is 96 seconds at the tightest window.</li>
+  <li><b>Fold quests and badges into stars?</b> I recommend yes.</li>
+  <li><b>The names</b> (Ossa, Sèo, Vell, Morrow, the Snuffer) and Marlow staying "he": change any freely.</li>
+</ol>
+
+<h2>14. What happens next</h2>
+<ol>
+  <li><b>Your OK on this,</b> with any of the nine changed.</li>
+  <li><b>Test chambers in plain shapes:</b> one short room per gift's four beats, one for the ambush's light notes, and the lullaby to listen to. No art. You judge fun alone.</li>
+  <li><b>Vertical slice:</b> prologue, hub and Emberwick, as a new player's first ten minutes.</li>
+  <li><b>Then one at a time:</b> Cirra, the ambush, Glassmere, Verdance, the finale and ending.</li>
+  <li><b>A fresh-eyes checklist</b> for watching a friend play it for the first time.</li>
+</ol>
+</main>
+</body>
+</html>

@@ -1,0 +1,41 @@
+<!doctype html><meta charset="utf-8"><title>World 1: storyboards</title>
+<style>
+@font-face { font-family: 'Cormorant Garamond'; font-weight: 500; font-style: normal; src: url('../../node_modules/@fontsource/cormorant-garamond/files/cormorant-garamond-latin-500-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Cormorant Garamond'; font-weight: 500; font-style: italic; src: url('../../node_modules/@fontsource/cormorant-garamond/files/cormorant-garamond-latin-500-italic.woff2') format('woff2'); }
+@font-face { font-family: 'Cormorant Lining'; font-weight: 500; font-style: normal; font-feature-settings: 'lnum' 1; src: url('../../node_modules/@fontsource/cormorant-garamond/files/cormorant-garamond-latin-500-normal.woff2') format('woff2'); }
+</style>
+<body style="margin:0;background:#111">
+<script src="kit.js"></script><script src="a-dusk.js"></script><script src="results-afterglow.js"></script><script src="world1-afterglow.js"></script>
+<script>
+window.errors = []; window.done = false;
+const only = new URLSearchParams(location.search).get('only');
+const { W, H, P } = WORLD1;
+const SHEETS = {
+  prologue: { cols: 3, panels: [['pro1', '1. Dusk at the Lantern. Marlow trims the lamp; a spark sits on the wick. A lullaby begins.'], ['pro2', '2. Learning to fly. He draws rings of lamplight; the first taps hop between them.'], ['pro3', '3. Higher. Every planet hums back in its own colour, one note each.'], ['pro4', '4. Mid-phrase, the Hush. The songs are pulled out on threads; Marlow throws the spark clear.'], ['pro5', '5. Silence. One mark left. The tap is the only sound in the galaxy.'], ['pro6', '6. The stakes: four silent planets, and far up, one small light under glass.']] },
+  hub: { cols: 3, panels: [['hub0', 'Nothing restored. One wick. The road is dark and the Hollow is far.'], ['hub2', 'Two restored. The hearth and the gallery are lit, the beam reaches Glassmere, the Hollow has come closer.'], ['hub4', 'Four restored. Every room is lit, the road is lit to the Hollow, and its eye is half open.']] },
+  arc: { cols: 2, panels: [['arc1', 'Before: we arrive to silence. Ossa lies banked like a dead coal.'], ['arc2', 'During: at the drop Ossa is up on the horizon, striking the hills in time.'], ['arc3', 'After the first clear: colour floods in, its forks ring, and it gives Eko the gift.'], ['arc4', 'Then a few words from the Keeper along the beam, and the next planet stirs.']] },
+  finale: { cols: 2, panels: [['fin1', 'Phase one (verse): the curtains.'], ['fin2', 'Phase two (first drop): the eye opens.'], ['fin3', 'Phase three (second drop): unstitching, with the Keeper beside you.'], ['fin4', 'The ending: the quietest song, the Hush asleep by the lamp, and another lamp far off.']] },
+  ambush: { cols: 1, panels: [['ambush', 'After the second planet: the Snuffer rides down the beam to put the lamp out.']] },
+  cast: { cols: 1, panels: [['cast', 'The cast, to scale with each other. No faces anywhere: light, posture and silhouette carry them.']] }
+};
+(async () => {
+  await Promise.all([document.fonts.load('italic 500 20px "Cormorant Garamond"'), document.fonts.load('normal 500 20px "Cormorant Garamond"'), document.fonts.load('normal 500 20px "Cormorant Lining"')]);
+  for (const [name, S] of Object.entries(SHEETS)) {
+    if (only && only !== name) continue;
+    const pw = S.cols === 1 ? 1200 : S.cols === 2 ? 900 : 640, ph = Math.round(pw * H / W), cap = 54, gap = 14, rows = Math.ceil(S.panels.length / S.cols);
+    const sheet = document.createElement('canvas'); sheet.width = S.cols * pw + (S.cols - 1) * gap; sheet.height = rows * (ph + cap) + (rows - 1) * gap; sheet.id = `${name}-sheet`; sheet.style.cssText = 'display:block;margin:8px auto;max-width:100%';
+    const sc = sheet.getContext('2d'); sc.fillStyle = '#0b0a14'; sc.fillRect(0, 0, sheet.width, sheet.height); sc.imageSmoothingQuality = 'high';
+    S.panels.forEach(([id, text], i) => {
+      const cv = document.createElement('canvas'); cv.width = W; cv.height = H; cv.id = id;
+      try { P[id](cv.getContext('2d')); } catch (e) { window.errors.push(`${id}: ${e.stack || e}`); }
+      const x = (i % S.cols) * (pw + gap), y = Math.floor(i / S.cols) * (ph + cap + gap);
+      sc.drawImage(cv, x, y, pw, ph);
+      sc.font = `italic 500 ${S.cols === 3 ? 17 : 19}px "Cormorant Garamond", Georgia, serif`; sc.fillStyle = '#e9dcc0'; sc.textBaseline = 'top';
+      let line = '', yy = y + ph + 8; for (const word of text.split(' ')) { if (sc.measureText(line + word).width > pw - 12 && line) { sc.fillText(line.trim(), x + 4, yy); yy += 21; line = ''; } line += word + ' '; } sc.fillText(line.trim(), x + 4, yy);
+      cv.style.display = 'none'; document.body.appendChild(cv);
+    });
+    document.body.appendChild(sheet);
+  }
+  window.done = true;
+})();
+</script>
