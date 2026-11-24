@@ -1,0 +1,11 @@
+<!doctype html><meta charset="utf-8"><title>Afterglow: the galaxy map</title>
+<body style="margin:0;background:#111">
+<script src="kit.js"></script><script src="a-dusk.js"></script><script src="map-afterglow.js"></script>
+<script>
+window.errors = [];
+for (const name of Object.keys(MAPS.LAYOUTS)) for (const [dev, w, h] of [['phone', 780, 1688], ['desktop', 1440, 900]]) {
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h; cv.id = `${name}-${dev}`; cv.style.cssText = 'display:block;margin:8px auto;max-width:100%';
+  document.body.appendChild(cv);
+  try { MAPS.draw(cv.getContext('2d'), w, h, name, dev); } catch (e) { window.errors.push(`${name}/${dev}: ${e.stack || e}`); }
+}
+</script>

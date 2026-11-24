@@ -143,6 +143,7 @@ const DUSK = (() => {
   };
 
   return {
+    tools: { sky, stars, sphere, eko, ridge, lighthouse, finish, SERIF },
     hero(ctx, w, h) {
       const r = RNG(11);
       sky(ctx, w, h, [[0, [14, 18, 46]], [0.4, [48, 34, 92]], [0.66, [140, 62, 92]], [0.86, [232, 128, 88]], [1, [250, 198, 138]]], r);
