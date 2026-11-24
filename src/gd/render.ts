@@ -6,6 +6,7 @@ import { orbColour } from '../game/extras';
 import type { Level } from '../game/level';
 import { PALETTES, type Palette, type RGB } from '../render/palettes';
 import { PLANETS } from '../ui/galaxy';
+import { INK as ATLAS_INK, globe, rng, stamp, tooth } from '../art/atlas';
 import { bestFor, save, starsFor } from '../save';
 import { LIFT, flightRho, smoothstep, type Course, type Feature, type Form, type Star } from './course';
 import type { GdRun } from './run';
@@ -15,11 +16,11 @@ const EQ_BARS = 48;
 
 const LOOK = 2; // beats before an opening that the ring above shows as a ceiling
 const WHITE: RGB = [255, 255, 255];
-const DANGER: RGB = [255, 64, 120]; // the edge of everything that ends the run
-const GOLD: RGB = [255, 214, 90]; // flow notes, flow, the smash
-const VIOLET: RGB = [190, 120, 255]; // gravity flip
-const CYAN: RGB = [0, 245, 255]; // speed portals, turns, planet hops
-const FLOOR: RGB = [226, 234, 255]; // the rings you ride: one fixed colour, whatever the world behind is doing
+const DANGER: RGB = [232, 70, 54]; // vermilion, the atlas's one warning colour: // the edge of everything that ends the run
+const GOLD: RGB = [240, 200, 98]; // flow notes, flow, the smash
+const VIOLET: RGB = [178, 150, 255]; // gravity flip
+const CYAN: RGB = [112, 220, 204]; // speed portals, turns, planet hops
+const FLOOR: RGB = [247, 240, 222]; // the rings you ride: one fixed colour, whatever the world behind is doing
 const STAR: RGB = [255, 244, 200]; // star trails: pale gold, between the white you must hit and the gold you may
 const HALO = 'rgba(3,5,14,0.62)'; // the dark edge under everything in the foreground
 const HINT: Record<Feature, string> = {
@@ -97,6 +98,12 @@ export class GdRenderer {
   private branchE = 0;
   /** the picture's left-to-right scale: -1 past a mirror gate */
   private mx = 1;
+  /** how much of the planet's colour is showing, 0..1: none in a calm engraved stretch, all of it in an earned drop */
+  private colour = 0;
+  private heroDir = 1;
+  private globeCv: HTMLCanvasElement | null = null;
+  /** the menus' sky: how much of the galaxy's colour is home, 0..1 */
+  idleColour = 0;
   private formWas: Form = 'orb';
   private camY = 0;
   private pf = 0;
@@ -167,6 +174,8 @@ export class GdRenderer {
     const level = run.level;
     const c = run.course;
     this.plats = platforms(c, level);
+    if (!this.globeCv) this.globeCv = stamp(160, 160, (g) => globe(g, 80, 80, 74, 225, rng(5)), 2);
+    this.colour = 0;
     this.ahead = level.file.side?.ahead ?? level.file.rules?.ahead ?? 3;
     // hints: the first mark, the first gold note, and each mechanic the first time the level uses it
     this.hints = [];
@@ -311,6 +320,21 @@ export class GdRenderer {
     g.addColorStop(1, this.col(p.bg1));
     c.fillStyle = g;
     c.fillRect(0, 0, this.w, this.h);
+    {
+      // the atlas's plate behind everything: circles of declination, graduations and hour lines, in ink. As colour comes
+      // home the lines take it, and in a drop the whole plate turns slowly.
+      const lineCol = mix(ATLAS_INK, p.ring, this.colour);
+      const turn = calm ? 0 : this.rayTurn * 0.6;
+      c.lineWidth = 1;
+      c.strokeStyle = this.col(lineCol, 0.13 + 0.1 * this.colour);
+      for (const f of [0.3, 0.46, 0.62, 0.8, 1]) { c.beginPath(); c.arc(cx, cy, span * f, 0, TWO_PI); c.stroke(); }
+      c.beginPath();
+      for (let a = 0; a < 12; a++) { const q = turn + (a / 12) * TWO_PI; c.moveTo(cx + Math.cos(q) * span * 0.16, cy + Math.sin(q) * span * 0.16); c.lineTo(cx + Math.cos(q) * span, cy + Math.sin(q) * span); }
+      c.strokeStyle = this.col(lineCol, 0.07 + 0.08 * this.colour); c.stroke();
+      c.beginPath();
+      for (let a = 0; a < 120; a++) { const q = turn + (a / 120) * TWO_PI, l = a % 10 === 0 ? 11 : a % 5 === 0 ? 7 : 4; c.moveTo(cx + Math.cos(q) * span * 0.62, cy + Math.sin(q) * span * 0.62); c.lineTo(cx + Math.cos(q) * (span * 0.62 + l), cy + Math.sin(q) * (span * 0.62 + l)); }
+      c.strokeStyle = this.col(lineCol, 0.26); c.stroke();
+    }
     if (drive > 0.03) {
       // after the drop the world is a different place: turning light rays and a bloom, both breathing with the kick
       c.globalCompositeOperation = 'lighter';
@@ -396,8 +420,8 @@ export class GdRenderer {
         c.strokeStyle = this.col(p.acc, al);
         c.beginPath(); c.moveTo(x, y); c.lineTo(x - Math.cos(s.a) * streak * d, y - Math.sin(s.a) * streak * d); c.stroke();
       } else {
-        c.fillStyle = this.col(p.acc, al);
-        c.fillRect(x, y, s.s, s.s);
+        c.fillStyle = this.col(p.acc, al * 1.3);
+        c.beginPath(); c.arc(x, y, s.s * 0.8, 0, TWO_PI); c.fill();
       }
     }
     if (this.flipK > 0.02 && !calm) {
@@ -408,6 +432,7 @@ export class GdRenderer {
       c.globalCompositeOperation = 'source-over';
     }
     if (dark > 0.01) { c.fillStyle = `rgba(0,0,0,${dark})`; c.fillRect(0, 0, this.w, this.h); }
+    tooth(c, this.w, this.h, 0.55); // paper tooth over the whole sheet
   }
 
   /** Audio-reactive equalizer round the core, with the flow meter and the drop's charge as arcs round it. */
@@ -443,6 +468,8 @@ export class GdRenderer {
       // the planet whose song this is, at the heart of its rings. It loses its colour with the rest of the world when
       // the rhythm is lost; a B-side shows its night side.
       const rp = rc * 1.08;
+      if (this.globeCv) c.drawImage(this.globeCv, -rp * 1.08, -rp * 1.08, rp * 2.16, rp * 2.16);
+      c.globalAlpha = this.colour;
       const body = c.createRadialGradient(-rp * 0.3, -rp * 0.35, rp * 0.1, 0, 0, rp);
       body.addColorStop(0, this.col(planet[0]));
       body.addColorStop(0.7, this.col(planet[1]));
@@ -456,6 +483,7 @@ export class GdRenderer {
       c.beginPath(); c.moveTo(-rp, rp * 0.55); c.quadraticCurveTo(-rp * 0.3, rp * 0.3, rp * 0.2, rp * 0.52); c.quadraticCurveTo(rp * 0.6, rp * 0.66, rp, rp * 0.4); c.lineTo(rp, rp); c.lineTo(-rp, rp); c.closePath(); c.fill();
       if (night) { c.fillStyle = 'rgba(7,4,26,0.55)'; c.fillRect(-rp, -rp, rp * 2, rp * 2); }
       c.restore();
+      c.globalAlpha = 1;
     }
     c.lineWidth = Math.max(2, ((rc * TWO_PI) / EQ_BARS) * 0.5);
     for (let i = 0; i < EQ_BARS; i++) {
@@ -496,21 +524,28 @@ export class GdRenderer {
   /** eko: the hero himself, with his face, his flame tuft and his hoop in the chosen Glow (a plain ball otherwise). */
   private drawBall(x: number, y: number, r: number, col: RGB, angle = 0, along = 1, across = 1, eko = false): void {
     const c = this.ctx;
-    // Eko's hoop: a tilted ring worn round the middle. Its far half goes behind him, its near half in front.
-    const hoop = (front: boolean) => {
+    if (eko) {
+      // Eko in play: a flame cut thick enough for a phone. Its round foot sits where the ball is, its tip points out
+      // from the core and leans back from the way he is going; a seed of gold in it, and the ring he wears round it
+      // in the chosen Glow. When colour is home he glows warm.
+      const k = this.colour;
+      const tx = r * 2.9 * along, ty = -this.heroDir * r * 1.05;
+      const body = () => { c.beginPath(); c.moveTo(tx, ty); c.bezierCurveTo(r * 1.1, r * 1.3 * across, -r * 1.2, r * 1.25 * across, -r * 1.1, 0); c.bezierCurveTo(-r * 1.2, -r * 1.25 * across, r * 0.5, -r * 1.3 * across, tx, ty); c.closePath(); };
+      const ring = (front: boolean) => { c.strokeStyle = rgba(col, front ? 1 : 0.5); c.lineWidth = Math.max(1.8, r * 0.4); c.lineCap = 'round'; c.beginPath(); c.ellipse(r * 0.15, 0, r * 0.6, r * 1.95, 0, front ? -Math.PI / 2 + 0.2 : Math.PI / 2 + 0.2, front ? Math.PI / 2 - 0.2 : Math.PI * 1.5 - 0.2); c.stroke(); };
       c.save();
       c.translate(x, y);
-      c.rotate(-0.31);
-      c.lineWidth = Math.max(1.6, r * 0.34);
-      c.lineCap = 'round';
-      c.strokeStyle = rgba(col, front ? 1 : 0.5);
-      c.beginPath(); c.ellipse(0, r * 0.1, r * 1.62, r * 0.5, 0, front ? 0 : Math.PI, front ? Math.PI : TWO_PI); c.stroke();
+      c.rotate(angle);
+      ring(false);
+      body(); c.strokeStyle = 'rgba(4,4,12,0.9)'; c.lineWidth = r * 0.9; c.lineJoin = 'round'; c.stroke();
+      c.shadowColor = rgba(mix(GOLD, [255, 160, 80], k), 0.95);
+      c.shadowBlur = r * (1.8 + 3 * k);
+      body(); c.fillStyle = rgba(mix([247, 240, 222], [255, 228, 176], k)); c.fill();
+      c.shadowBlur = 0;
+      c.fillStyle = '#d9a93e'; c.beginPath(); c.ellipse(r * 0.05, 0, r * 0.7, r * 0.55, 0, 0, TWO_PI); c.fill();
+      c.fillStyle = '#fff3c4'; c.beginPath(); c.ellipse(r * 0.18, -r * 0.12, r * 0.26, r * 0.2, 0, 0, TWO_PI); c.fill();
+      ring(true);
       c.restore();
-    };
-    if (eko) {
-      hoop(false);
-      c.fillStyle = '#ffd36b'; // the flame tuft
-      c.beginPath(); c.moveTo(x - r * 0.34, y - r * 0.8); c.quadraticCurveTo(x - r * 0.3, y - r * 1.55, x + r * 0.1, y - r * 1.95); c.quadraticCurveTo(x + r * 0.52, y - r * 1.4, x + r * 0.34, y - r * 0.8); c.closePath(); c.fill();
+      return;
     }
     c.save();
     c.translate(x, y);
@@ -527,14 +562,6 @@ export class GdRenderer {
       c.beginPath(); c.arc(0, 0, r * 1.25, 0, TWO_PI); c.stroke();
     }
     c.restore();
-    if (eko) {
-      // the face, always upright: two dark eyes, and a smile when there is room for one
-      c.fillStyle = '#2a1b4d';
-      c.beginPath(); c.ellipse(x - r * 0.36, y - r * 0.08, r * 0.17, r * 0.25, 0, 0, TWO_PI); c.fill();
-      c.beginPath(); c.ellipse(x + r * 0.36, y - r * 0.08, r * 0.17, r * 0.25, 0, 0, TWO_PI); c.fill();
-      if (r >= 7) { c.strokeStyle = '#2a1b4d'; c.lineWidth = Math.max(1, r * 0.1); c.lineCap = 'round'; c.beginPath(); c.arc(x, y + r * 0.2, r * 0.22, 0.15 * Math.PI, 0.85 * Math.PI); c.stroke(); }
-      hoop(true);
-    }
   }
 
   /** A lens shard: a splinter of the Lantern's lens. A dark edge, an outline, and a filling that grows with `fill` (0..1). */
@@ -626,6 +653,7 @@ export class GdRenderer {
       }
       c.restore();
     }
+    this.heroDir = dir;
     this.drawBall(x, y, r, form === 'orb' ? col : mix(col, FORM_COL[form], 0.45), angle, along, across, true);
   }
 
@@ -767,7 +795,7 @@ export class GdRenderer {
         c.stroke();
       }
       c.strokeStyle = rgba(FLOOR);
-      c.lineWidth = drop ? 4.5 : 3.5;
+      c.lineWidth = drop ? 5.2 : 4.6;
       c.stroke();
       if (!plain && !Number.isNaN(pl.note) && pl.note > lo && pl.note < hi) {
         // the note: a bright mark across the ring. This is the moment to tap. Big hits get a bigger mark and a ring
@@ -776,7 +804,7 @@ export class GdRenderer {
         const bigness = pl.smash ? 2.3 : pl.accent || pl.after ? 1.6 : pl.wide ? 1.3 : 1;
         const len = rb * (1.15 + pulse * 0.5) * bigness;
         const gold = pl.auto || pl.smash;
-        const wide = (gold ? 6.5 : pl.accent || pl.after ? 5 : pl.wide ? 4.2 : 3.5) + pulse * 2.5;
+        const wide = (gold ? 7 : pl.accent || pl.after ? 6 : pl.wide ? 5.2 : 4.6) + pulse * 2.5;
         if (pl.form === 'meteor' || pl.form === 'pulsar') {
           // what the Hush left in the way, just past the mark: a wall across the ring (the Meteor dashes through it),
           // or a blot on this side of the ring (the Pulsar flips to the other side)
@@ -1105,6 +1133,7 @@ export class GdRenderer {
       c.globalAlpha = 1;
     }
     // flow notes: optional taps, on the ring or in mid-flight. Gold, and smaller than the white marks you must hit.
+    let lastNote: [number, number, number] | null = null; // gold notes a beat apart or less are joined: the phrase is a constellation
     for (const f of course.flow) {
       const d = f.beat - beat;
       if (d > this.ahead) break;
@@ -1117,6 +1146,8 @@ export class GdRenderer {
       const x = ox + Math.cos(ang(f.beat)) * r;
       const y = oy + Math.sin(ang(f.beat)) * r;
       c.globalAlpha = clamp((this.ahead - d) / 0.6, 0, 1) * clamp(1 + d / 0.25, 0, 1);
+      if (lastNote && f.beat - lastNote[2] <= 1.01 && d > 0) { c.strokeStyle = rgba(GOLD, 0.55); c.lineWidth = 1.3; c.beginPath(); c.moveTo(lastNote[0], lastNote[1]); c.lineTo(x, y); c.stroke(); }
+      lastNote = [x, y, f.beat];
       if (f.ride !== 0) {
         // gold collected by riding (the Comet's climb, a form's introduction): a plain gold bead, nothing to tap
         c.fillStyle = 'rgba(3,5,14,0.5)'; c.beginPath(); c.arc(x, y, rb * 0.6, 0, TWO_PI); c.fill();
@@ -1298,7 +1329,11 @@ export class GdRenderer {
     }
     const target = PALETTES[this.palName] || PALETTES.deep;
     this.palT = Math.min(1, this.palT + dt / 0.5);
-    const pal: Palette = this.palT >= 1 ? target : { bg0: mix(this.palFrom.bg0, target.bg0, this.palT), bg1: mix(this.palFrom.bg1, target.bg1, this.palT), ring: mix(this.palFrom.ring, target.ring, this.palT), acc: mix(this.palFrom.acc, target.acc, this.palT) };
+    const sectPal: Palette = this.palT >= 1 ? target : { bg0: mix(this.palFrom.bg0, target.bg0, this.palT), bg1: mix(this.palFrom.bg1, target.bg1, this.palT), ring: mix(this.palFrom.ring, target.ring, this.palT), acc: mix(this.palFrom.acc, target.acc, this.palT) };
+    void sectPal; // (sections no longer set the colours: the planet has one palette, and the song decides how much of it shows)
+    const P3 = (PLANETS[level.file.side?.of ?? level.id] ?? PLANETS.heroes).rgb;
+    const kc = this.colour;
+    const pal: Palette = { bg0: mix([26, 26, 46], mix(P3[1], P3[2], 0.5), kc), bg1: mix([9, 10, 20], mix(P3[2], [8, 6, 24], 0.45), kc), ring: mix(ATLAS_INK, P3[0], kc), acc: mix(GOLD, mix(P3[0], WHITE, 0.3), kc) };
     this.pal = pal;
 
     // the song's measured energy sets the scene; the player's flow opens it up or drains it
@@ -1325,6 +1360,11 @@ export class GdRenderer {
     // a B-side is the night side of its planet: the same scene, with the lights down
     this.dark += (Math.max(seg.blackout ? 0.45 : 0, level.file.side ? 0.3 : 0) - this.dark) * Math.min(1, dt * 4);
 
+    {
+      const home = bestFor(level.file.side?.of ?? level.id).cleared ? 0.26 : 0;
+      const want = clamp(Math.max(home, drive * 1.2, this.flash), 0, 1);
+      this.colour += (want - this.colour) * Math.min(1, dt * (want > this.colour ? 9 : 1.5));
+    }
     // what just happened
     const loud = drive > 0.15 || wound > 0.05;
     const formEv = course.presses[sim.ni - 1]?.form;
@@ -1659,7 +1699,9 @@ export class GdRenderer {
     const c = this.ctx;
     c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.drain = 0;
-    const to = PALETTES[this.idlePal] || PALETTES.deep;
+    this.colour = this.idleColour;
+    const kI = this.idleColour;
+    const to: Palette = this.idlePal === 'lantern' ? { bg0: mix([26, 26, 46], [96, 52, 104], kI), bg1: mix([9, 10, 20], [20, 12, 40], kI), ring: mix(ATLAS_INK, [255, 214, 160], kI), acc: mix(GOLD, [255, 226, 180], kI) } : PALETTES[this.idlePal] || PALETTES.deep;
     const k = Math.min(1, dt * 3);
     this.idleMix = { bg0: mix(this.idleMix.bg0, to.bg0, k), bg1: mix(this.idleMix.bg1, to.bg1, k), ring: mix(this.idleMix.ring, to.ring, k), acc: mix(this.idleMix.acc, to.acc, k) };
     const pal = this.idleMix;

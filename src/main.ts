@@ -11,7 +11,7 @@ import { canHaptics, feel, fullScreen, gameCenter, isNative, watchBackground } f
 import { initRecord } from './record';
 import { bestFor, persist, save, starCount, starsFor } from './save';
 import { LEVEL_UI, icon } from './ui/art';
-import { PLANETS, STORY, ekoSvg, installDefs, lanternSvg, planetCard, planetName, planetSvg, titleArt, type Frame } from './ui/galaxy';
+import { PLANETS, STORY, cardPic, ekoPic, hollowPic, lanternPic, planetName, planetPic, titlePic, type Frame } from './ui/galaxy';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 type Screen = 'title' | 'levels' | 'play' | 'pause' | 'results' | 'settings' | 'calib' | 'orbs' | 'badges' | 'quests' | 'record' | 'story';
@@ -82,8 +82,12 @@ function show(s: Screen): void {
   $('levels').classList.remove('launch');
   // the scene behind the menus: beside the wordmark on a wide title screen, centred otherwise, in the focused level's colours
   placeScene(s);
-  renderer.idleBare = true; // the title, the map and the story draw their own pictures over the sky
+  renderer.idleBare = true; // the title, the map and the story draw their own pictures over the sheet
   renderer.idlePal = 'lantern';
+  // colour is what the Hush took: the sheet behind the menus warms with every planet restored, and floods when the Hush sleeps
+  const home = PACKS.filter((p) => bestFor(p.level.id).cleared).map((p) => p.level.id);
+  renderer.idleColour = bestFor(FINAL_ID).cleared ? 1 : home.length * 0.12;
+  if (s === 'title') $('titleArt').innerHTML = `<img alt="" src="${titlePic(bestFor(FINAL_ID).cleared ? PACKS.map((p) => p.level.id) : home)}"><span class="title-eko"><img alt="" src="${ekoPic(orbColour(save.skin))}"></span>`;
   if (s === 'levels') {
     renderMap(); queuePreview();
     if (starCount() >= maxStars && save.story.end && !save.story.lens) window.setTimeout(() => { if (screen === 'levels') playStory('lens', () => show('levels')); }, 600);
@@ -99,7 +103,12 @@ let storyAt = 0;
 let storyThen: (() => void) | null = null;
 function renderStory(): void {
   const f = storyFrames[storyAt];
-  $('storyArt').innerHTML = f.art;
+  // each card is a plate of the atlas, drawn when it is shown
+  const plateCv = document.createElement('canvas');
+  plateCv.width = 1200;
+  plateCv.height = 750;
+  f.draw(plateCv.getContext('2d')!, 1200, 750);
+  $('storyArt').replaceChildren(plateCv);
   $('storyArt').setAttribute('aria-label', f.text);
   const text = $('storyText');
   text.textContent = f.text;
@@ -165,16 +174,18 @@ const ekoEl = document.createElement('div');
 function buildMap(): void {
   // the Lantern in the middle, and Eko, who waits at the place you have chosen
   hubEl.className = 'hub';
-  hubEl.innerHTML = lanternSvg();
+  hubEl.innerHTML = `<img alt="" src="${lanternPic()}">`;
   ekoEl.className = 'map-eko';
-  ekoEl.innerHTML = ekoSvg();
+  ekoEl.innerHTML = '<img alt="">';
   mapEl.append(hubEl);
   for (const n of NODES) {
     const el = document.createElement('button');
     el.type = 'button';
     el.className = `node ${n.kind}`;
     el.dataset.id = n.id;
-    el.innerHTML = `${n.kind === 'moon' ? '' : planetSvg(n.kind === 'gate' ? FINAL_ID : n.id)}<span class="glyph"></span>`;
+    // a planet is two pictures: the engraving, and over it the same globe in colour, which shows once its song is home
+    const pics = n.kind === 'moon' ? '' : n.kind === 'gate' ? `<img class="pl mono" alt="" src="${hollowPic(false)}"><img class="pl col" alt="" src="${hollowPic(true)}">` : `<img class="pl mono" alt="" src="${planetPic(n.id, false)}"><img class="pl col" alt="" src="${planetPic(n.id, true)}">`;
+    el.innerHTML = `${pics}<span class="glyph"></span>`;
     const lab = document.createElement('div');
     lab.className = 'lab';
     lab.dataset.id = n.id;
@@ -306,7 +317,9 @@ function renderMap(): void {
     ekoEl.style.left = `${here[0] - here[2] * (at.kind === 'gate' ? 1.15 : 1.05)}px`;
     ekoEl.style.top = `${here[1] + here[2] * (at.kind === 'gate' ? 0.55 : -1.05)}px`;
     ekoEl.style.setProperty('--s', `${Math.max(30, Math.min(54, here[2] * 1.5))}px`);
-    ekoEl.style.color = `rgb(${orbColour(save.skin).join(',')})`;
+    const face = ekoEl.querySelector('img')!;
+    const pic = ekoPic(orbColour(save.skin));
+    if (face.getAttribute('src') !== pic) face.setAttribute('src', pic);
   }
   $('starTotal').innerHTML = `${icon('star')}${starCount()} / ${maxStars}`;
   $('starTotal').setAttribute('aria-label', `${starCount()} of ${maxStars} lens shards`);
@@ -326,8 +339,9 @@ function renderSheet(): void {
   const prac = $<HTMLButtonElement>('practiceBtn');
   const art = $('shArt');
   const artOf = at.kind === 'gate' ? 'gate' : at.planet;
-  const artKey = `${artOf}${at.kind === 'moon' ? ':moon' : ''}`;
-  if (art.dataset.of !== artKey) { art.dataset.of = artKey; art.innerHTML = planetCard(artOf === 'gate' ? FINAL_ID : artOf, at.kind === 'moon'); }
+  const artId = artOf === 'gate' ? FINAL_ID : artOf;
+  const artKey = `${artId}:${at.kind === 'moon'}:${bestFor(artId).cleared}`;
+  if (art.dataset.of !== artKey) { art.dataset.of = artKey; art.innerHTML = `<img alt="" src="${cardPic(artId, bestFor(artId).cleared, at.kind === 'moon')}">`; }
   $('shMastery').innerHTML = '';
   art.style.filter = at.kind === 'moon' ? (st === 'hidden' ? 'grayscale(1) brightness(0.3)' : 'saturate(0.5) brightness(0.62)') : at.kind === 'gate' ? 'none' : st === 'locked' ? 'grayscale(0.85) brightness(0.45)' : 'none';
   $('shLine').classList.remove('hidden');
@@ -1075,7 +1089,7 @@ function renderOrbs(): void {
     el.type = 'button';
     el.className = `tile${save.skin === o.id ? ' on' : ''}${open ? '' : ' locked'}`;
     el.style.setProperty('--c', `rgb(${o.rgb.join(',')})`);
-    el.innerHTML = `<span class="glow">${ekoSvg()}</span><b></b><small></small><span class="state">${save.skin === o.id ? `${icon('check')}EQUIPPED` : open ? '' : `${icon('lock')}LOCKED`}</span>`;
+    el.innerHTML = `<span class="glow"><img alt="" src="${ekoPic(o.rgb)}"></span><b></b><small></small><span class="state">${save.skin === o.id ? `${icon('check')}EQUIPPED` : open ? '' : `${icon('lock')}LOCKED`}</span>`;
     el.querySelector('b')!.textContent = o.name;
     el.querySelector('small')!.textContent = open ? (save.skin === o.id ? 'Eko wears it now' : 'Tap to wear') : o.how;
     el.setAttribute('aria-label', `${o.name} glow${open ? '' : `, locked: ${o.how}`}`);
@@ -1229,8 +1243,7 @@ if (import.meta.env.PROD && import.meta.env.MODE !== 'single' && !isNative && 's
   window.addEventListener('load', () => { void navigator.serviceWorker.register('./sw.js').catch(() => undefined); });
 }
 
-installDefs();
-$('titleArt').innerHTML = `${titleArt()}<span class="title-eko">${ekoSvg()}</span>`;
+for (const f of ['500 20px "Cormorant SC"', 'italic 500 18px "Cormorant Garamond"']) void document.fonts?.load(f); // the plates are lettered on a canvas: have the type ready
 buildMap();
 document.body.classList.add('boot');
 show('title');

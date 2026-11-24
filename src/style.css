@@ -1,8 +1,5 @@
 /* ONE MORE ORBIT: one design system for every screen.
-   Display face Unbounded; flat surfaces with a 2px line; one primary button, one secondary, icon buttons, chips. */
-@font-face { font-family: Unbounded; font-weight: 500; font-display: swap; src: url('../node_modules/@fontsource/unbounded/files/unbounded-latin-500-normal.woff2') format('woff2'); }
-@font-face { font-family: Unbounded; font-weight: 700; font-display: swap; src: url('../node_modules/@fontsource/unbounded/files/unbounded-latin-700-normal.woff2') format('woff2'); }
-@font-face { font-family: Unbounded; font-weight: 900; font-display: swap; src: url('../node_modules/@fontsource/unbounded/files/unbounded-latin-900-normal.woff2') format('woff2'); }
+   The Star Atlas rules are at the end of this file and win: engraved capitals, a clerk's italic, plates with ruled borders. */
 
 :root {
   --ink: #05060f; --surf: #0d1022; --surf2: #141835; --line: #272c55; --text: #f4f6ff; --mute: #8d95bd;
@@ -461,3 +458,77 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline-color:
 .world b { white-space: nowrap; }
 @media (max-width: 420px) { .world b { font-size: 16px; } .world small { font-size: 9px; letter-spacing: 0.22em; } }
 .node.gate .glyph { width: 30%; height: 30%; right: -4%; bottom: -4%; }
+
+/* ================= Star Atlas: ink and gold leaf on dark paper ================= */
+@font-face { font-family: 'Cormorant SC'; font-weight: 500; font-display: swap; src: url('../node_modules/@fontsource/cormorant-sc/files/cormorant-sc-latin-500-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Cormorant SC'; font-weight: 700; font-display: swap; src: url('../node_modules/@fontsource/cormorant-sc/files/cormorant-sc-latin-700-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Cormorant Garamond'; font-weight: 500; font-style: normal; font-display: swap; src: url('../node_modules/@fontsource/cormorant-garamond/files/cormorant-garamond-latin-500-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Cormorant Garamond'; font-weight: 500; font-style: italic; font-display: swap; src: url('../node_modules/@fontsource/cormorant-garamond/files/cormorant-garamond-latin-500-italic.woff2') format('woff2'); }
+@font-face { font-family: 'Source Sans 3'; font-weight: 600; font-display: swap; src: url('../node_modules/@fontsource/source-sans-3/files/source-sans-3-latin-600-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Source Sans 3'; font-weight: 700; font-display: swap; src: url('../node_modules/@fontsource/source-sans-3/files/source-sans-3-latin-700-normal.woff2') format('woff2'); }
+:root {
+  --ink: #0c0d17; --surf: #12131f; --surf2: #1a1b2b; --line: rgba(233, 223, 198, 0.3); --text: #efe6cf; --mute: #aaa28e;
+  --gold: #e7c264; --gold-d: #7a5a1a; --cyan: #70dccc; --cyan-d: #2f8f84; --pink: #e8463a; --rule: rgba(233, 223, 198, 0.55);
+  --display: 'Source Sans 3', system-ui, -apple-system, 'Segoe UI', sans-serif; /* the readable companion: buttons, labels, numbers in lists */
+  --title: 'Cormorant SC', Didot, 'Bodoni 72', 'Hoefler Text', Georgia, serif;   /* the engraved capitals: names and headings */
+  --hand: 'Cormorant Garamond', 'Hoefler Text', Baskerville, Georgia, serif;    /* the clerk's italic: annotations */
+  --story: var(--hand);
+}
+body { font-weight: 600; }
+.screen.veil { background: rgba(10, 11, 20, 0.95); } .screen.veil.story { background: rgba(10, 11, 20, 0.78); }
+/* names and headings are cut in spaced capitals; what is said about them is written by hand */
+.mark, .world b, .sheet h2, .lab b, .big-title, .panel h2, #resTitle, .title-card b, .cta, #pct, .pct-big, .label, .panel h3, .tile b, #finaleTitle { font-family: var(--title); font-weight: 700; letter-spacing: 0.12em; }
+.world b, .sheet h2, .lab b, .tile b { text-transform: none; }
+.world small, .lab, .sh-meta, .tier, .title-card small, .title-card span, #section, .tile small, .story-text, #bestPct { font-family: var(--hand); font-style: italic; font-weight: 500; text-transform: none; letter-spacing: 0.01em; }
+.story-text { font-style: normal; font-size: clamp(18px, 2.4vh + 7px, 23px); line-height: 1.42; }
+.world small { font-size: 14px; color: var(--mute); } .world b { font-size: 21px; letter-spacing: 0.14em; }
+.lab { font-size: 14px; color: rgba(233, 223, 198, 0.82); gap: 1px; } .lab b { font-size: 15.5px; letter-spacing: 0.14em; } .lab.gold { color: var(--gold); }
+.sheet h2 { font-size: 23px; } .sh-meta { font-size: 15.5px; line-height: 1.3; } .tier { font-size: 14.5px; letter-spacing: 0.02em; }
+.tile b { font-size: 15px; } .tile small { font-size: 14px; }
+.panel h3 { font-size: 15px; color: var(--gold); } .label { font-size: 14px; }
+#pct { font-weight: 500; letter-spacing: 0.04em; } .cta { font-weight: 500; letter-spacing: 0.3em; font-size: 17px; }
+/* the wordmark: engraved, with the O as an orbit ruled in gold */
+.mark { font-weight: 500; letter-spacing: 0.1em; font-size: clamp(44px, 16vw, 100px); text-shadow: none; }
+.mark small { font-family: var(--title); font-weight: 500; letter-spacing: 0.62em; margin-right: -0.62em; }
+.mark .o { border-width: 0.05em; border-color: var(--gold); width: 0.72em; height: 0.72em; margin-right: 0.12em; }
+/* plates: square corners, a ruled double border, no fills that are not paper */
+.btn, .icon, .chip, .pill, .tab, .tile, .sheet, .star-total, .mchip, .qchip, .story-art, .sync-box, .unlock, .pad { border-radius: 3px; }
+.btn { letter-spacing: 0.14em; font-weight: 700; }
+.btn.primary { background: linear-gradient(120deg, #a57a26, #e7c264 38%, #fff1bd 52%, #d6a846 70%, #9a7122); color: #171207; box-shadow: 0 4px 0 #5c4312, inset 0 0 0 1px rgba(255, 246, 210, 0.5); }
+.btn.primary:active { transform: translateY(3px); box-shadow: 0 1px 0 #5c4312; }
+.btn.primary:disabled { background: var(--surf2); color: var(--mute); box-shadow: 0 4px 0 #07070e; }
+.btn.secondary, .icon, .chip, .pill, .tab { background: rgba(12, 13, 23, 0.86); border: 1px solid var(--rule); box-shadow: inset 0 0 0 3px var(--ink), inset 0 0 0 4px rgba(233, 223, 198, 0.2); }
+.btn.secondary.toggle.on, .tile.on { border-color: var(--gold); color: var(--gold); }
+.sheet { background: rgba(13, 14, 24, 0.97); border: 1px solid var(--tint, var(--rule)); box-shadow: inset 0 0 0 4px var(--ink), inset 0 0 0 5px rgba(233, 223, 198, 0.2); }
+.tile { background: rgba(13, 14, 24, 0.92); border: 1px solid var(--line); } .tile.got { border-color: var(--gold); }
+.star-total { border: 1px solid var(--gold); background: none; font-family: var(--title); font-size: 16px; letter-spacing: 0.08em; }
+.mchip, .qchip { border-width: 1px; }
+/* the map: the road is a constellation, a planet is an engraving until its colour is home */
+.route .done { stroke: rgba(233, 223, 198, 0.9); stroke-width: 1.4; }
+.route .todo { stroke: rgba(233, 223, 198, 0.42); stroke-width: 1.4; stroke-dasharray: 2 7; }
+.route .side { stroke: rgba(233, 223, 198, 0.3); stroke-width: 1; } .route .side.found { stroke: var(--gold); }
+.route .beam { stroke-width: 18; } .route .beam.on { opacity: 0.24; }
+.hub { filter: brightness(calc(0.62 + 0.38 * var(--lit, 0))); }
+.hub img, .map-eko img { width: 100%; height: 100%; display: block; }
+.map-eko img { animation: bob calc(var(--beat) * 4) ease-in-out infinite; }
+.node .pl.col { opacity: 0; transition: opacity 2s ease; }
+.node.cleared .pl.col { opacity: 1; }
+.node.planet.locked .pl, .node.planet.cleared .pl, .node.gate.locked .pl, .node.gate.open .pl { filter: none; animation: none; }
+.node.planet.locked .pl.mono { opacity: 0.5; }
+.node.planet .glyph, .node.gate .glyph { background: var(--ink); color: var(--gold); box-shadow: 0 0 0 1px var(--gold); }
+.node.planet.locked .glyph { background: var(--ink); color: var(--mute); box-shadow: 0 0 0 1px var(--line); }
+.node.sel::after { border: 1.5px dashed rgba(233, 223, 198, 0.85); }
+.node.moon:not(.hidden-moon) { background: none; box-shadow: inset 0 0 0 1.5px var(--gold); color: var(--gold); }
+.node.hidden-moon { border: 1px dashed rgba(233, 223, 198, 0.4); }
+/* pictures drawn by the atlas */
+.title-art > img { width: 100%; height: auto; display: block; }
+.title-eko img { position: absolute; left: 50%; top: -14%; width: 30%; margin-left: -15%; animation: lap calc(var(--beat) * 14) linear infinite reverse; }
+.sheet .art > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.story-art { border: 1px solid var(--rule); } .story-art canvas { width: 100%; height: 100%; display: block; }
+.tile .glow img { width: 100%; height: 100%; display: block; } .tile .glow { width: 60px; height: 66px; }
+.story-dots i { border-radius: 0; transform: rotate(45deg); }
+@media (max-width: 420px) { .world b { font-size: 18px; } .world small { font-size: 12.5px; letter-spacing: 0; } }
+@media (prefers-reduced-motion: reduce) { .map-eko img, .title-eko img { animation: none; } .node .pl.col { transition: none; } }
+.title-art { width: min(96vw, 66vh, 640px); }
+.title-art > img { aspect-ratio: 5 / 4; object-fit: cover; }
+.title-eko { left: 31%; right: 31%; top: 9%; bottom: 31%; }

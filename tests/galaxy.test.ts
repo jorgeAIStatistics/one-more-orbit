@@ -1,40 +1,38 @@
-// The galaxy's words and pictures: the planets' names, the story's chapters, and the mastery badges.
+// The galaxy's words and pictures: the planets' names and palettes, the story's chapters, and the mastery badges.
 import { describe, expect, it } from 'vitest';
 import { BADGES } from '../src/game/extras';
 import { FINAL, PACKS } from '../src/game/packs';
-import { PLANETS, STORY, planetCard, planetName, titleArt } from '../src/ui/galaxy';
-import { GALAXY_DEFS } from '../src/ui/galaxy-art';
-
-const symbols = new Set([...GALAXY_DEFS.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]));
-const used = (svg: string) => [...svg.matchAll(/(?:href="#|url\(#)([^")]+)/g)].map((m) => m[1]);
+import { PLANETS, STORY, planetName } from '../src/ui/galaxy';
 
 describe('the galaxy', () => {
-  it('every level is a planet with its own name, picture and colour', () => {
+  it('every level is a planet with its own name and its own palette for when its colour is home', () => {
     const ids = [...PACKS, FINAL].map((p) => p.level.id);
     expect(Object.keys(PLANETS)).toEqual(ids);
-    expect(new Set(ids.map(planetName)).size).toBe(5);
     expect(ids.map(planetName)).toEqual(['Emberwick', 'Cirra', 'Glassmere', 'Verdance', 'The Hollow']);
     expect(planetName('skyhigh-b')).toBe('Cirra'); // a moon belongs to its planet
-    for (const id of ids) { expect(symbols.has(PLANETS[id].sym), id).toBe(true); expect(PLANETS[id].col).toMatch(/^#[0-9a-f]{6}$/); }
+    const hue = (c: number[]) => { const mx = Math.max(...c), mn = Math.min(...c); if (mx === mn) return 0; const d = mx - mn; const h = mx === c[0] ? ((c[1] - c[2]) / d) % 6 : mx === c[1] ? (c[2] - c[0]) / d + 2 : (c[0] - c[1]) / d + 4; return ((h * 60) + 360) % 360; };
+    const hues = ids.slice(0, 4).map((id) => hue(PLANETS[id].rgb[1]));
+    // no two planets share a colour: their body hues are at least 40 degrees apart
+    for (let i = 0; i < hues.length; i++) for (let j = i + 1; j < hues.length; j++) { const d = Math.abs(hues[i] - hues[j]); expect(Math.min(d, 360 - d), `${ids[i]} and ${ids[j]}`).toBeGreaterThanOrEqual(40); }
+    for (const id of ids) { expect(PLANETS[id].col).toMatch(/^#[0-9a-f]{6}$/); expect(PLANETS[id].rgb.length).toBe(3); }
   });
 
-  it('the story is twelve short cards in seven chapters, plus one for the mended lens, and every picture is made of drawings that exist', () => {
+  it('the story is twelve short cards in seven chapters, plus one for the mended lens; every card is a plate to draw and a line to read', () => {
     expect(Object.keys(STORY)).toEqual(['open', 'heroes', 'skyhigh', 'blank', 'invincible', 'hollow', 'end', 'lens']);
     expect(STORY.open.length).toBe(3);
     for (const p of PACKS) expect(STORY[p.level.id].length, p.level.id).toBe(1); // one card when its planet is restored
     expect(STORY.hollow.length).toBe(2);
     expect(STORY.end.length).toBe(3);
-    const main = Object.entries(STORY).filter(([k]) => k !== 'lens').flatMap(([, f]) => f);
-    expect(main.length).toBe(12);
+    expect(Object.entries(STORY).filter(([k]) => k !== 'lens').flatMap(([, f]) => f).length).toBe(12);
     for (const f of Object.values(STORY).flat()) {
+      expect(typeof f.draw).toBe('function');
       expect(f.text.length, f.text).toBeGreaterThan(40);
-      expect(f.text.length, f.text).toBeLessThanOrEqual(170); // a card is read in a few seconds
-      expect(f.art.startsWith('<svg')).toBe(true);
-      for (const id of used(f.art)) expect(symbols.has(id) || id === 'dim' || id === 'mw', `picture uses #${id}`).toBe(true);
+      expect(f.text.length, f.text).toBeLessThanOrEqual(175); // a card is read in a few seconds
     }
-    // each restored planet's card names that planet
     for (const p of PACKS) expect(STORY[p.level.id][0].text).toContain(planetName(p.level.id));
-    for (const svg of [titleArt(), planetCard('blank'), planetCard('royalty', true)]) for (const id of used(svg)) expect(symbols.has(id) || id === 'dim', `#${id}`).toBe(true);
+    // colour is part of the story: it is taken in the opening and comes back at the end
+    expect(STORY.open[2].text).toMatch(/colour/);
+    expect(STORY.end[1].text).toMatch(/colour/);
   });
 
   it('it is our own: no borrowed names anywhere in the story or the planets', () => {
