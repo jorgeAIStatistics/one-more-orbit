@@ -12,7 +12,7 @@ export interface SkyNode {
   state: 'home' | 'open' | 'dark'; best: number; shards: boolean[]; why: string;
 }
 export interface SkyInfo { nodes: SkyNode[]; lens: string; lit: string }
-export type SkyHit = { kind: 'node'; id: string } | { kind: 'practise' | 'glows' | 'settings' | 'badges' | 'quests' | 'sky' };
+export type SkyHit = { kind: 'node'; id: string } | { kind: 'practise' | 'glows' | 'settings' | 'badges' | 'quests' | 'title' | 'sky' };
 
 const T = DUSK.tools;
 const SERIF = '"Cormorant Garamond", "Hoefler Text", Baskerville, Palatino, Georgia, serif';
@@ -26,11 +26,11 @@ const PAL: Record<string, { base: RGB; lit: RGB; dark: RGB; bands: unknown[] }> 
 const NIGHT: RGB = [22, 18, 56];
 const SKY = [[0, [9, 10, 34]], [0.42, [34, 28, 84]], [0.72, [96, 50, 104]], [0.9, [206, 104, 92]], [1, [248, 178, 122]]];
 type Side = 'left' | 'right' | 'below';
-interface Lay { w: number; h: number; horizon: number; lantern: [number, number, number]; nodes: Record<string, [number, number, number, Side]>; hollow: [number, number, number, number]; hollowAt: [number, number, CanvasTextAlign]; stars: Array<[number, number]>; starsAt: [number, number, CanvasTextAlign]; words: [number, number, CanvasTextAlign] }
+interface Lay { w: number; h: number; horizon: number; lantern: [number, number, number]; nodes: Record<string, [number, number, number, Side]>; hollow: [number, number, number, number]; hollowAt: [number, number, CanvasTextAlign]; stars: Array<[number, number]>; starsAt: [number, number, CanvasTextAlign]; words: [number, number, CanvasTextAlign]; down: [number, number] }
 // Positions on a design sheet (a 390 x 844 phone, a 1440 x 900 desktop), from the approved stills.
 const LAYS: Record<'tall' | 'wide', Lay> = {
-  tall: { w: 390, h: 844, horizon: 0.93, lantern: [58, 805, 0.52], nodes: { heroes: [112, 646, 40, 'right'], skyhigh: [270, 470, 50, 'left'], blank: [104, 300, 32, 'right'], invincible: [286, 182, 27, 'left'], gate: [200, 44, 30, 'below'] }, hollow: [200, 18, 240, 80], hollowAt: [30, 128, 'left'], stars: [[282, 628], [322, 662], [302, 706], [352, 724], [346, 612]], starsAt: [366, 754, 'right'], words: [98, 772, 'left'] },
-  wide: { w: 1440, h: 900, horizon: 0.9, lantern: [130, 836, 1.1], nodes: { heroes: [330, 640, 62, 'right'], skyhigh: [640, 462, 84, 'right'], blank: [960, 300, 56, 'right'], invincible: [1170, 160, 46, 'left'], gate: [1300, 70, 46, 'left'] }, hollow: [1440, 0, 330, 230], hollowAt: [1180, 276, 'left'], stars: [[90, 130], [180, 200], [150, 300], [270, 280], [330, 150]], starsAt: [96, 352, 'left'], words: [210, 770, 'left'] }
+  tall: { w: 390, h: 844, horizon: 0.93, lantern: [58, 805, 0.52], nodes: { heroes: [112, 646, 40, 'right'], skyhigh: [270, 470, 50, 'left'], blank: [104, 300, 32, 'right'], invincible: [286, 182, 27, 'left'], gate: [200, 44, 30, 'below'] }, hollow: [200, 18, 240, 80], hollowAt: [30, 128, 'left'], stars: [[282, 628], [322, 662], [302, 706], [352, 724], [346, 612]], starsAt: [366, 754, 'right'], words: [98, 772, 'left'], down: [0, 0] },
+  wide: { w: 1440, h: 900, horizon: 0.9, lantern: [130, 836, 1.1], nodes: { heroes: [330, 640, 62, 'right'], skyhigh: [640, 462, 84, 'right'], blank: [960, 300, 56, 'right'], invincible: [1170, 160, 46, 'left'], gate: [1300, 70, 46, 'left'] }, hollow: [1440, 0, 330, 230], hollowAt: [1180, 276, 'left'], stars: [[90, 130], [180, 200], [150, 300], [270, 280], [330, 150]], starsAt: [96, 352, 'left'], words: [210, 770, 'left'], down: [0, 0] }
 };
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const cvs = (w: number, h: number): [HTMLCanvasElement, CanvasRenderingContext2D] => { const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); return [c, c.getContext('2d')!]; };
@@ -51,6 +51,7 @@ export class SkyMap {
   private z = 1; private fx = 0; private fy = 0; private ex = 0; private ey = 0;
   private shown = ''; private fade = 0; private launchAt = -1; private t = 0;
   private hits: Array<{ x: number; y: number; w: number; h: number; hit: SkyHit }> = [];
+  private screenHits: Array<{ x: number; y: number; w: number; h: number; hit: SkyHit }> = [];
 
   constructor(private canvas: HTMLCanvasElement) { this.ctx = canvas.getContext('2d')!; }
 
@@ -201,6 +202,7 @@ export class SkyMap {
       this.text(this.info.lens, wx, wy + 36, 14, quiet * 0.8, wa, SAND);
     }
     this.hits.push({ x: 0, y: lanternAt.y - 60 * u, w: Math.max(190, wx + 170), h: h - lanternAt.y + 60 * u, hit: { kind: 'node', id: 'lantern' } });
+
     // the worlds: far ones first, the chosen one last and larger, each with what is written beside it
     const order = [...this.info.nodes].sort((a, b) => Number(a.id === this.chosen) - Number(b.id === this.chosen) || (this.place(a)?.r ?? 0) - (this.place(b)?.r ?? 0));
     for (const n of order) {
@@ -243,16 +245,20 @@ export class SkyMap {
     }
     // Eko waits by the place chosen (or the furthest world reached), and drifts
     const base = at ?? this.pos.get([...planets].reverse().find((n) => n.state !== 'dark')?.id ?? 'heroes')!;
-    const wantX = fly > 0 ? base.x : base.x + (base.side === 'left' ? 1 : -1) * base.r * (at ? 1.5 : 1) * 0.9, wantY = fly > 0 ? base.y : base.y + base.r * (at ? 1.5 : 1) * 1.25;
+    const wantX = fly > 0 ? base.x : base.x + (base.side === 'left' ? 1 : -1) * base.r * (at ? 1.5 : 1) * 0.9, wantY = fly > 0 ? base.y : base.y + base.r * (at ? 1.5 : 1) * (base.y > h * 0.68 ? -1.25 : 1.25); // (above a low world, so he is never over the Lantern's words)
     const ke = Math.min(1, dt * (fly > 0 ? 12 : 3.2));
     this.ex += (wantX - this.ex) * ke; this.ey += (wantY - this.ey) * ke;
     if (this.eko) { const ew = 240 * u, eh = 320 * u, sc = (fly > 0 ? 1 - fly * 0.6 : 1) * (0.9 + 0.04 * Math.sin(t * 2.2)); c.drawImage(this.eko, this.ex - 150 * u * sc + Math.sin(t * 0.9) * 3, this.ey - 120 * u * sc + Math.sin(t * 1.5) * 4, ew * sc, eh * sc); }
     c.restore();
+    // the way back down to the title: a quiet word in the corner of the screen itself, so the camera never hides it
+    this.screenHits = [];
+    if (fly === 0) { this.text('down to the horizon', w - 14, h - 14, 14.5, 0.55, 'right', SAND); this.screenHits.push({ x: w - 170, y: h - 46, w: 170, h: 46, hit: { kind: 'title' } }); }
     if (fly > 0) { c.fillStyle = `rgba(255,226,180,${Math.min(1, fly * fly) * 0.9})`; c.fillRect(0, 0, w, h); if (fly >= 1 && t - this.launchAt > 1.2) this.launchAt = -1; }
   }
 
   /** What is under a tap at screen x, y. */
   hit(x: number, y: number): SkyHit {
+    for (const b of this.screenHits) if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) return b.hit;
     const wx = (x - this.w / 2) / this.z + this.fx, wy = (y - this.h / 2) / this.z + this.fy;
     for (let i = this.hits.length - 1; i >= 0; i--) { const b = this.hits[i]; if (wx >= b.x && wx <= b.x + b.w && wy >= b.y && wy <= b.y + b.h) return b.hit; }
     return { kind: 'sky' };

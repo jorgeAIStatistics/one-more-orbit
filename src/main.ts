@@ -12,6 +12,7 @@ import { initRecord } from './record';
 import { bestFor, persist, save, starCount, starsFor } from './save';
 import { LEVEL_UI, icon } from './ui/art';
 import { SkyMap, type SkyInfo, type SkyNode } from './ui/skymap';
+import { SkyTitle } from './ui/skytitle';
 import { PLANETS, STORY, cardPic, ekoPic, hollowPic, lanternPic, planetName, planetPic, titlePic, type Frame } from './ui/galaxy';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -47,6 +48,8 @@ const owned = (o: Orb): boolean => {
 const renderer = new Renderer($<HTMLCanvasElement>('stage'));
 /** the galaxy map: one painted sky you tap things in */
 const sky = new SkyMap($<HTMLCanvasElement>('stage'));
+/** the title: the horizon under that sky */
+const skyTitle = new SkyTitle($<HTMLCanvasElement>('stage'));
 let screen: Screen = 'title';
 let settingsFrom: Screen = 'levels';
 let run: Run | null = null;
@@ -90,7 +93,6 @@ function show(s: Screen): void {
   // colour is what the Hush took: the sheet behind the menus warms with every planet restored, and floods when the Hush sleeps
   const home = PACKS.filter((p) => bestFor(p.level.id).cleared).map((p) => p.level.id);
   renderer.idleColour = bestFor(FINAL_ID).cleared ? 1 : home.length * 0.12;
-  if (s === 'title') $('titleArt').innerHTML = `<img alt="" src="${titlePic(bestFor(FINAL_ID).cleared ? PACKS.map((p) => p.level.id) : home)}"><span class="title-eko"><img alt="" src="${ekoPic(orbColour(save.skin))}"></span>`;
   if (s === 'levels') {
     sky.settle();
     renderMap(); queuePreview();
@@ -360,6 +362,7 @@ $('levels').addEventListener('click', (e) => {
   else if (hit.kind === 'settings') openSettings('levels');
   else if (hit.kind === 'badges') { renderBadges(); show('badges'); }
   else if (hit.kind === 'quests') { renderQuests(); show('quests'); }
+  else if (hit.kind === 'title') { skyTitle.descend(); show('title'); }
   else sky.chosen = null; // the open sky: step back and see all of it
 });
 /** The panel under the map: the place you are at, how you have done there, and PLAY. */
@@ -858,7 +861,12 @@ window.addEventListener('blur', () => { fingers.clear(); keysDown.clear(); letGo
 for (const type of ['pointerup', 'touchend', 'click'] as const) window.addEventListener(type, () => { if (audio.ctx && !audio.running && !(run && (run.state === 'paused' || run.state === 'resuming'))) void audio.resume(); }, { capture: true, passive: true });
 // The title opens on the finished tap (a click), not on the touch going down: a touch that changes the screen under the
 // finger would land its click on whatever appears there, and start a level. A click is also what lets iOS start the sound.
-$('title').addEventListener('click', () => { if (screen !== 'title') return; audio.ensure(); audio.setVolumes(save.music, save.sfx); playStory('open', () => show('levels')); });
+$('title').addEventListener('click', () => {
+  if (screen !== 'title' || skyTitle.rising) return;
+  audio.ensure(); audio.setVolumes(save.music, save.sfx);
+  // the first time, the story opens; after that a tap is Eko rising, and the camera goes up into the galaxy with him
+  if (!save.story.open) playStory('open', () => show('levels')); else { renderMap(); skyTitle.ascend(() => show('levels')); }
+});
 $('storyNext').addEventListener('click', nextStory);
 $('storyArt').addEventListener('click', nextStory);
 $('storySkip').addEventListener('click', () => { if (screen === 'story') endStory(); });
@@ -1261,7 +1269,9 @@ function tick(now: number): void {
     renderer.drawMetronome(now, cal.running ? Math.max(0, (now - cal.startPerf) / 1000 / CAL_PERIOD) % 1 : 0);
   } else {
     audio.tick(now);
-    if (screen === 'levels') sky.draw(now, dt); else renderer.drawIdle(now, dt);
+    if (screen === 'levels') sky.draw(now, dt);
+    else if (screen === 'title') { if (skyTitle.between) sky.draw(now, dt); skyTitle.draw(now, dt); } // rising, the galaxy shows through
+    else renderer.drawIdle(now, dt);
     if (screen === 'record') record.tick(now);
   }
 }

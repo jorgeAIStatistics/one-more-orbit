@@ -537,3 +537,5 @@ body { font-weight: 600; }
    The old map's pieces (top bar, nodes, the planet card, the tab bar) are not shown; the picture is tapped directly. */
 #levels { cursor: pointer; }
 #levels .topbar, #levels .map, #levels .foot { display: none; }
+/* Afterglow, screen 2: the title is painted on the canvas; the old wordmark and picture are kept for readers, not shown */
+#title .title-in { visibility: hidden; }
