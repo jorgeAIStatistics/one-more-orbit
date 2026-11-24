@@ -1,0 +1,23 @@
+<!doctype html><meta charset="utf-8"><title>Afterglow: the rest of the interface</title>
+<style>
+@font-face { font-family: 'Cormorant Garamond'; font-weight: 500; font-style: normal; src: url('../../node_modules/@fontsource/cormorant-garamond/files/cormorant-garamond-latin-500-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Cormorant Garamond'; font-weight: 500; font-style: italic; src: url('../../node_modules/@fontsource/cormorant-garamond/files/cormorant-garamond-latin-500-italic.woff2') format('woff2'); }
+@font-face { font-family: 'Cormorant Lining'; font-weight: 500; font-style: normal; font-feature-settings: 'lnum' 1; src: url('../../node_modules/@fontsource/cormorant-garamond/files/cormorant-garamond-latin-500-normal.woff2') format('woff2'); }
+</style>
+<body style="margin:0;background:#111">
+<script src="kit.js"></script><script src="a-dusk.js"></script><script src="ui-afterglow.js"></script>
+<script>
+window.errors = []; window.done = false;
+const only = new URLSearchParams(location.search).get('only');
+const add = (id, w, h, draw) => { const cv = document.createElement('canvas'); cv.width = w; cv.height = h; cv.id = id; cv.style.cssText = 'display:block;margin:8px auto;max-width:100%'; document.body.appendChild(cv); try { draw(cv.getContext('2d')); } catch (e) { window.errors.push(`${id}: ${e.stack || e}`); } return cv; };
+(async () => {
+  await Promise.all([document.fonts.load('italic 500 20px "Cormorant Garamond"'), document.fonts.load('normal 500 20px "Cormorant Garamond"'), document.fonts.load('normal 500 20px "Cormorant Lining"')]);
+  for (const name of ['pause', 'hud1', 'hud2', 'settings', 'sync', 'glows', 'stars', 'credits']) {
+    if (only && only !== name) continue;
+    const p = add(`${name}-phone`, 780, 1688, (c) => UI.draw(c, 780, 1688, name, 'phone')), d = add(`${name}-desktop`, 1440, 900, (c) => UI.draw(c, 1440, 900, name, 'desktop'));
+    add(`${name}-sheet`, 416 + 24 + 1440, 900, (c) => { c.fillStyle = '#0b0a14'; c.fillRect(0, 0, 1880, 900); c.imageSmoothingQuality = 'high'; c.drawImage(p, 0, 0, 416, 900); c.drawImage(d, 440, 0); });
+  }
+  if (!only || only === 'parts') add('parts-sheet', 1440, 900, (c) => UI.draw(c, 1440, 900, 'parts', 'desktop'));
+  window.done = true;
+})();
+</script>
