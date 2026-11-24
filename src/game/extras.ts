@@ -1,7 +1,9 @@
-// Orbs (ball skins) and badges for the ring-hop game: clears, flow, the drop, and playing a level cold.
+// Glows (the colour of Eko's hoop and light) and the old badges: clears, flow, the drop, and playing a level cold.
+// The badges screen is gone (stars took its place, see stars.ts); the badges themselves are still earned, because
+// Game Center's achievements and two of the glows hang on them.
 export interface Badge { id: string; name: string; desc: string }
-/** needs: a badge id, or "quests:<level>" (both of its quests done), or "moon:<level>" (its B-side cleared) */
-export interface Orb { id: string; name: string; rgb: [number, number, number]; needs: string | null; how: string }
+/** needs: a badge id, or "dare:<level>" (its Daredevil star), or "moon:<level>" (its night side cleared) */
+export interface Orb { id: string; name: string; rgb: [number, number, number]; needs: string | null; /** what it is, in the world's words */ says: string; /** what lights it */ how: string }
 
 const MASTERY: Array<[string, string, string]> = [['heroes', 'Emberwick', 'Heroes Tonight'], ['skyhigh', 'Cirra', 'Sky High'], ['blank', 'Glassmere', 'Blank'], ['invincible', 'Verdance', 'Invincible'], ['royalty', 'The Hollow', 'Royalty']];
 export const BADGES: Badge[] = [
@@ -24,25 +26,27 @@ export const BADGES: Badge[] = [
 ];
 
 export const ORBS: Orb[] = [
-  { id: 'cyan', name: 'Classic', rgb: [0, 245, 255], needs: null, how: 'Yours from the start' },
-  { id: 'ember', name: 'Ember', rgb: [255, 150, 90], needs: 'clear_heroes', how: 'Clear Heroes Tonight' },
-  { id: 'violet', name: 'Violet', rgb: [190, 120, 255], needs: 'clear_skyhigh', how: 'Clear Sky High' },
-  { id: 'frost', name: 'Frost', rgb: [225, 240, 255], needs: 'clear_blank', how: 'Clear Blank' },
-  { id: 'toxic', name: 'Toxic', rgb: [160, 255, 70], needs: 'clear_invincible', how: 'Clear Invincible' },
-  { id: 'gold', name: 'Gold', rgb: [255, 214, 90], needs: 'full_drop', how: 'Set off a drop at 100%' },
-  { id: 'rose', name: 'Rose', rgb: [255, 90, 160], needs: 'in_flow', how: 'Clear a level with 85% on the beat' },
-  { id: 'singular', name: 'Singular', rgb: [255, 255, 255], needs: 'clear_royalty', how: 'Clear Royalty' },
-  // quests: both of a level's quests
-  { id: 'coral', name: 'Coral', rgb: [255, 120, 110], needs: 'quests:heroes', how: 'Both quests on Heroes Tonight' },
-  { id: 'magenta', name: 'Magenta', rgb: [255, 90, 240], needs: 'quests:skyhigh', how: 'Both quests on Sky High' },
-  { id: 'azure', name: 'Azure', rgb: [90, 160, 255], needs: 'quests:blank', how: 'Both quests on Blank' },
-  { id: 'mint', name: 'Mint', rgb: [90, 255, 190], needs: 'quests:invincible', how: 'Both quests on Invincible' },
-  // moons: a level's B-side cleared
-  { id: 'halo', name: 'Halo', rgb: [255, 176, 40], needs: 'moon:heroes', how: 'Clear the B-side of Heroes Tonight' },
-  { id: 'eclipse', name: 'Eclipse', rgb: [130, 110, 255], needs: 'moon:skyhigh', how: 'Clear the B-side of Sky High' },
-  { id: 'silver', name: 'Silver', rgb: [200, 205, 220], needs: 'moon:blank', how: 'Clear the B-side of Blank' },
-  { id: 'crimson', name: 'Crimson', rgb: [255, 60, 90], needs: 'moon:invincible', how: 'Clear the B-side of Invincible' }
+  { id: 'cyan', name: 'Classic', rgb: [0, 245, 255], needs: null, says: 'the light Eko was lit with', how: 'yours from the start' },
+  { id: 'ember', name: 'Ember', rgb: [255, 150, 90], needs: 'clear_heroes', says: 'a coal from Ossa\u2019s forge', how: 'restore Emberwick' },
+  { id: 'violet', name: 'Violet', rgb: [190, 120, 255], needs: 'clear_skyhigh', says: 'a thread from Seo\u2019s kite', how: 'restore Cirra' },
+  { id: 'frost', name: 'Frost', rgb: [225, 240, 255], needs: 'clear_blank', says: 'a sliver of Vell\u2019s glass', how: 'restore Glassmere' },
+  { id: 'toxic', name: 'Toxic', rgb: [160, 255, 70], needs: 'clear_invincible', says: 'a seed light from Morrow\u2019s woods', how: 'restore Verdance' },
+  { id: 'gold', name: 'Gold', rgb: [255, 214, 90], needs: 'full_drop', says: 'a drop, caught whole', how: 'set off a drop at full charge' },
+  { id: 'rose', name: 'Rose', rgb: [255, 90, 160], needs: 'in_flow', says: 'what keeping time looks like', how: 'bring a song home with 85 taps in 100 on the beat' },
+  { id: 'singular', name: 'Singular', rgb: [255, 255, 255], needs: 'clear_royalty', says: 'the Hollow\u2019s one small light', how: 'bring the last song home' },
+  // a planet dared: its Daredevil star (these were the quests' glows, and whoever did both of a level's quests keeps its)
+  { id: 'coral', name: 'Coral', rgb: [255, 120, 110], needs: 'dare:heroes', says: 'Emberwick, dared', how: 'the Daredevil star on Emberwick' },
+  { id: 'magenta', name: 'Magenta', rgb: [255, 90, 240], needs: 'dare:skyhigh', says: 'Cirra, dared', how: 'the Daredevil star on Cirra' },
+  { id: 'azure', name: 'Azure', rgb: [90, 160, 255], needs: 'dare:blank', says: 'Glassmere, dared', how: 'the Daredevil star on Glassmere' },
+  { id: 'mint', name: 'Mint', rgb: [90, 255, 190], needs: 'dare:invincible', says: 'Verdance, dared', how: 'the Daredevil star on Verdance' },
+  // a night side cleared
+  { id: 'halo', name: 'Halo', rgb: [255, 176, 40], needs: 'moon:heroes', says: 'from the night side of Emberwick', how: 'the Night side star on Emberwick' },
+  { id: 'eclipse', name: 'Eclipse', rgb: [130, 110, 255], needs: 'moon:skyhigh', says: 'from the night side of Cirra', how: 'the Night side star on Cirra' },
+  { id: 'silver', name: 'Silver', rgb: [200, 205, 220], needs: 'moon:blank', says: 'from the night side of Glassmere', how: 'the Night side star on Glassmere' },
+  { id: 'crimson', name: 'Crimson', rgb: [255, 60, 90], needs: 'moon:invincible', says: 'from the night side of Verdance', how: 'the Night side star on Verdance' }
 ];
+/** The old quests, two a level. They are no longer earned or shown; a save that has both of a level's keeps the glow they gave. */
+export const OLD_QUESTS: Record<string, [string, string]> = { heroes: ['heroes_drop', 'heroes_holds'], skyhigh: ['skyhigh_beat', 'skyhigh_clean'], blank: ['blank_streak', 'blank_holds'], invincible: ['invincible_drop', 'invincible_beat'] };
 
 export const orbColour = (id: string) => (ORBS.find((o) => o.id === id) || ORBS[0]).rgb;
 

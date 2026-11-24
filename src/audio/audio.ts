@@ -15,7 +15,7 @@ export interface LoadedTrack {
   exact: boolean;
 }
 
-type HitName = 'hit' | 'stray' | 'impact' | 'tap' | 'L' | 'R' | 'sparkle' | 'sparkleHi' | 'miss' | 'spin' | 'hop' | 'release' | 'click' | 'clickHi';
+type HitName = 'hit' | 'stray' | 'impact' | 'tap' | 'L' | 'R' | 'sparkle' | 'sparkleHi' | 'miss' | 'spin' | 'hop' | 'release' | 'click' | 'clickHi' | 'glass';
 
 /**
  * Web Audio wrapper. The audio context's clock is the game clock: `ctxTimeAt()` maps an input
@@ -379,6 +379,8 @@ export class AudioEngine {
     this.hits.release = make(0.07, (t) => Math.sin(TAU * hz * 3 * t) * Math.exp(-t * 60) * 0.4 + hpNoise() * Math.exp(-t * 300) * 0.2);
     this.hits.click = make(0.03, (t) => Math.sin(TAU * 1320 * t) * Math.exp(-t * 160) * 0.8);
     this.hits.clickHi = make(0.03, (t) => Math.sin(TAU * 1980 * t) * Math.exp(-t * 160) * 0.9);
+    // Marlow's knuckle on the lamp's glass (the sync check): the same knock that counts the lullaby in, sharp enough to tap along to
+    this.hits.glass = make(0.22, (t) => (Math.sin(TAU * 1240 * t) * Math.exp(-t / 0.02) + 0.5 * Math.sin(TAU * 2710 * t) * Math.exp(-t / 0.012) + hpNoise() * Math.exp(-t / 0.004) * 0.3) * 0.75);
   }
 
   /** Plays a pre-rendered hitsound right now (or at audio-clock time `when`). */

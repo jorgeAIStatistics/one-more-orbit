@@ -1,9 +1,9 @@
 import './style.css';
 import { audio } from './audio/audio';
-import { BADGES, ORBS, earned, orbColour, type Orb } from './game/extras';
+import { OLD_QUESTS, ORBS, earned, type Orb } from './game/extras';
 import { BSIDES, FINAL, PACKS as ALL_PACKS, SLICE, creditLine, manifest, type LevelPack } from './game/packs';
-import { QUESTS, questSet, questsEarned, questsFor } from './game/quests';
-import { FINAL_ID, GATE_CLEARS, NODES, maxStars, nodeOf, nodeState, playable, totalStars, type MapNode, type Progress } from './game/world';
+import { STAR_PLACES, STAR_TOTAL, starLit, starsLit, starsOf, type StarProgress } from './game/stars';
+import { FINAL_ID, NODES, maxStars, nodeOf, nodeState, playable, type MapNode, type Progress } from './game/world';
 import { refreshBars } from './gd/presses';
 import { GdRenderer as Renderer } from './gd/render';
 import { GdRun as Run, TUTORIAL_BEATS } from './gd/run';
@@ -11,21 +11,21 @@ import { CHAMBERS, LISTEN, type Chamber } from './game/chambers';
 import { canHaptics, feel, fullScreen, gameCenter, isNative, watchBackground } from './native';
 import { initRecord } from './record';
 import { bestFor, persist, save, starCount, starsFor } from './save';
-import { LEVEL_UI, icon } from './ui/art';
 import { SkyMap, type SkyInfo, type SkyNode } from './ui/skymap';
 import { SkyTitle } from './ui/skytitle';
 import { SkyStory } from './ui/skystory';
 import { SkyResult, type ResultInfo } from './ui/skyresult';
-import { PLANETS, STORY, ekoPic, planetName, type Frame } from './ui/galaxy';
+import { SkyRooms, type GlowsInfo, type Room, type StarsInfo, type SyncInfo } from './ui/skyrooms';
+import { STORY, planetName, type Frame } from './ui/galaxy';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-type Screen = 'title' | 'levels' | 'play' | 'pause' | 'results' | 'settings' | 'calib' | 'orbs' | 'badges' | 'quests' | 'record' | 'story' | 'chambers';
-const SCREENS: Screen[] = ['title', 'levels', 'pause', 'results', 'settings', 'calib', 'orbs', 'badges', 'quests', 'record', 'story', 'chambers'];
+type Screen = 'title' | 'levels' | 'play' | 'pause' | 'results' | 'settings' | 'calib' | 'orbs' | 'stars' | 'credits' | 'record' | 'story' | 'chambers';
+const SCREENS: Screen[] = ['title', 'levels', 'pause', 'results', 'settings', 'calib', 'orbs', 'stars', 'credits', 'record', 'story', 'chambers'];
+/** The screens that are a room of the Lantern, painted on the canvas. */
+const ROOM_OF: Partial<Record<Screen, Room>> = { settings: 'desk', calib: 'lamp', orbs: 'hearth', stars: 'gallery', credits: 'page' };
 
 const PACKS = ALL_PACKS.filter((p) => SLICE.includes(p.level.id));
 const shortTitle = (p: LevelPack) => p.level.title.replace(/ \(.*/, '');
-/** Each level's own palette (its drop's), for the scene behind the menus. */
-const levelPalette = (p: LevelPack) => (p.level.segments.find((s) => s.core?.smash) ?? p.level.segments[0]).look.palette;
 /** Every level there is: the four planets, their B-sides (the moons), and the one behind the gate. */
 const ALL = [...PACKS, ...BSIDES, FINAL];
 const packOf = (id: string) => (id === 'gate' ? FINAL : ALL.find((p) => p.level.id === id));
@@ -33,19 +33,21 @@ const packOf = (id: string) => (id === 'gate' ? FINAL : ALL.find((p) => p.level.
 const baseOf = (p: LevelPack) => p.level.side?.of ?? p.level.id;
 /** What the map's rules read: clears, stars, and the playtest switch that opens every planet and shows every moon. */
 const progress: Progress = { cleared: (id) => bestFor(id).cleared, stars: starsFor, get unlockAll() { return save.unlockAll || /[?&]unlock=1/.test(location.search); } };
+/** What the stars read: clears, the gold collected, and the two feats that are done once (a shard run, a daredevil clear). */
+const feat = (key: string) => !!save.feats[key];
+const starProgress: StarProgress = { cleared: (id) => bestFor(id).cleared, gold: (id) => save.gold[id] ?? 0, feat };
 /** Where the player is on the map; `pack` is the level there (for the gate, the last one looked at). */
 let at: MapNode = nodeOf(save.at || PACKS[Math.max(0, Math.min(PACKS.length - 1, save.level || 0))].level.id);
 let levelIdx = Math.min(PACKS.length - 1, at.index);
 let pack = packOf(at.id) ?? PACKS[levelIdx];
-const levelOpen = (i: number) => playable(nodeOf(PACKS[i].level.id), progress);
 const canPlay = () => playable(at, progress);
-/** "PLANET 2 · CIRRA · SKY HIGH", or "MOON · CIRRA · SKY HIGH" for a B-side. */
-const levelLabel = (p: LevelPack) => `${p.level.side ? 'MOON' : p === FINAL ? 'THE DARK PLANET' : `PLANET ${PACKS.indexOf(p) + 1}`} · ${planetName(p.level.id)} · ${shortTitle(p)}`.toUpperCase();
-/** An orb is yours from the start, or for a badge, or for both quests of a level, or for clearing its B-side. */
+/** "Emberwick", or "Emberwick's moon" for a B-side. */
+const placeName = (p: LevelPack) => (p.level.side ? `${planetName(p.level.id)}’s moon` : planetName(p.level.id));
+/** A glow is Eko's from the start, or for a badge, or for daring a planet (in an older save: for both of its quests), or for clearing its night side. */
 const owned = (o: Orb): boolean => {
   if (!o.needs) return true;
   const [kind, lvl] = o.needs.split(':');
-  return kind === 'quests' ? questSet(lvl, save.quests) : kind === 'moon' ? bestFor(`${lvl}-b`).cleared : !!save.badges[o.needs];
+  return kind === 'dare' ? feat(o.needs) || (OLD_QUESTS[lvl] ?? ['']).every((q) => !!save.quests[q]) : kind === 'moon' ? bestFor(`${lvl}-b`).cleared : !!save.badges[o.needs];
 };
 
 const renderer = new Renderer($<HTMLCanvasElement>('stage'));
@@ -56,11 +58,17 @@ const skyTitle = new SkyTitle($<HTMLCanvasElement>('stage'));
 /** the story: painted scenes with the words written into them */
 const skyStory = new SkyStory($<HTMLCanvasElement>('stage'));
 const skyResult = new SkyResult($<HTMLCanvasElement>('stage'));
+/** the rooms of the Lantern (settings, the sync check, glows, the star chart, the credits), and the held breath of a pause */
+const rooms = new SkyRooms($<HTMLCanvasElement>('stage'));
 let screen: Screen = 'title';
 let settingsFrom: Screen = 'levels';
 let run: Run | null = null;
 let botMode = /[?&]bot=1/.test(location.search);
 let practice = false;
+/** a daredevil flight: one attempt, and a fall sends you home */
+let dare = false;
+/** how far the pause has come down over the scene, 0..1 */
+let held = 0;
 let lastFrame = performance.now();
 /** this visit to a level: the furthest any attempt got, and its flow, for the results screen */
 const session = { far: 0, newBest: false, onBeat: 0, judged: 0, streak: 0, drop: -1, attempts: 0 };
@@ -68,37 +76,27 @@ const session = { far: 0, newBest: false, onBeat: 0, judged: 0, streak: 0, drop:
 /** Input events carry the time the tap happened; fall back to "now" on browsers that report something else. */
 const stamp = (e: Event) => (Math.abs(e.timeStamp - performance.now()) < 2000 ? e.timeStamp : performance.now());
 const fmtMs = (ms: number) => `${ms > 0 ? '+' : ''}${Math.round(ms)} ms`;
-const wide = () => window.innerWidth >= 900;
 
-for (const el of document.querySelectorAll<HTMLElement>('[data-icon]')) el.insertAdjacentHTML('afterbegin', icon(el.dataset.icon!));
 
 // ------------------------------------------------------------------ screens
-/** Where the menu scene sits: beside the wordmark on a wide title screen; on a phone, centred in the room between the wordmark and TAP TO START. */
-function placeScene(s: Screen): void {
-  renderer.idleScale = 1;
-  if (s !== 'title') { renderer.idleAt = [0.5, 0.46]; return; }
-  if (wide()) { renderer.idleAt = [0.7, 0.5]; return; }
-  const h = window.innerHeight;
-  const top = document.querySelector<HTMLElement>('.mark')!.getBoundingClientRect().bottom;
-  const bottom = $('cta').getBoundingClientRect().top;
-  const room = bottom - top;
-  if (!(room > 60)) { renderer.idleAt = [0.5, 0.58]; renderer.idleScale = 0.7; return; }
-  const outer = 0.46 * Math.min(window.innerWidth, h); // the outermost ring at full size
-  renderer.idleAt = [0.5, (top + bottom) / 2 / h];
-  renderer.idleScale = Math.max(0.45, Math.min(1, (room / 2 - 14) / outer));
-}
 function show(s: Screen): void {
+  const was = screen;
   screen = s;
   for (const id of SCREENS) $(id).classList.toggle('on', id === s);
   $('hud').classList.toggle('hidden', !(s === 'play' || s === 'pause'));
+  $('hud').classList.toggle('held', s === 'pause');
   $('levels').classList.remove('launch');
-  // the scene behind the menus: beside the wordmark on a wide title screen, centred otherwise, in the focused level's colours
-  placeScene(s);
-  renderer.idleBare = true; // the title, the map and the story draw their own pictures over the sheet
+  // the sheet behind the developer screens: bare, in the Lantern's colours. Colour is what the Hush took: it warms
+  // with every planet restored, and floods when the Hush sleeps.
+  renderer.idleAt = [0.5, 0.46];
+  renderer.idleScale = 1;
+  renderer.idleBare = true;
   renderer.idlePal = 'lantern';
-  // colour is what the Hush took: the sheet behind the menus warms with every planet restored, and floods when the Hush sleeps
   const home = PACKS.filter((p) => bestFor(p.level.id).cleared).map((p) => p.level.id);
   renderer.idleColour = bestFor(FINAL_ID).cleared ? 1 : home.length * 0.12;
+  rooms.calm = save.reducedMotion;
+  const room = ROOM_OF[s];
+  if (room && s !== was) rooms.enter(room);
   if (s === 'levels') {
     sky.settle();
     renderMap(); queuePreview();
@@ -116,15 +114,7 @@ let storyThen: (() => void) | null = null;
 function renderStory(): void {
   const f = storyFrames[storyAt];
   skyStory.show(f.scene, f.text, storyFrames.length > 1); // the scene is painted on the canvas; the words fade in over it
-  $('storyArt').setAttribute('aria-label', f.text);
-  const text = $('storyText');
-  text.textContent = f.text;
-  text.classList.remove('in');
-  void text.offsetWidth; // restart its little entrance
-  text.classList.add('in');
-  $('storyDots').innerHTML = storyFrames.length > 1 ? storyFrames.map((_, i) => `<i class="${i === storyAt ? 'on' : ''}"></i>`).join('') : '';
-  $('storyNext').textContent = storyAt + 1 < storyFrames.length ? 'NEXT' : 'CONTINUE';
-  $('storySkip').classList.toggle('hidden', storyFrames.length < 2 || storyAt + 1 >= storyFrames.length);
+  $('storyText').textContent = f.text;
 }
 function endStory(): void {
   const then = storyThen;
@@ -154,179 +144,9 @@ function viaStory(then: () => void): void {
   if (key) playStory(key, then); else then();
 }
 
-// ------------------------------------------------------------------ the world map
-const STARS3 = `<i>${icon('star')}</i>`.repeat(3);
-/** Fills a row of three stars: `kept` are gold, `got` (just collected) glow, `lost` are dimmed. */
-function paintStars(el: Element, state: (i: number) => '' | 'kept' | 'got' | 'lost'): void {
-  if (!el.children.length || el.children[0].tagName !== 'I') el.insertAdjacentHTML('afterbegin', STARS3);
-  for (let i = 0; i < 3; i++) { const cls = state(i); if (el.children[i].className !== cls) el.children[i].className = cls; }
-}
-// Where everything sits, as fractions of the map's width and height. Tall: the route climbs the screen, labels to the
-// side. Wide: it zigzags left to right, labels under the low planets and over the high ones, each moon on the far side.
-type XY = [number, number];
-type Side = 'left' | 'right' | 'below' | 'above';
-const LAYOUT: Record<'tall' | 'wide', { planets: XY[]; moons: XY[]; gate: XY; sides: Side[]; gateSide: Side; hub: XY }> = {
-  tall: { planets: [[0.2, 0.92], [0.8, 0.78], [0.2, 0.46], [0.8, 0.32]], moons: [[0.06, 0.74], [0.94, 0.64], [0.06, 0.33], [0.95, 0.46]], gate: [0.3, 0.13], sides: ['right', 'left', 'right', 'left'], gateSide: 'right', hub: [0.5, 0.67] },
-  wide: { planets: [[0.12, 0.7], [0.3, 0.33], [0.7, 0.72], [0.86, 0.36]], moons: [[0.12, 0.3], [0.3, 0.78], [0.7, 0.3], [0.86, 0.8]], gate: [0.5, 0.13], sides: ['below', 'above', 'below', 'above'], gateSide: 'right', hub: [0.5, 0.6] }
-};
-const mapEl = $('map');
-const nodeEls = new Map<string, HTMLElement>();
-const labEls = new Map<string, HTMLElement>();
-/** places that have just changed (a planet unlocked, a moon found, the gate opened): they pop once when the map is next shown */
-const freshNodes = new Set<string>();
-/** where each place sits on the map right now, in pixels (Eko flies between them) */
-const posOf = new Map<string, [number, number, number]>();
-const hubEl = document.createElement('div');
-const ekoEl = document.createElement('div');
-function buildMap(): void {
-  // the Lantern in the middle, and Eko, who waits at the place you have chosen
-  hubEl.className = 'hub';
-  hubEl.innerHTML = '';
-  ekoEl.className = 'map-eko';
-  ekoEl.innerHTML = '<img alt="">';
-  mapEl.append(hubEl);
-  for (const n of NODES) {
-    const el = document.createElement('button');
-    el.type = 'button';
-    el.className = `node ${n.kind}`;
-    el.dataset.id = n.id;
-    // a planet is two pictures: the engraving, and over it the same globe in colour, which shows once its song is home
-    const pics = ''; // (the painted sky draws the worlds now; these hidden pieces only keep the old map's logic alive)
-    el.innerHTML = `${pics}<span class="glyph"></span>`;
-    const lab = document.createElement('div');
-    lab.className = 'lab';
-    lab.dataset.id = n.id;
-    mapEl.append(el, lab);
-    nodeEls.set(n.id, el);
-    labEls.set(n.id, lab);
-  }
-  mapEl.append(ekoEl);
-  mapEl.addEventListener('click', (e) => {
-    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-id]');
-    if (!el) return;
-    // a second tap on the planet you are at goes in
-    if (el.dataset.id === at.id && el.classList.contains('node') && canPlay()) begin(false); else select(el.dataset.id!);
-  });
-}
-/** Puts every place, label and stretch of route where the map's current size wants it. */
-function layoutMap(): void {
-  const w = mapEl.clientWidth;
-  const h = mapEl.clientHeight;
-  if (!w || !h) return;
-  const wideMap = w > h * 1.3;
-  mapEl.classList.toggle('compact', wideMap && w < 640); // a phone on its side: names only
-  const L = wideMap ? LAYOUT.wide : LAYOUT.tall;
-  const r = Math.max(14, Math.min(wideMap ? 34 : 31, wideMap ? Math.min(h * 0.085, w * 0.05) : Math.min(h * 0.07, w * 0.078)));
-  const xy = (n: MapNode): XY => { const [x, y] = n.kind === 'gate' ? L.gate : n.kind === 'moon' ? L.moons[n.index] : L.planets[n.index]; return [x * w, y * h]; };
-  for (const n of NODES) {
-    const [x, y] = xy(n);
-    const rr = n.kind === 'planet' ? r : n.kind === 'moon' ? Math.max(10, r * 0.45) : r * 1.55; // the dark planet looms
-    posOf.set(n.id, [x, y, rr]);
-    const el = nodeEls.get(n.id)!;
-    el.style.left = `${x}px`;
-    el.style.top = `${y}px`;
-    el.style.setProperty('--r', `${rr}px`);
-    const lab = labEls.get(n.id)!;
-    const side = n.kind === 'moon' ? 'below' : n.kind === 'gate' ? L.gateSide : L.sides[n.index];
-    const reach = rr * (n.kind === 'planet' ? 1.5 : n.kind === 'gate' ? 1.25 : 1.3) + 8;
-    lab.className = `lab ${side}`;
-    lab.style.left = `${side === 'right' ? x + reach : side === 'left' ? x - reach : x}px`;
-    lab.style.top = `${side === 'below' ? y + reach - 2 : side === 'above' ? y - reach + 2 : y}px`;
-  }
-  // the Lantern: as tall as the map can spare
-  const hubH = Math.max(64, Math.min(170, h * (wideMap ? 0.42 : 0.2)));
-  const [hx, hy] = [L.hub[0] * w, L.hub[1] * h];
-  hubEl.style.left = `${hx}px`;
-  hubEl.style.top = `${hy}px`;
-  hubEl.style.setProperty('--h', `${hubH}px`);
-  const lamp: XY = [hx - hubH * 0.05, hy - hubH * 0.47]; // where its lamp is: the beams start here
-  // the route: planet to planet and on to the gate, each stretch its own path so the travelled part can light up
-  const stops = [...NODES.filter((n) => n.kind === 'planet'), nodeOf('gate')].map(xy);
-  let d = '';
-  // the Lantern's beams, one to each planet: lit when that planet's song is home
-  for (const n of NODES.filter((m) => m.kind === 'planet')) { const [x, y] = xy(n); d += `<path data-beam="${n.id}" class="beam" d="M${lamp[0]} ${lamp[1]} L${x} ${y}"/>`; }
-  for (let i = 0; i + 1 < stops.length; i++) {
-    const [x0, y0] = stops[i];
-    const [x1, y1] = stops[i + 1];
-    const c = wideMap ? `${(x0 + x1) / 2} ${y0}, ${(x0 + x1) / 2} ${y1}` : `${x0} ${(y0 + y1) / 2}, ${x1} ${(y0 + y1) / 2}`;
-    d += `<path data-seg="${i}" d="M${x0} ${y0} C ${c}, ${x1} ${y1}"/>`;
-  }
-  for (const n of NODES.filter((m) => m.kind === 'moon')) {
-    const [x0, y0] = stops[n.index];
-    const [x1, y1] = xy(n);
-    d += `<path data-moon="${n.id}" class="side" d="M${x0} ${y0} L${x1} ${y1}"/>`;
-  }
-  const svg = $('mapRoute');
-  svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
-  svg.innerHTML = d;
-}
-/** Every place's state (open, cleared, locked, hidden), the route travelled so far, the star total and the panel. */
+// ------------------------------------------------------------------ the galaxy map
+/** Hands the painted map what it shows now, and where the player is. */
 function renderMap(): void {
-  renderSheet(); // first: the card's height decides how much room the map has
-  layoutMap();
-  for (const n of NODES) {
-    const st = nodeState(n, progress);
-    const el = nodeEls.get(n.id)!;
-    const lab = labEls.get(n.id)!;
-    const side = lab.className.split(' ').find((c) => c === 'left' || c === 'right' || c === 'below' || c === 'above') ?? 'right';
-    const p = packOf(n.id);
-    const title = p ? shortTitle(p) : '';
-    // a moon nobody has found shows as a "?" beside a planet that is open, and not at all beside a locked one
-    const unseen = n.kind === 'moon' && st === 'hidden' && nodeState(nodeOf(n.planet), progress) === 'locked';
-    el.className = `node ${n.kind} ${st === 'hidden' ? 'hidden-moon' : st}${n.id === at.id ? ' sel' : ''}${freshNodes.has(n.id) ? ' fresh' : ''}${unseen ? ' hidden' : ''}`;
-    el.querySelector('.glyph')!.innerHTML = st === 'cleared' ? icon('check') : st === 'locked' && n.kind === 'planet' ? icon('lock') : st === 'hidden' ? '?' : '';
-    if (n.kind === 'planet') {
-      const b = bestFor(n.id);
-      el.style.setProperty('--c', PLANETS[n.id].col);
-      el.setAttribute('aria-label', `Planet ${n.index + 1}, ${planetName(n.id)}, ${title}${st === 'locked' ? ', dark and silent' : st === 'cleared' ? ', restored' : `, best ${b.pct} percent`}`);
-      const sub = st === 'locked' ? `Restore ${planetName(PACKS[n.index - 1].level.id)}` : st === 'open' && b.pct > 0 ? `Best ${b.pct}%` : title;
-      lab.className = `lab ${side}${st === 'locked' ? ' dim' : ''}`;
-      lab.innerHTML = `<b></b><span class="sub">${st === 'locked' ? '' : '<span class="stars3"></span>'}<span></span></span>${st === 'locked' ? '' : `<span class="gems">${questsFor(n.id).map((q) => `<i class="${save.quests[q.id] ? 'on' : ''}"></i>`).join('')}</span>`}`;
-      lab.querySelector('b')!.textContent = planetName(n.id);
-      lab.querySelector('.sub > span:last-child')!.textContent = sub;
-      const kept = starsFor(n.id);
-      const row = lab.querySelector('.stars3');
-      if (row) paintStars(row, (k) => (kept[k] ? 'kept' : ''));
-    } else if (n.kind === 'moon') {
-      el.style.setProperty('--c', 'var(--gold)');
-      el.setAttribute('aria-label', st === 'hidden' ? `Something hidden near ${title}` : `B-side of ${title}${st === 'cleared' ? ', cleared' : ''}`);
-      lab.className = `lab ${side} gold`;
-      lab.textContent = st === 'hidden' ? '' : 'B-side';
-    } else {
-      el.style.setProperty('--c', PLANETS[FINAL_ID].col);
-      el.setAttribute('aria-label', st === 'locked' ? 'The Hollow, the dark planet: the way opens when all four planets are restored' : `The Hollow, the dark planet, ${shortTitle(FINAL)}${st === 'cleared' ? ', the Hush put to sleep' : ''}`);
-      lab.className = `lab ${side}${st === 'locked' ? ' dim' : ''}`;
-      if (st === 'locked') lab.innerHTML = '<b>The Hollow</b><span>Restore the four planets</span>';
-      else {
-        lab.innerHTML = '<b>The Hollow</b><span class="sub"><span class="stars3"></span><span></span></span>';
-        lab.querySelector('.sub > span:last-child')!.textContent = shortTitle(FINAL);
-        const kept = starsFor(FINAL_ID);
-        paintStars(lab.querySelector('.stars3')!, (k) => (kept[k] ? 'kept' : ''));
-      }
-    }
-  }
-  freshNodes.clear();
-  for (const path of $('mapRoute').querySelectorAll<SVGPathElement>('path')) {
-    if (path.dataset.seg !== undefined) path.setAttribute('class', bestFor(PACKS[Number(path.dataset.seg)].level.id).cleared ? 'done' : 'todo');
-    else if (path.dataset.beam) {
-      path.setAttribute('class', `beam${bestFor(path.dataset.beam).cleared ? ' on' : ''}`);
-      path.style.stroke = PLANETS[path.dataset.beam].col;
-    } else if (path.dataset.moon) {
-      const m = nodeOf(path.dataset.moon);
-      path.setAttribute('class', `side${nodeState(m, progress) === 'hidden' ? '' : ' found'}${nodeState(nodeOf(m.planet), progress) === 'locked' ? ' hidden' : ''}`);
-    }
-  }
-  // the Lantern is as bright as the songs that are home; Eko waits beside the place you have chosen
-  hubEl.style.setProperty('--lit', String(PACKS.filter((p) => bestFor(p.level.id).cleared).length / PACKS.length));
-  const here = posOf.get(at.id);
-  if (here) {
-    // up and to the left of a planet; beside the dark planet, lower down (it sits at the very top of the map)
-    ekoEl.style.left = `${here[0] - here[2] * (at.kind === 'gate' ? 1.15 : 1.05)}px`;
-    ekoEl.style.top = `${here[1] + here[2] * (at.kind === 'gate' ? 0.55 : -1.05)}px`;
-    ekoEl.style.setProperty('--s', `${Math.max(30, Math.min(54, here[2] * 1.5))}px`);
-  }
-  $('starTotal').innerHTML = `${icon('star')}${starCount()} / ${maxStars}`;
-  $('starTotal').setAttribute('aria-label', `${starCount()} of ${maxStars} lens shards`);
   sky.info = skyInfo();
   sky.chosen = at.id;
 }
@@ -340,96 +160,43 @@ function skyInfo(): SkyInfo {
     const lid = n.kind === 'gate' ? FINAL_ID : n.id;
     const b = bestFor(lid);
     nodes.push({
-      id: n.id, kind: n.kind === 'gate' ? 'hollow' : n.kind, of: n.planet, name: n.kind === 'moon' ? `${planetName(n.planet)}\u2019s moon` : planetName(lid), song: shortTitle(p), by: p.level.artist,
+      id: n.id, kind: n.kind === 'gate' ? 'hollow' : n.kind, of: n.planet, name: n.kind === 'moon' ? `${planetName(n.planet)}’s moon` : planetName(lid), song: shortTitle(p), by: p.level.artist,
       state: st === 'cleared' ? 'home' : st === 'open' ? 'open' : 'dark', best: b.cleared ? 100 : b.pct, shards: starsFor(n.kind === 'moon' ? n.planet : lid),
-      why: n.kind === 'gate' ? 'restore the four planets first' : n.index > 0 ? `restore ${planetName(PACKS[n.index - 1].level.id)} first` : ''
+      why: n.kind === 'gate' ? 'restore the four planets first' : n.index > 0 ? `restore ${planetName(PACKS[n.index - 1].level.id)} first` : '',
+      // a world whose song is home can be dared (a moon has no such star)
+      dare: n.kind !== 'moon' && st === 'cleared' ? (feat(`dare:${lid}`) ? 'done' : 'open') : undefined
     });
   }
-  const got = Object.keys(save.badges).filter((k) => save.badges[k]).length;
-  return { nodes, lens: `lens: ${starCount()} of ${maxStars} shards`, lit: `${got} constellation${got === 1 ? '' : 's'} lit` };
+  return { nodes, lens: `lens: ${starCount()} of ${maxStars} shards`, lit: `${starsLit(starProgress).length} of ${STAR_TOTAL} stars lit` };
 }
-// Taps on the map go to whatever is painted there: a world, the Lantern, the constellations, or the open sky.
+/** the Lantern was the place chosen when one of its rooms was entered: coming back out, it still is */
+let viaLantern = false;
+/** Out of a room of the Lantern, back to the galaxy. */
+function leaveRoom(): void {
+  show('levels');
+  if (viaLantern) sky.chosen = 'lantern';
+  viaLantern = false;
+}
+// Taps on the map go to whatever is painted there: a world, the Lantern and its rooms, the stars, or the open sky.
 $('levels').addEventListener('click', (e) => {
   if (screen !== 'levels' || $('levels').classList.contains('launch')) return;
   const hit = sky.hit(e.clientX, e.clientY);
   if (hit.kind === 'node') {
-    if (hit.id === 'lantern') { sky.chosen = sky.chosen === 'lantern' ? null : 'lantern'; return; }
+    if (hit.id === 'lantern') {
+      sky.chosen = sky.chosen === 'lantern' ? null : 'lantern';
+      if (sky.chosen) rooms.prepare(['hearth', 'desk', 'gallery'], () => screen === 'levels'); // (its rooms are painted while the galaxy is at rest)
+      return;
+    }
     if (hit.id === at.id && sky.chosen === hit.id) { if (canPlay()) begin(false); } // a second tap on the chosen world flies in
     else { select(hit.id); const p = packOf(hit.id); if (p) skyResult.prepare(baseOf(p), () => screen === 'levels' && !$('levels').classList.contains('launch')); } // (its results' skies are painted while the galaxy is at rest)
   } else if (hit.kind === 'practise') { if (canPlay()) begin(true); }
-  else if (hit.kind === 'glows') { renderOrbs(); show('orbs'); }
+  else if (hit.kind === 'dare') { if (canPlay()) begin(false, true); }
+  else if (hit.kind === 'glows') openGlows();
   else if (hit.kind === 'settings') openSettings('levels');
-  else if (hit.kind === 'badges') { renderBadges(); show('badges'); }
-  else if (hit.kind === 'quests') { renderQuests(); show('quests'); }
+  else if (hit.kind === 'stars') openStars();
   else if (hit.kind === 'title') { skyTitle.descend(); show('title'); }
   else sky.chosen = null; // the open sky: step back and see all of it
 });
-/** The panel under the map: the place you are at, how you have done there, and PLAY. */
-function renderSheet(): void {
-  const st = nodeState(at, progress);
-  const sheet = $('sheet');
-  const best = $('shBest');
-  const meter = (label: string, pct: number, text: string) => {
-    best.classList.remove('hidden');
-    best.querySelector('span')!.textContent = label;
-    best.querySelector<HTMLElement>('i')!.style.width = `${Math.max(0, Math.min(100, pct))}%`;
-    best.querySelector('b')!.textContent = text;
-  };
-  const play = $<HTMLButtonElement>('playBtn');
-  const prac = $<HTMLButtonElement>('practiceBtn');
-  const art = $('shArt');
-  const artOf = at.kind === 'gate' ? 'gate' : at.planet;
-  const artId = artOf === 'gate' ? FINAL_ID : artOf;
-  const artKey = `${artId}:${at.kind === 'moon'}:${bestFor(artId).cleared}`;
-  art.dataset.of = artKey;
-  $('shMastery').innerHTML = '';
-  art.style.filter = at.kind === 'moon' ? (st === 'hidden' ? 'grayscale(1) brightness(0.3)' : 'saturate(0.5) brightness(0.62)') : at.kind === 'gate' ? 'none' : st === 'locked' ? 'grayscale(0.85) brightness(0.45)' : 'none';
-  $('shLine').classList.remove('hidden');
-  $('shStars').classList.remove('hidden');
-  $('shQuests').innerHTML = '';
-  $('shTries').textContent = '';
-  if (at.kind === 'gate' && st === 'locked') {
-    const n = PACKS.filter((p) => bestFor(p.level.id).cleared).length;
-    sheet.style.setProperty('--tint', 'var(--pink)');
-    $('shTitle').textContent = 'The Hollow';
-    $('shTier').textContent = 'The dark planet';
-    $('shMeta').textContent = 'No beam reaches it and no song comes out of it. The way there opens when all four planets are restored.';
-    meter('LIT', (n / GATE_CLEARS) * 100, `${n}/${GATE_CLEARS}`);
-    $('shLine').classList.add('hidden');
-    play.disabled = prac.disabled = true;
-    play.textContent = 'LOCKED';
-    return;
-  }
-  // the level here: a planet's own, a moon's planet's, or the one behind the open gate
-  const planet = at.kind === 'gate' ? FINAL : PACKS[at.index];
-  const lid = at.kind === 'gate' ? FINAL_ID : at.id;
-  const b = bestFor(lid);
-  const kept = starsFor(planet.level.id);
-  const open = st === 'open' || st === 'cleared';
-  play.disabled = prac.disabled = !open;
-  play.textContent = open ? 'PLAY' : st === 'hidden' ? 'HIDDEN' : 'LOCKED';
-  const tries = b.attempts ? `<b>${b.attempts}</b> attempt${b.attempts === 1 ? '' : 's'}${(b.prac ?? 0) > 0 ? ` · practice <b>${b.prac}%</b>` : ''}${(save.gold[lid] ?? 0) > 0 ? ` · gold <b>${save.gold[lid]}%</b>` : ''}` : 'Not played yet';
-  if (at.kind === 'moon') {
-    sheet.style.setProperty('--tint', 'var(--gold)');
-    $('shTitle').textContent = st === 'hidden' ? '???' : `${planetName(planet.level.id)}'s moon`;
-    $('shTier').textContent = st === 'hidden' ? 'Hidden' : 'Moon · B-side';
-    $('shMeta').textContent = st === 'hidden' ? `Keep all three lens shards on ${planetName(planet.level.id)} and something will appear here.` : `${shortTitle(planet)} · ${planet.level.artist} · ${pack.level.adds ?? ''}`;
-    if (st === 'hidden') { best.classList.add('hidden'); paintStars($('shStars'), (k) => (kept[k] ? 'kept' : '')); $('shTries').textContent = `${kept.filter(Boolean).length} of 3 shards kept`; } else { meter('BEST', b.cleared ? 100 : b.pct, `${b.cleared ? 100 : b.pct}%`); $('shStars').classList.add('hidden'); $('shTries').innerHTML = tries; }
-    return;
-  }
-  sheet.style.setProperty('--tint', (PLANETS[lid] ?? PLANETS.heroes).col);
-  $('shTitle').textContent = planetName(lid);
-  $('shTier').textContent = at.kind === 'gate' ? 'The dark planet' : `Planet ${at.index + 1}`;
-  $('shMeta').textContent = st === 'locked' ? `Dark and silent. Restore ${planetName(PACKS[at.index - 1].level.id)} to light the way here.` : `${shortTitle(planet)} · ${planet.level.artist} · ${planet.level.adds ?? ''}`;
-  // mastery: the three things there are to do here beyond getting through
-  const gold = save.gold[lid] ?? 0;
-  if (open) $('shMastery').innerHTML = ([['Restored', b.cleared, 'Clear it in one run'], ['In Tune', !!save.badges[`tune_${lid}`], `Every piece of gold on a clear${gold ? ` (best ${gold}%)` : ''}`], ['Lens Mender', kept.every(Boolean), 'All three lens shards']] as Array<[string, boolean, string]>)
-    .map(([name, on, how]) => `<span class="mchip${on ? ' on' : ''}" title="${how}">${icon(on ? 'check' : 'badge')}${name}</span>`).join('');
-  meter('BEST', b.cleared ? 100 : b.pct, `${b.cleared ? 100 : b.pct}%`);
-  paintStars($('shStars'), (k) => (kept[k] ? 'kept' : ''));
-  $('shTries').innerHTML = tries;
-  $('shQuests').innerHTML = questsFor(lid).map((q) => `<span class="qchip${save.quests[q.id] ? ' on' : ''}" title="${q.desc}">${icon(save.quests[q.id] ? 'check' : 'quest')}${q.name}</span>`).join('');
-}
 /** Moves to a place on the map. */
 function select(id: string, quiet = false): void {
   const n = nodeOf(id);
@@ -461,15 +228,16 @@ function queuePreview(): void {
 }
 
 // ------------------------------------------------------------------ starting a level
-/** PLAY or PRACTICE from the level select: sync check on a first run, the tutorial before level 1, then the card opens into the level. */
-function begin(asPractice: boolean): void {
+/** Flying in from the map: the sync check on a first run, the tutorial before level 1, then the level. */
+function begin(asPractice: boolean, asDare = false): void {
   if (!canPlay() || $('levels').classList.contains('launch')) return;
   practice = asPractice;
+  dare = asDare && !asPractice;
   botMode = false;
   audio.ensure();
   audio.setVolumes(save.music, save.sfx);
   checkDevice();
-  if (!save.calibrated || deviceChanged) { openCalib(true, 'begin'); return; }
+  if (!save.calibrated || deviceChanged) { openCalib('begin'); return; }
   enter();
 }
 function enter(): void {
@@ -479,7 +247,7 @@ function enter(): void {
   session.newBest = false;
   session.drop = -1;
   if (screen === 'levels') {
-    // the chosen card zooms open over one beat while the preview fades into the level's own music
+    // the chosen world opens over one beat while the preview fades into the level's own music
     $('levels').classList.add('launch');
     sky.launch();
     audio.stopPreview(0.9);
@@ -498,6 +266,7 @@ function startRun(from = -1, quick = false): void {
   audio.stopPreview(0.6);
   if (practice && !botMode && !save.practiced[pack.level.id]) { save.practiced[pack.level.id] = true; persist(); }
   run?.stop();
+  if (practice || botMode || chamber) dare = false;
   const counted = !botMode && !practice && !chamber; // (a test chamber keeps no record)
   if (counted) {
     save.bests[pack.level.id] = { ...bestFor(pack.level.id), attempts: bestFor(pack.level.id).attempts + 1 };
@@ -505,57 +274,66 @@ function startRun(from = -1, quick = false): void {
   }
   session.attempts++;
   renderer.reset();
+  held = 0;
   const spb = 60 / pack.audio.bpm;
   // a fresh start plays the whole count-in bar under the title card; an instant restart cuts in for the last two counts
   const opts = from >= 0 ? { startAt: from, leadIn: 1.5 } : quick ? { startAt: 2 * spb, leadIn: 0.3 } : { leadIn: 2.4 };
-  run = new Run(pack, { bot: botMode, practice: practice && !botMode, ...opts }, onRunEnd);
+  const r = (run = new Run(pack, { bot: botMode, practice: practice && !botMode, ...opts }, onRunEnd));
   const b = bestFor(pack.level.id);
-  $('dropMark').style.left = `${((run.level.dropTime - run.t0) / (run.t1 - run.t0)) * 100}%`;
-  $('bestMark').style.left = `${b.cleared ? 100 : b.pct}%`;
-  $('bestMark').classList.toggle('hidden', b.pct === 0 && !b.cleared);
-  $('bestPct').textContent = b.cleared ? 'CLEARED' : `BEST ${b.pct}%`;
+  // the song's thread: a tick at the drop, a ring at your best; in practice, a tick where each section begins and a dab where this run set off
+  const along = (t: number) => `${(Math.max(0, Math.min(1, (t - r.t0) / (r.t1 - r.t0))) * 100).toFixed(2)}%`;
+  const prac = practice && !botMode;
+  $('dropMark').style.left = along(r.level.dropTime);
+  $('bestMark').style.left = `${b.pct}%`;
+  $('bestMark').classList.toggle('hidden', b.pct === 0 || b.cleared || prac || botMode || !!chamber);
+  $('checks').innerHTML = prac ? r.level.segments.filter((s) => s.t0 > r.t0 + 0.01).map((s) => `<i style="left:${along(s.t0)}"></i>`).join('') : '';
+  $('fromMark').classList.toggle('hidden', !(prac && from > r.t0 + 0.01));
+  if (from >= 0) $('fromMark').style.left = along(from);
   const label = $('attempt');
-  label.textContent = botMode ? 'AUTOPLAY' : chamber ? `TRY ${session.attempts}` : practice ? 'PRACTICE' : `ATTEMPT ${b.attempts}`;
+  label.textContent = botMode ? 'a perfect run' : chamber ? `try ${session.attempts}` : practice ? 'practice' : dare ? 'daredevil' : `attempt ${b.attempts}`;
   label.classList.remove('flash');
   if (quick) { void label.offsetWidth; label.classList.add('flash'); }
   const card = $('titleCard');
   card.classList.remove('show');
   if (from < 0 && !quick) {
-    $('tcLevel').textContent = `${pack.level.side ? 'MOON' : pack === FINAL ? 'THE DARK PLANET' : `PLANET ${levelIdx + 1}`} · ${planetName(pack.level.id).toUpperCase()}${practice ? ' · PRACTICE' : ''}`;
+    $('tcLevel').textContent = `${placeName(pack)}${practice ? '  ·  practice' : dare ? '  ·  daredevil: one attempt' : ''}`;
     $('tcSong').textContent = shortTitle(pack);
-    $('tcArtist').textContent = pack.level.artist;
-    if (chamber) { $('tcLevel').textContent = 'TEST CHAMBER'; $('tcSong').textContent = chamber.name.toUpperCase(); $('tcArtist').textContent = chamber.what; }
+    $('tcArtist').textContent = `by ${pack.level.artist}`;
+    if (chamber) { $('tcLevel').textContent = 'test chamber'; $('tcSong').textContent = chamber.name; $('tcArtist').textContent = chamber.what; }
     void card.offsetWidth;
     card.classList.add('show');
   }
   $('tutor').classList.add('hidden');
   $('finale').classList.remove('show');
   hud.pct = -1;
+  hud.at = -1;
   hud.crashShown = false;
   hud.count = '';
   show('play');
-  void run.start().then(() => { if (run && run.state === 'error') { alert(`Could not start the level: ${run.error}`); show('levels'); } });
+  void r.start().then(() => { if (run === r && r.state === 'error') { alert(`Could not start the level: ${r.error}`); show('levels'); } });
 }
 
 // ------------------------------------------------------------------ first run: the tutorial
 const LESSONS: Array<[number, string]> = [
-  [-9, 'The ball orbits <i>by itself</i>, in time with the music.'],
-  [2.6, 'TAP anywhere as it crosses a <i>white mark</i>. A little early or late still counts.'],
+  [-9, 'Eko orbits by himself, in time with the music.'],
+  [2.6, 'Tap anywhere as he crosses a <i>white mark</i>. A little early or late still counts.'],
   [12, '<b>Gold notes</b> are bonus taps. On the beat they build <b>flow</b>: the gold arc round the core.'],
   [17, '<b>Gold rails</b>: keep your finger down to ride along them. Only a missed <i>white mark</i> restarts the run.']
 ];
 function startTutorial(): void {
   run?.stop();
   renderer.reset();
+  held = 0;
   audio.stopPreview(0.6);
   run = new Run(pack, { tutorial: true, leadIn: 1.8 }, endTutorial);
-  $('attempt').textContent = 'TUTORIAL';
-  $('bestPct').textContent = '';
-  $('bestMark').classList.add('hidden');
+  $('attempt').textContent = 'the first flight';
+  for (const id of ['bestMark', 'fromMark', 'dropMark']) $(id).classList.add('hidden');
+  $('checks').innerHTML = '';
   $('titleCard').classList.remove('show');
   $('finale').classList.remove('show');
   $('tutor').classList.remove('hidden');
   hud.pct = -1;
+  hud.at = -1;
   hud.lesson = -1;
   hud.count = '';
   show('play');
@@ -565,6 +343,7 @@ function endTutorial(): void {
   save.tutorialDone = true;
   persist();
   $('tutor').classList.add('hidden');
+  $('dropMark').classList.remove('hidden');
   startRun();
 }
 
@@ -590,30 +369,33 @@ function spread(a: number[]): { n: number; mean: number; sd: number } {
   const mean = core.reduce((p, v) => p + v, 0) / core.length;
   return { n: a.length, mean, sd: Math.sqrt(core.reduce((p, v) => p + (v - mean) * (v - mean), 0) / core.length) };
 }
-const lateEarly = (ms: number) => (Math.abs(ms) < 3 ? 'on the beat' : `${Math.abs(Math.round(ms))} ms ${ms > 0 ? 'late' : 'early'}`);
-/** Fills a sync box: what the taps say, and a one-tap fix if they are consistently off. */
-function showSync(textId: string, fixId: string): void {
-  const all = spread([...sync.press, ...sync.flow]);
-  const fix = $(fixId);
-  fix.classList.add('hidden');
-  let text: string;
-  if (all.n < 12) text = 'Your taps: not enough yet to say. Play a little more.';
-  else if (all.sd > 60) text = `Your taps are spread too wide (±${Math.round(all.sd)} ms) to say where they centre.`;
-  else if (Math.abs(all.mean) < 15) text = `In sync: your taps centre ${lateEarly(all.mean)} (±${Math.round(all.sd)} ms over ${all.n} taps).`;
-  else {
-    const next = Math.max(-200, Math.min(400, save.audioOffset + Math.round(all.mean)));
-    text = `Your taps are consistently ${lateEarly(all.mean)} (±${Math.round(all.sd)} ms over ${all.n} taps). That is audio or display delay, not the level.`;
-    fix.textContent = `Fix it: offset ${fmtMs(next)}`;
-    fix.classList.remove('hidden');
-    fix.onclick = () => {
-      save.audioOffset = next;
-      persist();
-      sync.press.length = sync.flow.length = 0;
-      $(textId).textContent = `Audio offset set to ${fmtMs(next)}. Play on and check again.`;
-      fix.classList.add('hidden');
-    };
-  }
-  $(textId).textContent = `${text} Audio offset ${fmtMs(save.audioOffset)}.`;
+/** What the taps so far say about sync: one soft line, and the offset that would set it right (null when there is nothing to set). */
+function syncRead(): { line: string; next: number | null } {
+  const all = spread([...sync.press, ...sync.flow]), ms = Math.abs(Math.round(all.mean)), side = all.mean > 0 ? 'late' : 'early';
+  if (all.n < 12) return { line: 'Not enough taps yet to tell how your timing sits.', next: null };
+  if (all.sd > 60) return { line: 'Your taps are too spread out to tell where they sit.', next: null };
+  if (Math.abs(all.mean) < 15) return { line: ms < 3 ? 'Your taps sit right on the beat.' : `Your taps sit about ${ms} ms ${side}: close enough.`, next: null };
+  return { line: `Your taps sit about ${ms} ms ${side}: a delay in sound or screen, not the song.`, next: Math.max(-200, Math.min(400, save.audioOffset + Math.round(all.mean))) };
+}
+/** Sets the sound's offset from what the taps said, and starts listening afresh. */
+function syncFix(next: number): void {
+  save.audioOffset = next;
+  persist();
+  sync.press.length = sync.flow.length = 0;
+}
+/** The pause's two quiet lines about sync: what the taps say, and the one tap that sets it right. */
+function showPauseSync(): void {
+  const r = syncRead(), fix = $('pauseSyncFix'), dot = $('pauseSyncDot');
+  $('pauseSyncText').textContent = r.line;
+  fix.classList.toggle('hidden', r.next === null);
+  dot.classList.toggle('hidden', r.next === null);
+  fix.onclick = () => {
+    if (r.next === null) return;
+    syncFix(r.next);
+    $('pauseSyncText').textContent = `Set: the sound now arrives ${fmtMs(r.next)}. Play on, and see.`;
+    fix.classList.add('hidden');
+    dot.classList.add('hidden');
+  };
 }
 function drawSyncOverlay(): void {
   const el = $('syncOverlay');
@@ -666,6 +448,7 @@ function onRunEnd(r: Run): void {
       return;
     }
     if (counted && pct > prev.pct) { save.bests[id] = { ...prev, pct }; persist(); session.newBest = true; if (PACKS.includes(r.pack)) gameCenter.best(id, pct); }
+    if (dare && counted) { r.stop(); showResults(r, false, pct); return; } // a daredevil has one attempt: a fall sends him home
     startRun(-1, true);
     return;
   }
@@ -680,19 +463,17 @@ function showResults(r: Run, cleared: boolean, reached = r.pct): void {
   const counted = !r.opts.bot && !r.opts.practice;
   const first = cleared && counted && !prev.cleared;
   const wasHome = !!r.pack.level.side || !!bestFor(baseOf(r.pack)).cleared; // was this world's colour home before the run?
-  const said: string[] = []; // what the run changed, in a few soft lines (the painted results)
-  const won = { quest: [] as string[], badge: [] as string[], glow: [] as string[] };
-  const unlocks: string[] = [];
+  const said: string[] = []; // what the run changed, in a few soft lines
+  const won = { star: [] as string[], glow: [] as string[] };
   let newStars = [false, false, false];
   if (cleared && counted) {
     const moon = !!r.pack.level.side;
-    const row = (ico: string, head: string, small: string) => `<div class="unlock">${ico}<div>${head}<small>${small}</small></div></div>`;
-    const dot = (o: Orb) => `<span class="dot" style="background:rgb(${o.rgb.join(',')})"></span>`;
-    // how the map stood before this clear, to tell what it has just changed
+    // how things stood before this clear, to tell what it has just changed
     const gateWas = nodeState(nodeOf('gate'), progress) === 'open';
     const hasMoon = NODES.some((n) => n.id === `${id}-b`);
     const moonWas = !hasMoon || nodeState(nodeOf(`${id}-b`), progress) !== 'hidden';
     const orbsWas = new Set(ORBS.filter(owned).map((o) => o.id));
+    const starsWas = new Set(starsLit(starProgress).map((s) => s.id));
     save.bests[id] = { ...prev, pct: 100, cleared: true };
     const onBeatPct = r.sim.judged ? (r.sim.onBeat / r.sim.judged) * 100 : 0;
     if (!moon) {
@@ -700,113 +481,62 @@ function showResults(r: Run, cleared: boolean, reached = r.pct): void {
       const fresh = earned(id, { onBeatPct, dropPower: r.dropPower, bestStreak: r.sim.bestStreak, attempts: bestFor(id).attempts, practised: !!save.practiced[id] }, done).filter((b) => !save.badges[b]);
       if (first) pendingStory = r.pack === FINAL ? 'end' : id; // its story card plays on the way back to the map
       if (first) said.push(r.pack === FINAL ? 'The last song is home.' : 'Its song is home, and its colour with it.');
-      if (first && r.pack !== FINAL && levelIdx + 1 < PACKS.length) {
-        freshNodes.add(PACKS[levelIdx + 1].level.id);
-        if (!progress.unlockAll) said.push(`The way to ${planetName(PACKS[levelIdx + 1].level.id)} is lit.`);
-        if (!progress.unlockAll) unlocks.push(row(icon('play'), 'THE WAY IS LIT', `${planetName(PACKS[levelIdx + 1].level.id)} · ${shortTitle(PACKS[levelIdx + 1])}`));
-      }
-      // stars are kept when the run that collected them clears the level
+      if (first && r.pack !== FINAL && levelIdx + 1 < PACKS.length && !progress.unlockAll) said.push(`The way to ${planetName(PACKS[levelIdx + 1].level.id)} is lit.`);
+      // shards are kept when the run that collected them clears the level
       const had = starsFor(id);
       const now = had.map((k, i) => k || r.sim.stars[i] === 1);
       const gained = now.filter(Boolean).length - had.filter(Boolean).length;
       if (gained > 0) {
         save.stars[id] = now;
         newStars = now.map((k, i) => k && !had[i]);
-        const all = now.every(Boolean);
-        if (all && !first) said.push(gained === 3 ? 'All three lens shards are home.' : 'The last shard is home.');
-        unlocks.push(row(icon('star'), all ? 'ALL THREE LENS SHARDS' : `${gained} NEW LENS SHARD${gained === 1 ? '' : 'S'}`, all ? `Every shard branch in ${shortTitle(r.pack)} played clean` : `${now.filter(Boolean).length} of 3 kept on ${shortTitle(r.pack)}`));
+        if (now.every(Boolean) && !first) said.push(gained === 3 ? 'All three lens shards are home.' : 'The last shard is home.');
       }
-      // what the stars have just done to the map
-      if (!moonWas && nodeState(nodeOf(`${id}-b`), progress) !== 'hidden') {
-        freshNodes.add(`${id}-b`);
-        said.push(`${planetName(id)} has a moon now.`);
-        unlocks.push(row(icon('orb'), 'A MOON APPEARS', `${planetName(id)} has a moon: its B-side is on the map`));
-      }
-      if (!gateWas && nodeState(nodeOf('gate'), progress) === 'open') {
-        freshNodes.add('gate');
-        said.push('All four songs are home: the Hollow is in reach.');
-        unlocks.push(row(icon('flag'), 'THE HOLLOW IS IN REACH', 'All four songs are home: the way to the Hollow is open'));
-      }
-      // side quests this clear completes
-      for (const q of questsEarned(id, { onBeatPct, dropPower: r.dropPower, bestStreak: r.sim.bestStreak, holdsFull: r.sim.holdsFull, holds: r.course.holds.length, strays: r.sim.strays }, save.quests)) {
-        save.quests[q.id] = true;
-        won.quest.push(q.name);
-        unlocks.push(row(icon('quest'), `QUEST: ${q.name.toUpperCase()}`, q.desc));
-      }
+      // the two feats that are done once: every shard on this one flight, and a clear on a daredevil's single attempt
+      if (r.course.stars.length > 0 && r.course.stars.every((st) => r.sim.stars[st.i] === 1)) save.feats[`shards:${id}`] = true;
+      if (dare) save.feats[`dare:${id}`] = true;
+      // what the shards have just done to the map
+      if (!moonWas && nodeState(nodeOf(`${id}-b`), progress) !== 'hidden') said.push(`${planetName(id)} has a moon now.`);
+      if (!gateWas && nodeState(nodeOf('gate'), progress) === 'open') said.push('All four songs are home: the Hollow is in reach.');
       // (Game Center has boards and achievements for the four levels of the route)
       if (PACKS.includes(r.pack)) { gameCenter.best(id, 100); gameCenter.flow(id, onBeatPct); }
-      // mastery: the share of the level's gold this clear collected, and the badges for all of it and for all three shards
+      // the share of the level's gold this clear collected (all of it is the Rhythm master star)
       const gold = Math.round((100 * (r.course.flow.filter((f) => r.sim.noteUsed(f.beat)).length + r.sim.holdsFull)) / Math.max(1, r.course.flow.length + r.course.holds.length));
       save.gold[id] = Math.max(save.gold[id] ?? 0, gold);
+      // the old badges are still earned, unseen: Game Center's achievements and two of the glows hang on them
       if (gold >= 100 && !save.badges[`tune_${id}`]) fresh.push(`tune_${id}`);
       if (starsFor(id).every(Boolean) && !save.badges[`mender_${id}`]) fresh.push(`mender_${id}`);
       for (const bid of fresh) {
         save.badges[bid] = true;
         if (bid !== `clear_${FINAL_ID}` && !/^(tune|mender)_/.test(bid)) gameCenter.badge(bid);
-        const b = BADGES.find((x) => x.id === bid);
-        if (b) won.badge.push(b.name);
-        if (b) unlocks.push(row(icon('badge'), `BADGE: ${b.name.toUpperCase()}`, b.desc));
       }
     }
-    // orbs this clear has earned: by a badge, by both quests of a level, or by a B-side
+    // stars this clear has lit (a first clear's own star goes without saying: its song is home), and glows it has won
+    for (const s of starsLit(starProgress)) if (!starsWas.has(s.id) && !(first && s.kind === 'restore')) won.star.push(s.name);
     for (const o of ORBS) if (owned(o) && !orbsWas.has(o.id)) won.glow.push(o.name);
-    for (const o of ORBS) if (owned(o) && !orbsWas.has(o.id)) unlocks.push(row(dot(o), `GLOW: ${o.name.toUpperCase()}`, 'Eko can wear it: look under Glows'));
   }
   if (cleared && r.opts.practice) save.bests[id] = { ...bestFor(id), prac: 100 };
   persist();
   const pct = cleared ? 100 : Math.max(session.far, reached);
-  $('results').querySelector('.results')!.classList.toggle('clear', cleared);
-  $('resLevel').textContent = `${levelLabel(r.pack)}${r.opts.bot ? ' · AUTOPLAY' : r.opts.practice ? ' · PRACTICE' : ''}`;
-  $('resPct').textContent = String(pct);
-  const callout = $('resCallout');
-  const says = first ? 'FIRST CLEAR' : !cleared && session.newBest ? 'NEW BEST' : '';
-  callout.textContent = says;
-  callout.classList.toggle('hidden', !says);
-  $('resTitle').textContent = cleared ? 'LEVEL COMPLETE' : `REACHED ${pct}%`;
-  $('resFill').style.transform = 'scaleX(0)';
-  window.setTimeout(() => { $('resFill').style.transform = `scaleX(${pct / 100})`; }, 60);
-  $('resDrop').style.left = `${((r.level.dropTime - r.t0) / (r.t1 - r.t0)) * 100}%`;
-  $('resCrash').classList.toggle('hidden', cleared);
-  $('resCrash').style.left = `${pct}%`;
-  $('resAttempts').textContent = counted ? String(bestFor(id).attempts) : String(session.attempts);
-  $('resOnBeat').textContent = session.judged ? `${Math.round((session.onBeat / session.judged) * 100)}%` : '–';
-  $('resStreak').textContent = String(session.streak);
-  $('resCharge').textContent = session.drop < 0 ? '–' : `${Math.round(session.drop * 100)}%`;
-  $('resUnlocks').innerHTML = unlocks.join('');
   const keptNow = starsFor(id);
-  paintStars($('resStars'), (i) => (newStars[i] ? 'got' : keptNow[i] ? 'kept' : ''));
-  $('resStars').classList.toggle('hidden', !r.course.stars.length);
   const sm = r.smoothness();
   const carried = r.sim.stars.filter((x) => x === 1).length;
-  const notes: string[] = [];
-  if (r.opts.bot) notes.push(`Autoplay. Movement check: ${sm.frames} frames, clock speed never more than ${sm.worstPct.toFixed(2)}% off.`);
-  else {
-    if (cleared && r.dropFull === false) notes.push(`The drop played at ${Math.round(r.dropPower * 100)}%. Tap the roll's notes and arrive in flow for the full one.`);
-    if (cleared && r.course.holds.length) notes.push(`Gold holds collected in full: ${r.sim.holdsFull} of ${r.course.holds.length}.`);
-    if (r.opts.practice && carried) notes.push('Practice runs do not keep lens shards.');
-    else if (!cleared && carried) notes.push('A lens shard is kept when the run that collected it clears the level.');
-    else if (cleared && r.course.stars.length && !keptNow.every(Boolean)) notes.push('Lens shards: play a shard branch clean (all its gold, no extra taps) and clear the level to keep its shard.');
-  }
-  $('resNote').textContent = notes.join(' ');
   console.log(`[one more orbit] ${r.opts.bot ? 'autoplay' : 'run'} ${cleared ? 'cleared' : 'left'} ${r.level.title}: ${r.sim.onBeat}/${r.sim.judged} taps on the beat, best streak ${r.sim.bestStreak}, drop at ${Math.round(r.dropPower * 100)}%. Movement check: ${sm.frames} frames, clock speed never more than ${sm.worstPct.toFixed(2)}% off (average ${sm.meanPct.toFixed(3)}%)`);
-  showSync('resSyncText', 'resSyncFix');
-  const next = $<HTMLButtonElement>('nextBtn');
-  next.disabled = !!r.pack.level.side || r.pack === FINAL || !(levelIdx + 1 < PACKS.length && levelOpen(levelIdx + 1));
-  next.style.opacity = next.disabled ? '0.4' : '1';
   // the painted results: the planet's sky, and a few soft lines
-  if (cleared && counted && r.pack.level.side && first) said.unshift('The moon\u2019s song is played all the way through.');
-  if (cleared && !said.length) said.push(r.opts.bot ? 'Autoplay, all the way through.' : r.opts.practice ? 'A practice run, all the way through.' : 'Once more, all the way through.');
+  if (cleared && counted && r.pack.level.side && first) said.unshift('The moon’s song is played all the way through.');
+  if (cleared && !said.length && !won.star.length) said.push(r.opts.bot ? 'Autoplay, all the way through.' : r.opts.practice ? 'A practice run, all the way through.' : 'Once more, all the way through.');
   if (!cleared) {
     if (r.opts.bot) said.push('Autoplay.');
     else if (r.opts.practice) said.push('A practice run: nothing is kept.');
-    else said.push(session.newBest ? 'Your furthest yet.' : bestFor(id).cleared ? 'Its song is already home.' : `Your furthest is ${Math.max(bestFor(id).pct, pct)}%.`);
+    else {
+      if (dare) said.push('A daredevil has one attempt, and this one fell.');
+      said.push(session.newBest ? 'Your furthest yet.' : bestFor(id).cleared ? 'Its song is already home.' : `Your furthest is ${Math.max(bestFor(id).pct, pct)}%.`);
+    }
     if (!wasHome) said.push('The colour rose this far, and waits.');
   }
-  if (won.quest.length) said.push(won.quest.length === 1 ? `A quest done: ${won.quest[0]}.` : `${won.quest.length} quests done.`);
-  if (won.badge.length) said.push(won.badge.length === 1 ? `A constellation lit: ${won.badge[0]}.` : `${won.badge.length} constellations lit.`);
+  if (won.star.length) said.push(won.star.length === 1 ? `A star lit: ${won.star[0]}.` : `${won.star.length} stars lit: ${won.star.join(', ')}.`);
   if (won.glow.length) said.push(won.glow.length === 1 ? `A new glow for Eko: ${won.glow[0]}.` : `${won.glow.length} new glows for Eko.`);
   const kept = keptNow.filter(Boolean).length;
-  const more = [`Attempt ${$('resAttempts').textContent}. On the beat ${$('resOnBeat').textContent}, best streak ${session.streak}.`];
+  const more = [`Attempt ${counted ? bestFor(id).attempts : session.attempts}. On the beat ${session.judged ? `${Math.round((session.onBeat / session.judged) * 100)}%` : 'not judged'}, best streak ${session.streak}.`];
   if (session.drop >= 0) more.push(session.drop >= 0.995 ? 'The drop played at full charge.' : `The drop played at ${Math.round(session.drop * 100)}% charge.`);
   if (said.length > 3) more.push(said.splice(3).join(' ')); // (three lines in the picture; anything past that is here)
   if (r.opts.bot) more.push(`Movement check: ${sm.frames} frames, the clock never more than ${sm.worstPct.toFixed(2)}% off.`);
@@ -818,26 +548,25 @@ function showResults(r: Run, cleared: boolean, reached = r.pct): void {
   }
   resMore = more;
   skyResult.show({
-    world: baseOf(r.pack), name: r.pack.level.side ? `${planetName(id)}\u2019s moon` : planetName(id), song: shortTitle(r.pack), tag: r.opts.bot ? 'autoplay' : r.opts.practice ? 'practice' : '',
+    world: baseOf(r.pack), name: placeName(r.pack), song: shortTitle(r.pack), tag: r.opts.bot ? 'autoplay' : r.opts.practice ? 'practice' : dare ? 'daredevil' : '',
     pct, cleared, first, home: wasHome,
     shards: r.course.stars.length ? keptNow : null, fresh: newStars,
     shardLine: kept === 3 ? 'all three lens shards' : kept === 0 ? 'no shards yet' : `${['', 'one', 'two'][kept]} lens shard${kept === 1 ? '' : 's'} kept`,
     lines: said, ...syncSaid()
   });
+  $('resSaid').textContent = `${placeName(r.pack)}, ${shortTitle(r.pack)}: ${cleared ? 'played all the way through' : `reached ${pct} percent`}. ${said.join(' ')} Tap, or press Enter, for one more orbit; Escape goes up to the galaxy.`;
   botMode = false;
   show('results');
 }
 /** more about the run, apart from the sync line (which can change while the results are up) */
 let resMore: string[] = [];
+/** the offset the results' one-tap fix would set, when there is one on offer */
+let resFix: number | null = null;
 /** What the taps say about sync, as the results' last soft line, and the one-tap fix if there is one. */
 function syncSaid(fixed = false): Pick<ResultInfo, 'more' | 'fix'> {
-  const all = spread([...sync.press, ...sync.flow]), fix = $('resSyncFix'), offer = !fixed && !fix.classList.contains('hidden');
-  const line = fixed ? `The audio offset is now ${fmtMs(save.audioOffset)}. Play on, and check again.`
-    : all.n < 12 ? 'Not enough taps yet to judge the sync.'
-    : all.sd > 60 ? 'Your taps are too spread out to judge the sync.'
-    : Math.abs(all.mean) < 15 ? `In sync: your taps centre ${lateEarly(all.mean)}.`
-    : `Your taps ran about ${Math.abs(Math.round(all.mean))} ms ${all.mean > 0 ? 'late' : 'early'}: a delay in sound or screen, not the song.`;
-  return { more: [...resMore, line], fix: offer ? (fix.textContent ?? '').replace(/^Fix it: offset/, 'set the offset to') : '' };
+  const r = syncRead();
+  resFix = fixed ? null : r.next;
+  return { more: [...resMore, fixed ? `The sound now arrives ${fmtMs(save.audioOffset)}. Play on, and see.` : r.line], fix: resFix !== null ? `set the sound to ${fmtMs(resFix)}` : '' };
 }
 
 // ------------------------------------------------------------------ test chambers
@@ -908,21 +637,28 @@ $('chambers').addEventListener('click', (e) => {
 });
 
 // ------------------------------------------------------------------ HUD
-const hud = { pct: -1, seg: '', count: '', crashShown: false, lesson: -1, finale: false };
+const hud = { pct: -1, at: -1, seg: '', count: '', crashShown: false, lesson: -1, finale: false };
+/** "Emberwick · the drop": where in the song, in the HUD's small hand. */
+const sectionSaid = (label: string) => { const s = label.toLowerCase(); return /^drop/.test(s) ? `the ${s}` : s; };
 function updateHud(r: Run): void {
   harvest(r);
   drawSyncOverlay();
-  // the level's three stars: gold if already kept, glowing once collected on this attempt, dimmed if lost on it
-  const kept = starsFor(r.pack.level.id);
-  $('hudStars').classList.toggle('hidden', !!r.opts.tutorial || !r.course.stars.length);
-  paintStars($('hudStars'), (i) => (r.sim.stars[i] === 1 ? 'got' : kept[i] ? 'kept' : r.sim.stars[i] === -1 && r.sim.starBeat[i] > -90 ? 'lost' : ''));
+  // the level's three shards: lit if already kept, glowing once collected on this attempt, dimmed if lost on it
+  const kept = starsFor(r.pack.level.id), shards = $('hudStars');
+  shards.classList.toggle('hidden', !!r.opts.tutorial || !r.course.stars.length);
+  for (let i = 0; i < 3; i++) {
+    const cls = r.sim.stars[i] === 1 ? 'got' : kept[i] ? 'kept' : r.sim.stars[i] === -1 && r.sim.starBeat[i] > -90 ? 'lost' : '';
+    if (shards.children[i].className !== cls) shards.children[i].className = cls;
+  }
   const pct = r.pct;
-  if (pct !== hud.pct) { hud.pct = pct; $('pct').textContent = `${pct}%`; }
-  $('progFill').style.transform = `scaleX(${r.progress.toFixed(4)})`;
-  const cb = chamber ? [...chamber.beats].reverse().find((x) => r.time / r.level.spb >= (x.bar - 1) * 4 - 0.01) : undefined;
-  const label = chamber ? cb?.label ?? 'READY' : r.level.segAt(Math.max(0, r.time)).label;
-  if (label !== hud.seg) { hud.seg = label; $('section').textContent = label; }
+  if (pct !== hud.pct) { hud.pct = pct; $('pct').textContent = String(pct); }
   const beat = r.time / r.level.spb;
+  // the thread is drawn through as far as the song has come, and the flame rides its end
+  const at = r.opts.tutorial ? Math.max(0, Math.min(1, beat / TUTORIAL_BEATS)) : r.progress;
+  if (Math.abs(at - hud.at) > 0.0004) { hud.at = at; $('progFill').style.transform = `scaleX(${at.toFixed(4)})`; $('progAt').style.left = `${(at * 100).toFixed(2)}%`; }
+  const cb = chamber ? [...chamber.beats].reverse().find((x) => r.time / r.level.spb >= (x.bar - 1) * 4 - 0.01) : undefined;
+  const label = chamber ? (cb?.label ?? 'ready').toLowerCase() : r.opts.tutorial ? 'Emberwick' : `${planetName(r.pack.level.id)}  ·  ${sectionSaid(r.level.segAt(Math.max(0, r.time)).label)}`;
+  if (label !== hud.seg) { hud.seg = label; $('section').textContent = label; }
   // 3, 2, 1 on the beats of the count-in bar: the first press is never a surprise
   let n = '';
   if (r.course.start === 0 && !r.opts.tutorial && r.startAt <= r.level.spb * 3.5 && r.state === 'playing') n = beat >= 1 && beat < 2 ? '3' : beat >= 2 && beat < 3 ? '2' : beat >= 3 && beat < 4 ? '1' : '';
@@ -933,23 +669,22 @@ function updateHud(r: Run): void {
     if (n) { el.textContent = n; void el.offsetWidth; el.classList.add('pop'); }
   }
   if (r.state === 'failed' && !hud.crashShown) {
-    // the crash: how far you got, briefly; it restarts by itself, or at once on a tap
+    // the fall: how far you got, in one line; it restarts by itself, or at once on a tap
     hud.crashShown = true;
     const best = !r.opts.bot && !r.opts.practice && pct > bestFor(r.pack.level.id).pct;
-    // (letting go of a tether says so: it is the one crash that is not a missed mark)
-    toast(r.sim.crashKind === 'let' ? `LET GO · ${pct}%` : best && pct >= 2 ? `NEW BEST ${pct}%` : `${pct}%`, best);
+    // (letting go of a tether says so: it is the one fall that is not a missed mark)
+    toast(r.sim.crashKind === 'let' ? `let go: ${pct}%` : best && pct >= 2 ? `your furthest yet: ${pct}%` : pct >= 80 ? `so close: ${pct}%` : `${pct}%`, best);
   }
   if (r.finale !== hud.finale) {
     hud.finale = r.finale;
     $('finale').classList.toggle('show', r.finale);
-    if (r.finale) $('finaleNote').textContent = !r.opts.bot && !r.opts.practice && !bestFor(r.pack.level.id).cleared ? 'FIRST CLEAR' : '';
+    if (r.finale) $('finaleNote').textContent = !r.opts.bot && !r.opts.practice && !bestFor(r.pack.level.id).cleared ? 'for the first time' : '';
   }
   if (r.finale) $('finaleFill').style.transform = `scaleX(${r.progress.toFixed(3)})`;
   if (r.opts.tutorial) {
     let k = 0;
     LESSONS.forEach(([b], i) => { if (beat >= b) k = i; });
     if (k !== hud.lesson) { hud.lesson = k; $('tutorText').innerHTML = LESSONS[k][1]; }
-    $('progFill').style.transform = `scaleX(${Math.max(0, Math.min(1, beat / TUTORIAL_BEATS)).toFixed(3)})`;
   }
 }
 
@@ -990,31 +725,27 @@ $('title').addEventListener('click', () => {
   // the first time, the story opens; after that a tap is Eko rising, and the camera goes up into the galaxy with him
   if (!save.story.open) playStory('open', () => show('levels')); else { renderMap(); skyTitle.ascend(() => show('levels')); }
 });
-// the story: a tap anywhere goes on (or brings the rest of the words in); the quiet word in the corner skips
+// the results: a tap anywhere flies the song again; the quiet lines lead elsewhere
 $('results').addEventListener('click', (e) => {
-  if (screen !== 'results' || (e.target as HTMLElement).closest('.panel')) return; // (the old panel's own buttons are pressed by code, never by a tap)
+  if (screen !== 'results') return;
   const r = skyResult.tap(e.clientX, e.clientY);
   if (r === 'again') { session.far = 0; session.newBest = false; startRun(); }
   else if (r === 'galaxy') toLevels();
-  else if (r === 'check') { run?.stop(); run = null; openCalib(true); }
-  else if (r === 'fix') { $('resSyncFix').click(); if (skyResult.info) Object.assign(skyResult.info, syncSaid(true)); }
+  else if (r === 'check') { run?.stop(); run = null; openCalib(); }
+  else if (r === 'fix') { if (resFix !== null) syncFix(resFix); if (skyResult.info) Object.assign(skyResult.info, syncSaid(true)); }
 });
+// the story: a tap anywhere goes on (or brings the rest of the words in); the quiet word in the corner skips
 $('story').addEventListener('click', (e) => { if (screen !== 'story') return; const r = skyStory.tap(e.clientX, e.clientY); if (r === 'skip') endStory(); else if (r === 'next') nextStory(); });
-$('storyNext').addEventListener('click', nextStory);
-$('storyArt').addEventListener('click', nextStory);
-$('storySkip').addEventListener('click', () => { if (screen === 'story') endStory(); });
-$('chambersBtn').addEventListener('click', () => openChambers());
-$('chambersClose').addEventListener('click', () => closeChambers());
-$('storyBtn').addEventListener('click', () => { const back: Screen = settingsFrom === 'pause' ? 'pause' : 'levels'; playStory('all', () => show(back), true); });
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 
 window.addEventListener('keydown', (e) => {
   if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
   audioReady = true;
   const back = e.code === 'Escape';
-  if (screen === 'calib') { if (!back) { e.preventDefault(); calTap(stamp(e)); } else closeCalib(); return; }
+  if (screen === 'calib') { if (back) closeCalib(); else if (e.code !== 'Tab') { e.preventDefault(); calTap(stamp(e)); } return; }
   if (screen === 'record') { if (record.key(e)) e.preventDefault(); return; }
   if (screen === 'title') { e.preventDefault(); audio.ensure(); show('levels'); return; }
+  if (screen === 'story') { if (back) endStory(); else if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); nextStory(); } return; }
   if (screen === 'levels') {
     const step = e.code === 'ArrowLeft' || e.code === 'ArrowDown' ? -1 : e.code === 'ArrowRight' || e.code === 'ArrowUp' ? 1 : 0;
     if (step) { e.preventDefault(); select(NODES[Math.max(0, Math.min(NODES.length - 1, NODES.indexOf(at) + step))].id); }
@@ -1025,9 +756,9 @@ window.addEventListener('keydown', (e) => {
     if (back || e.code === 'KeyP') pause(); else if (e.code === 'KeyR' && !run?.opts.tutorial) startRun(-1, true); else if (e.code !== 'Tab') { e.preventDefault(); keysDown.add(e.code); tap(stamp(e)); } // any key is the button
     return;
   }
-  if (screen === 'pause') { if (back || e.code === 'Space' || e.code === 'Enter') resume(); else if (e.code === 'KeyR') startRun(-1, true); return; }
+  if (screen === 'pause') { if (back) resume(); else if (e.code === 'KeyR') startRun(-1, true); return; } // (Enter and Space press whichever line has the focus: Resume, when the pause opens)
   if (screen === 'results') { if (e.code === 'Enter' || e.code === 'Space' || e.code === 'KeyR') { e.preventDefault(); startRun(); } else if (back) toLevels(); return; }
-  if (back) { if (screen === 'settings') closeSettings(); else if (screen === 'chambers') closeChambers(); else show('levels'); }
+  if (back) { if (screen === 'settings') closeSettings(); else if (screen === 'chambers') closeChambers(); else if (screen === 'credits') { renderSettings(); show('settings'); } else leaveRoom(); }
 });
 
 function pause(): void {
@@ -1036,12 +767,16 @@ function pause(): void {
   keysDown.clear();
   run.release(performance.now()); // a held button does not stay held through a pause
   run.pause();
-  showSync('pauseSyncText', 'pauseSyncFix');
+  $('pauseAt').textContent = run.opts.tutorial ? 'held, in the first flight' : `held at ${run.pct}%`;
+  showPauseSync();
   const tut = !!run.opts.tutorial;
   for (const id of ['pauseRestartBtn', 'pausePracticeBtn', 'pauseSkipBtn']) $(id).classList.toggle('hidden', tut);
   $('pauseSkipBtn').classList.toggle('hidden', tut || buildStart() < 0);
   if (chamber) for (const id of ['pausePracticeBtn', 'pauseSkipBtn']) $(id).classList.add('hidden'); // a room is short: it is always played whole
+  $('pauseQuitBtn').textContent = chamber ? 'Back to the rooms' : 'Leave for the galaxy';
+  rooms.prepare(['desk'], () => screen === 'pause', 700); // (the desk is painted while the scene is held, in case Settings is next)
   show('pause');
+  $('resumeBtn').focus({ preventScroll: true });
 }
 function resume(): void {
   if (!run || screen !== 'pause') return;
@@ -1104,42 +839,41 @@ function installHint(): boolean {
   return ios && !installed;
 }
 function renderSettings(): void {
-  $<HTMLInputElement>('setMusic').value = String(save.music);
-  $<HTMLInputElement>('setSfx').value = String(save.sfx);
-  $<HTMLInputElement>('setHit').value = String(save.hitVol);
+  for (const [id, v] of [['setMusic', save.music], ['setSfx', save.sfx], ['setHit', save.hitVol]] as const) $<HTMLInputElement>(id).value = String(v);
   showVolumes();
   $('aoVal').textContent = fmtMs(save.audioOffset);
   $('voVal').textContent = fmtMs(save.visualOffset);
-  $('setMotion').classList.toggle('on', save.reducedMotion);
-  $('setSync').classList.toggle('on', save.syncOverlay);
-  $('setUnlock').classList.toggle('on', save.unlockAll);
-  $('setHaptics').classList.toggle('on', save.haptics);
+  for (const [id, on] of [['setMotion', save.reducedMotion], ['setSync', save.syncOverlay], ['setUnlock', save.unlockAll], ['setHaptics', save.haptics]] as const) $(id).setAttribute('aria-pressed', String(on));
   $('setHaptics').classList.toggle('hidden', !canHaptics);
   $('gcBtn').classList.toggle('hidden', !gameCenter.available);
   $('installNote').classList.toggle('hidden', !installHint());
   $('installBtn').classList.toggle('hidden', !installEvent);
-  $('syncBtn').textContent = !save.calibrated ? 'Sync check needed' : deviceChanged ? 'Audio changed: check' : 'Sync check · 10 s';
+  $('syncNote').textContent = !save.calibrated ? 'not done yet' : deviceChanged ? 'your sound has changed' : 'ten seconds';
   $('recordBtn').classList.toggle('hidden', !import.meta.env.DEV);
   const lat = Math.round(audio.latency() * 1000);
-  $('setInfo').textContent = `${audio.ctx ? `This device reports ${lat} ms of output delay, already allowed for. ` : ''}Changed headphones or speakers? Run the sync check again.`;
+  $('setInfo').textContent = `${audio.ctx ? `This device says its sound takes ${lat} ms to arrive; that is already allowed for. ` : ''}New headphones or speakers? Tap along with Marlow again.`;
+  $('settingsBack').textContent = settingsFrom === 'pause' ? 'back to the flight' : 'out to the galaxy';
+  rooms.calm = save.reducedMotion;
 }
-/** Each slider says its value, so a saved setting can be read at a glance (and 0 reads as Off, not as a blank bar). */
+/** Each thread is drawn through as far as its sound is up; drawn right down, its flame is out. (The value is also kept in words, for readers.) */
 function showVolumes(): void {
-  for (const [id, v] of [['setMusicVal', save.music], ['setSfxVal', save.sfx], ['setHitVal', save.hitVol]] as const) {
+  for (const [id, v] of [['setMusic', save.music], ['setSfx', save.sfx], ['setHit', save.hitVol]] as const) {
     const el = $(id);
-    el.textContent = v <= 0 ? 'Off' : `${Math.round(v * 100)}%`;
-    el.classList.toggle('off', v <= 0);
+    el.style.setProperty('--f', String(v));
+    el.classList.toggle('out', v <= 0);
+    $(`${id}Val`).textContent = v <= 0 ? 'off' : `${Math.round(v * 100)}%`;
   }
 }
 function openSettings(from: Screen): void {
   settingsFrom = from;
+  if (from === 'levels') viaLantern = sky.chosen === 'lantern';
   audio.ensure();
   renderSettings();
   show('settings');
 }
 function closeSettings(): void {
   persist();
-  show(settingsFrom === 'pause' ? 'pause' : 'levels');
+  if (settingsFrom === 'pause') show('pause'); else leaveRoom();
 }
 function nudge(key: 'audioOffset' | 'visualOffset', by: number): void {
   save[key] = Math.max(-200, Math.min(400, save[key] + by));
@@ -1152,188 +886,202 @@ function toggle(key: 'reducedMotion' | 'syncOverlay' | 'unlockAll' | 'haptics'):
   renderSettings();
 }
 
-// ------------------------------------------------------------------ calibration
-// Audio: tap along to a click; the average distance between taps and clicks becomes the audio offset.
-// Visual: no sound; tap when the ball crosses the mark; the average becomes the visual offset.
+// ------------------------------------------------------------------ the sync check: Marlow taps the glass
+// He taps the lamp's glass, "one, two, three, four", and you tap along with him. By ear first: the average distance
+// between your taps and his becomes the sound's offset. Then, if you like, by eye: no sound, his taps come down the
+// dark and land on the glass, and the average becomes the picture's offset. Nothing is changed until you say so.
 const CAL_PERIOD = 0.6;
 const CAL_NEED = 8;
-const cal = { mode: 'audio' as 'audio' | 'visual', running: false, clicks: [] as number[], taps: [] as number[], startPerf: 0, timer: 0, quick: false, then: 'back' as 'begin' | 'back', from: 'settings' as Screen, done: false };
-
-function renderCal(): void {
-  $('calAudioTab').classList.toggle('on', cal.mode === 'audio');
-  $('calVisualTab').classList.toggle('on', cal.mode === 'visual');
-  $('calTabs').classList.toggle('hidden', cal.quick);
-  $('calStart').classList.toggle('hidden', cal.quick && cal.running);
-  $('calClose').textContent = cal.quick ? (cal.then === 'begin' ? 'Skip (not recommended)' : 'Cancel') : 'Done';
-  $('calTitle').textContent = cal.quick ? 'SYNC CHECK' : 'CALIBRATION';
-  $('calText').textContent = cal.quick
-    ? `${deviceChanged && save.calibrated ? 'Your audio output has changed. ' : ''}Tap along to the click 8 times, going by what you hear. It lines the game up with your speakers or headphones. Do it again whenever you change them: Bluetooth adds 150 to 250 ms.`
-    : cal.mode === 'audio'
-    ? 'Press Start, then tap in time with the click, 8 times. Go by what you hear. Use the speakers or headphones you will play with.'
-    : 'No sound here. Press Start, then tap each time the ball crosses the mark at the top of the ring.';
-  const dots = $('calDots');
-  dots.innerHTML = '';
-  for (let i = 0; i < CAL_NEED; i++) { const d = document.createElement('i'); if (i < cal.taps.length) d.className = 'on'; dots.appendChild(d); }
-  $('calStart').textContent = cal.running ? 'Restart' : 'Start';
-}
+const CAL_TAPS = 40; // he taps for 24 seconds, then stops
+type CalStage = 'tapping' | 'read' | 'uneven' | 'stopped' | 'set';
+const cal = {
+  mode: 'ear' as 'ear' | 'eye', stage: 'stopped' as CalStage,
+  /** his taps, as times on the audio clock (by ear), and how many of them have been handed to the sound card */
+  clicks: [] as number[], t0: 0, sent: 0,
+  /** when his first tap lands, on the page's clock (by eye) */
+  startPerf: 0,
+  taps: [] as number[], read: 0, sd: 0, timer: 0,
+  then: 'back' as 'begin' | 'back', from: 'settings' as Screen, done: false
+};
+/** A round begins: he starts tapping. */
 function calStart(): void {
   audio.ensure();
   audio.stopPreview(0.2);
-  cal.running = true;
+  cal.stage = 'tapping';
   cal.taps = [];
   cal.clicks = [];
-  $('calResult').textContent = cal.mode === 'audio' ? 'Listening…' : 'Watching…';
+  cal.sent = 0;
+  cal.t0 = -1;
   clearTimeout(cal.timer);
-  if (cal.mode === 'audio' && audio.ctx) {
-    void audio.resume().then(() => {
-      const t0 = audio.ctx!.currentTime + 0.8;
-      for (let i = 0; i < 40; i++) { const t = t0 + i * CAL_PERIOD; cal.clicks.push(t); audio.hit(i % 4 === 0 ? 'clickHi' : 'click', 1, t); }
-    });
-  } else cal.startPerf = performance.now() + 600;
-  cal.timer = window.setTimeout(() => { if (cal.running) { cal.running = false; $('calResult').textContent = 'Timed out. Press Start to try again.'; renderCal(); } }, 26000);
-  renderCal();
+  if (cal.mode === 'ear') void audio.resume().then(() => { if (cal.stage === 'tapping' && cal.mode === 'ear' && audio.ctx) cal.t0 = audio.ctx.currentTime + 0.8; });
+  else { cal.startPerf = performance.now() + CAL_PERIOD * 1000; cal.timer = window.setTimeout(() => { if (cal.stage === 'tapping') cal.stage = 'stopped'; }, CAL_TAPS * CAL_PERIOD * 1000); }
 }
+/** His taps are handed to the sound card a few at a time, so that when a round ends they end with it. */
+function calTick(): void {
+  if (cal.stage !== 'tapping' || cal.mode !== 'ear' || !audio.ctx || cal.t0 < 0) return;
+  while (cal.sent < CAL_TAPS && cal.t0 + cal.sent * CAL_PERIOD < audio.ctx.currentTime + 0.35) {
+    const t = cal.t0 + cal.sent * CAL_PERIOD;
+    cal.clicks.push(t);
+    audio.hit('glass', cal.sent % 4 === 0 ? 1 : 0.75, t);
+    cal.sent++;
+  }
+  if (cal.sent >= CAL_TAPS && audio.ctx.currentTime > cal.t0 + CAL_TAPS * CAL_PERIOD) cal.stage = 'stopped';
+}
+/** One of your taps, at page time t. */
 function calTap(t: number): void {
-  if (!cal.running) return;
+  if (cal.stage !== 'tapping') return;
   let d: number;
-  if (cal.mode === 'audio') {
-    if (!cal.clicks.length) return;
+  if (cal.mode === 'ear') {
+    if (cal.clicks.length < 3) return; // let his first taps set the pulse
     const heard = audio.ctxTimeAt(t) - audio.latency();
-    if (heard < cal.clicks[2] - CAL_PERIOD / 2) return; // let the first clicks set the pulse
+    if (heard < cal.clicks[2] - CAL_PERIOD / 2) return;
     d = Infinity;
     for (const c of cal.clicks) if (Math.abs(heard - c) < Math.abs(d)) d = heard - c;
+    // (a tap just after the last one handed over belongs to the next, not yet in the list)
+    const next = cal.t0 + cal.sent * CAL_PERIOD;
+    if (Math.abs(heard - next) < Math.abs(d)) d = heard - next;
   } else {
     const x = (t - cal.startPerf) / 1000;
     if (x < CAL_PERIOD * 1.5) return;
     d = ((x + CAL_PERIOD / 2) % CAL_PERIOD) - CAL_PERIOD / 2;
   }
   if (Math.abs(d) > 0.25) return;
+  rooms.tapped();
   cal.taps.push(d * 1000);
-  if (cal.taps.length >= CAL_NEED) {
-    const sorted = [...cal.taps].sort((a, b) => a - b);
-    const core = sorted.slice(1, -1);
-    const mean = core.reduce((s, v) => s + v, 0) / core.length;
-    const sd = Math.sqrt(core.reduce((s, v) => s + (v - mean) * (v - mean), 0) / core.length);
-    cal.running = false;
-    clearTimeout(cal.timer);
-    if (sd > 40) $('calResult').textContent = `Taps were too uneven (±${Math.round(sd)} ms). Try again.`;
-    else {
-      const v = Math.max(-200, Math.min(400, Math.round(mean)));
-      if (cal.mode === 'audio') { save.audioOffset = v; save.calLatency = audio.latency(); cal.done = true; sync.press.length = sync.flow.length = 0; } else save.visualOffset = v;
-      persist();
-      $('calResult').textContent = `${cal.mode === 'audio' ? 'Audio' : 'Visual'} offset set to ${fmtMs(v)} (your taps were within ±${Math.round(sd)} ms).`;
-      if (cal.quick) window.setTimeout(() => { if (screen === 'calib' && cal.quick) closeCalib(); }, 1200);
-    }
-  }
-  renderCal();
+  if (cal.taps.length < CAL_NEED) return;
+  const sorted = [...cal.taps].sort((a, b) => a - b);
+  const core = sorted.slice(1, -1);
+  const mean = core.reduce((s, v) => s + v, 0) / core.length;
+  cal.sd = Math.sqrt(core.reduce((s, v) => s + (v - mean) * (v - mean), 0) / core.length);
+  cal.read = Math.max(-200, Math.min(400, Math.round(mean)));
+  cal.stage = cal.sd > 40 ? 'uneven' : 'read';
+  clearTimeout(cal.timer);
 }
-/** quick: the 10-second sync check. then 'begin': it came up on the way into a level, which starts when it is done. */
-function openCalib(quick = false, then: 'begin' | 'back' = 'back'): void {
-  cal.quick = quick;
+/** What the lamp room shows right now. */
+function calView(now: number): SyncInfo {
+  const ear = cal.mode === 'ear', first = cal.then === 'begin', v = cal.read, set = ear ? save.audioOffset : save.visualOffset;
+  const line = cal.stage === 'tapping' ? (cal.taps.length ? `${['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven'][cal.taps.length] ?? cal.taps.length} of eight` : 'Eight taps will do.')
+    : cal.stage === 'read' ? (Math.abs(v) < 8 ? 'You are right with him.' : `You are about ${Math.abs(v)} ms ${v > 0 ? 'behind' : 'ahead of'} him.`) + (v === set ? ' It is already set so.' : '')
+    : cal.stage === 'uneven' ? 'Your taps were too uneven to read.'
+    : cal.stage === 'set' ? `Set: the ${ear ? 'sound' : 'picture'} now arrives ${fmtMs(set)}.`
+    : 'He has stopped tapping.';
+  const leave = { id: 'leave', label: first ? 'not now' : 'leave it' }, again = { id: 'again', label: 'once more' };
+  const acts = cal.stage === 'tapping' ? [leave]
+    : cal.stage === 'read' ? [...(v === set ? [] : [{ id: 'set', label: 'set it right' }]), again, leave]
+    : cal.stage === 'set' ? (first ? [] : [ear ? { id: 'eye', label: 'now by eye' } : { id: 'ear', label: 'by ear again' }, again, { id: 'leave', label: 'done' }])
+    : [again, leave];
+  return {
+    title: 'Marlow taps the glass.',
+    say: ear ? `${deviceChanged && save.calibrated ? 'Your sound has changed. ' : ''}Tap along with him, going by what you hear.` : 'No sound now. Tap as each of his taps lands on the glass.',
+    back: first ? 'fly without it' : cal.from === 'settings' ? 'back to the desk' : 'out to the galaxy',
+    counting: cal.stage === 'tapping' ? cal.taps.length : -1, taps: cal.taps, line, acts,
+    foot: ear ? 'by ear first, then by eye' : 'by eye: his taps make no sound',
+    phase: !ear && cal.stage === 'tapping' ? (((now - cal.startPerf) / 1000 / CAL_PERIOD) % 1 + 1) % 1 : -1
+  };
+}
+/** then 'begin': the check came up on the way into a level, which starts when it is done or passed over. */
+function openCalib(then: 'begin' | 'back' = 'back'): void {
   cal.then = then;
   cal.from = screen === 'calib' ? cal.from : screen;
   cal.done = false;
-  if (quick) cal.mode = 'audio';
-  cal.running = false;
-  cal.taps = [];
-  $('calResult').textContent = '';
-  renderCal();
+  cal.mode = 'ear';
+  if (cal.from === 'levels') viaLantern = sky.chosen === 'lantern';
   show('calib');
-  if (quick) calStart();
+  calStart();
+}
+/** One of the lamp room's quiet words was tapped. */
+function calAct(id: string): void {
+  if (id === 'back' || id === 'leave') closeCalib();
+  else if (id === 'again') calStart();
+  else if (id === 'eye' || id === 'ear') { cal.mode = id; calStart(); }
+  else if (id === 'set' && cal.stage === 'read') {
+    if (cal.mode === 'ear') { save.audioOffset = cal.read; save.calLatency = audio.latency(); cal.done = true; sync.press.length = sync.flow.length = 0; } else save.visualOffset = cal.read;
+    persist();
+    cal.stage = 'set';
+    if (cal.then === 'begin') window.setTimeout(() => { if (screen === 'calib' && cal.stage === 'set') closeCalib(); }, 1100); // and on into the level
+  }
 }
 function closeCalib(): void {
-  cal.running = false;
+  cal.stage = 'stopped';
   clearTimeout(cal.timer);
-  void audio.suspend().then(() => audio.resume()); // drops any clicks still queued
-  if (cal.quick) {
-    cal.quick = false;
-    if (cal.then === 'begin' || cal.done) {
-      // done, or skipped on the way in: it is not forced again until the audio output changes
-      save.calibrated = true;
-      if (save.calLatency < 0 || cal.done) save.calLatency = audio.latency();
-      deviceChanged = false;
-      persist();
-    }
-    if (cal.then === 'begin') { show('levels'); window.setTimeout(enter, 60); return; }
-    if (cal.from === 'results' || cal.from === 'pause') { toLevels(); return; }
-    if (cal.from === 'settings') { renderSettings(); show('settings'); return; }
-    show('levels');
-    return;
+  if (cal.then === 'begin' || cal.done) {
+    // done, or passed over on the way in: it is not asked for again until the sound's output changes
+    save.calibrated = true;
+    if (save.calLatency < 0 || cal.done) save.calLatency = audio.latency();
+    deviceChanged = false;
+    persist();
   }
-  renderSettings();
-  show('settings');
+  if (cal.then === 'begin') { cal.then = 'back'; show('levels'); window.setTimeout(enter, 60); return; }
+  if (cal.from === 'results' || cal.from === 'pause') { toLevels(); return; }
+  if (cal.from === 'settings') { renderSettings(); show('settings'); return; }
+  leaveRoom();
 }
+// A tap along has to be timed from the moment the finger lands, so it is taken on the way down; the quiet words
+// (and the way back) are taken as finished taps, like everything else that leaves a screen.
+$('calib').addEventListener('pointerdown', (e) => { if (screen !== 'calib' || rooms.hit(e.clientX, e.clientY)) return; e.preventDefault(); calTap(stamp(e)); });
+$('calib').addEventListener('click', (e) => { if (screen !== 'calib') return; const id = rooms.hit(e.clientX, e.clientY); if (id) calAct(id); });
 
-// ------------------------------------------------------------------ orbs and badges
-function renderOrbs(): void {
-  const list = $('orbList');
-  list.innerHTML = '';
-  for (const o of ORBS) {
-    const open = owned(o);
-    const el = document.createElement('button');
-    el.type = 'button';
-    el.className = `tile${save.skin === o.id ? ' on' : ''}${open ? '' : ' locked'}`;
-    el.style.setProperty('--c', `rgb(${o.rgb.join(',')})`);
-    el.innerHTML = `<span class="glow"><img alt="" src="${ekoPic(o.rgb)}"></span><b></b><small></small><span class="state">${save.skin === o.id ? `${icon('check')}EQUIPPED` : open ? '' : `${icon('lock')}LOCKED`}</span>`;
-    el.querySelector('b')!.textContent = o.name;
-    el.querySelector('small')!.textContent = open ? (save.skin === o.id ? 'Eko wears it now' : 'Tap to wear') : o.how;
-    el.setAttribute('aria-label', `${o.name} glow${open ? '' : `, locked: ${o.how}`}`);
-    el.addEventListener('click', () => { if (!open) return; save.skin = o.id; persist(); renderOrbs(); });
-    list.appendChild(el);
-  }
+// ------------------------------------------------------------------ the hearth (Eko's glows), the gallery (the star chart), the logbook's last page
+const glowsView = (): GlowsInfo => ({ glows: ORBS.map((o) => ({ id: o.id, name: o.name, rgb: o.rgb, lit: owned(o), says: o.says, how: o.how })), worn: save.skin });
+function openGlows(): void {
+  viaLantern = sky.chosen === 'lantern';
+  rooms.glows = glowsView();
+  rooms.look = save.skin;
+  $('orbsSaid').textContent = `By the hearth: Eko’s glows. ${ORBS.map((o) => `${o.name}: ${owned(o) ? (o.id === save.skin ? 'worn now' : 'lit') : `still dark; what lights it: ${o.how}`}`).join('. ')}.`;
+  show('orbs');
 }
-function renderBadges(): void {
-  const list = $('badgeList');
-  list.innerHTML = '';
-  let got = 0;
-  for (const b of BADGES) {
-    const has = !!save.badges[b.id];
-    if (has) got++;
-    const el = document.createElement('div');
-    el.className = `tile${has ? ' got' : ' locked'}`;
-    el.innerHTML = `<span class="star">${icon('badge')}</span><b></b><small></small><span class="state">${has ? `${icon('check')}EARNED` : icon('lock')}</span>`;
-    el.querySelector('.star svg')!.setAttribute('style', 'width:100%;height:100%');
-    el.querySelector('b')!.textContent = b.name;
-    el.querySelector('small')!.textContent = b.desc;
-    list.appendChild(el);
-  }
-  $('badgeCount').textContent = `${got} of ${BADGES.length} earned. Each one says how to earn it.`;
+$('orbs').addEventListener('click', (e) => {
+  if (screen !== 'orbs') return;
+  const id = rooms.hit(e.clientX, e.clientY);
+  if (id === 'back') { leaveRoom(); return; }
+  const o = ORBS.find((x) => `glow:${x.id}` === id);
+  if (!o) return;
+  // a flame is worn at a touch; a dark wick says what lights it
+  rooms.look = o.id;
+  if (owned(o) && save.skin !== o.id) { save.skin = o.id; persist(); rooms.glows = glowsView(); if (audio.ctx) audio.hit('sparkle', 0.5); feel('pick'); }
+  else if (audio.ctx) audio.hit('tap', 0.4);
+});
+const starsView = (): StarsInfo => ({
+  groups: STAR_PLACES.map((id) => ({
+    id, name: id === 'ambush' ? 'the ambush' : planetName(id), note: id === 'ambush' ? 'not in the sky yet' : '',
+    rows: starsOf(id).map((s) => ({ name: s.name, what: s.what, lit: starLit(s, starProgress) }))
+  })),
+  lit: starsLit(starProgress).length, total: STAR_TOTAL
+});
+function openStars(): void {
+  viaLantern = sky.chosen === 'lantern';
+  const v = (rooms.stars = starsView());
+  rooms.place = at.kind === 'gate' ? FINAL_ID : at.planet; // the chart opens on the world you are at
+  $('starsSaid').textContent = `The star chart: ${v.lit} of ${v.total} lit. ${v.groups.map((g) => `${g.name}: ${g.rows.map((r) => `${r.name} (${r.what}), ${r.lit ? 'lit' : 'not yet'}`).join('; ')}`).join('. ')}.`;
+  show('stars');
 }
-
-function renderQuests(): void {
-  const list = $('questList');
-  list.innerHTML = '';
-  let done = 0;
-  for (const p of PACKS) {
-    const id = p.level.id;
-    const both = questSet(id, save.quests);
-    const orb = ORBS.find((o) => o.needs === `quests:${id}`);
-    const g = document.createElement('div');
-    g.className = 'qgroup';
-    g.style.setProperty('--tint', (LEVEL_UI[id] ?? { col: '#19e3ff' }).col);
-    const rows = questsFor(id).map((q) => {
-      const on = !!save.quests[q.id];
-      if (on) done++;
-      return `<div class="qrow${on ? ' on' : ''}">${icon('quest')}<div><b>${q.name}</b>${q.desc}</div><span class="state">${on ? 'DONE' : ''}</span></div>`;
-    });
-    g.innerHTML = `<h4><span></span><small>${planetName(id)}</small></h4>${rows.join('')}${orb ? `<div class="qreward${both ? ' on' : ''}"><span class="dot" style="background:rgb(${orb.rgb.join(',')})"></span>${both ? `Both done: the ${orb.name} orb is yours` : `Both quests: the ${orb.name} orb`}</div>` : ''}`;
-    g.querySelector('h4 span')!.textContent = shortTitle(p);
-    list.appendChild(g);
-  }
-  $('questCount').textContent = `${done} of ${QUESTS.length} done. A quest is completed by a clear that counts: not practice, not autoplay.`;
+$('stars').addEventListener('click', (e) => {
+  if (screen !== 'stars') return;
+  const id = rooms.hit(e.clientX, e.clientY);
+  if (id === 'back') leaveRoom();
+  else if (id.startsWith('place:')) { rooms.place = id.slice(6); if (audio.ctx) audio.hit('tap', 0.4); }
+});
+const privacyUrl = isNative ? `${import.meta.env.VITE_SITE_URL}privacy.html` : './privacy.html';
+function openCredits(): void {
+  rooms.credits = {
+    tracks: manifest.tracks.map((t) => ({ title: t.title, by: `${t.artist}   ·   ${t.release}` })),
+    lines: [`${manifest.creditSuffix}.`, manifest.licenceNote, 'The Lantern’s lullaby was written for this game.'],
+    foot: 'ONE MORE ORBIT keeps no record of you.', link: 'the privacy note'
+  };
+  show('credits');
 }
+$('credits').addEventListener('click', (e) => {
+  if (screen !== 'credits') return;
+  const id = rooms.hit(e.clientX, e.clientY);
+  if (id === 'back') { renderSettings(); show('settings'); }
+  else if (id === 'privacy') window.open(privacyUrl, '_blank', 'noopener');
+});
+// (the same credits in plain words, each in full, for anyone reading the page instead of looking at it)
+$('creditsSaid').innerHTML = `<p>The songs, and who made them.</p>${manifest.tracks.map(() => '<p></p>').join('')}<p></p><p>No data is collected. <a href="${privacyUrl}" target="_blank" rel="noopener">Privacy policy</a></p>`;
+manifest.tracks.forEach((t, i) => { $('creditsSaid').children[i + 1].textContent = creditLine(t); });
+$('creditsSaid').children[manifest.tracks.length + 1].textContent = manifest.licenceNote;
 
 // ------------------------------------------------------------------ wiring
-$('lvBack').addEventListener('click', () => show('title'));
-$('playBtn').addEventListener('click', () => begin(false));
-$('practiceBtn').addEventListener('click', () => begin(true));
-$('orbsBtn').addEventListener('click', () => { renderOrbs(); show('orbs'); });
-$('badgesBtn').addEventListener('click', () => { renderBadges(); show('badges'); });
-$('settingsBtn').addEventListener('click', () => openSettings('levels'));
-$('orbsClose').addEventListener('click', () => show('levels'));
-$('badgesClose').addEventListener('click', () => show('levels'));
-$('questsBtn').addEventListener('click', () => { renderQuests(); show('quests'); });
-$('questsClose').addEventListener('click', () => show('levels'));
 $('pauseBtn').addEventListener('click', pause);
 $('resumeBtn').addEventListener('click', resume);
 $('pauseRestartBtn').addEventListener('click', () => startRun(-1, true));
@@ -1341,17 +1089,13 @@ $('pausePracticeBtn').addEventListener('click', () => { if (!run) return; const 
 $('pauseSkipBtn').addEventListener('click', () => { practice = true; startRun(buildStart()); });
 $('pauseSettingsBtn').addEventListener('click', () => openSettings('pause'));
 $('pauseQuitBtn').addEventListener('click', quit);
-$('pauseSyncCal').addEventListener('click', () => { run?.stop(); run = null; openCalib(true); });
-$('retryBtn').addEventListener('click', () => { session.far = 0; session.newBest = false; startRun(); });
-$('nextBtn').addEventListener('click', () => { if (levelIdx + 1 < PACKS.length && levelOpen(levelIdx + 1)) { run?.stop(); run = null; const to = levelIdx + 1; viaStory(() => { focusLevel(to); show('levels'); }); } });
-$('resLevelsBtn').addEventListener('click', toLevels);
-$('resSyncCal').addEventListener('click', () => { run?.stop(); run = null; openCalib(true); });
+$('pauseSyncCal').addEventListener('click', () => { run?.stop(); run = null; openCalib(); });
 $('tutorSkip').addEventListener('click', () => { run?.stop(); endTutorial(); });
 $('settingsClose').addEventListener('click', closeSettings);
 $('setMusic').addEventListener('input', (e) => { save.music = Number((e.target as HTMLInputElement).value); audio.setVolumes(save.music, save.sfx); showVolumes(); });
 $('setSfx').addEventListener('input', (e) => { save.sfx = Number((e.target as HTMLInputElement).value); audio.setVolumes(save.music, save.sfx); audio.hit('impact', 0.6); showVolumes(); });
 $('setHit').addEventListener('input', (e) => { save.hitVol = Number((e.target as HTMLInputElement).value); audio.hit('hit', save.hitVol); showVolumes(); });
-for (const id of ['setMusic', 'setSfx', 'setHit']) $(id).addEventListener('change', persist); // saved as soon as the slider is let go
+for (const id of ['setMusic', 'setSfx', 'setHit']) $(id).addEventListener('change', persist); // saved as soon as the thread is let go
 $('aoMinus').addEventListener('click', () => nudge('audioOffset', -5));
 $('aoPlus').addEventListener('click', () => nudge('audioOffset', 5));
 $('voMinus').addEventListener('click', () => nudge('visualOffset', -5));
@@ -1361,20 +1105,16 @@ $('setSync').addEventListener('click', () => toggle('syncOverlay'));
 $('setUnlock').addEventListener('click', () => toggle('unlockAll'));
 $('setHaptics').addEventListener('click', () => { toggle('haptics'); feel('big'); });
 $('gcBtn').addEventListener('click', () => void gameCenter.show());
-$('ranksBtn').addEventListener('click', () => void gameCenter.show());
-$('ranksBtn').classList.toggle('hidden', !gameCenter.available);
 $('installBtn').addEventListener('click', () => { void installEvent?.prompt(); installEvent = null; renderSettings(); });
-$<HTMLAnchorElement>('privacyLink').href = isNative ? `${import.meta.env.VITE_SITE_URL}privacy.html` : './privacy.html';
-$('syncBtn').addEventListener('click', () => { audio.ensure(); audio.setVolumes(save.music, save.sfx); openCalib(true); });
-$('calibBtn').addEventListener('click', () => openCalib(false));
+$('syncBtn').addEventListener('click', () => { audio.ensure(); audio.setVolumes(save.music, save.sfx); openCalib(); });
+$('creditsBtn').addEventListener('click', openCredits);
+$('storyBtn').addEventListener('click', () => { const back: Screen = settingsFrom === 'pause' ? 'pause' : 'levels'; playStory('all', () => show(back), true); });
+$('chambersBtn').addEventListener('click', () => openChambers());
+$('chambersClose').addEventListener('click', () => closeChambers());
 $('botBtn').addEventListener('click', () => { botMode = true; practice = false; session.far = session.onBeat = session.judged = session.streak = session.attempts = 0; session.drop = -1; startRun(); });
-$('replayTutorial').addEventListener('click', () => { save.tutorialDone = false; persist(); focusLevel(0, false); practice = false; botMode = false; audio.ensure(); startTutorial(); });
+$('replayTutorial').addEventListener('click', () => { save.tutorialDone = false; persist(); focusLevel(0, false); practice = false; botMode = false; dare = false; audio.ensure(); startTutorial(); });
 $('recordBtn').addEventListener('click', () => { run?.stop(); run = null; audio.stopPreview(0.2); record.open(); });
-$('calAudioTab').addEventListener('click', () => { cal.mode = 'audio'; cal.running = false; cal.taps = []; $('calResult').textContent = ''; renderCal(); });
-$('calVisualTab').addEventListener('click', () => { cal.mode = 'visual'; cal.running = false; cal.taps = []; $('calResult').textContent = ''; void audio.suspend().then(() => audio.resume()); renderCal(); });
-$('calStart').addEventListener('click', calStart);
-$('calClose').addEventListener('click', closeCalib);
-$('calPad').addEventListener('pointerdown', (e) => { e.preventDefault(); calTap(stamp(e)); });
+
 
 const record = initRecord({
   pack: () => PACKS[levelIdx],
@@ -1382,10 +1122,6 @@ const record = initRecord({
   play: (from) => { botMode = false; practice = true; startRun(from); }
 });
 for (const p of PACKS) void refreshBars(p);
-
-const credits = $('creditList');
-for (const t of manifest.tracks) { const d = document.createElement('div'); d.textContent = creditLine(t); credits.appendChild(d); }
-$('licenceNote').textContent = manifest.licenceNote;
 
 function tick(now: number): void {
   const dt = Math.min(0.05, (now - lastFrame) / 1000);
@@ -1400,14 +1136,18 @@ function tick(now: number): void {
       else if (ev.kind === 'crash') feel('crash');
       else if (ev.kind === 'finale') feel('win');
     }
-    for (const ev of run.events) if (ev.kind === 'star') toast('STAR COLLECTED', true);
+    for (const ev of run.events) if (ev.kind === 'star') toast('a shard, in hand', true);
     renderer.draw(run, now, dt);
+    // paused, the scene dims and softens like a held breath; it comes back a little faster than it went
+    held = Math.max(0, Math.min(1, held + (screen === 'pause' ? dt / 0.45 : -dt / 0.22)));
+    if (held > 0) rooms.hold(held * held * (3 - 2 * held));
     updateHud(run);
-  } else if (screen === 'calib' && cal.mode === 'visual') {
-    renderer.drawMetronome(now, cal.running ? Math.max(0, (now - cal.startPerf) / 1000 / CAL_PERIOD) % 1 : 0);
   } else {
     audio.tick(now);
-    if (screen === 'levels') sky.draw(now, dt);
+    const room = ROOM_OF[screen];
+    if (screen === 'calib') { calTick(); rooms.sync = calView(now); }
+    if (room) rooms.draw(room, now);
+    else if (screen === 'levels') sky.draw(now, dt);
     else if (screen === 'story') skyStory.draw(now);
     else if (screen === 'results') skyResult.draw(now, dt);
     else if (screen === 'title') { if (skyTitle.between) sky.draw(now, dt); skyTitle.draw(now, dt); } // rising, the galaxy shows through
@@ -1432,8 +1172,7 @@ if (import.meta.env.PROD && import.meta.env.MODE !== 'single' && !isNative && 's
   window.addEventListener('load', () => { void navigator.serviceWorker.register('./sw.js').catch(() => undefined); });
 }
 
-for (const f of ['500 20px "Cormorant SC"', 'italic 500 18px "Cormorant Garamond"']) void document.fonts?.load(f); // the plates are lettered on a canvas: have the type ready
-buildMap();
+for (const f of ['500 20px "Cormorant SC"', 'italic 500 18px "Cormorant Garamond"', '500 18px "Cormorant Lining"']) void document.fonts?.load(f); // the words are lettered on a canvas: have the type ready
 document.body.classList.add('boot');
 show('title');
 if (/[?&#]chambers\b/.test(location.search + location.hash)) openChambers();
@@ -1443,11 +1182,12 @@ requestAnimationFrame(loop);
 // Hooks for tests and debugging; the game itself never reads these.
 Object.assign(window, {
   __omo: {
-    audio, save, renderer, sky, skyResult, session, sync, get run() { return run; }, get screen() { return screen; }, tick, show,
-    level: (i: number) => focusLevel(i), select: (id: string) => select(id, true), quests: () => { renderQuests(); show('quests'); },
-    start: (bot: boolean, prac = false, from = -1) => { botMode = bot; practice = prac; startRun(from); },
+    audio, save, renderer, sky, skyResult, rooms, session, sync, cal, get run() { return run; }, get screen() { return screen; }, tick, show,
+    level: (i: number) => focusLevel(i), select: (id: string) => select(id, true),
+    start: (bot: boolean, prac = false, from = -1, daring = false) => { botMode = bot; practice = prac; dare = daring; startRun(from); },
     story: (k: string) => playStory(k, () => show('levels'), true),
     chambers: () => openChambers(), chamber: (id: string, bot = false) => { const c = CHAMBERS.find((x) => x.id === id); if (c) startChamber(c, bot); }, get room() { return chamber; },
-    tutorial: startTutorial, results: (cleared: boolean) => { if (run) showResults(run, cleared, run.pct); }, orbs: () => { renderOrbs(); show('orbs'); }, badges: () => { renderBadges(); show('badges'); }, settings: () => openSettings('levels')
+    tutorial: startTutorial, results: (cleared: boolean) => { if (run) showResults(run, cleared, run.pct); }, pause,
+    orbs: openGlows, stars: openStars, credits: openCredits, sync10: () => openCalib(), calTap, settings: () => openSettings('levels')
   }
 });

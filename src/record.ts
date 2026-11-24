@@ -52,7 +52,7 @@ export function initRecord(deps: { pack: () => LevelPack; show: (screen: 'menu' 
     for (const r of RATES) {
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = `pill toggle${r === rate ? ' on' : ''}`;
+      b.className = `dev-btn${r === rate ? ' on' : ''}`;
       b.textContent = `${Math.round(r * 100)}%`;
       b.addEventListener('click', () => { if (!tr) { rate = r; renderControls(); } });
       speed.appendChild(b);
@@ -62,7 +62,7 @@ export function initRecord(deps: { pack: () => LevelPack; show: (screen: 'menu' 
     for (const [k, g] of Object.entries(GRIDS)) {
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = `pill toggle${k === grid ? ' on' : ''}`;
+      b.className = `dev-btn${k === grid ? ' on' : ''}`;
       b.textContent = g.name;
       b.addEventListener('click', () => { grid = k; renderControls(); renderGrid(); });
       gr.appendChild(b);
@@ -72,7 +72,7 @@ export function initRecord(deps: { pack: () => LevelPack; show: (screen: 'menu' 
     for (const [k, name] of [['survival', 'Survival presses'], ['flow', 'Flow notes']] as const) {
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = `pill toggle${k === layer ? ' on' : ''} lay-${k}`;
+      b.className = `dev-btn${k === layer ? ' on' : ''} lay-${k}`;
       b.textContent = name;
       b.addEventListener('click', () => { if (!tr) { layer = k; renderControls(); } });
       lay.appendChild(b);

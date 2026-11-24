@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { ORBS } from '../src/game/extras';
+import { OLD_QUESTS, ORBS } from '../src/game/extras';
 import { BSIDES, FINAL, PACKS } from '../src/game/packs';
-import { QUESTS, questSet, questsEarned, questsFor, type QuestStats } from '../src/game/quests';
+import { STARS, STAR_PLACES, STAR_TOTAL, starLit, starsLit, starsOf, type StarProgress } from '../src/game/stars';
 import { GATE_CLEARS, NODES, TIERS, maxStars, nodeOf, nodeState, playable, totalStars, type Progress } from '../src/game/world';
 
 const ids = PACKS.map((p) => p.level.id);
@@ -63,39 +63,39 @@ describe('world 1: the map', () => {
   });
 });
 
-describe('quests', () => {
-  const stats = (s: Partial<QuestStats>): QuestStats => ({ onBeatPct: 0, dropPower: 0, bestStreak: 0, holdsFull: 0, holds: 30, strays: 5, ...s });
-  it('two per level, each with a name and what to do', () => {
-    for (const id of ids) expect(questsFor(id).length).toBe(2);
-    expect(new Set(QUESTS.map((q) => q.id)).size).toBe(QUESTS.length);
-    for (const q of QUESTS) { expect(q.name.length).toBeGreaterThan(2); expect(q.desc.length).toBeGreaterThan(10); }
+describe('stars (they took the place of quests and the badges screen)', () => {
+  const sp = (o: { cleared?: string[]; gold?: Record<string, number>; feats?: string[] } = {}): StarProgress => ({ cleared: (id) => (o.cleared ?? []).includes(id), gold: (id) => o.gold?.[id] ?? 0, feat: (k) => (o.feats ?? []).includes(k) });
+  it('five for each planet, three for the Hollow, two for the ambush, one kept by a hidden moon: 26', () => {
+    for (const id of ids) expect(starsOf(id).map((s) => s.kind)).toEqual(['restore', 'shards', 'dare', 'master', 'night']);
+    expect(starsOf(FINAL.level.id).map((s) => s.kind)).toEqual(['restore', 'dare', 'master']);
+    expect(starsOf('ambush').length).toBe(2);
+    expect(STAR_TOTAL).toBe(26);
+    expect(STAR_PLACES).toEqual([...ids, 'ambush', FINAL.level.id]);
+    expect(new Set(STARS.map((s) => s.id)).size).toBe(STARS.length); // (each can be a Game Center achievement later)
+    for (const s of STARS) { expect(s.id).toMatch(/^star_[a-z]+_[a-z]+$/); expect(s.name.length).toBeGreaterThan(2); expect(s.what.length).toBeGreaterThan(8); }
   });
-  it('a plain clear completes none; a perfect one completes both; done quests are not given twice', () => {
+  it('nothing is lit on a new save, and the ambush cannot be lit yet', () => {
+    expect(starsLit(sp())).toEqual([]);
+    expect(starsOf('ambush').some((s) => starLit(s, sp({ cleared: ['ambush'], feats: ['dare:ambush', 'shards:ambush'], gold: { ambush: 100 } })))).toBe(false);
+  });
+  it('each star has its own condition', () => {
+    const lit = (o: Parameters<typeof sp>[0]) => starsLit(sp(o)).map((s) => s.id);
+    expect(lit({ cleared: ['heroes'] })).toEqual(['star_heroes_restore']);
+    expect(lit({ cleared: ['heroes'], feats: ['shards:heroes'] })).toEqual(['star_heroes_restore', 'star_heroes_shards']);
+    expect(lit({ cleared: ['heroes'], feats: ['dare:heroes'] })).toEqual(['star_heroes_restore', 'star_heroes_dare']);
+    expect(lit({ cleared: ['heroes'], gold: { heroes: 99 } })).toEqual(['star_heroes_restore']);
+    expect(lit({ cleared: ['heroes'], gold: { heroes: 100 } })).toEqual(['star_heroes_restore', 'star_heroes_master']);
+    expect(lit({ cleared: ['heroes', 'heroes-b'] })).toEqual(['star_heroes_restore', 'star_heroes_night']);
+    expect(lit({ cleared: [FINAL.level.id], feats: [`dare:${FINAL.level.id}`], gold: { [FINAL.level.id]: 100 } }).length).toBe(3);
+  });
+  it('every planet has a glow for daring it and one for its night side; the old quests are remembered two a level', () => {
     for (const id of ids) {
-      expect(questsEarned(id, stats({}), {})).toEqual([]);
-      const perfect = stats({ onBeatPct: 100, dropPower: 1, bestStreak: 200, holdsFull: 30, strays: 0 });
-      const got = questsEarned(id, perfect, {});
-      expect(got.length).toBe(2);
-      const have = Object.fromEntries(got.map((q) => [q.id, true]));
-      expect(questsEarned(id, perfect, have)).toEqual([]);
-      expect(questSet(id, have)).toBe(true);
-      expect(questSet(id, { [got[0].id]: true })).toBe(false);
-    }
-  });
-  it('each condition is its own: the drop at 99%, 89% on the beat, one hold short or one stray tap each miss theirs', () => {
-    const names = (id: string, s: Partial<QuestStats>) => questsEarned(id, stats({ onBeatPct: 100, dropPower: 1, bestStreak: 200, holdsFull: 30, strays: 0, ...s }), {}).map((q) => q.id);
-    expect(names('heroes', { dropPower: 0.98 })).toEqual(['heroes_holds']);
-    expect(names('heroes', { holdsFull: 29 })).toEqual(['heroes_drop']);
-    expect(names('skyhigh', { onBeatPct: 89 })).toEqual(['skyhigh_clean']);
-    expect(names('skyhigh', { strays: 1 })).toEqual(['skyhigh_beat']);
-    expect(names('blank', { bestStreak: 79 })).toEqual(['blank_holds']);
-    expect(names('invincible', { dropPower: 0.5 })).toEqual(['invincible_beat']);
-  });
-  it('every level has an orb for its quests and one for its moon', () => {
-    for (const id of ids) {
-      expect(ORBS.some((o) => o.needs === `quests:${id}`), `quest orb for ${id}`).toBe(true);
-      expect(ORBS.some((o) => o.needs === `moon:${id}`), `moon orb for ${id}`).toBe(true);
+      expect(ORBS.some((o) => o.needs === `dare:${id}`), `daredevil glow for ${id}`).toBe(true);
+      expect(ORBS.some((o) => o.needs === `moon:${id}`), `night-side glow for ${id}`).toBe(true);
+      expect(OLD_QUESTS[id].length).toBe(2);
+      expect(BSIDES.some((b) => b.level.id === `${id}-b`)).toBe(true);
     }
     expect(new Set(ORBS.map((o) => o.id)).size).toBe(ORBS.length);
+    for (const o of ORBS) { expect(o.says.length).toBeGreaterThan(8); expect(o.how.length).toBeGreaterThan(8); }
   });
 });

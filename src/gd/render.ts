@@ -24,16 +24,18 @@ const FLOOR: RGB = [247, 240, 222]; // the rings you ride: one fixed colour, wha
 const STAR: RGB = [255, 244, 200]; // star trails: pale gold, between the white you must hit and the gold you may
 const HALO = 'rgba(3,5,14,0.88)'; // the dark edge under everything in the foreground
 const HINT: Record<Feature, string> = {
-  charge: 'TAP THE ROLL: CHARGE THE DROP', smash: 'THE DROP: HIT THE BIG GOLD MARK', flip: 'VIOLET: GRAVITY FLIP', weave: 'WEAVE: BOUNCE BETWEEN THE TWO RINGS',
-  spin: 'SPIN GATE: THE GAP COMES ROUND TO THE MARK', sling: 'CYAN ARROWS: TAP AND HOLD TO RIDE TO THE NEXT PLANET', reverse: 'THE ORBIT TURNS ROUND', faster: 'SPEED UP', slower: 'SLOW DOWN',
-  twin: 'TWIN ORBIT: ONE TAP MOVES BOTH',
-  rail: 'GOLD RAIL: TAP AND HOLD THROUGH THE HOP', line: 'GOLD LINE: HOLD TO FLOAT ALONG IT',
-  tether: 'RED TETHER: HOLD ON. LET GO EARLY AND THE RUN ENDS',
-  meteor: 'METEOR: TAP TO DASH THROUGH EACH WALL', sat: 'SATELLITE: EACH TAP TURNS THE ZIG-ZAG', pulsar: 'PULSAR: EACH TAP FLIPS TO THE OTHER SIDE OF THE RING',
-  comet: 'COMET: PRESS AND HOLD ON THE BAR, LET GO ON THE RING', spring: 'SPRING PAD: TAP IT AND IT THROWS YOU', tide: 'TIDE PAD: TAP IT AND GRAVITY TURNS OVER',
-  chime: 'JUMP ORB: TAP IT IN MID-AIR TO HOP AGAIN', slip: 'DASH: TAP AND IT CARRIES YOU', grav: 'GRAVITY ORB: TAP IT IN MID-AIR, GRAVITY TURNS OVER', combo: 'COMBO: ORB TO ORB, ONE TAP EACH, ON THE BEAT',
-  mirror: 'MIRROR GATE: THE PICTURE FLIPS', invert: 'UPSIDE-DOWN GATE: THE PICTURE TURNS OVER', dual: 'DUAL: ONE TAP, TWO DIFFERENT SPARKS'
+  charge: 'tap the roll: it charges the drop', smash: 'the drop: hit the big gold mark', flip: 'violet: gravity turns over', weave: 'weave: bounce between the two rings',
+  spin: 'spin gate: the gap comes round to the mark', sling: 'cyan arrows: tap and hold, and ride to the next planet', reverse: 'the orbit turns round', faster: 'faster now', slower: 'slower now',
+  twin: 'twin orbit: one tap moves both',
+  rail: 'gold rail: tap and hold through the hop', line: 'gold line: hold, and float along it',
+  tether: 'red tether: hold on. Let go early and the run ends',
+  meteor: 'Meteor: tap to dash through each wall', sat: 'Satellite: each tap turns the zig-zag', pulsar: 'Pulsar: each tap flips to the other side of the ring',
+  comet: 'Comet: press and hold on the bar, let go on the ring', spring: 'spring pad: tap it, and it throws you', tide: 'tide pad: tap it, and gravity turns over',
+  chime: 'jump orb: tap it in mid-air to hop again', slip: 'dash orb: tap it, and it carries you', grav: 'gravity orb: tap it in mid-air, and gravity turns over', combo: 'combo: orb to orb, one tap each, on the beat',
+  mirror: 'mirror gate: the picture flips', invert: 'upside-down gate: the picture turns over', dual: 'dual: one tap, two different sparks'
 };
+/** the hand the play field's few words are written in (the same as the rest of the interface); plain sans in a test chamber */
+const HAND = '"Cormorant Garamond", "Hoefler Text", Baskerville, Palatino, Georgia, serif';
 const INK: RGB = [78, 42, 150]; // what the Hush leaves in the way: dark violet with a pale rim
 const INK_RIM: RGB = [205, 178, 255];
 /** Each form's own colour: its lens, and the trim of the hero while in it. */
@@ -700,22 +702,23 @@ export class GdRenderer {
     this.drawBall(x, y, r, form === 'orb' ? col : mix(col, FORM_COL[form], 0.45), angle, along, across, true);
   }
 
+  /** A line of words near the core: a hint, the count back in after a pause. One quiet line with a dark breath under it; never a pill. */
   private text(s: string, x: number, y: number, size: number, col: RGB, alpha: number): void {
     if (alpha <= 0.01) return;
     const c = this.ctx;
     c.save();
     if (this.mx < 0) { c.scale(-1, 1); x = -x; } // past a mirror gate the picture is flipped; words never are
     if (this.my < 0) { c.scale(1, -1); y = -y; }
-    c.font = `800 ${Math.round(size)}px ui-rounded, "SF Pro Rounded", system-ui, sans-serif`;
+    const figure = /^\d+$/.test(s), px = Math.round(this.plain || figure ? size : size * 1.3);
+    c.font = this.plain ? `600 ${px}px system-ui, sans-serif` : figure ? `500 ${px}px "Cormorant Lining", ${HAND}` : `italic 500 ${px}px ${HAND}`;
     c.textAlign = 'center';
     c.textBaseline = 'middle';
-    c.fillStyle = `rgba(0,0,8,${alpha * 0.6})`;
-    const w = c.measureText(s).width + size * 1.4;
-    c.beginPath();
-    c.roundRect(x - w / 2, y - size * 0.95, w, size * 1.9, size * 0.95);
-    c.fill();
-    c.fillStyle = rgba(col, alpha);
+    // (white on the play field means only "tap here": words are cream)
+    c.fillStyle = rgba(col === WHITE ? [255, 241, 216] : col, alpha);
+    c.shadowColor = `rgba(10,6,24,${alpha})`;
+    c.shadowBlur = px * 0.45;
     c.fillText(s, x, y + 1);
+    c.fillText(s, x, y + 1); // twice: the shade under the words has to hold over a bright sky
     c.restore();
   }
 
@@ -1786,16 +1789,16 @@ export class GdRenderer {
       let shown: [number, number, string] | null = null;
       // (a B-side explains nothing: whoever found it has cleared the level it is the night side of)
       if ((!bestFor(level.id).cleared || run.opts.practice) && !level.file.side) for (const hnt of this.hints) if (beat >= hnt[0] && beat <= hnt[1]) shown = hnt;
-      if (ahead && !run.opts.tutorial) shown = [ahead.a - 5, ahead.a + 1, 'SHARD BRANCH: ALL THE GOLD, NO EXTRA TAPS'];
+      if (ahead && !run.opts.tutorial) shown = [ahead.a - 5, ahead.a + 1, 'shard branch: all the gold, no extra taps'];
       if (shown) {
         const al = Math.min(1, (beat - Math.max(shown[0], run.startAt / level.spb - 4)) / 0.5, (shown[1] - beat) / 0.5);
         // the star trail's line sits under the three stars at the top of the screen, clear of the course
-        const star = !!ahead && shown[2].startsWith('SHARD');
+        const star = !!ahead && shown[2].startsWith('shard');
         this.text(shown[2], star ? 0 : this.coreX, star ? this.h * 0.185 - this.h * 0.52 : this.coreY - m * 0.045 * 1.2 - m * 0.04 * 1.5 - 30, clamp(m * 0.022, 10, 16), star ? STAR : WHITE, clamp(al, 0, 1));
       }
     }
     if (run.state === 'resuming') this.text(String(Math.max(1, Math.ceil((run.resumeAt - now) / 400))), this.coreX, this.coreY + m * 0.16, m * 0.06, WHITE, 1);
-    if (run.state === 'loading') this.text('LOADING', this.coreX, this.coreY + m * 0.16, clamp(m * 0.024, 11, 17), WHITE, 0.8);
+    if (run.state === 'loading') this.text('loading', this.coreX, this.coreY + m * 0.16, clamp(m * 0.024, 11, 17), WHITE, 0.8);
     c.restore();
   }
 

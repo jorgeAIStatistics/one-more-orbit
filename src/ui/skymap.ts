@@ -10,9 +10,11 @@ export interface SkyNode {
   id: string; kind: 'planet' | 'moon' | 'hollow'; of: string; name: string; song: string; by: string;
   /** home: its song and colour are back. open: playable, still waking. dark: silent, not yet reachable. */
   state: 'home' | 'open' | 'dark'; best: number; shards: boolean[]; why: string;
+  /** it can be flown as a daredevil ('open'), or already has been ('done'); nothing where it cannot */
+  dare?: 'open' | 'done';
 }
 export interface SkyInfo { nodes: SkyNode[]; lens: string; lit: string }
-export type SkyHit = { kind: 'node'; id: string } | { kind: 'practise' | 'glows' | 'settings' | 'badges' | 'quests' | 'title' | 'sky' };
+export type SkyHit = { kind: 'node'; id: string } | { kind: 'practise' | 'dare' | 'glows' | 'settings' | 'stars' | 'title' | 'sky' };
 
 const T = DUSK.tools;
 const SERIF = '"Cormorant Garamond", "Hoefler Text", Baskerville, Palatino, Georgia, serif';
@@ -177,31 +179,34 @@ export class SkyMap {
       const a = stops[i], b = stops[i + 1], n = Math.round(Math.hypot(b.x - a.x, b.y - a.y) / (15 * u)), done = planets[i]?.state === 'home';
       for (let j = 1; j < n; j++) { const q = j / n, bend = Math.sin(q * Math.PI) * 34 * u * (i % 2 ? -1 : 1), tw = 0.75 + 0.25 * Math.sin(t * 2 + j * 0.7 + i); c.fillStyle = K.rgba([255, 226, 170], (done ? 0.7 : 0.22) * tw); c.beginPath(); c.ellipse(lerp(a.x, b.x, q) + bend * 0.4, lerp(a.y, b.y, q) + bend, 2.3 * u, 1.7 * u, j, 0, Math.PI * 2); c.fill(); }
     }
-    // constellations (badges) and the Lantern's words: places in the picture
+    // the stars lit so far (the star chart is read from the gallery) and the Lantern's words: places in the picture
     const sx = w / L.w, sy = h / L.h;
     c.strokeStyle = 'rgba(255,236,206,0.35)'; c.lineWidth = 1; c.beginPath();
     L.stars.forEach(([x, y], i) => (i ? c.lineTo(x * sx, y * sy) : c.moveTo(x * sx, y * sy))); c.stroke();
     L.stars.forEach(([x, y], i) => this.dab(x * sx, y * sy, (i % 2 ? 2.2 : 3) * u + 0.6, true, 0.75 + 0.25 * Math.sin(t * 1.6 + i * 2)));
     const quiet = this.chosen && this.chosen !== 'lantern' ? 0.45 : 0.8;
-    this.text(this.info.lit, L.starsAt[0] * sx, L.starsAt[1] * sy, 15, quiet, L.starsAt[2], SAND);
-    this.text('quests', L.starsAt[0] * sx, L.starsAt[1] * sy + 22, 15, quiet, L.starsAt[2], SAND);
+    // (on a tall screen the count sits low on the right: it steps aside while the lowest world's lines are written there)
+    if (!(at && L === LAYS.tall && at.y > h * 0.6)) this.text(this.info.lit, L.starsAt[0] * sx, L.starsAt[1] * sy, 15, quiet, L.starsAt[2], SAND);
     const sxs = L.stars.map((p) => p[0] * sx), sys = L.stars.map((p) => p[1] * sy);
-    this.hits.push({ x: Math.min(...sxs) - 20, y: Math.min(...sys) - 20, w: Math.max(...sxs) - Math.min(...sxs) + 40, h: L.starsAt[1] * sy + 4 - Math.min(...sys) + 20, hit: { kind: 'badges' } });
-    this.hits.push({ x: L.starsAt[0] * sx - (L.starsAt[2] === 'right' ? 110 : 10), y: L.starsAt[1] * sy + 4, w: 120, h: 40, hit: { kind: 'quests' } });
+    this.hits.push({ x: Math.min(...sxs) - 20, y: Math.min(...sys) - 20, w: Math.max(...sxs) - Math.min(...sxs) + 40, h: L.starsAt[1] * sy + 4 - Math.min(...sys) + 20, hit: { kind: 'stars' } });
     const [wx, wy, wa] = [L.words[0] * sx, L.words[1] * sy, L.words[2]];
+    // (the Lantern itself first: its rooms' words lie over it, and a later place is the one a tap finds)
+    this.hits.push({ x: 0, y: lanternAt.y - 60 * u, w: Math.max(190, wx + 170), h: h - lanternAt.y + 60 * u, hit: { kind: 'node', id: 'lantern' } });
     if (this.chosen === 'lantern') {
-      // at the Lantern: its two rooms, written large enough to tap
+      // at the Lantern: its three rooms, written large enough to tap
       this.text('the Lantern', wx, wy - 58, 26, this.fade, wa, CREAM, 600);
-      this.text('Eko’s glows', wx, wy - 22, 21, this.fade, wa);
-      this.text('settings', wx, wy + 16, 21, this.fade, wa);
-      this.text(this.info.lens, wx, wy + 44, 14.5, this.fade * 0.7, wa, SAND);
-      this.hits.push({ x: wx - 8, y: wy - 48, w: 170, h: 38, hit: { kind: 'glows' } }, { x: wx - 8, y: wy - 10, w: 170, h: 38, hit: { kind: 'settings' } });
+      const rooms: Array<['glows' | 'settings' | 'stars', string, string]> = [['glows', 'the hearth', 'Eko’s glows'], ['settings', 'the desk', 'settings'], ['stars', 'the gallery', 'the star chart']];
+      rooms.forEach(([kind, room, what], i) => {
+        const y = wy - 27 + i * 30, rw = this.text(room, wx, y, 20, this.fade, wa);
+        this.text(what, wx + rw + 10, y, 14, this.fade * 0.6, wa, SAND);
+        this.hits.push({ x: wx - 8, y: y - 21, w: 210, h: 30, hit: { kind } });
+      });
+      this.text(this.info.lens, wx, wy + 56, 14.5, this.fade * 0.7, wa, SAND);
     } else {
       this.text('the Lantern', wx, wy, 18, quiet + 0.1, wa, CREAM, 600);
-      this.text('Eko’s glows  ·  settings', wx, wy + 19, 14, quiet * 0.8, wa, SAND);
+      this.text('the hearth  ·  the desk  ·  the gallery', wx, wy + 19, 14, quiet * 0.8, wa, SAND);
       this.text(this.info.lens, wx, wy + 36, 14, quiet * 0.8, wa, SAND);
     }
-    this.hits.push({ x: 0, y: lanternAt.y - 60 * u, w: Math.max(190, wx + 170), h: h - lanternAt.y + 60 * u, hit: { kind: 'node', id: 'lantern' } });
 
     // the worlds: far ones first, the chosen one last and larger, each with what is written beside it
     const order = [...this.info.nodes].sort((a, b) => Number(a.id === this.chosen) - Number(b.id === this.chosen) || (this.place(a)?.r ?? 0) - (this.place(b)?.r ?? 0));
@@ -240,8 +245,19 @@ export class SkyMap {
       if (n.kind !== 'moon') for (let i = 0; i < 3; i++) this.dab(below ? p.x - 16 + i * 16 : x0 + dir * (bw + 16 + i * 16), below ? y0 + 92 : y0 + 68, 4, n.shards[i], a);
       const y1 = y0 + (below ? 118 : 104);
       this.text('tap again to fly in', x0, y1, 16, a * 0.75, al);
-      this.text('or practise', x0, y1 + 30, 15.5, a * 0.6, al, SAND);
-      this.hits.push({ x: below ? x0 - 70 : left ? x0 - 130 : x0 - 10, y: y1 + 8, w: 140, h: 40, hit: { kind: 'practise' } });
+      if (!n.dare) {
+        this.text('or practise', x0, y1 + 30, 15.5, a * 0.6, al, SAND);
+        this.hits.push({ x: below ? x0 - 70 : left ? x0 - 130 : x0 - 10, y: y1 + 8, w: 140, h: 40, hit: { kind: 'practise' } });
+      } else {
+        // a world whose song is home can also be dared: one attempt, and a fall sends you back here (its Daredevil star).
+        // The two quiet ways in share a line, each word its own place to tap.
+        const dareIt = n.dare === 'done' ? 'or dare it again' : 'or dare it', gap = 26;
+        c.font = `italic 500 15.5px ${SERIF}`;
+        const pw = c.measureText('or practise').width, dw = c.measureText(dareIt).width, xs = below ? x0 - (pw + gap + dw) / 2 : left ? x0 - (pw + gap + dw) : x0;
+        this.text('or practise', xs, y1 + 30, 15.5, a * 0.6, 'left', SAND);
+        this.text(dareIt, xs + pw + gap, y1 + 30, 15.5, a * 0.6, 'left', SAND);
+        this.hits.push({ x: xs - 12, y: y1 + 8, w: pw + 12 + gap / 2, h: 40, hit: { kind: 'practise' } }, { x: xs + pw + gap / 2, y: y1 + 8, w: dw + gap / 2 + 12, h: 40, hit: { kind: 'dare' } });
+      }
     }
     // Eko waits by the place chosen (or the furthest world reached), and drifts
     const base = at ?? this.pos.get([...planets].reverse().find((n) => n.state !== 'dark')?.id ?? 'heroes')!;

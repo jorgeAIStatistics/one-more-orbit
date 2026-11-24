@@ -142,7 +142,7 @@ const UI = (() => {
     ctx.save(); ctx.clip();
     const g = ctx.createLinearGradient(0, y, 0, y + hh); for (const [t, c] of DUSKY) g.addColorStop(t, rgba(c)); ctx.fillStyle = g; ctx.fillRect(x, y, ww, hh);
     for (let i = 0; i < 26; i++) { ctx.fillStyle = `rgba(255,244,225,${0.3 + r() * 0.6})`; ctx.beginPath(); ctx.arc(x + r() * ww, y + r() * hh * 0.6, 0.6 + r() * 1.4, 0, TAU); ctx.fill(); }
-    if (hollow) { ctx.filter = 'blur(6px)'; ctx.fillStyle = 'rgba(4,4,12,0.9)'; ctx.beginPath(); ctx.ellipse(x + ww * 0.72, y + hh * 0.1, ww * 0.34, hh * 0.14, 0, 0, TAU); ctx.fill(); ctx.filter = 'none'; K.glow(ctx, x + ww * 0.66, y + hh * 0.2, ww * 0.12, [255, 200, 130], 0.9); ctx.fillStyle = '#ffe6b0'; ctx.beginPath(); ctx.arc(x + ww * 0.66, y + hh * 0.2, 1.8, 0, TAU); ctx.fill(); }
+    if (hollow) { blot(ctx, x + ww * 0.72, y + hh * 0.1, ww * 0.46, hh * 0.2, 0.92); K.glow(ctx, x + ww * 0.66, y + hh * 0.2, ww * 0.12, [255, 200, 130], 0.9); ctx.fillStyle = '#ffe6b0'; ctx.beginPath(); ctx.arc(x + ww * 0.66, y + hh * 0.2, 1.8, 0, TAU); ctx.fill(); }
     ctx.restore();
     ctx.strokeStyle = 'rgba(12,9,24,0.95)'; ctx.lineWidth = Math.max(4, ww * 0.05); ctx.stroke();
     ctx.lineWidth = Math.max(2, ww * 0.022); ctx.beginPath(); ctx.moveTo(x + ww / 2, y); ctx.lineTo(x + ww / 2, y + hh); ctx.moveTo(x, y + hh * 0.55); ctx.lineTo(x + ww, y + hh * 0.55); ctx.stroke();
@@ -186,14 +186,123 @@ const UI = (() => {
       y += 8 * u; write(ctx, 'Leave for the galaxy', x, y, 25 * u, { alpha: 0.62 }); y += 54 * u;
       rule(ctx, x, x + (dev === 'phone' ? w * 0.7 : w * 0.3), y - 24 * u, 0.2);
       write(ctx, 'Your taps sit about 30 ms late.', x, y, 15.5 * u, { alpha: 0.78, color: SAND }); y += 24 * u;
-      write(ctx, 'set it right   ·   tap along with Marlow', x, y, 15.5 * u, { alpha: 0.95 }); },
+      write(ctx, 'set it right   ·   tap along with Marlow', x, y, 15.5 * u, { alpha: 0.95 }); }
 
-    // ---- settings: a page of rows at Marlow's desk
-    settings(ctx, w, h, dev) { const u = dev === 'phone' ? 2 : 1.15, dy = h - (dev === 'phone' ? 70 : 76) * u;
-      const lampX = dev === 'phone' ? w * 0.84 : w * 0.9, r = wall(ctx, w, h, 201, [lampX, dy - 40 * u, 520 * u]);
+  };
+  // ------------------------------------------------------------------ the rooms themselves, without their words
+  // What the game paints once and keeps behind the live things (flames, taps, constellations) and the writing.
+  // Each takes the picture's size, 'phone' or 'desktop', and u: how many pixels one point of the layout is.
+  const unit = (w, h, dev) => (dev === 'phone' ? Math.min(w / 390, h / 844) : Math.min(w / 1440, h / 900) * 1.15);
+  const starsFor = (w, h, dev, u, k = 1) => Math.round((w * h * k) / ((dev === 'phone' ? 470 : 1400) * u * u));
+  /** Soft paint without a blur filter (not every browser has one): drawn small, laid back large. */
+  function soft(ctx, w, h, px, draw, op = 'source-over') {
+    const k = Math.max(2, px * 1.6), cv = document.createElement('canvas');
+    cv.width = Math.ceil(w / k); cv.height = Math.ceil(h / k);
+    const c = cv.getContext('2d'); c.scale(1 / k, 1 / k); draw(c);
+    ctx.save(); ctx.globalCompositeOperation = op; ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'; ctx.drawImage(cv, 0, 0, cv.width * k, cv.height * k); ctx.restore();
+  }
+  /** A dark, soft-edged blot: the Hollow, far off. */
+  function blot(ctx, x, y, rx, ry, a = 0.95) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(1, ry / rx);
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, rx); g.addColorStop(0, `rgba(4,4,12,${a})`); g.addColorStop(0.55, `rgba(4,4,12,${a * 0.85})`); g.addColorStop(1, 'rgba(4,4,12,0)');
+    ctx.fillStyle = g; ctx.fillRect(-rx, -rx, rx * 2, rx * 2); ctx.restore();
+  }
+  const SHAPES = { heroes: [[0, 0.9], [0.5, 0.2], [1, 0.8], [1.6, 0.1], [2.1, 0.7]], skyhigh: [[0, 0.2], [0.6, 0.8], [1.1, 0.1], [1.7, 0.7], [2.2, 0]], blank: [[0, 0.5], [0.6, 0], [1.2, 0.5], [0.6, 1], [0.6, 0.5]], invincible: [[0.5, 1], [0.5, 0.4], [0, 0], [1, 0], [0.5, -0.4]], royalty: [[0, 0], [0.7, 0.5], [1.4, 0]], ambush: [[0, 0], [0.7, 0.3]] };
+  /** Where the star chart puts things: the chosen constellation large, its lines, and five places for the others. */
+  const galleryLay = (w, h, dev, u) => (dev === 'phone'
+    ? { big: [w * 0.12, h * 0.185, 130 * u], lines: [w * 0.09, h * 0.345], slots: [[w * 0.08, h * 0.63, 46 * u], [w * 0.42, h * 0.635, 46 * u], [w * 0.72, h * 0.645, 46 * u], [w * 0.14, h * 0.785, 54 * u], [w * 0.52, h * 0.78, 50 * u]] }
+    : { big: [w * 0.08, h * 0.3, 130 * u], lines: [w * 0.36, h * 0.3], slots: [[w * 0.66, h * 0.18, 64 * u], [w * 0.84, h * 0.3, 64 * u], [w * 0.68, h * 0.5, 64 * u], [w * 0.86, h * 0.56, 60 * u], [w * 0.76, h * 0.7, 54 * u]] });
+  /** One constellation: its lines, and a dab for each star, lit or not. `lit` is a count or one flag per star. */
+  function constellation(ctx, pts, lit, sc, ox, oy, u, a = 1, tw = null) {
+    ctx.strokeStyle = `rgba(255,236,206,${0.34 * a})`; ctx.lineWidth = 1.1 * u; ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(ox + x * sc, oy + y * sc) : ctx.moveTo(ox + x * sc, oy + y * sc))); ctx.stroke();
+    pts.forEach(([x, y], i) => { const on = Array.isArray(lit) ? !!lit[i] : i < lit; dab(ctx, ox + x * sc, oy + y * sc, (on ? 4.2 : 3.2) * u * Math.min(1, sc / (60 * u) + 0.4) * (on && tw ? tw(i) : 1), on); });
+  }
+  const ROOMS = {
+    /** Marlow's desk: the wall in lamplight, the window onto the dusk, the desk's edge and its lamp. */
+    desk(ctx, w, h, dev, u) {
+      const dy = h - (dev === 'phone' ? 70 : 76) * u, lampX = dev === 'phone' ? w * 0.84 : w * 0.9, r = wall(ctx, w, h, 201, [lampX, dy - 40 * u, 520 * u]);
       if (dev === 'phone') windowTo(ctx, w - 100 * u, 34 * u, 68 * u, 108 * u, r); else windowTo(ctx, w * 0.8, 70 * u, 150 * u, 250 * u, r);
       desk(ctx, w, h, dy, r, u, lampX);
       T.finish(ctx, w, h, 211, 0.55);
+      return { dy, lampX };
+    },
+    /** The lamp room: the great glass, the dark beyond it, and far up under the Hollow, Marlow's one small light. */
+    lamp(ctx, w, h, dev, u) {
+      const r = RNG(221);
+      T.sky(ctx, w, h, DUSKY.map(([t, c]) => [t, mix(c, [8, 8, 26], 0.45)]), r, 130); T.stars(ctx, w, h * 0.8, r, starsFor(w, h, dev, u), 5);
+      const hx = dev === 'phone' ? w * 0.74 : w * 0.8, hy = dev === 'phone' ? h * 0.1 : h * 0.14, gx = dev === 'phone' ? w * 0.5 : w * 0.62, gy = dev === 'phone' ? h * 0.42 : h * 0.5;
+      blot(ctx, hx + 30 * u, hy - 40 * u, 190 * u, 92 * u);
+      K.glow(ctx, hx, hy, 40 * u, [255, 200, 130], 0.8); ctx.fillStyle = '#ffe6b0'; ctx.beginPath(); ctx.arc(hx, hy, 2.6 * u, 0, TAU); ctx.fill();
+      ctx.strokeStyle = 'rgba(10,8,22,0.9)'; ctx.lineWidth = 5 * u; for (const fx of dev === 'phone' ? [0.04, 0.35, 0.66, 0.97] : [0.04, 0.27, 0.5, 0.73, 0.96]) { ctx.beginPath(); ctx.moveTo(w * fx, -10); ctx.lineTo(w * fx, h); ctx.stroke(); }
+      ctx.fillStyle = 'rgb(12,9,22)'; ctx.fillRect(0, h * 0.9, w, h * 0.1); K.glow(ctx, w * 0.5, h * 0.9, 300 * u, [255, 190, 120], 0.12, 'screen');
+      T.finish(ctx, w, h, 231, 0.55);
+      return { hx, hy, gx, gy };
+    },
+    /** By the hearth: the fire in its arch of stone, the mantel over it, and a second shelf above for more flames. */
+    hearth(ctx, w, h, dev, u) {
+      const fx = dev === 'phone' ? w * 0.5 : w * 0.68, fy = dev === 'phone' ? h * 0.84 : h * 0.82, fw = (dev === 'phone' ? 118 : 190) * u;
+      const r = wall(ctx, w, h, 241, [fx, fy - 40 * u, 620 * u], [255, 150, 80], 0.5);
+      ctx.fillStyle = 'rgb(12,9,20)'; ctx.beginPath(); ctx.moveTo(fx - fw - 40 * u, h + 10); ctx.lineTo(fx - fw - 40 * u, fy - fw * 1.1); ctx.lineTo(fx + fw + 40 * u, fy - fw * 1.1); ctx.lineTo(fx + fw + 40 * u, h + 10); ctx.closePath(); ctx.fill();
+      const arch = () => { ctx.beginPath(); ctx.moveTo(fx - fw, h + 10); ctx.lineTo(fx - fw, fy - fw * 0.3); ctx.arc(fx, fy - fw * 0.3, fw, Math.PI, 0); ctx.lineTo(fx + fw, h + 10); ctx.closePath(); };
+      ctx.save(); arch();
+      const g = ctx.createRadialGradient(fx, fy + 20 * u, 10, fx, fy, fw * 1.5); g.addColorStop(0, 'rgb(150,60,40)'); g.addColorStop(0.4, 'rgb(84,30,30)'); g.addColorStop(1, 'rgb(20,10,18)'); ctx.fillStyle = g; ctx.fill(); ctx.clip();
+      // logs, then the fire itself: many soft tongues laid over each other, hot at the heart
+      ctx.strokeStyle = 'rgb(22,12,16)'; ctx.lineCap = 'round'; ctx.lineWidth = 18 * u; ctx.beginPath(); ctx.moveTo(fx - fw * 0.6, fy + 44 * u); ctx.lineTo(fx + fw * 0.5, fy + 20 * u); ctx.moveTo(fx - fw * 0.45, fy + 18 * u); ctx.lineTo(fx + fw * 0.62, fy + 46 * u); ctx.stroke();
+      soft(ctx, w, h, 7 * u, (c) => {
+        c.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < 26; i++) {
+          const bx = fx + (r() - 0.5) * fw * 1.1, k = 1 - Math.abs(bx - fx) / (fw * 0.75), hh = fw * (0.35 + r() * 0.75) * Math.max(0.25, k), wd = (10 + r() * 16) * u, lean = (r() - 0.5) * 30 * u;
+          c.fillStyle = rgba(i % 3 === 0 ? [255, 226, 160] : i % 3 === 1 ? [255, 150, 70] : [230, 80, 50], 0.22);
+          c.beginPath(); c.moveTo(bx - wd, fy + 34 * u); c.bezierCurveTo(bx - wd * 1.3, fy - hh * 0.4, bx + lean - wd * 0.2, fy - hh * 0.8, bx + lean, fy - hh); c.bezierCurveTo(bx + lean + wd * 0.4, fy - hh * 0.7, bx + wd * 1.3, fy - hh * 0.35, bx + wd, fy + 34 * u); c.closePath(); c.fill();
+        }
+      }, 'lighter');
+      K.glow(ctx, fx, fy + 10 * u, fw * 0.8, [255, 236, 190], 0.5);
+      for (let i = 0; i < 22; i++) { ctx.fillStyle = rgba([255, 200 + r() * 40, 130], 0.3 + r() * 0.6); ctx.beginPath(); ctx.arc(fx + (r() - 0.5) * fw * 1.3, fy - r() * fw * 1.1, (0.8 + r() * 1.6) * u, 0, TAU); ctx.fill(); }
+      ctx.restore();
+      ctx.save(); ctx.globalCompositeOperation = 'screen'; ctx.strokeStyle = 'rgba(255,170,100,0.5)'; ctx.lineWidth = 2 * u; ctx.beginPath(); ctx.moveTo(fx - fw, h + 10); ctx.lineTo(fx - fw, fy - fw * 0.3); ctx.arc(fx, fy - fw * 0.3, fw, Math.PI, 0); ctx.lineTo(fx + fw, h + 10); ctx.stroke(); ctx.restore(); // the arch's edge catches the light
+      // the mantel, and a narrower shelf above it: a flame stands on them for each of Eko's glows
+      const my = fy - fw * 1.1, mx0 = dev === 'phone' ? w * 0.05 : fx - fw - 54 * u, mx1 = dev === 'phone' ? w * 0.95 : fx + fw + 54 * u, sy = my - 70 * u, sx0 = mx0 + 14 * u, sx1 = mx1 - 14 * u;
+      const plank = (x0, x1, y, t) => { ctx.fillStyle = 'rgb(20,14,28)'; ctx.fillRect(x0, y - t * 0.75, x1 - x0, t); ctx.save(); ctx.globalCompositeOperation = 'screen'; ctx.strokeStyle = 'rgba(255,190,120,0.45)'; ctx.lineWidth = 1.4 * u; ctx.beginPath(); ctx.moveTo(x0, y - t * 0.75); ctx.lineTo(x1, y - t * 0.75); ctx.stroke(); ctx.restore(); };
+      plank(mx0, mx1, my, 12 * u); plank(sx0, sx1, sy, 7 * u);
+      T.finish(ctx, w, h, 251, 0.55);
+      return { fx, fy, fw, shelves: [[mx0 + 16 * u, mx1 - 16 * u, my - 10 * u], [sx0 + 16 * u, sx1 - 16 * u, sy - 6.5 * u]], eko: dev === 'phone' ? [w * 0.74, h * 0.37, 0.46 * u] : [w * 0.38, h * 0.6, 0.6 * u] };
+    },
+    /** The gallery rail, and the whole sky over it. */
+    gallery(ctx, w, h, dev, u) {
+      const r = RNG(261);
+      T.sky(ctx, w, h, DUSKY.map(([t, c]) => [t, mix(c, [10, 10, 30], 0.3)]), r, 150); T.stars(ctx, w, h * 0.86, r, starsFor(w, h, dev, u, 1.3), 6);
+      const ry = h * 0.9; ctx.fillStyle = 'rgb(12,9,22)'; ctx.fillRect(0, ry, w, h - ry); ctx.fillRect(0, ry - 10 * u, w, 5 * u);
+      for (let x = 14 * u; x < w; x += 30 * u) ctx.fillRect(x, ry - 8 * u, 3 * u, 12 * u);
+      T.finish(ctx, w, h, 271, 0.5);
+      return galleryLay(w, h, dev, u);
+    },
+    /** The last page of the logbook, lying in lamplight. Returns where the sheet is, to write on it. */
+    page(ctx, w, h, dev, u) {
+      wall(ctx, w, h, 281, [w * (dev === 'phone' ? 0.9 : 0.94), h * 0.1, 700 * u], [255, 180, 110], 0.5);
+      const px = dev === 'phone' ? w * 0.06 : w * 0.2, py = (dev === 'phone' ? 100 : 76) * u, pw = dev === 'phone' ? w * 0.88 : w * 0.6, ph = h - py - (dev === 'phone' ? 60 : 50) * u;
+      ctx.save(); ctx.translate(px + pw / 2, py + ph / 2); ctx.rotate(-0.012); ctx.translate(-pw / 2, -ph / 2);
+      ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 40 * u; ctx.shadowOffsetY = 10 * u;
+      const g = ctx.createRadialGradient(pw * 0.95, 0, 20, pw * 0.6, ph * 0.4, Math.hypot(pw, ph)); g.addColorStop(0, 'rgb(238,214,170)'); g.addColorStop(0.5, 'rgb(200,168,128)'); g.addColorStop(1, 'rgb(116,86,80)');
+      const sheet = () => { ctx.beginPath(); ctx.moveTo(1.5 * u, 0); ctx.lineTo(pw * 0.5, -1.5 * u); ctx.lineTo(pw, 1 * u); ctx.lineTo(pw + 1.5 * u, ph * 0.5); ctx.lineTo(pw - 1 * u, ph); ctx.lineTo(pw * 0.4, ph + 1.5 * u); ctx.lineTo(0, ph - 1 * u); ctx.lineTo(-1.5 * u, ph * 0.5); ctx.closePath(); };
+      sheet(); ctx.fillStyle = g; ctx.fill(); ctx.shadowColor = 'transparent';
+      ctx.save(); sheet(); ctx.clip(); K.lay(ctx, K.texture(Math.ceil(pw), Math.ceil(ph), 291, { fine: 0.5, mottle: 0.6, scale: 0.004, fibres: 700 }), 'multiply', 0.5); ctx.restore();
+      ctx.restore();
+      T.finish(ctx, w, h, 301, 0.5);
+      return { px, py, pw, ph, rot: -0.012, ix: pw * 0.09 };
+    }
+  };
+  /** Eko wearing a glow: his hoop and the light round him take its colour. */
+  function ekoIn(ctx, x, y, s, r, c, o = {}) {
+    T.eko(ctx, x, y, s, r, o);
+    K.glow(ctx, x, y - 10 * s, 150 * s, c, 0.34, 'screen');
+    ctx.save(); ctx.translate(x, y + 16 * s); ctx.rotate(-0.3); ctx.lineWidth = Math.max(1.2, 3.2 * s); ctx.lineCap = 'round'; ctx.shadowColor = rgba(c, 0.9); ctx.shadowBlur = 12 * s;
+    ctx.strokeStyle = rgba(mix(c, [255, 255, 255], 0.25), 0.95); ctx.beginPath(); ctx.ellipse(0, 0, 78 * s, 22 * s, 0, 0.15, Math.PI - 0.15); ctx.stroke();
+    ctx.restore();
+  }
+
+  Object.assign(S, {
+    // ---- settings: a page of rows at Marlow's desk
+    settings(ctx, w, h, dev) { const u = unit(w, h, dev), { dy } = ROOMS.desk(ctx, w, h, dev, u);
       const x0 = dev === 'phone' ? w * 0.09 : w * 0.07;
       back(ctx, x0, (dev === 'phone' ? 64 : 46) * u, 15 * u, 'out to the galaxy', u);
       write(ctx, 'Marlow’s desk', x0, (dev === 'phone' ? 122 : 108) * u, 44 * u, { glow: 0.8 });
@@ -222,20 +331,11 @@ const UI = (() => {
       } },
 
     // ---- the sync check: Marlow taps the glass, and you tap along
-    sync(ctx, w, h, dev) { const u = dev === 'phone' ? 2 : 1.15, r = RNG(221);
-      T.sky(ctx, w, h, DUSKY.map(([t, c]) => [t, mix(c, [8, 8, 26], 0.45)]), r, 130); T.stars(ctx, w, h * 0.8, r, 700, 5);
-      // far up, under the Hollow, his one small light; four taps on their way down the dark
-      const hx = dev === 'phone' ? w * 0.74 : w * 0.8, hy = dev === 'phone' ? h * 0.1 : h * 0.14, gx = dev === 'phone' ? w * 0.5 : w * 0.62, gy = dev === 'phone' ? h * 0.42 : h * 0.5;
-      ctx.save(); ctx.filter = `blur(${14 * u}px)`; ctx.fillStyle = 'rgba(4,4,12,0.95)'; ctx.beginPath(); ctx.ellipse(hx + 30 * u, hy - 40 * u, 150 * u, 70 * u, 0, 0, TAU); ctx.fill(); ctx.restore();
-      K.glow(ctx, hx, hy, 40 * u, [255, 200, 130], 0.8); ctx.fillStyle = '#ffe6b0'; ctx.beginPath(); ctx.arc(hx, hy, 2.6 * u, 0, TAU); ctx.fill();
+    sync(ctx, w, h, dev) { const u = unit(w, h, dev), r = RNG(222), { hx, hy, gx, gy } = ROOMS.lamp(ctx, w, h, dev, u);
+      // four taps on their way down the dark, and the rings where they land on the glass
       for (let i = 1; i <= 4; i++) { const t = i / 5; dab(ctx, lerp(hx, gx, t), lerp(hy, gy, t), (1.6 + t * 1.6) * u, true); }
-      // the lamp's glass: tall panes, and the rings where his taps land
-      ctx.strokeStyle = 'rgba(10,8,22,0.9)'; ctx.lineWidth = 5 * u; for (const fx of dev === 'phone' ? [0.04, 0.35, 0.66, 0.97] : [0.04, 0.27, 0.5, 0.73, 0.96]) { ctx.beginPath(); ctx.moveTo(w * fx, -10); ctx.lineTo(w * fx, h); ctx.stroke(); }
       ctx.save(); ctx.globalCompositeOperation = 'screen'; for (let i = 0; i < 4; i++) { ctx.strokeStyle = `rgba(255,226,170,${0.6 - i * 0.14})`; ctx.lineWidth = (2.6 - i * 0.4) * u; ctx.beginPath(); ctx.arc(gx, gy, (20 + i * 26) * u, 0, TAU); ctx.stroke(); } ctx.restore();
       K.glow(ctx, gx, gy, 120 * u, [255, 214, 150], 0.3); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(gx, gy, 5 * u, 0, TAU); ctx.fill();
-      // the lamp room's floor and the unlit lamp, below
-      ctx.fillStyle = 'rgb(12,9,22)'; ctx.fillRect(0, h * 0.9, w, h * 0.1); K.glow(ctx, w * 0.5, h * 0.9, 300 * u, [255, 190, 120], 0.12, 'screen');
-      T.finish(ctx, w, h, 231, 0.55);
       const x0 = dev === 'phone' ? w * 0.09 : w * 0.07; let y = (dev === 'phone' ? 64 : 46) * u;
       back(ctx, x0, y, 15 * u, 'back to the desk', u);
       y = dev === 'phone' ? h * 0.6 : h * 0.34;
@@ -251,36 +351,11 @@ const UI = (() => {
       write(ctx, 'set it right   ·   once more   ·   leave it', x0, y, 17 * u, { alpha: 0.92 });
       write(ctx, 'by ear first, then by eye', x0, y + 30 * u, 13.5 * u, { alpha: 0.55, color: SAND }); },
 
-    // ---- Glows: Eko's trims, as flames along the mantel by the hearth
-    glows(ctx, w, h, dev) { const u = dev === 'phone' ? 2 : 1.15, fx = dev === 'phone' ? w * 0.5 : w * 0.68, fy = dev === 'phone' ? h * 0.84 : h * 0.82, fw = (dev === 'phone' ? 118 : 190) * u;
-      const r = wall(ctx, w, h, 241, [fx, fy - 40 * u, 620 * u], [255, 150, 80], 0.5);
-      // the hearth: an arch of stone with the fire in it
-      ctx.fillStyle = 'rgb(12,9,20)'; ctx.beginPath(); ctx.moveTo(fx - fw - 40 * u, h + 10); ctx.lineTo(fx - fw - 40 * u, fy - fw * 1.1); ctx.lineTo(fx + fw + 40 * u, fy - fw * 1.1); ctx.lineTo(fx + fw + 40 * u, h + 10); ctx.closePath(); ctx.fill();
-      ctx.save(); ctx.save(); ctx.beginPath(); ctx.moveTo(fx - fw, h + 10); ctx.lineTo(fx - fw, fy - fw * 0.3); ctx.arc(fx, fy - fw * 0.3, fw, Math.PI, 0); ctx.lineTo(fx + fw, h + 10); ctx.closePath();
-      const g = ctx.createRadialGradient(fx, fy + 20 * u, 10, fx, fy, fw * 1.5); g.addColorStop(0, 'rgb(150,60,40)'); g.addColorStop(0.4, 'rgb(84,30,30)'); g.addColorStop(1, 'rgb(20,10,18)'); ctx.fillStyle = g; ctx.fill(); ctx.clip();
-      // logs, then the fire itself: many soft tongues laid over each other, hot at the heart
-      ctx.strokeStyle = 'rgb(22,12,16)'; ctx.lineCap = 'round'; ctx.lineWidth = 18 * u; ctx.beginPath(); ctx.moveTo(fx - fw * 0.6, fy + 44 * u); ctx.lineTo(fx + fw * 0.5, fy + 20 * u); ctx.moveTo(fx - fw * 0.45, fy + 18 * u); ctx.lineTo(fx + fw * 0.62, fy + 46 * u); ctx.stroke();
-      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.filter = `blur(${7 * u}px)`;
-      for (let i = 0; i < 26; i++) {
-        const bx = fx + (r() - 0.5) * fw * 1.1, k = 1 - Math.abs(bx - fx) / (fw * 0.75), hh = fw * (0.35 + r() * 0.75) * Math.max(0.25, k), wd = (10 + r() * 16) * u, lean = (r() - 0.5) * 30 * u;
-        ctx.fillStyle = rgba(i % 3 === 0 ? [255, 226, 160] : i % 3 === 1 ? [255, 150, 70] : [230, 80, 50], 0.22);
-        ctx.beginPath(); ctx.moveTo(bx - wd, fy + 34 * u); ctx.bezierCurveTo(bx - wd * 1.3, fy - hh * 0.4, bx + lean - wd * 0.2, fy - hh * 0.8, bx + lean, fy - hh); ctx.bezierCurveTo(bx + lean + wd * 0.4, fy - hh * 0.7, bx + wd * 1.3, fy - hh * 0.35, bx + wd, fy + 34 * u); ctx.closePath(); ctx.fill();
-      }
-      ctx.restore();
-      K.glow(ctx, fx, fy + 10 * u, fw * 0.8, [255, 236, 190], 0.5);
-      for (let i = 0; i < 22; i++) { ctx.fillStyle = rgba([255, 200 + r() * 40, 130], 0.3 + r() * 0.6); ctx.beginPath(); ctx.arc(fx + (r() - 0.5) * fw * 1.3, fy - r() * fw * 1.1, (0.8 + r() * 1.6) * u, 0, TAU); ctx.fill(); }
-      ctx.restore();
-      ctx.save(); ctx.globalCompositeOperation = 'screen'; ctx.strokeStyle = 'rgba(255,170,100,0.5)'; ctx.lineWidth = 2 * u; ctx.beginPath(); ctx.moveTo(fx - fw, h + 10); ctx.lineTo(fx - fw, fy - fw * 0.3); ctx.arc(fx, fy - fw * 0.3, fw, Math.PI, 0); ctx.lineTo(fx + fw, h + 10); ctx.stroke(); ctx.restore(); // the arch's edge catches the light
-      // the mantel, and on it one small flame for each trim: lit if it is yours, a bare wick if not
-      const my = fy - fw * 1.1, mx0 = dev === 'phone' ? w * 0.05 : fx - fw - 54 * u, mx1 = dev === 'phone' ? w * 0.95 : fx + fw + 54 * u;
-      ctx.fillStyle = 'rgb(20,14,28)'; ctx.fillRect(mx0, my - 9 * u, mx1 - mx0, 12 * u);
-      ctx.save(); ctx.globalCompositeOperation = 'screen'; ctx.strokeStyle = 'rgba(255,190,120,0.45)'; ctx.lineWidth = 1.4 * u; ctx.beginPath(); ctx.moveTo(mx0, my - 9 * u); ctx.lineTo(mx1, my - 9 * u); ctx.stroke(); ctx.restore();
-      const TRIMS = [[255, 226, 170], [255, 150, 90], [190, 120, 255], [225, 240, 255], [160, 255, 70], [255, 214, 90], [255, 90, 160], [255, 120, 110], [90, 160, 255], [90, 255, 190], [255, 176, 40], [130, 110, 255]];
-      TRIMS.forEach((c, i) => { const x = lerp(mx0 + 16 * u, mx1 - 16 * u, i / (TRIMS.length - 1)), on = i < 5 || i === 6; flame(ctx, x, my - 10 * u, 1.05 * u, c, on ? 1 : 0); if (i === 1) { ctx.strokeStyle = 'rgba(255,241,216,0.8)'; ctx.lineWidth = 1.2 * u; ctx.beginPath(); ctx.arc(x, my - 23 * u, 21 * u, 0, TAU); ctx.stroke(); } });
-      T.finish(ctx, w, h, 251, 0.55);
-      // Eko by the fire, wearing the one chosen
-      const ex = dev === 'phone' ? w * 0.74 : w * 0.38, ey = dev === 'phone' ? h * 0.37 : h * 0.6;
-      T.eko(ctx, ex, ey, (dev === 'phone' ? 0.46 : 0.6) * u, r, { wisp: true, lean: 0.2 });
+    // ---- Glows: Eko's trims, as flames along the mantel and the shelf over it
+    glows(ctx, w, h, dev) { const u = unit(w, h, dev), r = RNG(242), G = ROOMS.hearth(ctx, w, h, dev, u);
+      const TRIMS = [[255, 226, 170], [255, 150, 90], [190, 120, 255], [225, 240, 255], [160, 255, 70], [255, 214, 90], [255, 90, 160], [255, 255, 255], [255, 120, 110], [255, 90, 240], [90, 160, 255], [90, 255, 190], [255, 176, 40], [130, 110, 255], [200, 205, 220], [255, 60, 90]];
+      TRIMS.forEach((c, i) => { const [a, b, yy] = G.shelves[i < 8 ? 0 : 1], x = lerp(a, b, (i % 8) / 7), on = i < 5 || i === 6; flame(ctx, x, yy, 1.05 * u, c, on ? 1 : 0); if (i === 1) { ctx.strokeStyle = 'rgba(255,241,216,0.8)'; ctx.lineWidth = 1.2 * u; ctx.beginPath(); ctx.arc(x, yy - 13 * u, 21 * u, 0, TAU); ctx.stroke(); } });
+      ekoIn(ctx, G.eko[0], G.eko[1], G.eko[2], r, TRIMS[1], { wisp: true, lean: 0.2 });
       const x0 = dev === 'phone' ? w * 0.09 : w * 0.07; let y = (dev === 'phone' ? 64 : 46) * u;
       back(ctx, x0, y, 15 * u, 'out to the galaxy', u);
       y = (dev === 'phone' ? 122 : 108) * u; write(ctx, 'By the hearth', x0, y, 44 * u, { glow: 0.8 }); y += 26 * u;
@@ -288,28 +363,19 @@ const UI = (() => {
       write(ctx, 'Ember', x0, y, 40 * u, { glow: 0.6 }); y += 28 * u;
       write(ctx, 'a coal from Ossa’s forge', x0, y, 18 * u, { alpha: 0.9 }); y += 24 * u;
       write(ctx, 'worn now', x0, y, 15 * u, { alpha: 0.65, color: SAND }); y += 46 * u;
-      write(ctx, 'six lit, six still dark', x0, y, 15 * u, { alpha: 0.65, color: SAND }); y += 22 * u;
+      write(ctx, 'six lit, ten still dark', x0, y, 15 * u, { alpha: 0.65, color: SAND }); y += 22 * u;
       write(ctx, 'touch a flame to wear it; touch a wick to see what lights it', x0, y, 14 * u, { alpha: 0.55, color: SAND }); },
 
     // ---- the star chart, from the gallery rail
-    stars(ctx, w, h, dev) { const u = dev === 'phone' ? 2 : 1.15, r = RNG(261);
-      T.sky(ctx, w, h, DUSKY.map(([t, c]) => [t, mix(c, [10, 10, 30], 0.3)]), r, 150); T.stars(ctx, w, h * 0.86, r, 900, 6);
-      const con = (pts, lit, sc, ox, oy, a = 1) => { ctx.strokeStyle = `rgba(255,236,206,${0.34 * a})`; ctx.lineWidth = 1.1 * u; ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(ox + x * sc, oy + y * sc) : ctx.moveTo(ox + x * sc, oy + y * sc))); ctx.stroke(); pts.forEach(([x, y], i) => dab(ctx, ox + x * sc, oy + y * sc, (i < lit ? 4.2 : 3.2) * u * Math.min(1, sc / (60 * u) + 0.4), i < lit)); };
-      const SHAPES = { ember: [[0, 0.9], [0.5, 0.2], [1, 0.8], [1.6, 0.1], [2.1, 0.7]], cirra: [[0, 0.2], [0.6, 0.8], [1.1, 0.1], [1.7, 0.7], [2.2, 0]], glass: [[0, 0.5], [0.6, 0], [1.2, 0.5], [0.6, 1], [0.6, 0.5]], verd: [[0.5, 1], [0.5, 0.4], [0, 0], [1, 0], [0.5, -0.4]], hollow: [[0, 0], [0.7, 0.5], [1.4, 0]], ambush: [[0, 0], [0.7, 0.3]] };
-      const P = dev === 'phone'
-        ? { big: [w * 0.12, h * 0.185, 130 * u], lines: [w * 0.09, h * 0.345], cirra: [w * 0.08, h * 0.63, 46 * u], glass: [w * 0.42, h * 0.635, 46 * u], verd: [w * 0.72, h * 0.645, 46 * u], ambush: [w * 0.14, h * 0.785, 54 * u], hollow: [w * 0.52, h * 0.78, 50 * u] }
-        : { big: [w * 0.08, h * 0.3, 130 * u], lines: [w * 0.36, h * 0.3], cirra: [w * 0.66, h * 0.18, 64 * u], glass: [w * 0.84, h * 0.3, 64 * u], verd: [w * 0.68, h * 0.5, 64 * u], ambush: [w * 0.86, h * 0.56, 60 * u], hollow: [w * 0.76, h * 0.7, 54 * u] };
-      con(SHAPES.ember, 2, P.big[2], P.big[0], P.big[1]);
+    stars(ctx, w, h, dev) { const u = unit(w, h, dev), P = ROOMS.gallery(ctx, w, h, dev, u);
+      constellation(ctx, SHAPES.heroes, 2, P.big[2], P.big[0], P.big[1], u);
       const lab = (name, n, of, x, y) => { write(ctx, name, x, y, 19 * u, { alpha: 0.85 }); write(ctx, `${n} of ${of}`, x, y + 18 * u, 13 * u, { alpha: 0.55, color: SAND }); };
-      con(SHAPES.cirra, 1, P.cirra[2], P.cirra[0], P.cirra[1]); lab('Cirra', 1, 5, P.cirra[0], P.cirra[1] + P.cirra[2] * 0.8 + 34 * u);
-      con(SHAPES.glass, 0, P.glass[2], P.glass[0], P.glass[1], 0.6); lab('Glassmere', 0, 5, P.glass[0], P.glass[1] + P.glass[2] + 34 * u);
-      con(SHAPES.verd, 0, P.verd[2], P.verd[0], P.verd[1], 0.6); lab('Verdance', 0, 5, P.verd[0], P.verd[1] + P.verd[2] + 34 * u);
-      con(SHAPES.ambush, 1, P.ambush[2], P.ambush[0], P.ambush[1]); lab('the ambush', 1, 2, P.ambush[0], P.ambush[1] + 46 * u);
-      con(SHAPES.hollow, 0, P.hollow[2], P.hollow[0], P.hollow[1], 0.5); lab('the Hollow', 0, 3, P.hollow[0], P.hollow[1] + 46 * u);
-      // the rail, with Seo's kite tied to it
-      const ry = h * 0.9; ctx.fillStyle = 'rgb(12,9,22)'; ctx.fillRect(0, ry, w, h - ry); ctx.fillRect(0, ry - 10 * u, w, 5 * u);
-      for (let x = 14 * u; x < w; x += 30 * u) ctx.fillRect(x, ry - 8 * u, 3 * u, 12 * u);
-      T.finish(ctx, w, h, 271, 0.5);
+      const [c1, c2, c3, c4, c5] = P.slots;
+      constellation(ctx, SHAPES.skyhigh, 1, c1[2], c1[0], c1[1], u); lab('Cirra', 1, 5, c1[0], c1[1] + c1[2] * 0.8 + 34 * u);
+      constellation(ctx, SHAPES.blank, 0, c2[2], c2[0], c2[1], u, 0.6); lab('Glassmere', 0, 5, c2[0], c2[1] + c2[2] + 34 * u);
+      constellation(ctx, SHAPES.invincible, 0, c3[2], c3[0], c3[1], u, 0.6); lab('Verdance', 0, 5, c3[0], c3[1] + c3[2] + 34 * u);
+      constellation(ctx, SHAPES.ambush, 1, c4[2], c4[0], c4[1], u); lab('the ambush', 1, 2, c4[0], c4[1] + 46 * u);
+      constellation(ctx, SHAPES.royalty, 0, c5[2], c5[0], c5[1], u, 0.5); lab('the Hollow', 0, 3, c5[0], c5[1] + 46 * u);
       const x0 = dev === 'phone' ? w * 0.09 : w * 0.07; let y = (dev === 'phone' ? 64 : 46) * u;
       back(ctx, x0, y, 15 * u, 'out to the galaxy', u);
       y = (dev === 'phone' ? 122 : 108) * u; write(ctx, 'The star chart', x0, y, 44 * u, { glow: 0.8 });
@@ -324,16 +390,9 @@ const UI = (() => {
       } },
 
     // ---- credits: the last page of the logbook
-    credits(ctx, w, h, dev) { const u = dev === 'phone' ? 2 : 1.15, r = wall(ctx, w, h, 281, [w * (dev === 'phone' ? 0.9 : 0.94), h * 0.1, 700 * u], [255, 180, 110], 0.5);
-      // the page: paper in lamplight, warm where the lamp is and falling away
-      const px = dev === 'phone' ? w * 0.06 : w * 0.2, py = (dev === 'phone' ? 100 : 76) * u, pw = dev === 'phone' ? w * 0.88 : w * 0.6, ph = h - py - (dev === 'phone' ? 60 : 50) * u;
-      ctx.save(); ctx.translate(px + pw / 2, py + ph / 2); ctx.rotate(-0.012); ctx.translate(-pw / 2, -ph / 2);
-      ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 40 * u; ctx.shadowOffsetY = 10 * u;
-      const g = ctx.createRadialGradient(pw * 0.95, 0, 20, pw * 0.6, ph * 0.4, Math.hypot(pw, ph)); g.addColorStop(0, 'rgb(238,214,170)'); g.addColorStop(0.5, 'rgb(200,168,128)'); g.addColorStop(1, 'rgb(116,86,80)');
-      const sheet = () => { ctx.beginPath(); ctx.moveTo(1.5 * u, 0); ctx.lineTo(pw * 0.5, -1.5 * u); ctx.lineTo(pw, 1 * u); ctx.lineTo(pw + 1.5 * u, ph * 0.5); ctx.lineTo(pw - 1 * u, ph); ctx.lineTo(pw * 0.4, ph + 1.5 * u); ctx.lineTo(0, ph - 1 * u); ctx.lineTo(-1.5 * u, ph * 0.5); ctx.closePath(); };
-      sheet(); ctx.fillStyle = g; ctx.fill(); ctx.shadowColor = 'transparent';
-      ctx.save(); sheet(); ctx.clip(); K.lay(ctx, K.texture(Math.ceil(pw), Math.ceil(ph), 291, { fine: 0.5, mottle: 0.6, scale: 0.004, fibres: 700 }), 'multiply', 0.5); ctx.restore();
-      const INK = [44, 28, 40], ix = pw * 0.09; let y = (dev === 'phone' ? 64 : 62) * u;
+    credits(ctx, w, h, dev) { const u = unit(w, h, dev), G = ROOMS.page(ctx, w, h, dev, u), { pw, ph, ix } = G;
+      ctx.save(); ctx.translate(G.px + pw / 2, G.py + ph / 2); ctx.rotate(G.rot); ctx.translate(-pw / 2, -ph / 2);
+      const INK = [44, 28, 40]; let y = (dev === 'phone' ? 64 : 62) * u;
       const ink = (s, px2, a = 0.92, o = {}) => write(ctx, s, o.x != null ? o.x : ix, y, px2, { color: rgba(INK, 1), alpha: a, ink: true, ...o });
       ink('The last page', 38 * u); y += 20 * u; rule(ctx, ix, pw - ix, y, 0.35, INK); y += 40 * u;
       ink('the songs, and who made them', 15 * u, 0.7); y += 40 * u;
@@ -345,7 +404,6 @@ const UI = (() => {
       rule(ctx, ix, pw - ix, y - 26 * u, 0.3, INK);
       ink('ONE MORE ORBIT keeps no record of you.', 15.5 * u, 0.75); y += 24 * u; ink('the privacy note', 15.5 * u, 0.95);
       ctx.restore();
-      T.finish(ctx, w, h, 301, 0.5);
       back(ctx, dev === 'phone' ? w * 0.09 : w * 0.07, (dev === 'phone' ? 64 : 46) * u, 15 * u, 'back to the desk', u); },
 
     // ---- the components, once
@@ -370,6 +428,6 @@ const UI = (() => {
       cap('numbers: the same face, lining figures', col[2], y); write(ctx, '62', col[2], y + 50 * u, 40 * u, { style: 'normal', figs: true }); write(ctx, '%', col[2] + 44 * u, y + 50 * u, 18 * u, { alpha: 0.8 });
       y += 110 * u;
       write(ctx, 'Every target is at least 44 points tall, however small the words. White on the play field still means only “tap here”.', col[0], y + 20 * u, 15 * u, { alpha: 0.7, color: SAND }); }
-  };
-  return { S, draw: (ctx, w, h, name, dev) => S[name](ctx, w, h, dev) };
+  });
+  return { S, ROOMS, SHAPES, C: { write, rule, flame, slider, toggle, back, pauseMark, dab, constellation, ekoIn, soft }, unit, galleryLay, draw: (ctx, w, h, name, dev) => S[name](ctx, w, h, dev) };
 })();
