@@ -1,0 +1,11 @@
+<!doctype html><meta charset="utf-8"><title>Afterglow: the story</title>
+<body style="margin:0;background:#111">
+<script src="kit.js"></script><script src="a-dusk.js"></script><script src="story-afterglow.js"></script>
+<script>
+window.errors = [];
+const add = (id, w, h, draw) => { const cv = document.createElement('canvas'); cv.width = w; cv.height = h; cv.id = id; cv.style.cssText = 'display:block;margin:8px auto;max-width:100%'; document.body.appendChild(cv); try { draw(cv.getContext('2d')); } catch (e) { window.errors.push(`${id}: ${e.stack || e}`); } };
+for (const name of Object.keys(STORIES.SCENES)) for (const [dev, w, h] of [['phone', 780, 1688], ['desktop', 1440, 900]]) add(`${name}-${dev}`, w, h, (c) => STORIES.draw(c, w, h, name, dev));
+// how the words arrive: the picture alone, the first sentence in and the second on its way, then all of it and the spark
+add('words-0', 780, 1688, (c) => STORIES.draw(c, 780, 1688, 'ember', 'phone', -1));
+add('words-1', 780, 1688, (c) => STORIES.draw(c, 780, 1688, 'ember', 'phone', 1));
+</script>
