@@ -106,7 +106,7 @@ const WORLD1 = (() => {
     K.brush(ctx, [[0, 44 * s], [10 * s, 70 * s], [-6 * s, 96 * s], [12 * s, 124 * s]], 5 * s, mix([60, 50, 90], c, lit), r, { passes: 3, alpha: 0.5 });
     ctx.restore();
   }
-  /** Sèo, the kite-keeper of Cirra: a tall thin figure of folded sailcloth, all angles. lit 0 = wing folded, 1 = wing up, lines taut. */
+  /** Seo, the kite-keeper of Cirra: a tall thin figure of folded sailcloth, all angles. lit 0 = wing folded, 1 = wing up, lines taut. */
   function seo(ctx, x, y, s, lit, r, face = 1) {
     ctx.save(); ctx.translate(x, y); ctx.scale(s * face, s);
     const dark = mix([26, 20, 48], [120, 84, 140], lit * 0.5), pale = mix([44, 36, 76], [255, 214, 236], lit * 0.75);
@@ -379,7 +379,7 @@ const WORLD1 = (() => {
       snuffer(ctx, 1010, hy - 20, 0.5, r, 0.1);
       T.finish(ctx, W, H, 33, 0.5);
       const name = (s, x, sub) => { words(ctx, s, x, hy + 86, 22, { align: 'center' }); words(ctx, sub, x, hy + 108, 15, { align: 'center', alpha: 0.7, color: '#e6cfae' }); };
-      name('Eko', 70, 'the spark'); name('Marlow', 170, 'the Keeper'); name('Ossa', 340, 'Emberwick'); name('Sèo', 500, 'Cirra'); name('Vell', 640, 'Glassmere'); name('Morrow', 880, 'Verdance'); name('the Snuffer', 1012, 'the Hush’s hand'); name('the Hush', 1140, 'the Hollow'); }
+      name('Eko', 70, 'the spark'); name('Marlow', 170, 'the Keeper'); name('Ossa', 340, 'Emberwick'); name('Seo', 500, 'Cirra'); name('Vell', 640, 'Glassmere'); name('Morrow', 880, 'Verdance'); name('the Snuffer', 1012, 'the Hush’s hand'); name('the Hush', 1140, 'the Hollow'); }
   };
   return { W, H, P, parts: { ossa, seo, vell, morrow, snuffer, tower, kite } };
 })();

@@ -544,6 +544,13 @@ body { font-weight: 600; }
 /* Afterglow, screen 3: the story is painted on the canvas and tapped anywhere; the old card is kept for readers, not shown */
 .screen.veil.story { background: none; cursor: pointer; }
 #story .story-card { visibility: hidden; }
+/* Test chambers: a plain list. Not part of the game's look; it goes when the rooms have served. */
+.chamber-row { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; text-align: left; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: none; color: var(--text); font: inherit; cursor: pointer; min-height: 56px; }
+.chamber-row b { font-weight: 700; } .chamber-row small { grid-column: 1; color: var(--mute); line-height: 1.35; }
+.chamber-row .go { grid-row: 1 / span 2; grid-column: 2; display: flex; gap: 8px; }
+.chamber-row .go span { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; font-weight: 700; font-size: 13px; }
+.chamber-row.on { border-color: var(--gold); } .chamber-row.on .go span { background: var(--gold); color: var(--ink); border-color: var(--gold); }
+.chamber-said { border-left: 2px solid var(--gold); padding: 6px 0 6px 12px; margin: 4px 0 10px; }
 /* Afterglow, screen 4: the results are painted on the canvas and tapped anywhere; the old panel is kept for readers, not shown */
 .screen.veil#results { background: none; cursor: pointer; }
 #results .panel { visibility: hidden; }

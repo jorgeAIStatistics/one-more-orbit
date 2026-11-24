@@ -116,7 +116,7 @@ export interface Layers { survival: number[]; flow: number[] }
 /** Things a level can ask of the player; the first time each appears it gets a hint. */
 export type Feature = 'smash' | 'charge' | 'flip' | 'weave' | 'spin' | 'sling' | 'reverse' | 'faster' | 'slower' | 'twin' | 'rail' | 'line' | 'tether' | 'meteor' | 'sat' | 'pulsar' | 'comet' | 'spring' | 'tide' | 'chime' | 'slip' | 'grav' | 'combo' | 'mirror' | 'invert' | 'dual';
 /** How one bar plays. */
-export interface BarCfg { token: string; mode: 'up' | 'down' | 'weave'; spin: boolean; twin: boolean; dual: boolean; echo: Form; sling: boolean; spring: boolean; tide: boolean; turn: boolean; mirror: boolean; invert: boolean; long: boolean; tether: boolean; chime: boolean; slip: boolean; grav: boolean; combo: string; speed: number; form: Form }
+export interface BarCfg { token: string; mode: 'up' | 'down' | 'weave'; spin: boolean; twin: boolean; dual: boolean; echo: Form; sling: boolean; spring: boolean; tide: boolean; turn: boolean; mirror: boolean; invert: boolean; long: boolean; tether: boolean; chime: boolean; slip: boolean; grav: boolean; combo: string; sparse: boolean; speed: number; form: Form }
 
 export interface Course {
   spb: number;
@@ -247,6 +247,7 @@ export function autoLayers(beats: number[], accents: number[] = []): Layers {
  * the hop before lands on exactly; where the music does not chain the hops, the press stays an ordinary one.
  * mirror: the picture flips left to right at the bar line. invert: it flips top to bottom.
  * dual: a twin orbit whose second spark is a Pulsar; dual=sat: a Satellite.
+ * sparse: only the bar's first and third beats are presses; its other presses become gold (for fast songs played early).
  */
 export function barPlan(level: Level): BarCfg[] {
   const out: BarCfg[] = [];
@@ -267,7 +268,7 @@ export function barPlan(level: Level): BarCfg[] {
       const twin = w.includes('twin') || dual;
       const combo = (w.find((s) => s.startsWith('c=')) ?? '').slice(2);
       // a planet hop only ever starts a phrase or its second half (every other bar), and never in a twin orbit
-      out.push({ token, mode: w.includes('weave') ? 'weave' : w.includes('down') ? 'down' : 'up', spin: w.includes('spin'), twin, dual, echo, sling: w.includes('sling') && !twin && k % 2 === 0, spring: w.includes('spring') && !twin && k % 2 === 0, tide: w.includes('tide') && !twin, turn: w.includes('turn'), mirror: w.includes('mirror'), invert: w.includes('invert'), long: w.includes('long'), tether: w.includes('tether'), chime: w.includes('chime'), slip: w.includes('slip'), grav: w.includes('grav'), combo, speed, form });
+      out.push({ token, mode: w.includes('weave') ? 'weave' : w.includes('down') ? 'down' : 'up', spin: w.includes('spin'), twin, dual, echo, sling: w.includes('sling') && !twin && k % 2 === 0, spring: w.includes('spring') && !twin && k % 2 === 0, tide: w.includes('tide') && !twin, turn: w.includes('turn'), mirror: w.includes('mirror'), invert: w.includes('invert'), long: w.includes('long'), tether: w.includes('tether'), chime: w.includes('chime'), slip: w.includes('slip'), grav: w.includes('grav'), combo, sparse: w.includes('sparse'), speed, form });
     }
   }
   return out;
@@ -298,6 +299,8 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
   let ground = [...new Set([...layers.survival.map(snap).filter((b) => inRange(b) && !inCharge(b) && counted(b)), ...auto, ...smash])].sort((a, b) => a - b);
   // nothing else within a beat of a smash or a launch: those own their moment
   ground = ground.filter((b) => auto.has(b) || smash.has(b) || ![...auto, ...smash].some((x) => Math.abs(x - b) < MIN_GAP - 1e-6));
+  // A bar marked `sparse` keeps only the presses on its first and third beats: the rest are gold, there to take or leave.
+  ground = ground.filter((b) => { if (!barAt(b).sparse || auto.has(b) || smash.has(b)) return true; const off = b - Math.floor((b + 1e-6) / 4) * 4; return Math.abs(off) < 0.01 || Math.abs(off - 2) < 0.01; });
   // A level whose rules allow `pairs` (the slow, heavy one) also takes some of its eighth notes as presses: up to that
   // many a bar, each a note on the half beat with a press on the beat before it and a kick or snare under it, and
   // never two within two beats of each other. So the presses come in pairs, never in runs.

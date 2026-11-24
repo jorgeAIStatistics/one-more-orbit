@@ -7,6 +7,7 @@ import { FINAL_ID, GATE_CLEARS, NODES, maxStars, nodeOf, nodeState, playable, to
 import { refreshBars } from './gd/presses';
 import { GdRenderer as Renderer } from './gd/render';
 import { GdRun as Run, TUTORIAL_BEATS } from './gd/run';
+import { CHAMBERS, LISTEN, type Chamber } from './game/chambers';
 import { canHaptics, feel, fullScreen, gameCenter, isNative, watchBackground } from './native';
 import { initRecord } from './record';
 import { bestFor, persist, save, starCount, starsFor } from './save';
@@ -18,8 +19,8 @@ import { SkyResult, type ResultInfo } from './ui/skyresult';
 import { PLANETS, STORY, ekoPic, planetName, type Frame } from './ui/galaxy';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-type Screen = 'title' | 'levels' | 'play' | 'pause' | 'results' | 'settings' | 'calib' | 'orbs' | 'badges' | 'quests' | 'record' | 'story';
-const SCREENS: Screen[] = ['title', 'levels', 'pause', 'results', 'settings', 'calib', 'orbs', 'badges', 'quests', 'record', 'story'];
+type Screen = 'title' | 'levels' | 'play' | 'pause' | 'results' | 'settings' | 'calib' | 'orbs' | 'badges' | 'quests' | 'record' | 'story' | 'chambers';
+const SCREENS: Screen[] = ['title', 'levels', 'pause', 'results', 'settings', 'calib', 'orbs', 'badges', 'quests', 'record', 'story', 'chambers'];
 
 const PACKS = ALL_PACKS.filter((p) => SLICE.includes(p.level.id));
 const shortTitle = (p: LevelPack) => p.level.title.replace(/ \(.*/, '');
@@ -491,13 +492,13 @@ function go(): void {
 
 /** Starts an attempt. `from` is a song time (practice restarts from a checkpoint); `quick` is the instant restart after a crash. */
 function startRun(from = -1, quick = false): void {
-  if (!canPlay()) return;
+  if (!chamber && !canPlay()) return;
   audio.ensure();
   audio.setVolumes(save.music, save.sfx);
   audio.stopPreview(0.6);
   if (practice && !botMode && !save.practiced[pack.level.id]) { save.practiced[pack.level.id] = true; persist(); }
   run?.stop();
-  const counted = !botMode && !practice;
+  const counted = !botMode && !practice && !chamber; // (a test chamber keeps no record)
   if (counted) {
     save.bests[pack.level.id] = { ...bestFor(pack.level.id), attempts: bestFor(pack.level.id).attempts + 1 };
     persist();
@@ -514,7 +515,7 @@ function startRun(from = -1, quick = false): void {
   $('bestMark').classList.toggle('hidden', b.pct === 0 && !b.cleared);
   $('bestPct').textContent = b.cleared ? 'CLEARED' : `BEST ${b.pct}%`;
   const label = $('attempt');
-  label.textContent = botMode ? 'AUTOPLAY' : practice ? 'PRACTICE' : `ATTEMPT ${b.attempts}`;
+  label.textContent = botMode ? 'AUTOPLAY' : chamber ? `TRY ${session.attempts}` : practice ? 'PRACTICE' : `ATTEMPT ${b.attempts}`;
   label.classList.remove('flash');
   if (quick) { void label.offsetWidth; label.classList.add('flash'); }
   const card = $('titleCard');
@@ -523,6 +524,7 @@ function startRun(from = -1, quick = false): void {
     $('tcLevel').textContent = `${pack.level.side ? 'MOON' : pack === FINAL ? 'THE DARK PLANET' : `PLANET ${levelIdx + 1}`} · ${planetName(pack.level.id).toUpperCase()}${practice ? ' · PRACTICE' : ''}`;
     $('tcSong').textContent = shortTitle(pack);
     $('tcArtist').textContent = pack.level.artist;
+    if (chamber) { $('tcLevel').textContent = 'TEST CHAMBER'; $('tcSong').textContent = chamber.name.toUpperCase(); $('tcArtist').textContent = chamber.what; }
     void card.offsetWidth;
     card.classList.add('show');
   }
@@ -647,6 +649,7 @@ function tally(r: Run): void {
 function onRunEnd(r: Run): void {
   if (r !== run) return;
   harvest(r);
+  if (chamber) { tally(r); if (r.state === 'failed') startRun(-1, true); else chamberDone(r, true); return; } // a room: straight back in, or back to the list
   const id = r.pack.level.id;
   const prev = bestFor(id);
   const counted = !r.opts.bot && !r.opts.practice;
@@ -837,6 +840,73 @@ function syncSaid(fixed = false): Pick<ResultInfo, 'more' | 'fix'> {
   return { more: [...resMore, line], fix: offer ? (fix.textContent ?? '').replace(/^Fix it: offset/, 'set the offset to') : '' };
 }
 
+// ------------------------------------------------------------------ test chambers
+// Short rooms in plain shapes, to judge the play and the sound before any art. Reached from Settings (Playtest) or
+// with ?chambers on the address. Nothing here reads or writes the saved game.
+let chamber: Chamber | null = null;
+let packWas: LevelPack | null = null;
+let listening = '';
+function renderChambers(said = ''): void {
+  const note = $('chamberSaid');
+  note.textContent = said;
+  note.classList.toggle('hidden', !said);
+  $('chamberList').innerHTML = CHAMBERS.map((c) => `<button class="chamber-row" type="button" data-room="${c.id}"><b>${c.name}</b><small>${c.what}</small><span class="go"><span>PLAY</span></span></button>`).join('');
+  $('listenList').innerHTML = LISTEN.map((l) => `<button class="chamber-row${listening === l.id ? ' on' : ''}" type="button" data-listen="${l.id}"><b>${l.name}</b><small>${l.what}</small><span class="go"><span>${listening === l.id ? 'STOP' : 'LISTEN'}</span></span></button>`).join('');
+}
+function openChambers(said = ''): void {
+  run?.stop();
+  run = null;
+  botMode = false;
+  practice = false;
+  audio.stopPreview(0.3);
+  listening = '';
+  renderChambers(said);
+  show('chambers');
+}
+function closeChambers(): void {
+  audio.stopPreview(0.3);
+  listening = '';
+  chamber = null;
+  if (packWas) { pack = packWas; packWas = null; }
+  renderer.plain = renderer.windows = false;
+  show('levels');
+}
+function startChamber(c: Chamber, bot = false): void {
+  audio.stopPreview(0.2);
+  listening = '';
+  if (!packWas) packWas = pack;
+  chamber = c;
+  pack = c.pack;
+  practice = false;
+  botMode = bot;
+  renderer.plain = true;
+  renderer.windows = !!c.ambush;
+  Object.assign(session, { far: 0, newBest: false, onBeat: 0, judged: 0, streak: 0, drop: -1, attempts: 0 });
+  startRun();
+}
+/** A room played through, or left: one plain line about how it went, back on the list. */
+function chamberDone(r: Run, cleared: boolean, at = r.pct): void {
+  const c = chamber!;
+  const beat = session.judged ? `${Math.round((session.onBeat / session.judged) * 100)}% of taps on the beat` : 'no taps judged';
+  const w = r.windows;
+  const amb = c.ambush ? ` Light notes struck on the beat: ${w.struck} of ${r.lights.length}. Windows still lit: ${w.lit} of 4${cleared && !w.lost ? ' (none lost: both stars)' : ''}.` : '';
+  const said = `${c.name}: ${cleared ? `cleared on try ${session.attempts}` : `left at ${at}% after ${session.attempts} ${session.attempts === 1 ? 'try' : 'tries'}`}, ${beat}.${amb}`;
+  run = null;
+  openChambers(said);
+}
+$('chambers').addEventListener('click', (e) => {
+  const row = (e.target as HTMLElement).closest<HTMLElement>('.chamber-row');
+  if (!row) return;
+  audio.ensure();
+  const c = CHAMBERS.find((x) => x.id === row.dataset.room);
+  if (c) { startChamber(c); return; }
+  const l = LISTEN.find((x) => x.id === row.dataset.listen);
+  if (!l) return;
+  if (listening === l.id) { audio.stopPreview(0.25); listening = ''; }
+  else { listening = l.id; audio.setVolumes(save.music, save.sfx); void audio.preview(l.audio, l.from - l.audio.offset, 1, true); }
+  renderChambers($('chamberSaid').textContent ?? '');
+});
+
 // ------------------------------------------------------------------ HUD
 const hud = { pct: -1, seg: '', count: '', crashShown: false, lesson: -1, finale: false };
 function updateHud(r: Run): void {
@@ -849,7 +919,8 @@ function updateHud(r: Run): void {
   const pct = r.pct;
   if (pct !== hud.pct) { hud.pct = pct; $('pct').textContent = `${pct}%`; }
   $('progFill').style.transform = `scaleX(${r.progress.toFixed(4)})`;
-  const label = r.level.segAt(Math.max(0, r.time)).label;
+  const cb = chamber ? [...chamber.beats].reverse().find((x) => r.time / r.level.spb >= (x.bar - 1) * 4 - 0.01) : undefined;
+  const label = chamber ? cb?.label ?? 'READY' : r.level.segAt(Math.max(0, r.time)).label;
   if (label !== hud.seg) { hud.seg = label; $('section').textContent = label; }
   const beat = r.time / r.level.spb;
   // 3, 2, 1 on the beats of the count-in bar: the first press is never a surprise
@@ -932,6 +1003,8 @@ $('story').addEventListener('click', (e) => { if (screen !== 'story') return; co
 $('storyNext').addEventListener('click', nextStory);
 $('storyArt').addEventListener('click', nextStory);
 $('storySkip').addEventListener('click', () => { if (screen === 'story') endStory(); });
+$('chambersBtn').addEventListener('click', () => openChambers());
+$('chambersClose').addEventListener('click', () => closeChambers());
 $('storyBtn').addEventListener('click', () => { const back: Screen = settingsFrom === 'pause' ? 'pause' : 'levels'; playStory('all', () => show(back), true); });
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 
@@ -954,7 +1027,7 @@ window.addEventListener('keydown', (e) => {
   }
   if (screen === 'pause') { if (back || e.code === 'Space' || e.code === 'Enter') resume(); else if (e.code === 'KeyR') startRun(-1, true); return; }
   if (screen === 'results') { if (e.code === 'Enter' || e.code === 'Space' || e.code === 'KeyR') { e.preventDefault(); startRun(); } else if (back) toLevels(); return; }
-  if (back) { if (screen === 'settings') closeSettings(); else show('levels'); }
+  if (back) { if (screen === 'settings') closeSettings(); else if (screen === 'chambers') closeChambers(); else show('levels'); }
 });
 
 function pause(): void {
@@ -967,6 +1040,7 @@ function pause(): void {
   const tut = !!run.opts.tutorial;
   for (const id of ['pauseRestartBtn', 'pausePracticeBtn', 'pauseSkipBtn']) $(id).classList.toggle('hidden', tut);
   $('pauseSkipBtn').classList.toggle('hidden', tut || buildStart() < 0);
+  if (chamber) for (const id of ['pausePracticeBtn', 'pauseSkipBtn']) $(id).classList.add('hidden'); // a room is short: it is always played whole
   show('pause');
 }
 function resume(): void {
@@ -978,6 +1052,7 @@ function toLevels(): void {
   run?.stop();
   run = null;
   botMode = false;
+  if (chamber) { openChambers(); return; }
   viaStory(() => show('levels'));
 }
 /** Quitting shows what the visit came to (how far, flow, sync) before going back to the levels. */
@@ -985,6 +1060,7 @@ function quit(): void {
   if (!run) { toLevels(); return; }
   const r = run;
   if (r.opts.tutorial) { r.stop(); run = null; show('levels'); return; }
+  if (chamber) { tally(r); const at = r.pct; r.stop(); chamberDone(r, false, at); return; } // (a stopped run no longer knows how far it was)
   tally(r);
   const reached = r.pct;
   r.stop();
@@ -1360,6 +1436,7 @@ for (const f of ['500 20px "Cormorant SC"', 'italic 500 18px "Cormorant Garamond
 buildMap();
 document.body.classList.add('boot');
 show('title');
+if (/[?&#]chambers\b/.test(location.search + location.hash)) openChambers();
 window.setTimeout(() => document.body.classList.remove('boot'), 400);
 requestAnimationFrame(loop);
 
@@ -1370,6 +1447,7 @@ Object.assign(window, {
     level: (i: number) => focusLevel(i), select: (id: string) => select(id, true), quests: () => { renderQuests(); show('quests'); },
     start: (bot: boolean, prac = false, from = -1) => { botMode = bot; practice = prac; startRun(from); },
     story: (k: string) => playStory(k, () => show('levels'), true),
+    chambers: () => openChambers(), chamber: (id: string, bot = false) => { const c = CHAMBERS.find((x) => x.id === id); if (c) startChamber(c, bot); }, get room() { return chamber; },
     tutorial: startTutorial, results: (cleared: boolean) => { if (run) showResults(run, cleared, run.pct); }, orbs: () => { renderOrbs(); show('orbs'); }, badges: () => { renderBadges(); show('badges'); }, settings: () => openSettings('levels')
   }
 });

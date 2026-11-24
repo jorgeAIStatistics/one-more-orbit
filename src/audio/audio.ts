@@ -235,8 +235,11 @@ export class AudioEngine {
 
   private previewToken = 0;
   private previewEnd: ((fade: number) => void) | null = null;
-  /** Plays a stretch of a level's song quietly, looping: the level select's preview. A new call fades the old one out. */
-  async preview(meta: AudioMeta, from: number, gain = 0.75): Promise<void> {
+  /**
+   * Plays a stretch of a level's song quietly, looping: the level select's preview. A new call fades the old one out.
+   * whole: play on from there to the end, once (the listening room).
+   */
+  async preview(meta: AudioMeta, from: number, gain = 0.75, whole = false): Promise<void> {
     const token = ++this.previewToken;
     this.stopPreview(0.4, true);
     if (!this.ensure()) return;
@@ -247,13 +250,13 @@ export class AudioEngine {
     const c = this.ctx!;
     const src = c.createBufferSource();
     src.buffer = track.buffer;
-    src.loop = true;
+    src.loop = !whole;
     src.loopStart = Math.max(0, meta.offset + track.shift + from);
     src.loopEnd = Math.min(track.buffer.duration, src.loopStart + 15);
     const g = c.createGain();
     const now = c.currentTime;
     g.gain.setValueAtTime(0, now);
-    g.gain.linearRampToValueAtTime(gain, now + 0.7);
+    g.gain.linearRampToValueAtTime(gain, now + (whole ? 0.05 : 0.7));
     src.connect(g);
     g.connect(this.pre);
     src.start(now, src.loopStart);

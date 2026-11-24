@@ -1,0 +1,15 @@
+{
+  "file": "audio/ambush.mp3",
+  "frames": 2249100,
+  "firstSig": 10975,
+  "bpm": 160,
+  "offset": 1.5,
+  "length": 51.0,
+  "dropTime": 25.5,
+  "source": [
+    [
+      142.519,
+      193.519
+    ]
+  ]
+}

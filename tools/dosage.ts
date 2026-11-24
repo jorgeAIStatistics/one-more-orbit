@@ -1,9 +1,10 @@
 // What each level asks for, bar by bar: forms, gates (turn, tempo, mirror, upside-down), pads, orbs, combos, twins.
-// Run: npx vite-node tools/dosage.ts [id ...] [--bars]     (bars are counted from 1)
+// Run: npx vite-node tools/dosage.ts [id ...] [--bars] [--rooms]     (bars are counted from 1; --rooms: the test chambers)
 import { FINAL, PACKS, type LevelPack } from '../src/game/packs';
 import { Level } from '../src/game/level';
 import { buildCourse, type Course, type Press } from '../src/gd/course';
 import { accentBeats, layers, pitchLookup } from '../src/gd/presses';
+import { CHAMBERS } from '../src/game/chambers';
 
 const args = process.argv.slice(2);
 const ids = args.filter((a) => !a.startsWith('--'));
@@ -17,16 +18,17 @@ export function dosage(pack: LevelPack): { course: Course; text: string } {
   const level = new Level(pack.level, pack.audio, pack.chart);
   const c = buildCourse(level, layers(pack), pitchLookup(pack), pack.level.lab, accentBeats(pack));
   const nBars = Math.round(c.end / 4);
+  const bar0 = Math.round(c.start / 4);
   const L: string[] = [];
   L.push(`=== ${pack.level.id}: ${level.title}, ${nBars} bars, ${(60 / c.spb).toFixed(0)} BPM, window ±${Math.round((pack.level.rules?.tol ?? 0.12) * 1000)} ms`);
-  if (showBars) for (let n = 0; n < nBars; n++) {
+  if (showBars) for (let n = bar0; n < nBars; n++) {
     const ps = c.presses.filter((p) => bar(p.beat) === n + 1);
     const seg = level.segAt((n * 4 + 0.01) * c.spb);
     L.push(`  ${String(n + 1).padStart(2)} ${seg.label.padEnd(6)} ${(c.bars[n]?.token ?? '').padEnd(26)} ${ps.map(letter).join('')}${c.inCharge(n * 4 + 0.5) ? ' (charge)' : ''}`);
   }
   // forms: where each is in force (bars), and the lenses
   const forms: Record<string, number[]> = {};
-  for (let n = 0; n < nBars; n++) { if (c.inCharge(n * 4 + 0.5)) continue; const f = c.formAt(n * 4 + 0.01); (forms[f] ??= []).push(n + 1); }
+  for (let n = bar0; n < nBars; n++) { if (c.inCharge(n * 4 + 0.5)) continue; const f = c.formAt(n * 4 + 0.01); (forms[f] ??= []).push(n + 1); }
   const lens = c.lenses.map((l) => bar(l.beat));
   const gaps: number[] = []; { const pts = [1, ...lens, nBars]; for (let i = 1; i < pts.length; i++) gaps.push(pts[i] - pts[i - 1]); }
   L.push(`  forms: ${Object.entries(forms).map(([f, b]) => `${f} ${runs(b)}`).join(' | ')}`);
@@ -50,4 +52,5 @@ export function dosage(pack: LevelPack): { course: Course; text: string } {
   return { course: c, text: L.join('\n') };
 }
 
-for (const pack of [...PACKS, FINAL]) if (!ids.length || ids.includes(pack.level.id)) console.log(dosage(pack).text + '\n');
+const rooms = args.includes('--rooms');
+for (const pack of rooms ? CHAMBERS.map((c) => c.pack) : [...PACKS, FINAL]) if (!ids.length || ids.includes(pack.level.id)) console.log(dosage(pack).text + '\n');

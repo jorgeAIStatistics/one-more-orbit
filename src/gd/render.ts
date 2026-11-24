@@ -101,6 +101,10 @@ export class GdRenderer {
   private mx = 1;
   private my = 1;
   private gatesPassed = 0;
+  /** test chambers: no backdrop at all, only the course on a flat ground */
+  plain = false;
+  /** test chambers: draw the Lantern's four windows and the cap coming down on them (the ambush) */
+  windows = false;
   /** how much of the planet's colour is showing, 0..1: none in a calm engraved stretch, all of it in an earned drop */
   private colour = 0;
   private heroDir = 1;
@@ -316,6 +320,7 @@ export class GdRenderer {
     const cx = this.w / 2;
     const cy = this.h * 0.52;
     const span = Math.max(this.w, this.h) * 0.75;
+    if (this.plain) { c.fillStyle = '#0d0e17'; c.fillRect(0, 0, this.w, this.h); return; }
     const calm = save.reducedMotion;
     const k = 0.4 + inten * 0.95 + groove * 0.7 + drive * kick * 0.5;
     // the bass warps the backdrop: its bright centre swells on every kick
@@ -592,6 +597,39 @@ export class GdRenderer {
     c.beginPath(); c.moveTo(x + (0.05 * ca + 1.05 * sa) * R, y + (0.05 * sa - 1.05 * ca) * R); c.lineTo(x + (0.2 * ca - 0.3 * sa) * R, y + (0.2 * sa + 0.3 * ca) * R);
     c.strokeStyle = rgba(col, 0.7); c.lineWidth = Math.max(1, R * 0.08); c.stroke();
     c.lineJoin = 'miter';
+  }
+
+  /**
+   * The ambush, in plain shapes: the Lantern's four windows in a row at the top, and the Snuffer's cap coming down
+   * on them as the next light note nears. Struck on the beat, the cap is thrown back and a window relights; struck
+   * off it, a window goes dark.
+   */
+  private drawWindows(run: GdRun, beat: number): void {
+    const c = this.ctx;
+    const { lit } = run.windows;
+    const next = run.lights.find((l) => l.on === null);
+    const last = [...run.lights].reverse().find((l) => l.on !== null && l.beat <= beat);
+    const since = last ? beat - last.beat : 99;
+    c.save();
+    c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    const x0 = this.w / 2, y0 = Math.max(168, this.h * 0.2), sz = 15, gap = 9, n = 4, wRow = n * sz + (n - 1) * gap;
+    for (let i = 0; i < n; i++) {
+      const x = x0 - wRow / 2 + i * (sz + gap);
+      const on = i < lit;
+      c.fillStyle = on ? (since < 0.5 && last?.on ? '#ffffff' : '#f2e2b8') : 'rgba(13,14,23,0.9)';
+      c.strokeStyle = on ? '#f2e2b8' : since < 0.5 && last && !last.on && i === lit ? '#ea4a30' : 'rgba(242,226,184,0.45)';
+      c.lineWidth = 2;
+      c.fillRect(x, y0, sz, sz); c.strokeRect(x, y0, sz, sz);
+    }
+    if (next) {
+      // the cap: far off while the light note is far, on the windows as it arrives
+      const d = clamp((next.beat - beat) / 12, 0, 1), y = y0 - 10 - d * 62;
+      c.strokeStyle = 'rgba(242,226,184,0.35)'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(x0, y0 - 96); c.lineTo(x0, y - 16); c.stroke();
+      c.fillStyle = '#b7a6ff'; c.beginPath(); c.moveTo(x0 - 13, y); c.lineTo(x0 + 13, y); c.lineTo(x0 + 5, y - 18); c.lineTo(x0 - 5, y - 18); c.closePath(); c.fill();
+    }
+    c.font = '700 11px ui-rounded, system-ui, sans-serif'; c.textAlign = 'center'; c.fillStyle = 'rgba(242,226,184,0.7)';
+    c.fillText(since < 1.2 && last ? (last.on ? 'STRUCK' : 'OFF THE BEAT') : `WINDOWS ${lit}/4`, x0, y0 + sz + 16);
+    c.restore();
   }
 
   /** A small upright label in the course (a gate's number, a lens's name). It stays readable when the picture is mirrored. */
@@ -1654,8 +1692,8 @@ export class GdRenderer {
     // ---- behind the course: backdrop, flashes, beams, shockwaves, shards
     c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.background(pal, now / 1000, dt, inten, groove, this.dark, drive, kick);
-    if (this.flash > 0) { c.fillStyle = `rgba(255,255,255,${this.flash * (calm ? 0.08 : 0.26)})`; c.fillRect(0, 0, this.w, this.h); }
-    if (this.strobe > 0.01) { c.fillStyle = this.col(pal.acc, this.strobe * 0.09); c.fillRect(0, 0, this.w, this.h); }
+    if (this.flash > 0 && !this.plain) { c.fillStyle = `rgba(255,255,255,${this.flash * (calm ? 0.08 : 0.26)})`; c.fillRect(0, 0, this.w, this.h); }
+    if (this.strobe > 0.01 && !this.plain) { c.fillStyle = this.col(pal.acc, this.strobe * 0.09); c.fillRect(0, 0, this.w, this.h); }
     c.save();
     let cx = this.w / 2;
     let cy = this.h * 0.52;
@@ -1680,7 +1718,7 @@ export class GdRenderer {
     }
     c.translate(this.coreX, this.coreY);
     const chargeShown = afterDrop ? this.chargeV * clamp(1 - this.dropAge / 0.35, 0, 1) : course.charges.length && beat > course.charges[0][0] - 4 ? Math.max(this.chargeV, 0.006) : 0;
-    this.core(pal, m * 0.045, m * 0.04 * (0.4 + 1.1 * inten) * (1 + wound * 0.7 + drive * 0.5), kick * (0.3 + 0.7 * inten), snare * inten, dt, this.flowV, chargeShown, drive, span, PLANETS[level.file.side?.of ?? level.id]?.rgb, !!level.file.side);
+    this.core(pal, m * 0.045, m * 0.04 * (0.4 + 1.1 * inten) * (1 + wound * 0.7 + drive * 0.5), kick * (0.3 + 0.7 * inten), snare * inten, dt, this.flowV, chargeShown, this.plain ? 0 : drive, span, PLANETS[level.file.side?.of ?? level.id]?.rgb, !!level.file.side);
 
     for (let i = this.waves.length - 1; i >= 0; i--) {
       const wv = this.waves[i];
@@ -1694,7 +1732,7 @@ export class GdRenderer {
     }
     c.translate(-this.coreX, -this.coreY);
     this.drawParticles(dt, true);
-    if (this.glitch > 0 && !calm && this.canvas.width > 0 && this.canvas.height > 0) {
+    if (this.glitch > 0 && !calm && !this.plain && this.canvas.width > 0 && this.canvas.height > 0) {
       // the glitch tears only what has been drawn so far, which is all background
       c.save();
       c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
@@ -1740,6 +1778,7 @@ export class GdRenderer {
     }
     this.drawParticles(dt, false);
 
+    if (this.windows && run.lights.length) this.drawWindows(run, beat);
     // short hints near the core, out of the ball's way: the latest one that applies
     // a star trail coming up says so, until that star has been kept
     const ahead = course.stars.find((st) => sim.stars[st.i] === 0 && beat >= st.a - 5 && beat <= st.a + 1 && !starsFor(level.id)[st.i]);

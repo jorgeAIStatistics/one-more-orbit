@@ -157,7 +157,20 @@
       <h3>Playtest</h3>
       <div class="two"><button id="setUnlock" class="btn secondary toggle" type="button">All levels open</button><button id="botBtn" class="btn secondary" type="button">Watch autoplay</button></div>
       <div class="two"><button id="replayTutorial" class="btn secondary" type="button">Replay the tutorial</button><button id="storyBtn" class="btn secondary" type="button">Watch the story</button></div>
+      <button id="chambersBtn" class="btn secondary" type="button">Test chambers</button>
       <button id="recordBtn" class="btn secondary hidden" type="button">Record mode</button>
+    </div>
+  </section>
+
+  <section id="chambers" class="screen veil">
+    <div class="panel wide scroll">
+      <header class="topbar"><button id="chambersClose" class="icon" type="button" data-icon="back" aria-label="Back"></button><span class="label">TEST CHAMBERS</span><span class="icon ghost"></span></header>
+      <p class="note">Plain shapes on purpose: these are for judging the play and the sound, before any art. Nothing here is saved.</p>
+      <p id="chamberSaid" class="chamber-said hidden"></p>
+      <h3>Rooms to play</h3>
+      <div id="chamberList" class="list"></div>
+      <h3>Things to listen to</h3>
+      <div id="listenList" class="list"></div>
     </div>
   </section>
 

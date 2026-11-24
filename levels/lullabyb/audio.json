@@ -1,0 +1,15 @@
+{
+  "file": "audio/lullabyb.mp3",
+  "frames": 3439800,
+  "firstSig": 2,
+  "bpm": 80,
+  "offset": 0.0,
+  "length": 78.0,
+  "dropTime": 63.0,
+  "source": [
+    [
+      0.0,
+      78.0
+    ]
+  ]
+}

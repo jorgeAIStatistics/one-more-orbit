@@ -1,0 +1,15 @@
+{
+  "file": "audio/fallback.mp3",
+  "frames": 2976750,
+  "firstSig": 0,
+  "bpm": 128,
+  "offset": 0.0,
+  "length": 67.5,
+  "dropTime": 65.625,
+  "source": [
+    [
+      0.001,
+      67.501
+    ]
+  ]
+}

@@ -16,6 +16,10 @@ export const TUTORIAL_BEATS = 24;
 export interface RunEvent { kind: 'hop' | 'flip' | 'spark' | 'skip' | 'land' | 'crash' | 'drop' | 'finale' | 'tick' | 'held' | 'release' | 'star' | 'starlost'; star?: number; flow?: boolean; charge?: boolean; accent?: boolean; smash?: boolean; sling?: boolean; full?: boolean; power?: number }
 
 const RESUME_COUNT = 1.2;
+/** a light note is struck true within this many seconds of it (it can be taken, off the beat, within the press's own wider window) */
+export const LIGHT_S = 0.06;
+/** the Lantern's windows in the ambush */
+export const WINDOWS = 4;
 
 /** One attempt: the ball orbits by itself, a tap on a note hops it to the next ring, a missed opening ends it. */
 export class GdRun {
@@ -39,6 +43,8 @@ export class GdRun {
   /** whether the drop went off in full (null until it happens), and how big it was, 0..1: charge times flow */
   dropFull: boolean | null = null;
   dropPower = 1;
+  /** light notes (the ambush): each of the level's big presses, and whether it was struck on the beat (null: still to come) */
+  lights: Array<{ beat: number; on: boolean | null }> = [];
   /** the finish: from the moment the last press lands, the level is won and the ending plays out */
   finale = false;
   finaleAt = Infinity;
@@ -68,6 +74,17 @@ export class GdRun {
     if (lastPress && !opts.tutorial) this.finaleAt = lastPress.land * spb;
     while (this.bi < this.course.script.length && this.course.script[this.bi][0] * spb < this.startAt) this.bi++;
     if (this.startAt / spb > this.course.dropBeat) this.dropFull = true;
+    this.lights = this.course.presses.filter((p) => p.smash).map((p) => ({ beat: p.beat, on: p.beat * spb < this.startAt ? true : null }));
+  }
+
+  /**
+   * The Lantern's windows still lit: a light note struck off the beat lets one go dark, one struck on the beat
+   * relights one. lost: has any window gone dark at any point.
+   */
+  get windows(): { lit: number; lost: boolean; struck: number } {
+    let lit = WINDOWS, lost = false, struck = 0;
+    for (const l of this.lights) { if (l.on === false) { lit = Math.max(0, lit - 1); lost = true; } else if (l.on) { lit = Math.min(WINDOWS, lit + 1); struck++; } }
+    return { lit, lost, struck };
   }
 
   async start(): Promise<void> {
@@ -155,6 +172,7 @@ export class GdRun {
       audio.pluck(60 + 12 * Math.floor(k / scale.length) + scale[k % scale.length], 0.4 * save.hitVol);
     }
     const press = r.kind === 'spark' ? null : this.course.presses[this.sim.ni - 1];
+    if (press?.smash) { const l = this.lights.find((x) => x.beat === press.beat); if (l && l.on === null) l.on = !!r.auto || r.err === undefined || Math.abs(r.err) <= LIGHT_S; }
     this.events.push({ kind: r.kind, flow: !!r.flow || !!r.auto, charge: !!r.charge, accent: !!press?.accent, smash: !!press?.smash, sling: !!press?.sling });
   }
 
