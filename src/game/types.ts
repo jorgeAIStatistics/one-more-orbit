@@ -95,7 +95,9 @@ export interface LevelFile {
    * eighth notes a bar may take as presses, each right after a press on the beat (default 0); intro = false: forms
    * arrive with no safe introduction (the last level).
    */
-  rules?: { tol?: number; ahead?: number; branch?: number; pairs?: number; intro?: boolean };
+  rules?: { tol?: number; ahead?: number; branch?: number; pairs?: number; intro?: boolean;
+    /** forms the player has met on earlier planets: they come back with no played-for-you introduction, only wider first openings */
+    known?: string[] };
   /** shard branches: [from, to] in beats. Play each stretch clean (every piece of gold, no stray taps) for its lens shard. */
   shards?: Array<[number, number]>;
   /** the old name for `shards` */

@@ -52,11 +52,16 @@ export interface Press {
   act: 'tap' | 'down' | 'up';
   /** the flight is a straight line (the Satellite's zig-zag, a slipstream) instead of a hop's arc */
   line: boolean;
-  /** a chime: the mark hangs in mid-air, where the hop before it ends; there is no ring under it */
+  /** the mark hangs in mid-air, where the hop before it ends; there is no ring under it (every orb is one of these) */
   chime: boolean;
   /** a slipstream: the tap is carried along an arrow for a beat, two rings on */
   slip: boolean;
-  /** a pad the game takes for the player: a springboard (a planet hop) or a tide pad (a gravity flip) */
+  /**
+   * An orb: a mark tapped in mid-air, at the end of the hop before it. jump: another hop from where you are.
+   * dash: a slipstream from where you are. grav: gravity turns over in mid-air. '' : not an orb.
+   */
+  orb: '' | 'jump' | 'dash' | 'grav';
+  /** a pad on the ring, tapped like any mark: a spring pad throws the ball to the next planet, a tide pad turns gravity over */
   pad: '' | 'spring' | 'tide';
   /** part of a form's safe introduction: the game plays it, to show the move */
   intro: boolean;
@@ -109,9 +114,9 @@ export interface Star {
 }
 export interface Layers { survival: number[]; flow: number[] }
 /** Things a level can ask of the player; the first time each appears it gets a hint. */
-export type Feature = 'smash' | 'charge' | 'flip' | 'weave' | 'spin' | 'sling' | 'reverse' | 'faster' | 'slower' | 'twin' | 'rail' | 'line' | 'tether' | 'meteor' | 'sat' | 'pulsar' | 'comet' | 'spring' | 'tide' | 'chime' | 'slip' | 'mirror' | 'dual';
+export type Feature = 'smash' | 'charge' | 'flip' | 'weave' | 'spin' | 'sling' | 'reverse' | 'faster' | 'slower' | 'twin' | 'rail' | 'line' | 'tether' | 'meteor' | 'sat' | 'pulsar' | 'comet' | 'spring' | 'tide' | 'chime' | 'slip' | 'grav' | 'combo' | 'mirror' | 'invert' | 'dual';
 /** How one bar plays. */
-export interface BarCfg { token: string; mode: 'up' | 'down' | 'weave'; spin: boolean; twin: boolean; dual: boolean; sling: boolean; spring: boolean; tide: boolean; turn: boolean; mirror: boolean; long: boolean; tether: boolean; chime: boolean; slip: boolean; speed: number; form: Form }
+export interface BarCfg { token: string; mode: 'up' | 'down' | 'weave'; spin: boolean; twin: boolean; dual: boolean; echo: Form; sling: boolean; spring: boolean; tide: boolean; turn: boolean; mirror: boolean; invert: boolean; long: boolean; tether: boolean; chime: boolean; slip: boolean; grav: boolean; combo: string; speed: number; form: Form }
 
 export interface Course {
   spb: number;
@@ -145,8 +150,10 @@ export interface Course {
   lenses: Array<{ beat: number; form: Form; intro: boolean }>;
   /** mirror gates: beats at which the picture flips left to right */
   mirrors: number[];
-  /** stretches of twin orbit in which the second spark is a Pulsar (dual mode with two different forms) */
-  duals: Array<[number, number]>;
+  /** upside-down gates: beats at which the picture flips top to bottom */
+  inverts: number[];
+  /** stretches of twin orbit in which the second spark is another form on a path of its own: [from, to, its form] */
+  duals: Array<[number, number, Form]>;
   /** the form in force at a beat */
   formAt(beat: number): Form;
   /** where a perfect run is at a beat: ring level, side of the ring, planet */
@@ -178,7 +185,7 @@ export const RAIL_FLIGHT = 2; // a hop that flies this long becomes a rail
 export const LINE_CLEAR = 0.75; // beats between the end of a gold line and the next white mark: time to let go and tap
 export const TETHER_GRIP = 0.3; // beats after a tether's mark by which the button must be down...
 export const TETHER_LET_S = 0.12; // ...and it may come up this many seconds before the tether's end
-export const TURN_EASE = 0.25; // beats either side of a bar line over which a turn or a speed change is eased
+export const TURN_EASE = 0; // a turn or a speed change happens on the bar line itself: it is telegraphed, then it snaps
 export const LINE_TIGHT = 0.5; // ...or this, where the ride is too short for a line otherwise (a rail leaves no more either)
 /** Beats after a planet hop lands in which nothing can end the run: at least 1.5, and at least 0.85 s at any tempo. */
 export const landingGrace = (spb: number) => Math.max(1.5, Math.ceil((0.85 / spb) * 2) / 2);
@@ -234,8 +241,12 @@ export function autoLayers(beats: number[], accents: number[] = []): Layers {
  * x0.5 ... x2: a tempo gate, the orbit speed from that bar on. orb | meteor | sat | pulsar | comet: Eko's form from
  * that bar on (a lens stands on the bar line). spring: the bar's first press is a planet hop the game takes itself.
  * tide: the bar's first press is taken by the game (with a change of up/down: a gravity flip without a tap).
- * chime: the bar's chained hops are taken in mid-air. slip: its hops are slipstreams. mirror: the picture flips left
- * to right at the bar line. dual: a twin orbit whose second spark is a Pulsar.
+ * chime: the bar's chained hops are jump orbs (taken in mid-air). slip: its hops are slipstreams. grav: its chained
+ * hops are gravity orbs. c=<letters>: a combo, one letter per press of the bar in order: j jump orb, d dash orb,
+ * g gravity orb, anything else an ordinary press (c=.jd is hop, jump orb, dash orb). An orb is only ever a press that
+ * the hop before lands on exactly; where the music does not chain the hops, the press stays an ordinary one.
+ * mirror: the picture flips left to right at the bar line. invert: it flips top to bottom.
+ * dual: a twin orbit whose second spark is a Pulsar; dual=sat: a Satellite.
  */
 export function barPlan(level: Level): BarCfg[] {
   const out: BarCfg[] = [];
@@ -250,10 +261,13 @@ export function barPlan(level: Level): BarCfg[] {
       const x = w.find((s) => /^x\d/.test(s)); // a tempo gate: x0.5, x0.75, x1.25, x1.5, x2
       if (x) speed = clamp(parseFloat(x.slice(1)) || 1, 0.5, 2);
       for (const f of FORMS) if (w.includes(f)) form = f;
-      const dual = w.includes('dual');
+      const dw = w.find((s) => s === 'dual' || s.startsWith('dual='));
+      const dual = !!dw;
+      const echo: Form = dw && dw.endsWith('=sat') ? 'sat' : 'pulsar';
       const twin = w.includes('twin') || dual;
+      const combo = (w.find((s) => s.startsWith('c=')) ?? '').slice(2);
       // a planet hop only ever starts a phrase or its second half (every other bar), and never in a twin orbit
-      out.push({ token, mode: w.includes('weave') ? 'weave' : w.includes('down') ? 'down' : 'up', spin: w.includes('spin'), twin, dual, sling: w.includes('sling') && !twin && k % 2 === 0, spring: w.includes('spring') && !twin && k % 2 === 0, tide: w.includes('tide') && !twin, turn: w.includes('turn'), mirror: w.includes('mirror'), long: w.includes('long'), tether: w.includes('tether'), chime: w.includes('chime'), slip: w.includes('slip'), speed, form });
+      out.push({ token, mode: w.includes('weave') ? 'weave' : w.includes('down') ? 'down' : 'up', spin: w.includes('spin'), twin, dual, echo, sling: w.includes('sling') && !twin && k % 2 === 0, spring: w.includes('spring') && !twin && k % 2 === 0, tide: w.includes('tide') && !twin, turn: w.includes('turn'), mirror: w.includes('mirror'), invert: w.includes('invert'), long: w.includes('long'), tether: w.includes('tether'), chime: w.includes('chime'), slip: w.includes('slip'), grav: w.includes('grav'), combo, speed, form });
     }
   }
   return out;
@@ -342,22 +356,26 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
   // its safe introduction: the game plays that bar's presses itself, to show the move, and nothing in it can end the run.
   const lenses: Course['lenses'] = [];
   const introBars = new Set<number>();
+  const softBars = new Set<number>(); // a form met on an earlier planet comes back: no introduction, but its first two presses are wide
   const gates: number[] = []; // every bar line something changes on: the first press after it gets a wider opening
   {
     const met = new Set<Form>(['orb']);
+    const known = new Set<string>(level.file.rules?.known ?? []);
     bars.forEach((b, n) => {
       const was = n > 0 ? bars[n - 1] : null;
       const beat = n * 4;
       if (b.form !== (was ? was.form : 'orb')) {
-        const intro = !met.has(b.form) && !level.file.side && level.file.rules?.intro !== false;
+        const fresh = !met.has(b.form) && !level.file.side && level.file.rules?.intro !== false;
+        const intro = fresh && !known.has(b.form);
         met.add(b.form);
-        if (beat >= start - 1e-6 && beat < end) { lenses.push({ beat, form: b.form, intro }); gates.push(beat); if (intro) introBars.add(n); }
+        if (beat >= start - 1e-6 && beat < end) { lenses.push({ beat, form: b.form, intro }); gates.push(beat); if (intro) introBars.add(n); else if (fresh) softBars.add(n); }
       }
-      if (was && (b.turn || b.mirror || b.speed !== was.speed) && beat > start && beat < end) gates.push(beat);
+      if (was && (b.turn || b.mirror || b.invert || b.speed !== was.speed) && beat > start && beat < end) gates.push(beat);
     });
   }
   const formOf = (b: number): Form => (smash.has(b) || auto.has(b) || slings.has(b) || barAt(b).twin ? 'orb' : barAt(b).form);
-  // presses the game takes for the player: a form's introduction, a springboard, a tide pad (the bar's first press)
+  // a form's introduction is played for the player. Pads are not: a spring pad (the bar's planet hop) and a tide pad
+  // (the bar's first press, where gravity turns over) are marks to tap like any other, drawn as pads.
   const gift = new Map<number, 'intro' | 'spring' | 'tide'>();
   {
     const firstOf = new Map<number, number>();
@@ -370,13 +388,18 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
     }
   }
   const wide = new Set<number>();
-  for (const g of gates) { const b = ground.find((x) => x >= g - 1e-6 && x < g + 4 - 1e-6); if (b !== undefined && !gift.has(b)) wide.add(b); }
+  for (const g of gates) { const b = ground.find((x) => x >= g - 1e-6 && x < g + 4 - 1e-6); if (b !== undefined && gift.get(b) !== 'intro') wide.add(b); }
   // after its introduction, a form's first two real presses have openings twice as wide
   const easy = new Set<number>();
   for (const n of introBars) {
     const f = bars[n].form;
     let left = 2;
-    for (const b of ground) { if (b < (n + 1) * 4 - 1e-6 || left === 0) continue; if (barAt(b).form !== f) break; if (formOf(b) === f && !gift.has(b)) { easy.add(b); left--; } }
+    for (const b of ground) { if (b < (n + 1) * 4 - 1e-6 || left === 0) continue; if (barAt(b).form !== f) break; if (formOf(b) === f && gift.get(b) !== 'intro') { easy.add(b); left--; } }
+  }
+  for (const n of softBars) {
+    const f = bars[n].form;
+    let left = 2;
+    for (const b of ground) { if (b < n * 4 - 1e-6 || left === 0) continue; if (barAt(b).form !== f) break; if (formOf(b) === f) { easy.add(b); left--; } }
   }
   // The Comet: its marks come in pairs. Press on the first and keep holding (it climbs to the ring above), let go on
   // the second (it falls back). Pairs never cross a section, so a practice checkpoint always starts with a press; a
@@ -387,7 +410,7 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
     const close = () => { for (let k = 0; k + 1 < run.length; k += 2) { acts.set(run[k], 'down'); acts.set(run[k + 1], 'up'); } run = []; };
     let key = '';
     for (const b of ground) {
-      const k = formOf(b) === 'comet' ? `${level.segAt((b + 1e-6) * spb).index}:${gift.has(b) ? 1 : 0}` : '';
+      const k = formOf(b) === 'comet' ? `${level.segAt((b + 1e-6) * spb).index}:${gift.get(b) === 'intro' ? 1 : 0}` : '';
       if (k !== key) close();
       key = k;
       if (k) run.push(b);
@@ -408,6 +431,8 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
   let side: 1 | -1 = 1;
   let planet = 0;
   let lastTwin: 'a' | 'b' = 'b';
+  let gravBar = -1; // the bar in which a gravity orb has turned gravity over: it stays that way to the bar's end
+  const nthInBar = new Map<number, number>();
   ground.forEach((beat, i) => {
     const prev = i > 0 ? beat - ground[i - 1] : 99;
     const next = i + 1 < ground.length ? ground[i + 1] - beat : 99;
@@ -424,9 +449,18 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
     const act = acts.get(beat) ?? 'tap';
     const before = presses[i - 1];
     const orb = form === 'orb';
-    // a slipstream carries the ball for a beat, two rings on; a chime is a hop taken in mid-air, where the hop before ends
-    const slip = orb && cfg.slip && !sling && !plain && !cfg.twin && next >= SLIP_FLIGHT - 1e-6;
-    const chime = orb && cfg.chime && !sling && !plain && !cfg.twin && !!before && before.form === 'orb' && !before.sling && !before.auto && Math.abs(before.land - beat) < 1e-6;
+    // Orbs. The hop before ends exactly here, so this mark is taken in mid-air: there is no ring under it. Which orb
+    // it is comes from the bar's combo (one letter per press of the bar), or from the bar's own word for all of them.
+    const nth = nthInBar.get(barOf(beat)) ?? 0;
+    nthInBar.set(barOf(beat), nth + 1);
+    const ask = cfg.combo ? cfg.combo[nth] ?? '.' : '';
+    const free = orb && !sling && !plain && !cfg.twin;
+    const chained = free && !!before && before.form === 'orb' && !before.sling && !before.auto && Math.abs(before.land - beat) < 1e-6;
+    // a slipstream carries the ball for a beat, two rings on (from the ring, or as a dash orb from mid-air)
+    const slip = free && (ask === 'd' || (!cfg.combo && cfg.slip)) && next >= SLIP_FLIGHT - 1e-6;
+    const grav = chained && !slip && (ask === 'g' || (!cfg.combo && cfg.grav));
+    const kindOf: Press['orb'] = !chained ? '' : slip && ask === 'd' ? 'dash' : grav ? 'grav' : ask === 'j' || (!cfg.combo && cfg.chime && !slip) ? 'jump' : '';
+    const chime = kindOf !== '';
     const quick = form === 'meteor' || form === 'pulsar' || (form === 'comet' && act === 'tap') ? Math.min(QUICK, next) : form === 'comet' ? Math.min(QUICK, next * 0.5) : 0;
     const land = sling ? beat + SLING_FLIGHT : quick ? beat + quick : slip ? beat + SLIP_FLIGHT : i + 1 < ground.length ? Math.min(ground[i + 1], beat + CAP) : Math.min(beat + 1, end);
     const dur = land - beat;
@@ -434,11 +468,12 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
     // a Pulsar flips on its own ring; otherwise flip only when the bar wants the other side of the ring
     const pair = form === 'sat' || (form === 'comet' && act !== 'tap');
     const weave = !plain && !sling && (pair || (orb && cfg.mode === 'weave'));
-    const want = cfg.mode === 'up' ? 1 : cfg.mode === 'down' ? -1 : side;
+    const want = gravBar === barOf(beat) ? side : cfg.mode === 'up' ? 1 : cfg.mode === 'down' ? -1 : side;
     // (a tide pad is only there where the bar turns gravity over: otherwise the press is an ordinary one to tap)
     const given = gift.get(beat) === 'tide' && !(orb && want !== side) ? '' : gift.get(beat) ?? '';
     const still = form === 'meteor' || form === 'pulsar' || (form === 'comet' && act === 'tap'); // stays on its ring
-    const flip = !plain && !sling && (weave || form === 'pulsar' || (orb && want !== side));
+    const flip = !plain && !sling && (weave || form === 'pulsar' || (orb && want !== side) || grav);
+    if (grav) gravBar = barOf(beat);
     const step = still ? 0 : weave ? 1 : slip ? 2 : clamp(dur, 0.6, 1.4);
     const to = lv + side * step;
     // big hits: the chart's accents, and in a drop the first press of each half of the phrase
@@ -455,16 +490,18 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
     if (orb) { if (weave) first(beat, 'weave'); else if (flip && given !== 'tide') first(beat, 'flip'); }
     if (sling) first(beat, given === 'spring' ? 'spring' : 'sling');
     if (given === 'tide') first(beat, 'tide');
-    if (chime) first(beat, 'chime');
+    if (kindOf === 'jump') first(beat, 'chime');
+    if (kindOf === 'grav') first(beat, 'grav');
     if (slip) first(beat, 'slip');
+    if (kindOf && before && before.orb) first(before.beat, 'combo');
     const spin = orb && cfg.spin && !plain && !sling && !chime && !slip;
     if (spin) first(beat, 'spin');
     presses.push({
-      i, beat, tol, kind: flip ? 'flip' : 'hop', auto: auto.has(beat) || !!given, smash: isSmash, accent, sling, after, weave, spin, twin,
+      i, beat, tol, kind: flip ? 'flip' : 'hop', auto: auto.has(beat) || given === 'intro', smash: isSmash, accent, sling, after, weave, spin, twin,
       from: lv, to, side, planet, planetTo: sling ? planet + 1 : planet, camLv: weave ? lv + side * 0.5 : to,
       land, bounce: i + 1 < ground.length && ground[i + 1] === land,
       bulge: form === 'meteor' ? 0.28 : form === 'comet' && act === 'tap' ? 0.45 : flip || slip ? 0 : sling ? 0.5 : clamp(0.35 * dur - 0.1, 0.06, 0.7), pitch: pitchAt(beat), seg: seg.index,
-      form, act, line: form === 'sat' || slip, chime, slip, pad: given === 'spring' || given === 'tide' ? given : '', intro: given === 'intro', wide: isWide || easy.has(beat)
+      form, act, line: form === 'sat' || slip, chime, slip, orb: kindOf, pad: given === 'spring' || given === 'tide' ? given : '', intro: given === 'intro', wide: isWide || easy.has(beat)
     });
     lv = to;
     if (flip) side = side === 1 ? -1 : 1;
@@ -587,17 +624,19 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
   const turns: number[] = [];
   const portals: Course['portals'] = [];
   const twins: Array<[number, number]> = [];
-  const duals: Array<[number, number]> = [];
+  const duals: Course['duals'] = [];
   const mirrors: number[] = [];
+  const inverts: number[] = [];
   const rate = bars.map((b, n) => {
     const beat = n * 4;
     const before = n > 0 ? bars[n - 1].speed : 1;
     if (b.turn) { dir = -dir; if (beat > start && beat < end) { turns.push(beat); first(beat, 'reverse'); } }
     if (b.speed !== before && beat > start && beat < end) { portals.push({ beat, faster: b.speed > before, speed: b.speed }); first(beat, b.speed > before ? 'faster' : 'slower'); }
     if (b.mirror && beat > start && beat < end) { mirrors.push(beat); first(beat, 'mirror'); }
+    if (b.invert && beat > start && beat < end) { inverts.push(beat); first(beat, 'invert'); }
     if (b.dual && beat + 4 > start && beat < end) {
       const last = duals[duals.length - 1];
-      if (last && last[1] === beat) last[1] = beat + 4; else duals.push([beat, beat + 4]);
+      if (last && last[1] === beat && last[2] === b.echo) last[1] = beat + 4; else duals.push([beat, beat + 4, b.echo]);
     }
     if (b.twin && beat + 4 > start && beat < end) {
       const last = twins[twins.length - 1];
@@ -610,16 +649,16 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
   const a0: number[] = [];
   let acc = 0;
   rate.forEach((r) => { a0.push(acc); acc += r * 4; });
-  // Where the orbit turns round or changes speed, it does so over half a beat (a quarter either side of the bar
-  // line): the ball slows, turns and picks up again, instead of changing direction in a single frame.
+  // Where the orbit turns round or changes speed, it does so on the bar line itself: the gate is in view for beats
+  // beforehand, and then the change snaps. (TURN_EASE > 0 would spread it over that many beats either side.)
   const W = TURN_EASE;
   const blend = (n: number, x: number) => a0[n] + rate[n - 1] * x + ((rate[n] - rate[n - 1]) * (x + W) * (x + W)) / (4 * W); // x: beats from bar line n
   const angle = (beat: number): number => {
     if (beat <= 0) return beat * rate[0];
     const n = Math.min(bars.length - 1, Math.floor(beat / 4));
     const x = beat - n * 4;
-    if (n > 0 && x < W && rate[n] !== rate[n - 1]) return blend(n, x);
-    if (n + 1 < bars.length && x > 4 - W && rate[n + 1] !== rate[n]) return blend(n + 1, x - 4);
+    if (W > 0 && n > 0 && x < W && rate[n] !== rate[n - 1]) return blend(n, x);
+    if (W > 0 && n + 1 < bars.length && x > 4 - W && rate[n + 1] !== rate[n]) return blend(n + 1, x - 4);
     return a0[n] + rate[n] * x;
   };
 
@@ -627,6 +666,6 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
     spb, start, end, dropBeat: level.dropTime / spb, presses, flow, taps: tapped, rides: all.filter((t) => ups.has(t) || ridden.has(t)), holds, script, stars,
     checkpoints: segs.map((s) => s.beat0).filter((b) => b >= start && b < end),
     charges, chargeNotes: flow.filter((f) => f.charge).length, inCharge, angle, turns, portals, twins, firsts, bars,
-    lenses, mirrors, duals, formAt: (beat: number) => (barAt(beat).twin ? 'orb' : barAt(beat).form), at: where
+    lenses, mirrors, inverts, duals, formAt: (beat: number) => (barAt(beat).twin ? 'orb' : barAt(beat).form), at: where
   };
 }

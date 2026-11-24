@@ -30,8 +30,9 @@ const HINT: Record<Feature, string> = {
   rail: 'GOLD RAIL: TAP AND HOLD THROUGH THE HOP', line: 'GOLD LINE: HOLD TO FLOAT ALONG IT',
   tether: 'RED TETHER: HOLD ON. LET GO EARLY AND THE RUN ENDS',
   meteor: 'METEOR: TAP TO DASH THROUGH EACH WALL', sat: 'SATELLITE: EACH TAP TURNS THE ZIG-ZAG', pulsar: 'PULSAR: EACH TAP FLIPS TO THE OTHER SIDE OF THE RING',
-  comet: 'COMET: PRESS AND HOLD ON THE BAR, LET GO ON THE RING', spring: 'SPRINGBOARD: IT THROWS YOU, NO TAP', tide: 'TIDE PAD: IT FLIPS YOU, NO TAP',
-  chime: 'CHIME: TAP IT IN MID-AIR', slip: 'SLIPSTREAM: TAP AND IT CARRIES YOU', mirror: 'MIRROR GATE: THE PICTURE FLIPS', dual: 'DUAL: ONE TAP, TWO DIFFERENT SPARKS'
+  comet: 'COMET: PRESS AND HOLD ON THE BAR, LET GO ON THE RING', spring: 'SPRING PAD: TAP IT AND IT THROWS YOU', tide: 'TIDE PAD: TAP IT AND GRAVITY TURNS OVER',
+  chime: 'JUMP ORB: TAP IT IN MID-AIR TO HOP AGAIN', slip: 'DASH: TAP AND IT CARRIES YOU', grav: 'GRAVITY ORB: TAP IT IN MID-AIR, GRAVITY TURNS OVER', combo: 'COMBO: ORB TO ORB, ONE TAP EACH, ON THE BEAT',
+  mirror: 'MIRROR GATE: THE PICTURE FLIPS', invert: 'UPSIDE-DOWN GATE: THE PICTURE TURNS OVER', dual: 'DUAL: ONE TAP, TWO DIFFERENT SPARKS'
 };
 const INK: RGB = [78, 42, 150]; // what the Hush leaves in the way: dark violet with a pale rim
 const INK_RIM: RGB = [205, 178, 255];
@@ -58,8 +59,8 @@ interface Platform {
   planet: number; spinAt: number; spinTol: number; enterSide: number;
   /** the press that leaves this ring: its form, what the button does on it, and whether the game takes it as a pad */
   form: Form; act: 'tap' | 'down' | 'up'; pad: '' | 'spring' | 'tide'; wide: boolean;
-  /** a chime: there is no ring here, only the mark in mid-air. noCeil: the press before stayed on this ring */
-  chime: boolean; noCeil: boolean;
+  /** an orb: there is no ring here, only the mark in mid-air (and which orb). noCeil: the press before stayed on this ring */
+  chime: boolean; orb: '' | 'jump' | 'dash' | 'grav'; noCeil: boolean;
 }
 /** Things that fly past behind the course in a drop: shards thrown out from the centre, and ring fragments in orbit. */
 interface Debris { a: number; d: number; v: number; rot: number; spin: number; size: number; kind: number; hue: number }
@@ -96,8 +97,10 @@ export class GdRenderer {
   private branchV = 0;
   private branchK = 0;
   private branchE = 0;
-  /** the picture's left-to-right scale: -1 past a mirror gate */
+  /** the picture's left-to-right scale: -1 past a mirror gate; and its top-to-bottom scale: -1 past an upside-down gate */
   private mx = 1;
+  private my = 1;
+  private gatesPassed = 0;
   /** how much of the planet's colour is showing, 0..1: none in a calm engraved stretch, all of it in an earned drop */
   private colour = 0;
   private heroDir = 1;
@@ -195,6 +198,8 @@ export class GdRenderer {
     this.lift = this.liftV = 0;
     this.branchV = this.branchK = 0;
     this.mx = 1;
+    this.my = 1;
+    this.gatesPassed = 99;
     this.formWas = c.formAt(run.viewTime / level.spb);
     this.dropAge = 99;
     this.dropFull = run.dropFull === true;
@@ -595,7 +600,7 @@ export class GdRenderer {
     const c = this.ctx;
     c.save();
     c.translate(x, y);
-    if (this.mx < 0) c.scale(-1, 1);
+    c.scale(this.mx < 0 ? -1 : 1, this.my < 0 ? -1 : 1);
     c.font = `800 ${Math.round(size)}px ui-rounded, "SF Pro Rounded", system-ui, sans-serif`;
     c.textAlign = 'center';
     c.textBaseline = 'middle';
@@ -662,6 +667,7 @@ export class GdRenderer {
     const c = this.ctx;
     c.save();
     if (this.mx < 0) { c.scale(-1, 1); x = -x; } // past a mirror gate the picture is flipped; words never are
+    if (this.my < 0) { c.scale(1, -1); y = -y; }
     c.font = `800 ${Math.round(size)}px ui-rounded, "SF Pro Rounded", system-ui, sans-serif`;
     c.textAlign = 'center';
     c.textBaseline = 'middle';
@@ -708,20 +714,33 @@ export class GdRenderer {
     const pulse = pl.pulse ? kick : 0;
     const lit = this.ringFlash;
     if (pl.chime) {
-      // a chime: no ring at all, only a bell hanging where the hop before ends. White at its heart: it is a tap.
+      // an orb: no ring at all, only the mark hanging where the hop before ends. White at its heart: it is a tap.
+      // Gold with four ticks: a jump orb. Cyan with chevrons: a dash orb. Violet with an arrow each way: a gravity orb.
       if (plain || pl.note < lo || pl.note > hi) return;
       const a = ang(pl.note);
       const x = Math.cos(a) * (r + pl.side * rb);
       const y = Math.sin(a) * (r + pl.side * rb);
       const tick = Math.exp(-(((beat % 1) + 1) % 1) * 5);
+      const col = pl.orb === 'dash' ? CYAN : pl.orb === 'grav' ? VIOLET : GOLD;
       c.globalAlpha = alpha;
+      c.lineCap = 'round'; c.lineJoin = 'round';
       c.fillStyle = HALO; c.beginPath(); c.arc(x, y, rb * 2.1, 0, TWO_PI); c.fill();
-      c.strokeStyle = rgba(GOLD); c.lineWidth = Math.max(2, rb * 0.42);
+      c.strokeStyle = rgba(col); c.lineWidth = Math.max(2, rb * 0.42);
       c.beginPath(); c.arc(x, y, rb * (1.55 + 0.15 * tick), 0, TWO_PI); c.stroke();
-      for (let k = 0; k < 4; k++) { const q = a + Math.PI / 4 + (k * Math.PI) / 2; c.beginPath(); c.moveTo(x + Math.cos(q) * rb * 1.9, y + Math.sin(q) * rb * 1.9); c.lineTo(x + Math.cos(q) * rb * 2.5, y + Math.sin(q) * rb * 2.5); c.stroke(); }
-      c.fillStyle = '#ffffff'; c.beginPath(); c.arc(x, y, rb * 0.85, 0, TWO_PI); c.fill();
+      if (pl.orb === 'dash') {
+        // the way it carries you: along the orbit, onward
+        const way = c0.angle(pl.note + 0.05) >= c0.angle(pl.note) ? 1 : -1;
+        const tx = -Math.sin(a) * way, ty = Math.cos(a) * way, nx = Math.cos(a), ny = Math.sin(a);
+        for (const k of [2.3, 3.2]) { c.beginPath(); c.moveTo(x + tx * rb * (k - 0.7) + nx * rb * 0.75, y + ty * rb * (k - 0.7) + ny * rb * 0.75); c.lineTo(x + tx * rb * k, y + ty * rb * k); c.lineTo(x + tx * rb * (k - 0.7) - nx * rb * 0.75, y + ty * rb * (k - 0.7) - ny * rb * 0.75); c.stroke(); }
+      } else if (pl.orb === 'grav') {
+        // gravity turns over here: an arrow toward the core and one away from it
+        const nx = Math.cos(a), ny = Math.sin(a), tx = -ny, ty = nx;
+        for (const k of [-1, 1]) { const bx = x + nx * rb * 2.1 * k, by = y + ny * rb * 2.1 * k, ex = x + nx * rb * 3.2 * k, ey = y + ny * rb * 3.2 * k; c.beginPath(); c.moveTo(bx, by); c.lineTo(ex, ey); c.moveTo(ex - nx * rb * 0.7 * k + tx * rb * 0.6, ey - ny * rb * 0.7 * k + ty * rb * 0.6); c.lineTo(ex, ey); c.lineTo(ex - nx * rb * 0.7 * k - tx * rb * 0.6, ey - ny * rb * 0.7 * k - ty * rb * 0.6); c.stroke(); }
+      } else for (let k = 0; k < 4; k++) { const q = a + Math.PI / 4 + (k * Math.PI) / 2; c.beginPath(); c.moveTo(x + Math.cos(q) * rb * 1.9, y + Math.sin(q) * rb * 1.9); c.lineTo(x + Math.cos(q) * rb * 2.5, y + Math.sin(q) * rb * 2.5); c.stroke(); }
+      c.fillStyle = '#ffffff'; c.beginPath(); c.arc(x, y, rb * (pl.wide ? 1 : 0.85), 0, TWO_PI); c.fill();
       const ahead = pl.note - beat;
       if (ahead > 0 && ahead < 2) { c.strokeStyle = `rgba(255,255,255,${0.9 - ahead * 0.3})`; c.lineWidth = 2; c.beginPath(); c.arc(x, y, rb * (1.6 + ahead * 2.6), 0, TWO_PI); c.stroke(); }
+      c.lineCap = 'butt'; c.lineJoin = 'miter';
       c.globalAlpha = 1;
       return;
     }
@@ -826,11 +845,13 @@ export class GdRenderer {
           c.lineCap = 'round';
         }
         if (pl.pad) {
-          // a pad: the game takes this one. A short thick plate on the ring, cyan for a springboard, violet for a tide pad.
-          c.beginPath(); this.arcPath(c0, r, pl.note - 0.16, pl.note + 0.04);
-          c.strokeStyle = HALO; c.lineWidth = 13; c.stroke();
-          c.strokeStyle = rgba(pl.pad === 'spring' ? CYAN : VIOLET); c.lineWidth = 8; c.stroke();
-        } else if (pl.act === 'up') {
+          // a pad: a short thick plate on the ring, cyan for a spring pad, violet for a tide pad. The white mark across
+          // it is drawn as on any ring: a pad is tapped.
+          c.beginPath(); this.arcPath(c0, r, pl.note - 0.2, pl.note + 0.2);
+          c.strokeStyle = HALO; c.lineWidth = 14; c.stroke();
+          c.strokeStyle = rgba(pl.pad === 'spring' ? CYAN : VIOLET); c.lineWidth = 9; c.stroke();
+        }
+        if (pl.act === 'up') {
           // the Comet's second mark: a white ring. Let go here.
           const x = Math.cos(a) * r;
           const y = Math.sin(a) * r;
@@ -1058,7 +1079,7 @@ export class GdRenderer {
         c.rotate(ang(sp.beat) + Math.PI / 2);
         c.globalAlpha = clamp((this.ahead - d) / 0.6, 0, 1) * clamp(1 + d / 0.4, 0, 1);
         c.strokeStyle = rgba(CYAN);
-        c.lineWidth = 3;
+        c.lineWidth = 3 + (d < 2.05 && d > 0 ? Math.exp(-(((beat % 1) + 1) % 1) * 5) * 3 : 0); // in its last two beats the sign beats with the music
         c.lineCap = 'round';
         const way = (course.angle(sp.beat + 0.1) > course.angle(sp.beat) ? 1 : -1) * (sp.faster ? 1 : -1);
         for (let i = -1; i <= 1; i++) {
@@ -1093,23 +1114,29 @@ export class GdRenderer {
         const la = ang(ln.beat);
         this.tag(FORM_NAME[ln.form], bx0 + Math.cos(la) * (rr + rb * 6.4), by0 + Math.sin(la) * (rr + rb * 6.4), clamp(rb * 1.5, 10, 15), col, al);
       }
-      // mirror gates: a cyan line across the path with an arrow each way
-      for (const mb of course.mirrors) {
+      // mirror and upside-down gates: a cyan line across the path, with an arrow each way along the orbit (mirror) or
+      // toward and away from the core (upside-down), and its name. In its last two beats the sign beats with the music.
+      for (const [list, flipV] of [[course.mirrors, false], [course.inverts, true]] as Array<[number[], boolean]>) for (const mb of list) {
         const d = mb - beat;
         if (d > this.ahead || d < -0.4) continue;
+        const al = clamp((this.ahead - d) / 0.6, 0, 1) * clamp(1 + d / 0.4, 0, 1);
+        const beatK = d < 2.05 && d > 0 ? Math.exp(-(((beat % 1) + 1) % 1) * 5) : 0;
         c.save();
         c.translate(bx0, by0);
         c.rotate(ang(mb) + Math.PI / 2);
-        c.globalAlpha = clamp((this.ahead - d) / 0.6, 0, 1) * clamp(1 + d / 0.4, 0, 1);
+        c.globalAlpha = al;
         c.lineCap = 'round';
         c.setLineDash([rb * 0.8, rb * 0.9]);
         c.beginPath(); c.moveTo(0, -rr - rb * 3.2); c.lineTo(0, -rr + rb * 3.2);
-        c.strokeStyle = HALO; c.lineWidth = 7; c.stroke();
-        c.strokeStyle = rgba(CYAN); c.lineWidth = 3; c.stroke();
+        c.strokeStyle = HALO; c.lineWidth = 7 + beatK * 4; c.stroke();
+        c.strokeStyle = rgba(CYAN); c.lineWidth = 3 + beatK * 3; c.stroke();
         c.setLineDash([]);
         c.fillStyle = rgba(CYAN);
-        for (const k of [-1, 1]) { c.beginPath(); c.moveTo(k * rb * 2.6, -rr); c.lineTo(k * rb * 1.2, -rr - rb * 1.1); c.lineTo(k * rb * 1.2, -rr + rb * 1.1); c.closePath(); c.fill(); }
+        if (flipV) for (const k of [-1, 1]) { for (const sx of [-1, 1]) { c.beginPath(); c.moveTo(sx * rb * 1.7, -rr + k * rb * 4.6); c.lineTo(sx * rb * 1.7 - rb * 1.1, -rr + k * rb * 3.2); c.lineTo(sx * rb * 1.7 + rb * 1.1, -rr + k * rb * 3.2); c.closePath(); c.fill(); } }
+        else for (const k of [-1, 1]) { c.beginPath(); c.moveTo(k * rb * 2.6, -rr); c.lineTo(k * rb * 1.2, -rr - rb * 1.1); c.lineTo(k * rb * 1.2, -rr + rb * 1.1); c.closePath(); c.fill(); }
         c.restore();
+        const ma = ang(mb);
+        this.tag(flipV ? 'UPSIDE-DOWN' : 'MIRROR', bx0 + Math.cos(ma) * (rr + rb * 6.6), by0 + Math.sin(ma) * (rr + rb * 6.6), clamp(rb * 1.5, 10, 15), CYAN, al);
       }
       for (const tb of course.turns) {
         const d = tb - beat;
@@ -1121,7 +1148,7 @@ export class GdRenderer {
         c.translate(bx0, by0);
         c.beginPath(); c.moveTo(Math.cos(a) * (rr - rb * 3), Math.sin(a) * (rr - rb * 3)); c.lineTo(Math.cos(a) * (rr + rb * 3), Math.sin(a) * (rr + rb * 3));
         c.strokeStyle = HALO; c.lineWidth = 8; c.stroke();
-        c.strokeStyle = rgba(CYAN); c.lineWidth = 3.5; c.stroke();
+        c.strokeStyle = rgba(CYAN); c.lineWidth = 3.5 + (d < 2.05 && d > 0 ? Math.exp(-(((beat % 1) + 1) % 1) * 5) * 3.5 : 0); c.stroke();
         const back = course.angle(tb - 0.1) < course.angle(tb) ? -1 : 1;
         const ac = a + (back * rb * 2.6) / rr;
         c.lineWidth = 2.5;
@@ -1250,8 +1277,9 @@ export class GdRenderer {
   }
 
   /**
-   * Dual mode's second spark: a Pulsar on one ring of its own, mirrored across the screen. It answers the same taps,
-   * flipping to the other side of its ring on every one; the marks that are its to read have a blot of ink behind them.
+   * Dual mode's second spark, mirrored across the screen, answering the same taps in its own way. A Pulsar stays on
+   * one ring and flips to the other side of it on every tap (its marks have a blot of ink behind them). A Satellite
+   * zig-zags between two rings, turning on every tap (its marks are at the turns).
    */
   private drawEcho(run: GdRun, beat: number, skin: RGB): void {
     const c = this.ctx;
@@ -1269,6 +1297,46 @@ export class GdRenderer {
     c.save();
     c.translate(this.coreX, this.coreY);
     c.lineCap = 'round';
+    if (rng[2] === 'sat') {
+      const Rin = this.rad(this.cam - 1);
+      const ringOf = (k: number) => ((Math.max(k, first) - first) % 2 === 0 ? R : Rin); // the ring it is on as press k comes
+      for (const rr of [Rin, R]) { c.beginPath(); this.arcPath(course, rr, beat - 0.8, beat + this.ahead); c.strokeStyle = HALO; c.lineWidth = 8; c.stroke(); c.strokeStyle = rgba(FLOOR, 0.55); c.lineWidth = 2.6; c.stroke(); }
+      // where it is, and the zig-zag ahead of it: a straight run from turn to turn
+      const lastS = ps[sim.ni - 1];
+      const nextS = ps[sim.ni];
+      const inRng = !!lastS && sim.ni - 1 >= first && lastS.beat < rng[1];
+      const t1 = nextS && nextS.beat < rng[1] + 1e-6 ? nextS.beat : (lastS ? lastS.beat : beat) + 1;
+      const rrNow = inRng ? lerp(ringOf(sim.ni - 1), ringOf(sim.ni), clamp((beat - lastS.beat) / Math.max(0.05, t1 - lastS.beat), 0, 1)) : ringOf(first);
+      c.beginPath(); c.moveTo(Math.cos(ang(beat)) * rrNow, Math.sin(ang(beat)) * rrNow);
+      let fromB = beat, fromR = rrNow;
+      for (let k = Math.max(first, sim.ni); k < ps.length; k++) {
+        const p = ps[k];
+        if (p.beat >= rng[1] || p.beat - beat > this.ahead) break;
+        for (let q = 1; q <= 5; q++) { const b = lerp(fromB, p.beat, q / 5), rr = lerp(fromR, ringOf(k), q / 5); c.lineTo(Math.cos(ang(b)) * rr, Math.sin(ang(b)) * rr); }
+        fromB = p.beat; fromR = ringOf(k);
+      }
+      c.setLineDash([2, 7]); c.strokeStyle = 'rgba(255,255,255,0.5)'; c.lineWidth = 2.2; c.stroke(); c.setLineDash([]);
+      for (let k = Math.max(first, sim.ni); k < ps.length; k++) {
+        const p = ps[k];
+        if (p.beat >= rng[1] || p.beat - beat > this.ahead) break;
+        if (p.twin !== 'b' && p.twin !== 'both') continue;
+        c.globalAlpha = clamp((this.ahead - (p.beat - beat)) / 0.6, 0, 1);
+        const a = ang(p.beat), rr = ringOf(k), len = rb * (p.accent ? 1.8 : 1.15);
+        c.beginPath(); c.moveTo(Math.cos(a) * (rr - len), Math.sin(a) * (rr - len)); c.lineTo(Math.cos(a) * (rr + len), Math.sin(a) * (rr + len));
+        c.strokeStyle = HALO; c.lineWidth = 8.5; c.stroke();
+        c.strokeStyle = '#ffffff'; c.lineWidth = 3.5; c.stroke();
+      }
+      c.globalAlpha = 1;
+      c.lineCap = 'butt';
+      if (run.state !== 'failed') {
+        const a = ang(beat), x = Math.cos(a) * rrNow, y = Math.sin(a) * rrNow;
+        c.fillStyle = 'rgba(3,5,14,0.5)';
+        c.beginPath(); c.arc(x, y, rb * 2.1, 0, TWO_PI); c.fill();
+        this.drawHero(x, y, rb, skin, a, course.angle(beat + 0.05) >= course.angle(beat) ? 1 : -1, 'sat', 1, 1, 0);
+      }
+      c.restore();
+      return;
+    }
     c.beginPath(); this.arcPath(course, R, beat - 0.8, beat + this.ahead);
     c.strokeStyle = HALO; c.lineWidth = 10; c.stroke();
     c.strokeStyle = rgba(FLOOR, 0.9); c.lineWidth = 3.5; c.stroke();
@@ -1544,10 +1612,21 @@ export class GdRenderer {
     this.branchV += ((bt ? 1 : 0) - this.branchV) * Math.min(1, dt * 12);
     if (bt) this.branchE = this.env(bt, beat);
     this.branchK = this.branchV * this.branchE;
-    // mirror gates: the picture turns over left to right, across the half beat round the bar line
+    // mirror and upside-down gates: the picture turns over on the bar line itself. The gate is in view for beats
+    // beforehand; the change is a snap, with a ring of light thrown out as it goes.
     let mx = 1;
-    for (const g of course.mirrors) { const u = clamp((beat - (g - 0.25)) / 0.5, 0, 1); mx *= calm ? (u >= 0.5 ? -1 : 1) : Math.cos(Math.PI * smooth(u)); }
-    this.mx = Math.abs(mx) < 0.04 ? (mx < 0 ? -0.04 : 0.04) : mx;
+    let my = 1;
+    for (const g of course.mirrors) if (beat >= g) mx = -mx;
+    for (const g of course.inverts) if (beat >= g) my = -my;
+    if ((mx !== this.mx || my !== this.my) && run.state === 'playing' && beat > course.start + 0.5) { this.wave(this.ball.r || r0, CYAN, r0 * 3.4, 5, 0.7, 0.4); if (!calm) this.flash = Math.max(this.flash, 0.5); }
+    this.mx = mx;
+    this.my = my;
+    // the orbit turning round or changing speed snaps on its bar line too: the same ring of light, smaller
+    let passed = 0;
+    for (const t of course.turns) if (beat >= t) passed++;
+    for (const g of course.portals) if (beat >= g.beat) passed++;
+    if (passed !== this.gatesPassed && passed > this.gatesPassed && run.state === 'playing' && beat > course.start + 0.5) this.wave(this.ball.r || r0, CYAN, r0 * 3, 4, 0.55, 0.35);
+    this.gatesPassed = passed;
     // through a lens: a burst in the new form's colour
     const formNow = course.formAt(beat);
     if (formNow !== this.formWas) {
@@ -1584,7 +1663,7 @@ export class GdRenderer {
     if (this.shake > 0) { const sh = 4 * this.shake * (1 - this.shake) * 5; cx += Math.sin(now * 0.031) * sh; cy += Math.sin(now * 0.026 + 1) * sh; }
     if (this.dropPower >= 0.3 && this.dropAge < 1.2 && !calm) cx += Math.exp(-this.dropAge * 4) * Math.sin(this.dropAge * 10) * m * 0.045 * this.dropPower; // the launch swings the camera
     c.translate(cx, cy);
-    c.scale(this.mx, 1);
+    c.scale(this.mx, this.my);
 
     // the other planets nearby: a small glowing core each, so you can see where a planet hop is going
     // (only the one a planet hop is about to go to, or has just left)
@@ -1793,7 +1872,7 @@ function platforms(c: Course, level: Level): Platform[] {
       twin: p ? p.twin : inTwin ? 'both' : null,
       planet: p ? p.planet : prev ? prev.planetTo : 0,
       spinAt: prev && prev.spin ? prev.beat : NaN, spinTol: prev ? prev.tol : 0, enterSide: prev ? prev.side : 1,
-      form: p ? p.form : 'orb', act: p ? p.act : 'tap', pad: p ? p.pad : '', wide: !!p && p.wide, chime: !!p && p.chime, noCeil: !!prev && prev.from === prev.to,
+      form: p ? p.form : 'orb', act: p ? p.act : 'tap', pad: p ? p.pad : '', wide: !!p && p.wide, chime: !!p && p.chime, orb: p ? p.orb : '', noCeil: !!prev && prev.from === prev.to,
       // the violet "gravity turns over" stretch is for the Orb's flips and the Pulsar; the Satellite and the Comet cross by their nature
       flipAt: prev && prev.kind === 'flip' && prev.form !== 'sat' && prev.form !== 'comet' ? prev.beat : NaN, flipTol: prev ? prev.tol : 0,
       pulse: !!level.segAt(((p ? p.beat : c.end) + 1e-6) * c.spb).core?.pulse

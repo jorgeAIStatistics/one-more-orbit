@@ -57,11 +57,13 @@ describe('escalation: each planet is tighter, shows less and asks for more', () 
 describe('forms: one new one per planet, each with a safe introduction', () => {
   const NEW: Record<string, Form> = { heroes: 'meteor', skyhigh: 'sat', blank: 'pulsar', invincible: 'comet' };
 
-  it('each planet brings its own form through a lens; the bar after its first lens is played for the player and the next two presses are twice as wide', () => {
+  it('each planet brings its own form through a lens, shown first; forms from earlier planets come back with no introduction, only wider first openings', () => {
+    const order: Form[] = ['meteor', 'sat', 'pulsar', 'comet'];
     for (const [id, form] of Object.entries(NEW)) {
       const { course, pack } = of(id);
       const forms = new Set(course.lenses.map((l) => l.form).filter((f) => f !== 'orb'));
-      expect([...forms], id).toEqual([form]);
+      // its own form, and every form met before it: reused in new combinations
+      expect([...forms].sort(), id).toEqual(order.slice(0, order.indexOf(form) + 1).sort());
       const first = course.lenses.find((l) => l.form === form)!;
       expect(first.intro).toBe(true);
       expect(first.beat % 4).toBe(0); // a lens stands on a bar line
@@ -81,18 +83,57 @@ describe('forms: one new one per planet, each with a safe introduction', () => {
       const tol = pack.level.rules!.tol!;
       for (const p of real.slice(0, 2)) { expect(p.wide).toBe(true); expect(p.tol * course.spb).toBeGreaterThan(tol + 0.03); }
       expect(course.firsts.some((f) => f.what === form && f.beat === first.beat), 'a hint the first time').toBe(true);
+      // a form from an earlier planet: never played for the player, and its first press here is wide
+      for (const old of order.slice(0, order.indexOf(form))) {
+        const lens = course.lenses.find((l) => l.form === old)!;
+        expect(lens.intro, `${id}: ${old} needs no introduction`).toBe(false);
+        const p = course.presses.find((x) => x.beat >= lens.beat - 1e-6 && x.form === old)!;
+        expect(p.auto, `${id}: the first ${old} press is the player's`).toBe(false);
+        expect(p.wide, `${id}: and it is wide`).toBe(true);
+      }
     }
   });
 
-  it('the last level has every form, with no introductions, and is the only one with two different sparks on one tap', () => {
+  it('forms keep changing: from the second planet on there is a lens at least every 16 bars; the first planet has the Meteor for more than two bars running and changes form at least three times', () => {
+    const bar = (b: number) => Math.round(b / 4);
+    for (const id of ['skyhigh', 'blank', 'invincible']) {
+      const { course } = of(id);
+      const at = [0, ...course.lenses.map((l) => bar(l.beat)), Math.round(course.presses[course.presses.length - 1].beat / 4)];
+      for (let k = 1; k < at.length; k++) expect(at[k] - at[k - 1], `${id}: bars ${at[k - 1] + 1} to ${at[k] + 1} without a lens`).toBeLessThanOrEqual(16);
+      expect(course.lenses.length, id).toBeGreaterThanOrEqual(10);
+    }
+    const h = of('heroes').course;
+    expect(h.lenses.length).toBeGreaterThanOrEqual(3);
+    const stretches = h.lenses.filter((l) => l.form === 'meteor').map((l) => { const next = h.lenses.find((x) => x.beat > l.beat); return ((next ? next.beat : h.end) - l.beat) / 4; });
+    expect(Math.max(...stretches)).toBeGreaterThan(2);
+    // and in those bars the player really is the Meteor: at least four presses of their own in one stretch
+    expect(h.presses.filter((p) => p.form === 'meteor' && !p.auto).length).toBeGreaterThanOrEqual(8);
+  });
+
+  it('the last level has every form and no introductions; two different sparks on one tap come gently on the fourth planet, hard in its final drop, and again in the last level', () => {
     const { course } = of(FINAL.level.id);
     expect(new Set(course.lenses.map((l) => l.form))).toEqual(new Set(['orb', 'meteor', 'sat', 'pulsar', 'comet']));
     expect(course.lenses.some((l) => l.intro)).toBe(false);
     expect(course.presses.some((p) => p.intro)).toBe(false);
     expect(course.duals.length).toBe(1);
     expect(course.duals[0][0]).toBeGreaterThan(course.dropBeat);
-    for (const b of built) if (b.pack !== FINAL) expect(b.course.duals).toEqual([]);
-    expect(course.presses.filter((p) => p.beat >= course.duals[0][0] && p.beat < course.duals[0][1]).every((p) => p.twin !== null && p.form === 'orb')).toBe(true);
+    for (const b of built) if (b.pack !== FINAL && b.pack.level.id !== 'invincible') expect(b.course.duals).toEqual([]);
+    for (const c of [course, of('invincible').course]) for (const d of c.duals) expect(c.presses.filter((p) => p.beat >= d[0] && p.beat < d[1]).every((p) => p.twin !== null && p.form === 'orb')).toBe(true);
+    // Invincible: the mirrored twin orbit is still there; the echo in another form comes first before the drop, in a
+    // sparse stretch (a Pulsar: it stays on one ring), and the level ends on four bars of it, most of them a Satellite
+    const inv = of('invincible').course;
+    const mirrored = inv.twins.flatMap(([a, z]) => { const out: number[] = []; for (let b = a; b < z; b += 4) if (!inv.duals.some((d) => b >= d[0] && b < d[1])) out.push(b); return out; });
+    expect(mirrored.length).toBeGreaterThanOrEqual(4);
+    expect(inv.duals.length).toBeGreaterThanOrEqual(3);
+    expect(inv.duals[0][1]).toBeLessThanOrEqual(inv.dropBeat);
+    expect(inv.duals[0][2]).toBe('pulsar');
+    const gentle = inv.presses.filter((p) => p.beat >= inv.duals[0][0] && p.beat < inv.duals[0][1]).length / ((inv.duals[0][1] - inv.duals[0][0]) / 4);
+    const final = inv.duals.filter((d) => d[0] >= inv.presses[inv.presses.length - 1].beat - 20);
+    expect(final.reduce((n, d) => n + (d[1] - d[0]), 0)).toBe(16);
+    expect(final.some((d) => d[2] === 'sat')).toBe(true);
+    const hard = inv.presses.filter((p) => final.some((d) => p.beat >= d[0] && p.beat < d[1])).length / 4;
+    expect(hard).toBeGreaterThanOrEqual(gentle * 2);
+    expect(inv.firsts.some((f) => f.what === 'dual' && f.beat < inv.dropBeat)).toBe(true);
   });
 
   it('each form moves in its own way: the Meteor and the Pulsar stay on their ring, the Satellite and the Comet go between two', () => {
@@ -179,26 +220,129 @@ describe('gates, pads, chimes and slipstreams', () => {
     }
     expect(of('blank').course.portals.map((g) => g.speed)).toEqual(expect.arrayContaining([0.5, 1.5, 2]));
     expect(of('skyhigh').course.portals.some((g) => g.speed === 1.5)).toBe(true);
-    // mirror gates come in pairs, so the picture always ends the right way round
-    for (const { course } of built) expect(course.mirrors.length % 2).toBe(0);
-    expect(of('blank').course.mirrors.length).toBe(2);
+    // mirror and upside-down gates come in pairs, so the picture always ends the right way up and the right way round
+    for (const { course } of built) { expect(course.mirrors.length % 2).toBe(0); expect(course.inverts.length % 2).toBe(0); }
   });
 
-  it('springboards and tide pads need no tap; chimes are taken in mid-air; slipstreams carry for a beat', () => {
+  it('the dosage per planet: reversals and tempo gates from the second on, mirror and upside-down gates on the third and fourth, none of it on the first', () => {
+    const h = of('heroes').course;
+    expect([h.turns.length, h.portals.length, h.mirrors.length, h.inverts.length]).toEqual([0, 0, 0, 0]);
+    for (const id of ['skyhigh', 'blank', 'invincible']) {
+      const { course } = of(id);
+      expect(course.turns.length, `${id}: reversals`).toBeGreaterThanOrEqual(3);
+      expect(course.portals.length, `${id}: tempo gates`).toBeGreaterThanOrEqual(4);
+      expect(course.firsts.some((f) => f.what === 'reverse'), `${id}: a hint for the first reversal`).toBe(true);
+    }
+    expect(of('skyhigh').course.mirrors.length + of('skyhigh').course.inverts.length).toBe(0);
+    for (const id of ['blank', 'invincible']) {
+      const { course, pack } = of(id);
+      expect(course.mirrors.length, `${id}: mirror gates`).toBeGreaterThanOrEqual(2);
+      expect(course.inverts.length, `${id}: upside-down gates`).toBeGreaterThanOrEqual(2);
+      expect(course.firsts.some((f) => f.what === 'invert')).toBe(true);
+      // an upside-down gate stands on a bar line and the first press after it is wide, like any gate's
+      for (const g of course.inverts) {
+        expect(g % 4).toBe(0);
+        const p = course.presses.find((x) => x.beat >= g - 1e-6 && x.beat < g + 4);
+        if (p && !p.auto) expect(p.wide || p.after || p.smash, `${pack.level.id}: first press after the upside-down gate at ${g}`).toBe(true);
+      }
+    }
+  });
+
+  it('a gate is in view beforehand and then snaps: the orbit turns and changes speed on the bar line itself, with no easing', () => {
+    for (const { course, pack } of built) {
+      const rate = (b: number) => (course.angle(b + 0.01) - course.angle(b)) / 0.01;
+      for (const g of [...course.turns, ...course.portals.map((x) => x.beat)]) {
+        const before = rate(g - 0.02), justBefore = rate(g - 0.3), after = rate(g + 0.001), later = rate(g + 0.3);
+        expect(before, `${pack.level.id}: no slowing into the gate at ${g}`).toBeCloseTo(justBefore, 6);
+        expect(after, `${pack.level.id}: full speed straight after the gate at ${g}`).toBeCloseTo(later, 6);
+        expect(Math.abs(after - before)).toBeGreaterThan(0.05);
+        expect(course.angle(g + 1e-6), 'the ball itself never jumps').toBeCloseTo(course.angle(g - 1e-6), 4);
+      }
+      for (const g of course.turns) expect(Math.sign(rate(g - 0.1))).toBe(-Math.sign(rate(g + 0.1)));
+    }
+  });
+
+  it('pads are tapped: a spring pad throws the ball to the next planet, a tide pad turns gravity over, and missing either ends the run', () => {
     const spring = of('heroes').course.presses.filter((p) => p.pad === 'spring');
     expect(spring.length).toBeGreaterThanOrEqual(2);
-    for (const p of spring) { expect(p.auto).toBe(true); expect(p.sling).toBe(true); }
-    expect(of('heroes').course.presses.some((p) => p.sling && !p.auto)).toBe(true); // and the tapped planet hop is still there
+    for (const p of spring) { expect(p.auto).toBe(false); expect(p.sling).toBe(true); }
+    expect(of('heroes').course.presses.some((p) => p.sling && !p.pad)).toBe(true); // and the plain planet hop is still there
     const tide = of('skyhigh').course.presses.filter((p) => p.pad === 'tide');
     expect(tide.length).toBeGreaterThanOrEqual(3);
-    for (const p of tide) { expect(p.auto).toBe(true); expect(p.kind).toBe('flip'); }
-    const chimes = of('blank').course.presses.filter((p) => p.chime);
-    expect(chimes.length).toBeGreaterThanOrEqual(4);
-    for (const p of chimes) { const before = of('blank').course.presses[p.i - 1]; expect(before.land).toBe(p.beat); expect(before.to).toBe(p.from); expect(p.spin).toBe(false); }
-    const slips = of('invincible').course.presses.filter((p) => p.slip);
-    expect(slips.length).toBeGreaterThanOrEqual(3);
-    for (const p of slips) { expect(p.land - p.beat).toBe(SLIP_FLIGHT); expect(Math.abs(p.to - p.from)).toBeCloseTo(2, 9); expect(p.line).toBe(true); }
-    // the first two planets keep chimes and slipstreams off the main course
-    for (const id of ['heroes', 'skyhigh']) expect(of(id).course.presses.some((p) => p.chime || p.slip)).toBe(false);
+    for (const p of tide) { expect(p.auto).toBe(false); expect(p.kind).toBe('flip'); }
+    // nothing but a form's introduction, the launch into a drop and the run-in is ever played for the player
+    for (const { course } of built) expect(course.presses.filter((p) => p.auto && !p.intro && !p.smash).every((p) => !p.pad)).toBe(true);
+    for (const [id, pad] of [['heroes', 'spring'], ['skyhigh', 'tide']] as const) {
+      const { course } = of(id);
+      const p = course.presses.find((x) => x.pad === pad)!;
+      const skipped = course.script.filter(([t]) => Math.abs(t - p.beat) > 1e-6 && !(t > p.beat && t < p.beat + 0.3));
+      const sim = play(course, skipped.filter(([t]) => t < p.beat + 2), p.beat + 2);
+      expect(sim.crashed, `${id}: riding over the ${pad} pad without a tap`).toBe(true);
+      expect(play(course, course.script.filter(([t]) => t < p.beat + 2), p.beat + 2).crashed).toBe(false);
+    }
+  });
+
+  it('orbs are tapped in mid-air, exactly where the hop before ends: a jump orb hops again, a dash orb carries for a beat, a gravity orb turns gravity over', () => {
+    for (const { course, pack } of built) for (const p of course.presses) {
+      const where = `${pack.level.id} at ${p.beat}`;
+      if (!p.orb) { if (!p.slip) expect(p.chime, where).toBe(false); continue; }
+      const before = course.presses[p.i - 1];
+      expect(p.auto, where).toBe(false);
+      expect(p.chime, where).toBe(true);
+      expect(before.land, where).toBe(p.beat);
+      expect(before.to, where).toBe(p.from);
+      expect(p.form === 'orb' && p.twin === null && !p.spin && !p.sling, where).toBe(true);
+      if (p.orb === 'dash') { expect(p.slip, where).toBe(true); expect(p.land - p.beat, where).toBe(SLIP_FLIGHT); expect(Math.abs(p.to - p.from), where).toBeCloseTo(2, 9); expect(p.line, where).toBe(true); }
+      if (p.orb === 'grav') expect(p.kind, where).toBe('flip');
+      if (p.orb === 'jump') { expect(p.slip, where).toBe(false); expect(Math.abs(p.to - p.from), where).toBeGreaterThan(0.5); }
+    }
+    for (const p of of('invincible').course.presses.filter((x) => x.slip)) { expect(p.land - p.beat).toBe(SLIP_FLIGHT); expect(p.line).toBe(true); }
+    // a gravity orb turns gravity over for the rest of its bar: the next press in that bar leaves from the other side
+    for (const { course } of built) for (const p of course.presses.filter((x) => x.orb === 'grav')) {
+      const next = course.presses[p.i + 1];
+      if (next && Math.floor(next.beat / 4 + 1e-6) === Math.floor(p.beat / 4 + 1e-6)) { expect(next.side).toBe(-p.side); if (next.form === 'orb' && !next.weave && next.orb !== 'grav') expect(next.kind).toBe('hop'); }
+    }
+    // missing an orb ends the run like any missed mark; tapping it early is held until the ball arrives
+    const sky = of('skyhigh').course;
+    const orb = sky.presses.find((p) => p.orb === 'jump')!;
+    expect(play(sky, sky.script.filter(([t]) => t < orb.beat - 0.3), orb.beat + 1.5).crashed).toBe(true);
+    const early = sky.script.filter(([t]) => t < orb.beat + 1).map(([t, d]): [number, boolean] => [Math.abs(t - orb.beat) < 1e-6 ? t - orb.tol * 0.8 : t, d]).sort((x, y) => x[0] - y[0]);
+    expect(play(sky, early, orb.beat + 0.9).crashed).toBe(false);
+    // the first planet has no orbs at all; the gravity orb waits for the third
+    expect(of('heroes').course.presses.some((p) => p.orb || p.slip)).toBe(false);
+    expect(of('skyhigh').course.presses.some((p) => p.orb === 'grav')).toBe(false);
+    for (const id of ['blank', 'invincible']) expect(of(id).course.presses.filter((p) => p.orb === 'grav').length, id).toBeGreaterThanOrEqual(3);
+    for (const id of ['skyhigh', 'blank', 'invincible']) for (const kind of ['jump', 'dash'] as const) expect(of(id).course.presses.filter((p) => p.orb === kind).length, `${id}: ${kind} orbs`).toBeGreaterThanOrEqual(3);
+  });
+
+  it('combos: from the second planet on, every level chains orbs on consecutive notes of the music, and its longest chain is in the drop', () => {
+    const combos = (c: (typeof built)[number]['course']) => {
+      const out: Array<{ beat: number; kinds: string[] }> = [];
+      for (let i = 0; i < c.presses.length; i++) {
+        if (!c.presses[i].orb) continue;
+        let j = i; while (j + 1 < c.presses.length && c.presses[j + 1].orb) j++;
+        if (j > i) out.push({ beat: c.presses[i].beat, kinds: c.presses.slice(i, j + 1).map((p) => p.orb) });
+        i = j;
+      }
+      return out;
+    };
+    expect(combos(of('heroes').course)).toEqual([]);
+    const longest: number[] = [];
+    for (const id of ['skyhigh', 'blank', 'invincible']) {
+      const { course } = of(id);
+      const all = combos(course);
+      expect(all.length, `${id}: combos`).toBeGreaterThanOrEqual(3);
+      const inDrop = all.filter((x) => x.beat >= course.dropBeat);
+      expect(inDrop.length, `${id}: combos in the drop`).toBeGreaterThanOrEqual(2);
+      const best = Math.max(...all.map((x) => x.kinds.length));
+      expect(Math.max(...inDrop.map((x) => x.kinds.length)), `${id}: the longest is in the drop`).toBe(best);
+      longest.push(best);
+      // a combo is hop, orb, orb (, orb): each orb a beat or less after the one before, each on a note of the music
+      for (const x of all) { const i = course.presses.findIndex((p) => p.beat === x.beat); for (let k = 0; k < x.kinds.length; k++) expect(course.presses[i + k].beat - course.presses[i + k - 1].beat).toBeLessThanOrEqual(2); expect(course.presses[i - 1].orb, 'it starts with a hop from the ring').toBe(''); }
+      expect(all.some((x) => x.kinds[0] === 'jump' && x.kinds[1] === 'dash'), `${id}: hop, jump orb, dash orb`).toBe(true);
+      expect(course.firsts.some((f) => f.what === 'combo')).toBe(true);
+    }
+    expect(longest[1]).toBeGreaterThanOrEqual(3); // the third and fourth planets chain three orbs
+    expect(longest[2]).toBeGreaterThanOrEqual(3);
   });
 });
