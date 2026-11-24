@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { BADGES } from '../src/game/extras';
 import { FINAL, PACKS } from '../src/game/packs';
+import { STORIES } from '../src/art/storypaint.js';
 import { PLANETS, STORY, planetName } from '../src/ui/galaxy';
 
 describe('the galaxy', () => {
@@ -24,8 +25,11 @@ describe('the galaxy', () => {
     expect(STORY.hollow.length).toBe(2);
     expect(STORY.end.length).toBe(3);
     expect(Object.entries(STORY).filter(([k]) => k !== 'lens').flatMap(([, f]) => f).length).toBe(12);
+    expect(new Set(Object.values(STORY).flat().map((f) => f.scene)).size).toBe(13); // every card has a scene of its own
     for (const f of Object.values(STORY).flat()) {
       expect(typeof f.draw).toBe('function');
+      expect(STORIES.SCENES[f.scene], `scene ${f.scene}`).toBeTruthy(); // its painted scene exists, for a phone and a desktop
+      for (const dev of ['phone', 'desktop']) expect(STORIES.SCENES[f.scene][dev].B.size).toBeGreaterThanOrEqual(18);
       expect(f.text.length, f.text).toBeGreaterThan(40);
       expect(f.text.length, f.text).toBeLessThanOrEqual(175); // a card is read in a few seconds
     }

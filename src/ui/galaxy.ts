@@ -112,30 +112,31 @@ function restoredPlate(c: Ctx, w: number, h: number, id: string, n: number): voi
   tooth(c, w, h, 0.8);
 }
 
-export interface Frame { draw: (c: Ctx, w: number, h: number) => void; text: string }
+/** scene: the painted scene (Afterglow) this card is, by its name in src/art/storypaint.js. draw: the Star Atlas plate, kept with that look. */
+export interface Frame { scene: string; draw: (c: Ctx, w: number, h: number) => void; text: string }
 const ALL4 = ['heroes', 'skyhigh', 'blank', 'invincible'];
 /** The story, in chapters. Each plays once, at its moment, and can be skipped. */
 export const STORY: Record<string, Frame[]> = {
   open: [
-    { draw: (c, w, h) => galaxy(c, w, h, ALL4, { no: 'PLATE III.', marlow: true, eko: [690, 250] }), text: 'In the middle of a small galaxy stands the Lantern, a crooked old lighthouse. Its lamp hums, and every planet hums back in its own colour.' },
-    { draw: ekoPlate, text: 'Marlow the lampmoth keeps the lamp. Eko is its youngest spark, and likes nothing better than riding the beam.' },
-    { draw: (c, w, h) => hushPlate(c, w, h), text: 'Then the Hush came, which cannot bear a sound. It took every planet\'s song, and the colour went with it. It carried Marlow off to the Hollow.' }
+    { scene: 'lantern', draw: (c, w, h) => galaxy(c, w, h, ALL4, { no: 'PLATE III.', marlow: true, eko: [690, 250] }), text: 'In the middle of a small galaxy stands the Lantern, a crooked old lighthouse. Its lamp hums, and every planet hums back in its own colour.' },
+    { scene: 'eko', draw: ekoPlate, text: 'Marlow the lampmoth keeps the lamp. Eko is its youngest spark, and likes nothing better than riding the beam.' },
+    { scene: 'hush', draw: (c, w, h) => hushPlate(c, w, h), text: 'Then the Hush came, which cannot bear a sound. It took every planet\'s song, and the colour went with it. It carried Marlow off to the Hollow.' }
   ],
-  heroes: [{ draw: (c, w, h) => restoredPlate(c, w, h, 'heroes', 1), text: 'Emberwick sings again, and its embers are warm again. One song is home, and the Lantern\'s beam finds its way there.' }],
-  skyhigh: [{ draw: (c, w, h) => restoredPlate(c, w, h, 'skyhigh', 2), text: 'Cirra has its tune back, and its clouds are rose again. Two songs are home.' }],
-  blank: [{ draw: (c, w, h) => restoredPlate(c, w, h, 'blank', 3), text: 'Glassmere rings like a bell, blue to its heart. Three songs are home.' }],
-  invincible: [{ draw: (c, w, h) => restoredPlate(c, w, h, 'invincible', 4), text: 'Verdance is loud with leaves, and green again. Four songs are home, and at the edge of the galaxy something has noticed.' }],
+  heroes: [{ scene: 'ember', draw: (c, w, h) => restoredPlate(c, w, h, 'heroes', 1), text: 'Emberwick sings again, and its embers are warm again. One song is home, and the Lantern\'s beam finds its way there.' }],
+  skyhigh: [{ scene: 'cirra', draw: (c, w, h) => restoredPlate(c, w, h, 'skyhigh', 2), text: 'Cirra has its tune back, and its clouds are rose again. Two songs are home.' }],
+  blank: [{ scene: 'glass', draw: (c, w, h) => restoredPlate(c, w, h, 'blank', 3), text: 'Glassmere rings like a bell, blue to its heart. Three songs are home.' }],
+  invincible: [{ scene: 'verd', draw: (c, w, h) => restoredPlate(c, w, h, 'invincible', 4), text: 'Verdance is loud with leaves, and green again. Four songs are home, and at the edge of the galaxy something has noticed.' }],
   hollow: [
-    { draw: (c, w, h) => galaxy(c, w, h, ALL4, { no: 'PLATE IX.', eko: [640, 170], names: false }), text: 'The Hollow hangs where no beam reaches and no colour has ever come back. The last jar is there, and in it, the keeper of the lamp.' },
-    { draw: (c, w, h) => marlowPlate(c, w, h, true), text: 'Marlow taps on the glass: one, two, three, four. Even here, he keeps the beat. Go on, little spark.' }
+    { scene: 'hollow', draw: (c, w, h) => galaxy(c, w, h, ALL4, { no: 'PLATE IX.', eko: [640, 170], names: false }), text: 'The Hollow hangs where no beam reaches and no colour has ever come back. The last jar is there, and in it, the keeper of the lamp.' },
+    { scene: 'marlow', draw: (c, w, h) => marlowPlate(c, w, h, true), text: 'Marlow taps on the glass: one, two, three, four. Even here, he keeps the beat. Go on, little spark.' }
   ],
   end: [
-    { draw: (c, w, h) => hushPlate(c, w, h, 1), text: 'The last stitch comes loose, and the light it was holding pours out. Without its seam the Hush is small after all, and very tired.' },
-    { draw: (c, w, h) => marlowPlate(c, w, h, false), text: 'Marlow lights the lamp. Every planet hums back, and colour runs through the whole galaxy like ink through water.' },
-    { draw: (c, w, h) => galaxy(c, w, h, ALL4, { no: 'PLATE X.', guest: true, marlow: true, eko: [690, 250] }), text: 'The Hush is given the quietest song there is, and falls asleep beside the lamp. One more orbit, Eko?' }
+    { scene: 'unstitch', draw: (c, w, h) => hushPlate(c, w, h, 1), text: 'The last stitch comes loose, and the light it was holding pours out. Without its seam the Hush is small after all, and very tired.' },
+    { scene: 'relight', draw: (c, w, h) => marlowPlate(c, w, h, false), text: 'Marlow lights the lamp. Every planet hums back, and colour runs through the whole galaxy like ink through water.' },
+    { scene: 'dawn', draw: (c, w, h) => galaxy(c, w, h, ALL4, { no: 'PLATE X.', guest: true, marlow: true, eko: [690, 250] }), text: 'The Hush is given the quietest song there is, and falls asleep beside the lamp. One more orbit, Eko?' }
   ],
   lens: [
-    { draw: (c, w, h) => { galaxy(c, w, h, ALL4, { no: 'PLATE XI.', guest: true, names: false }); glow(c, 588, 292, 520, [255, 226, 170], 0.5, 'screen'); }, text: 'Fifteen shards, and the lens is whole. The Lantern\'s beam reaches further than it ever has.' }
+    { scene: 'lens', draw: (c, w, h) => { galaxy(c, w, h, ALL4, { no: 'PLATE XI.', guest: true, names: false }); glow(c, 588, 292, 520, [255, 226, 170], 0.5, 'screen'); }, text: 'Fifteen shards, and the lens is whole. The Lantern\'s beam reaches further than it ever has.' }
   ]
 };
 

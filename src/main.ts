@@ -13,7 +13,8 @@ import { bestFor, persist, save, starCount, starsFor } from './save';
 import { LEVEL_UI, icon } from './ui/art';
 import { SkyMap, type SkyInfo, type SkyNode } from './ui/skymap';
 import { SkyTitle } from './ui/skytitle';
-import { PLANETS, STORY, cardPic, ekoPic, hollowPic, lanternPic, planetName, planetPic, titlePic, type Frame } from './ui/galaxy';
+import { SkyStory } from './ui/skystory';
+import { PLANETS, STORY, ekoPic, planetName, type Frame } from './ui/galaxy';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 type Screen = 'title' | 'levels' | 'play' | 'pause' | 'results' | 'settings' | 'calib' | 'orbs' | 'badges' | 'quests' | 'record' | 'story';
@@ -50,6 +51,8 @@ const renderer = new Renderer($<HTMLCanvasElement>('stage'));
 const sky = new SkyMap($<HTMLCanvasElement>('stage'));
 /** the title: the horizon under that sky */
 const skyTitle = new SkyTitle($<HTMLCanvasElement>('stage'));
+/** the story: painted scenes with the words written into them */
+const skyStory = new SkyStory($<HTMLCanvasElement>('stage'));
 let screen: Screen = 'title';
 let settingsFrom: Screen = 'levels';
 let run: Run | null = null;
@@ -109,12 +112,7 @@ let storyAt = 0;
 let storyThen: (() => void) | null = null;
 function renderStory(): void {
   const f = storyFrames[storyAt];
-  // each card is a plate of the atlas, drawn when it is shown
-  const plateCv = document.createElement('canvas');
-  plateCv.width = 1200;
-  plateCv.height = 750;
-  f.draw(plateCv.getContext('2d')!, 1200, 750);
-  $('storyArt').replaceChildren(plateCv);
+  skyStory.show(f.scene, f.text, storyFrames.length > 1); // the scene is painted on the canvas; the words fade in over it
   $('storyArt').setAttribute('aria-label', f.text);
   const text = $('storyText');
   text.textContent = f.text;
@@ -180,7 +178,7 @@ const ekoEl = document.createElement('div');
 function buildMap(): void {
   // the Lantern in the middle, and Eko, who waits at the place you have chosen
   hubEl.className = 'hub';
-  hubEl.innerHTML = `<img alt="" src="${lanternPic()}">`;
+  hubEl.innerHTML = '';
   ekoEl.className = 'map-eko';
   ekoEl.innerHTML = '<img alt="">';
   mapEl.append(hubEl);
@@ -190,7 +188,7 @@ function buildMap(): void {
     el.className = `node ${n.kind}`;
     el.dataset.id = n.id;
     // a planet is two pictures: the engraving, and over it the same globe in colour, which shows once its song is home
-    const pics = n.kind === 'moon' ? '' : n.kind === 'gate' ? `<img class="pl mono" alt="" src="${hollowPic(false)}"><img class="pl col" alt="" src="${hollowPic(true)}">` : `<img class="pl mono" alt="" src="${planetPic(n.id, false)}"><img class="pl col" alt="" src="${planetPic(n.id, true)}">`;
+    const pics = ''; // (the painted sky draws the worlds now; these hidden pieces only keep the old map's logic alive)
     el.innerHTML = `${pics}<span class="glyph"></span>`;
     const lab = document.createElement('div');
     lab.className = 'lab';
@@ -323,9 +321,6 @@ function renderMap(): void {
     ekoEl.style.left = `${here[0] - here[2] * (at.kind === 'gate' ? 1.15 : 1.05)}px`;
     ekoEl.style.top = `${here[1] + here[2] * (at.kind === 'gate' ? 0.55 : -1.05)}px`;
     ekoEl.style.setProperty('--s', `${Math.max(30, Math.min(54, here[2] * 1.5))}px`);
-    const face = ekoEl.querySelector('img')!;
-    const pic = ekoPic(orbColour(save.skin));
-    if (face.getAttribute('src') !== pic) face.setAttribute('src', pic);
   }
   $('starTotal').innerHTML = `${icon('star')}${starCount()} / ${maxStars}`;
   $('starTotal').setAttribute('aria-label', `${starCount()} of ${maxStars} lens shards`);
@@ -382,7 +377,7 @@ function renderSheet(): void {
   const artOf = at.kind === 'gate' ? 'gate' : at.planet;
   const artId = artOf === 'gate' ? FINAL_ID : artOf;
   const artKey = `${artId}:${at.kind === 'moon'}:${bestFor(artId).cleared}`;
-  if (art.dataset.of !== artKey) { art.dataset.of = artKey; art.innerHTML = `<img alt="" src="${cardPic(artId, bestFor(artId).cleared, at.kind === 'moon')}">`; }
+  art.dataset.of = artKey;
   $('shMastery').innerHTML = '';
   art.style.filter = at.kind === 'moon' ? (st === 'hidden' ? 'grayscale(1) brightness(0.3)' : 'saturate(0.5) brightness(0.62)') : at.kind === 'gate' ? 'none' : st === 'locked' ? 'grayscale(0.85) brightness(0.45)' : 'none';
   $('shLine').classList.remove('hidden');
@@ -867,6 +862,8 @@ $('title').addEventListener('click', () => {
   // the first time, the story opens; after that a tap is Eko rising, and the camera goes up into the galaxy with him
   if (!save.story.open) playStory('open', () => show('levels')); else { renderMap(); skyTitle.ascend(() => show('levels')); }
 });
+// the story: a tap anywhere goes on (or brings the rest of the words in); the quiet word in the corner skips
+$('story').addEventListener('click', (e) => { if (screen !== 'story') return; const r = skyStory.tap(e.clientX, e.clientY); if (r === 'skip') endStory(); else if (r === 'next') nextStory(); });
 $('storyNext').addEventListener('click', nextStory);
 $('storyArt').addEventListener('click', nextStory);
 $('storySkip').addEventListener('click', () => { if (screen === 'story') endStory(); });
@@ -1270,6 +1267,7 @@ function tick(now: number): void {
   } else {
     audio.tick(now);
     if (screen === 'levels') sky.draw(now, dt);
+    else if (screen === 'story') skyStory.draw(now);
     else if (screen === 'title') { if (skyTitle.between) sky.draw(now, dt); skyTitle.draw(now, dt); } // rising, the galaxy shows through
     else renderer.drawIdle(now, dt);
     if (screen === 'record') record.tick(now);

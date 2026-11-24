@@ -539,3 +539,6 @@ body { font-weight: 600; }
 #levels .topbar, #levels .map, #levels .foot { display: none; }
 /* Afterglow, screen 2: the title is painted on the canvas; the old wordmark and picture are kept for readers, not shown */
 #title .title-in { visibility: hidden; }
+/* Afterglow, screen 3: the story is painted on the canvas and tapped anywhere; the old card is kept for readers, not shown */
+.screen.veil.story { background: none; cursor: pointer; }
+#story .story-card { visibility: hidden; }
