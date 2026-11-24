@@ -1,0 +1,12 @@
+<!doctype html><meta charset="utf-8"><title>Afterglow: the title</title>
+<body style="margin:0;background:#111">
+<script src="kit.js"></script><script src="a-dusk.js"></script><script src="map-afterglow.js"></script><script src="title-afterglow.js"></script>
+<script>
+window.errors = [];
+const add = (id, w, h, draw) => { const cv = document.createElement('canvas'); cv.width = w; cv.height = h; cv.id = id; cv.style.cssText = 'display:block;margin:8px auto;max-width:100%'; document.body.appendChild(cv); try { draw(cv.getContext('2d')); } catch (e) { window.errors.push(`${id}: ${e.stack || e}`); } };
+for (const name of Object.keys(TITLES.LAYOUTS)) for (const [dev, w, h] of [['phone', 780, 1688], ['desktop', 1440, 900]]) add(`${name}-${dev}`, w, h, (c) => TITLES.draw(c, w, h, name, dev));
+// the glide: the first composition as the tap lands, half-way up, and arrived in the galaxy
+add('glide-1', 780, 1688, (c) => TITLES.draw(c, 780, 1688, 'horizon', 'phone', 0.25));
+add('glide-2', 780, 1688, (c) => TITLES.draw(c, 780, 1688, 'horizon', 'phone', 0.7));
+add('glide-3', 780, 1688, (c) => MAPS.draw(c, 780, 1688, 'ascent', 'phone'));
+</script>
