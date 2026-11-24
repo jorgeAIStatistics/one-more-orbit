@@ -2,8 +2,8 @@
 // the end that opens on stars. This file is the rules only (what is open, hidden or cleared); the map screen draws them.
 import { BSIDES, FINAL, PACKS } from './packs';
 
-/** Stars needed to open the gate, out of the twelve in the four levels. */
-export const GATE_STARS = 9;
+/** Planets that must be cleared to open the gate: all of them. Lens shards never block the way. */
+export const GATE_CLEARS = PACKS.length;
 /** The level behind the gate. */
 export const FINAL_ID = FINAL.level.id;
 /** The difficulty ladder, by level: how far from home each one is. */
@@ -37,11 +37,11 @@ export const maxStars = (ids.length + 1) * 3;
 
 /**
  * A planet opens when the one before it is cleared. A moon is found when all three of its planet's stars are kept.
- * The gate opens on GATE_STARS stars, and the last level is behind it. The playtest switch ("All levels open") opens
- * the planets and shows the moons; the gate always needs its stars.
+ * The gate opens when every planet is cleared, and the last level is behind it. The playtest switch ("All levels
+ * open") opens the planets and shows the moons; the gate always needs the four clears.
  */
 export function nodeState(n: MapNode, p: Progress): NodeState {
-  if (n.kind === 'gate') return totalStars(p) < GATE_STARS ? 'locked' : p.cleared(FINAL_ID) ? 'cleared' : 'open';
+  if (n.kind === 'gate') return !ids.every((id) => p.cleared(id)) ? 'locked' : p.cleared(FINAL_ID) ? 'cleared' : 'open';
   if (p.cleared(n.id)) return 'cleared';
   if (n.kind === 'moon') return p.unlockAll || p.stars(n.planet).every(Boolean) ? 'open' : 'hidden';
   return n.index === 0 || p.unlockAll || p.cleared(ids[n.index - 1]) ? 'open' : 'locked';

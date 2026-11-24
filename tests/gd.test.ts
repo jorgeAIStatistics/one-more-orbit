@@ -19,7 +19,14 @@ for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), FINAL, .
   const level = new Level(pack.level, pack.audio, pack.chart);
   const course = buildCourse(level, layers(pack), pitchLookup(pack), pack.level.lab, accentBeats(pack));
   const ms = (x: number) => x / 1000 / course.spb; // milliseconds as beats
-  const pressBeats = course.presses.map((p) => p.beat);
+  /** every mark a tap answers (a Comet's second mark is answered by letting go) */
+  const pressBeats = course.presses.filter((p) => p.act !== 'up').map((p) => p.beat);
+  const allBeats = course.presses.map((p) => p.beat);
+  const pairs = pack.level.side ? 0 : pack.level.rules?.pairs ?? 0;
+  /** the Comet's first mark at a beat, if there is one: the tap for it keeps hold until the second mark */
+  const cometAt = (b: number) => course.presses.find((p) => p.act === 'down' && Math.abs(p.beat - b) < 1e-6);
+  /** the flow notes there are to tap (gold collected by riding is not tapped) */
+  const flowTaps = course.flow.filter((f) => f.ride === 0);
 
   /** Plays the level from a list of button moves ([beat, down?]), stepping like 60 fps frames. */
   const play = (moves: Array<[number, boolean]>, start = course.start - 3, until = course.end) => {
@@ -35,13 +42,20 @@ for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), FINAL, .
   const tethers = course.holds.filter((h) => h.tether);
   /**
    * Quick taps at the given beat-times: each is let go a moment later, so no hold is held, except a tether: the tap
-   * that takes one keeps hold to its end, as anyone who wants to live must.
+   * that takes one keeps hold to its end, as anyone who wants to live must. So does the tap on a Comet's first mark,
+   * which is let go on its second. `base`: the beats the taps are for, when the taps themselves have been moved.
    */
-  const run = (taps: number[], start = course.start - 3, until = course.end) =>
-    play(taps.flatMap((t, i): Array<[number, boolean]> => {
+  const run = (taps: number[], start = course.start - 3, until = course.end, base: number[] = taps) => {
+    const pairs = taps.map((t, i): [number, number, boolean] => {
       const th = tethers.find((h) => Math.abs(h.a - t) < 0.3);
-      return [[t, true], [th ? th.b : Math.min(t + 0.12, i + 1 < taps.length ? Math.max(t, taps[i + 1] - 0.02) : t + 0.12), false]];
-    }).sort((x, y) => x[0] - y[0] || Number(x[1]) - Number(y[1])), start, until);
+      const cd = cometAt(base[i]);
+      return [t, cd ? course.presses[cd.i + 1].beat + (t - cd.beat) : th ? th.b : Math.min(t + 0.12, i + 1 < taps.length ? Math.max(t, taps[i + 1] - 0.02) : t + 0.12), !!cd];
+    });
+    // there is one button: while it is held through a Comet's climb, nothing else can be tapped
+    const climbs = pairs.filter((x) => x[2]);
+    const moves = pairs.filter((x) => x[2] || !climbs.some((c) => x[0] >= c[0] && x[0] <= c[1])).flatMap(([t, end]): Array<[number, boolean]> => [[t, true], [end, false]]);
+    return play(moves.sort((x, y) => x[0] - y[0] || Number(x[1]) - Number(y[1])), start, until);
+  };
   const spam = (from: number, rate: number, phase = 0, to = course.end) => {
     const out: number[] = [];
     for (let b = from + phase / rate / course.spb; b < to; b += 1 / rate / course.spb) out.push(b);
@@ -55,7 +69,7 @@ for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), FINAL, .
       const kinds = (k: string) => course.presses.filter((p) => (p as unknown as Record<string, unknown>)[k]).length;
       console.log(`LEVEL ${id}: ${secs.toFixed(0)} s at ${pack.audio.bpm} BPM, drop at ${(course.dropBeat * course.spb).toFixed(1)} s; ${course.presses.length} survival presses (${(course.presses.length / secs).toFixed(2)}/s; ${kinds('smash')} smash, ${kinds('accent')} accents, ${kinds('sling')} planet hops, ${kinds('weave')} weave, ${course.presses.filter((p) => p.kind === 'flip' && !p.weave).length} other flips, ${kinds('spin')} spin gates, ${course.presses.filter((p) => p.twin).length} twin), ${course.flow.length} flow notes (${course.chargeNotes} charge); turns ${course.turns.length}, speed changes ${course.portals.length}, planets ${course.presses[course.presses.length - 1].planetTo + 1}`);
       expect(s.crashed, `${s.crashKind} at ${s.crashBeat}`).toBe(false);
-      expect(s.onBeat).toBe(course.taps.length + course.holds.length); // every tap, and every hold let go on its end
+      expect(s.onBeat).toBe(course.taps.length + course.presses.filter((p) => p.act === 'up' && !p.auto).length + course.holds.length); // every tap, every Comet mark let go on, and every hold let go on its end
       expect(s.holdsFull).toBe(course.holds.length);
       expect(s.flow).toBe(1);
       expect(s.charge).toBe(1);
@@ -64,21 +78,34 @@ for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), FINAL, .
     });
 
     it('survival presses are strong beats only: never closer than a beat and never faster than 2.5 a second, openings at least ±120 ms (±90 on a B-side)', () => {
-      const gaps = pressBeats.slice(1).map((b, i) => b - pressBeats[i]);
-      expect(Math.min(...gaps)).toBeGreaterThanOrEqual(1 - 1e-9);
-      expect(1 / (Math.min(...gaps) * course.spb)).toBeLessThanOrEqual(RATE);
+      const gaps = allBeats.slice(1).map((b, i) => b - allBeats[i]);
+      if (pairs) {
+        // the slow, heavy level also takes pairs of eighth notes: never closer than half a beat, never more than `pairs`
+        // extra in a bar, never two pairs within two beats, and over any bar still no faster than 2.5 a second
+        expect(Math.min(...gaps)).toBeGreaterThanOrEqual(0.5 - 1e-9);
+        const close = gaps.map((g, i) => (g < 1 - 1e-9 ? i : -1)).filter((i) => i >= 0);
+        expect(close.length).toBeGreaterThan(8);
+        // an eighth sits between two presses on the beat at most: never four presses in a row at that pace
+        gaps.forEach((g, i) => { if (i >= 2) expect(g < 1 - 1e-9 && gaps[i - 1] < 1 - 1e-9 && gaps[i - 2] < 1 - 1e-9, `run of eighths at ${allBeats[i]}`).toBe(false); });
+        for (let bar = 0; bar * 4 < course.end; bar++) expect(allBeats.filter((b) => Math.floor(b / 4 + 1e-6) === bar).length / (4 * course.spb), `bar ${bar}`).toBeLessThanOrEqual(RATE);
+      } else {
+        expect(Math.min(...gaps)).toBeGreaterThanOrEqual(1 - 1e-9);
+        expect(1 / (Math.min(...gaps) * course.spb)).toBeLessThanOrEqual(RATE);
+      }
       for (const p of course.presses) expect(p.tol * course.spb * 1000).toBeGreaterThanOrEqual(TOL_MS - 1e-6);
     });
 
     it('every note of the chart is played in exactly one layer; flights land on the next press or within two beats', () => {
       const chart = pack.chart.notes.map((n) => n.t / 12).filter((b) => b >= course.start && b < course.end - 0.5);
-      const got = new Set([...course.taps, ...course.holds.flatMap((h) => h.ticks)].map((b) => b.toFixed(3))); // a tap, or gold along a hold
+      const got = new Set([...course.taps, ...course.rides, ...course.holds.flatMap((h) => h.ticks)].map((b) => b.toFixed(3))); // a tap, a Comet's let-go or its gold, or gold along a hold
       for (const b of chart) expect(got.has(b.toFixed(3)), `note ${b}`).toBe(true);
       expect(new Set(course.taps).size).toBe(course.taps.length);
       course.presses.forEach((p, i) => {
         const next = course.presses[i + 1];
         expect(p.land - p.beat).toBeLessThanOrEqual(2 + 1e-9);
-        if (next && next.beat - p.beat <= 2) expect(p.land).toBe(next.beat);
+        // a hop (and the Satellite's zig-zag) lasts until the next press; a dash, a flip on the spot, a climb and a slipstream are over sooner
+        if (next && next.beat - p.beat <= 2 && (p.form === 'orb' || p.form === 'sat') && !p.slip) expect(p.land).toBe(next.beat);
+        else if (next) expect(p.land).toBeLessThanOrEqual(next.beat + 1e-9);
       });
     });
 
@@ -92,7 +119,7 @@ for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), FINAL, .
       expect(smash!.tol * course.spb).toBeGreaterThan(0.15);
       const before = pressBeats.filter((b) => b < c0);
       // perfect up to the roll, then: no taps at all / mashing at 6, 10 and 14 a second / only off-beat taps. All reach the drop.
-      for (const taps of [before, ...[6, 10, 14].map((r) => [...before, ...spam(c0, r, 0, c1 - 0.5)]), [...before, ...course.flow.filter((f) => f.charge).map((f) => f.beat + 0.2)]]) {
+      for (const taps of [before, ...[6, 10, 14].map((r) => [...before, ...spam(c0, r, 0, c1 - 0.5)]), [...before, ...course.flow.filter((f) => f.charge).map((f) => f.beat + 0.2)].sort((a, b) => a - b)]) {
         expect(run(taps, course.start - 3, c1 - 0.3).crashed, `${taps.length - before.length} taps in the roll`).toBe(false);
       }
       // and anyone still tapping along hits the smash without trying: mashing through it clears it
@@ -113,7 +140,7 @@ for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), FINAL, .
       const only = run(pressBeats);
       expect(only.crashed).toBe(false);
       for (const off of [-150, -60, 60, 150]) {
-        const taps = [...pressBeats, ...course.flow.map((f) => f.beat + ms(off))].sort((a, b) => a - b);
+        const taps = [...pressBeats, ...flowTaps.map((f) => f.beat + ms(off))].sort((a, b) => a - b);
         const s = run(taps);
         expect(s.crashed, `flow notes ${off} ms off: ${s.crashKind} at ${s.crashBeat.toFixed(2)}`).toBe(false);
       }
@@ -121,22 +148,22 @@ for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), FINAL, .
 
     it('survival is forgiving: every tap 100 ms early or late still clears (70 on a B-side); uneven timing clears', () => {
       const wide = TOL_MS - 20;
-      for (const off of [-wide, -70, 70, wide]) {
-        const s = run(course.taps.map((b) => b + ms(off)));
+      for (const off of [-wide, -Math.min(70, wide), Math.min(70, wide), wide]) {
+        const s = run(course.taps.map((b) => b + ms(off)), undefined, undefined, course.taps);
         expect(s.crashed, `${off} ms: ${s.crashKind} at ${s.crashBeat.toFixed(2)}`).toBe(false);
       }
       for (let seed = 1; seed <= 25; seed++) {
         const rnd = rng(seed);
-        const a = run(pressBeats.map((b) => b + ms(rnd() * 2 * wide)));
+        const a = run(pressBeats.map((b) => b + ms(rnd() * 2 * wide)), undefined, undefined, pressBeats);
         expect(a.crashed, `presses, seed ${seed}: ${a.crashKind} at beat ${a.crashBeat.toFixed(2)}`).toBe(false);
-        const b = run(course.taps.map((t) => t + ms(rnd() * 90)));
+        const b = run(course.taps.map((t) => t + ms(rnd() * Math.min(90, TOL_MS))), undefined, undefined, course.taps); // (within half the window, so two taps never land on top of each other)
         expect(b.crashed, `all taps, seed ${seed}: ${b.crashKind} at beat ${b.crashBeat.toFixed(2)}`).toBe(false);
       }
     });
 
     it('but the openings are real: 180 ms off on every press crashes, and so does doing nothing', () => {
-      expect(run(pressBeats.map((b) => b + ms(180))).crashKind).toBe('edge');
-      expect(run(pressBeats.map((b) => b - ms(180))).crashed).toBe(true);
+      expect(run(pressBeats.map((b) => b + ms(180)), undefined, undefined, pressBeats).crashKind).toBe('edge');
+      expect(run(pressBeats.map((b) => b - ms(180)), undefined, undefined, pressBeats).crashed).toBe(true);
       const idle = run([]);
       expect(idle.crashKind).toBe('edge');
       expect(idle.crashBeat).toBeLessThan(course.presses[0].beat + 1);
@@ -191,7 +218,7 @@ for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), FINAL, .
       const before = own ? tethers.filter((h) => h.a < course.dropBeat).length : course.presses.filter((p) => p.beat < course.dropBeat && has(p)).length;
       expect(before, 'introduced before the drop').toBeGreaterThanOrEqual(1);
       expect(inDrop, 'stars in the drop').toBeGreaterThanOrEqual(star === 'sling' ? 3 : 8);
-      if (base !== 'invincible') expect(course.presses.some((p) => p.twin)).toBe(false); // the twin orbit stays in the last level
+      if (base !== 'invincible' && id !== FINAL.level.id) expect(course.presses.some((p) => p.twin)).toBe(false); // two sparks on one tap: Eko's echo on the fourth planet, and the final level's dual mode
     });
 
     it('transitions are fair: every planet hop launches on a strong beat at a phrase boundary, and after it lands the next press is at least 1.5 beats away, on the ring you landed on, and extra wide', () => {
@@ -241,7 +268,7 @@ for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), FINAL, .
       expect(taps.crashed).toBe(false);
       expect(taps.holdsFull).toBe(tethers.length); // (a tether has to be held, so it is collected)
       // holding everything (the button stays down from each tap until just before the next) clears too
-      const legato = play(course.taps.flatMap((t, i): Array<[number, boolean]> => [[t, true], [i + 1 < course.taps.length ? course.taps[i + 1] - 0.08 : t + 0.5, false]]));
+      const legato = play(course.taps.flatMap((t, i): Array<[number, boolean]> => { const cd = cometAt(t); return [[t, true], [cd ? course.presses[cd.i + 1].beat : i + 1 < course.taps.length ? course.taps[i + 1] - 0.08 : t + 0.5, false]]; }));
       expect(legato.crashed, `held throughout: ${legato.crashKind} at ${legato.crashBeat.toFixed(2)}`).toBe(false);
       // letting go 150 ms early or late on every hold costs a little gold at most, never the run
       for (const off of [-150, 150]) {
@@ -297,7 +324,7 @@ for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), FINAL, .
       if (!level.file.holds) return;
       for (const s of level.segments.filter((x) => x.label === 'DROP')) {
         // things to do: taps, and the whole length of every hold
-        const marks = [s.beat0, ...course.taps.filter((t) => t >= s.beat0 && t < s.beat1), s.beat1];
+        const marks = [s.beat0, ...[...course.taps, ...course.rides].filter((t) => t >= s.beat0 && t < s.beat1).sort((a, b) => a - b), s.beat1]; // (a Comet's let-go and the gold along its climb are things to do too)
         const busy = (from: number, to: number) => course.holds.filter((h) => h.b > from && h.a < to).reduce((left, h) => Math.max(0, left - (Math.min(h.b, to) - Math.max(h.a, from))), to - from);
         let worst = 0;
         for (let i = 1; i < marks.length; i++) worst = Math.max(worst, busy(marks[i - 1], marks[i]));
@@ -317,9 +344,11 @@ for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), FINAL, .
       expect(perfect.stars).toEqual([1, 1, 1]);
       const inside = (st: { a: number; b: number }, h: { a: number; b: number }) => h.a >= st.a - 1e-6 && h.b <= st.b + 1e-6;
       course.stars.forEach((st, i) => {
-        expect(st.b - st.a, `length of star ${i + 1}`).toBeGreaterThanOrEqual(4);
-        expect(st.b - st.a, `length of star ${i + 1}`).toBeLessThanOrEqual(8);
-        expect(st.gold, `gold in star ${i + 1}`).toBeGreaterThanOrEqual(8);
+        // a shard branch: two to four beats, at least four pieces of gold, each within the level's own branch window
+        expect(st.b - st.a, `length of branch ${i + 1}`).toBeGreaterThanOrEqual(2 - 1e-9);
+        expect(st.b - st.a, `length of branch ${i + 1}`).toBeLessThanOrEqual(4 + 1e-9);
+        expect(st.gold, `gold in branch ${i + 1}`).toBeGreaterThanOrEqual(4);
+        for (const f of course.flow.filter((x) => x.branch === i)) expect(f.tol * course.spb, `window of the note at ${f.beat}`).toBeLessThanOrEqual((pack.level.rules?.branch ?? 0.07) + 1e-9);
         if (i > 0) expect(st.a - course.stars[i - 1].b).toBeGreaterThanOrEqual(8);
         // it starts on something to tap and ends on its last piece of gold; no hold hangs over either end
         expect(course.taps.includes(st.a), `star ${i + 1} starts on a tap`).toBe(true);
@@ -372,7 +401,7 @@ for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), FINAL, .
     });
 
     it('same music, same pattern: sections sharing a motif have the same presses and flow notes', () => {
-      const shape = (s: { beat0: number; beat1: number }) => course.taps.filter((b) => b >= s.beat0 + 1.5 && b < s.beat1 - 0.5).map((b) => `${(b - s.beat0).toFixed(2)}${pressBeats.includes(b) ? 'S' : 'f'}`).join(' ');
+      const shape = (s: { beat0: number; beat1: number }) => [...course.taps, ...course.rides].sort((a, b) => a - b).filter((b) => b >= s.beat0 + 1.5 && b < s.beat1 - 0.5).map((b) => `${(b - s.beat0).toFixed(2)}${allBeats.includes(b) ? 'S' : 'f'}`).join(' ');
       const groups = new Map<string, string[]>();
       for (const s of level.segments) if (s.motif && !s.core?.charge) groups.set(s.motif, [...(groups.get(s.motif) ?? []), shape(s)]);
       for (const [motif, shapes] of groups) {
@@ -455,8 +484,10 @@ describe('B-sides: the same song on the night side', () => {
       expect(b.audio).toBe(base.audio);
       expect(b.chart).toBe(base.chart);
       expect(b.level.stars).toBeUndefined();
-      expect(b.level.side!.tol!).toBeLessThan(TOL_S);
-      expect(b.level.side!.tol!).toBeGreaterThanOrEqual(0.085);
+      expect(b.level.shards).toBeUndefined();
+      const tolN = b.level.side!.tol! * 1000;
+      expect(b.level.side!.tol!).toBeLessThan(base.level.rules?.tol ?? TOL_S); // tighter than its planet's
+      expect(b.level.side!.tol!).toBeGreaterThanOrEqual(0.07);
       expect(b.level.side!.ahead!).toBeLessThan(3);
       const build = (p: typeof b) => buildCourse(new Level(p.level, p.audio, p.chart), layers(p), pitchLookup(p), p.level.lab, accentBeats(p));
       const night = build(b);
@@ -467,11 +498,22 @@ describe('B-sides: the same song on the night side', () => {
       // its bars are its own: at least half of them play differently from the level's
       const differ = night.bars.filter((x, n) => x.token !== day.bars[n].token).length;
       expect(differ / night.bars.length, `${b.level.id}: bars that differ`).toBeGreaterThanOrEqual(0.4);
-      // 70 ms off on every press clears; 105 ms off does not (it would on the level itself)
-      const sim = (c: typeof night, off: number) => { const s = new Sim(c, c.start - 3); for (const p of c.presses) { if (s.crashed) break; s.press(p.beat + off / 1000 / c.spb); s.release(p.beat + off / 1000 / c.spb + 0.1); } s.advance(c.end); return s; };
-      expect(sim(night, 70).crashed).toBe(false);
-      expect(sim(night, 105).crashed).toBe(true);
-      expect(sim(day, 105).crashed).toBe(false);
+      // 20 ms inside its window on every press clears; 15 ms outside does not (it would on the level itself)
+      const sim = (c: typeof night, off: number) => {
+        const s = new Sim(c, c.start - 3);
+        for (const p of c.presses) {
+          if (s.crashed) break;
+          const t = p.beat + off / 1000 / c.spb;
+          if (p.act === 'up') { s.release(t); continue; } // the Comet's second mark: let go
+          s.press(t);
+          if (p.act !== 'down') s.release(t + 0.1);
+        }
+        s.advance(c.end);
+        return s;
+      };
+      expect(sim(night, tolN - 20).crashed).toBe(false);
+      expect(sim(night, tolN + 15).crashed).toBe(true);
+      expect(sim(day, tolN + 15).crashed).toBe(false);
     });
   });
 });

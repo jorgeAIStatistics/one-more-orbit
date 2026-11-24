@@ -72,6 +72,7 @@ function bside(base: LevelPack, file: unknown): LevelPack {
     adds: b.adds,
     side: { of: base.level.id, ...b.side },
     stars: undefined,
+    shards: undefined,
     segments: base.level.segments.map((s) => (b.bars[s.id] && s.core ? { ...s, core: { ...s.core, bars: b.bars[s.id] } } : s))
   };
   return { ...base, level };

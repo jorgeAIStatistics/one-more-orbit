@@ -8,19 +8,26 @@ A one-button rhythm game. A ball rides a ring in time with the music. Tap on eac
 
 ## The game
 
-| Level | Difficulty | Mode it introduces |
-|---|---|---|
-| Heroes Tonight | Easy | Planet hop: slingshots from planet to planet |
-| Sky High | Normal | Weave: gravity flips that bounce the ball between two rings |
-| Blank | Hard | Spin gates: the opening is a gap in a turning ring; with turns and speed changes |
-| Invincible | Insane | Twin orbit: one tap moves two mirrored balls; plus every mode before |
-| Royalty (behind the gate) | Singularity | Tethers: red rails you must hold; with weave, spin gates and planet hops |
+| Planet (level) | Form it introduces | Also new there | Window | Shown ahead |
+|---|---|---|---|---|
+| Emberwick (Heroes Tonight) | **Meteor**: a tap is a dash through a wall of ink | springboards, planet hops | ±140 ms | 3.5 beats |
+| Cirra (Sky High) | **Satellite**: each tap turns a zig-zag between two rings | tide pads, a 1.5× tempo gate | ±120 ms | 3 beats |
+| Glassmere (Blank) | **Pulsar**: each tap flips to the other side of its ring | chimes, mirror gates, tempo gates 0.5× to 2×, spin gates | ±105 ms | 3 beats |
+| Verdance (Invincible) | **Comet**: press and hold to climb, let go to fall | slipstreams, Eko's echo (the twin orbit), pairs of eighth notes | ±90 ms | 2.5 beats |
+| The Hollow (Royalty, behind the gate) | every form, no introductions | tethers, dual mode (two different sparks on one tap) | ±80 ms | 2.5 beats |
 
+The planet names, the hero (Eko) and the story are in `mockups/galaxy-design.html`; the map, story cards and the boss are later stages. The play field already uses the forms and the lens shards.
+
+- **Forms.** Eko is the Orb by default: a tap hops to the next ring. A **lens** on a bar line changes the form (`orb | meteor | sat | pulsar | comet` in a bar's words). The notes never change with the form: the same music always asks for the same taps. The first time a form appears in a level the bar after its lens is played for the player (nothing in it can end the run) and its first two real presses are twice as wide. A planet hop, the drop's big press and the twin orbit are always the Orb.
+- **The Comet is the one form that holds.** Its marks come in pairs: press on the white bar and keep holding (it climbs to the ring above), let go on the white ring (it falls back). Letting go early, a quick tap, or never letting go ends the run; both marks have the planet's window. Pairs never cross a section, so a practice checkpoint never starts on a let-go. Gold along a climb is collected by holding.
+- **Gates** stand on bar lines and are shown for the whole look-ahead: tempo gates (`x0.5`, `x0.75`, `x1.25`, `x1.5`, `x2`; the old `fast`, `slow`, `normal` still work), `turn` (the orbit reverses) and `mirror` (the picture flips left to right, always in pairs). The first press after a lens or a gate is ±160 ms and tapping early for it is never punished.
+- **Pads, chimes, slipstreams.** `spring`: a planet hop the game takes (no tap). `tide`: where a bar turns gravity over, the game takes that flip. `chime`: a chained hop is taken in mid-air, on a bell with no ring under it. `slip`: a tap is carried along cyan arrows for a beat, two rings on. Chimes and slipstreams are on the main course from the third planet.
+- **Dual mode** (`dual`): a twin orbit whose second spark is a Pulsar on its own ring. Only in the last level.
 - **Two layers of notes.** *Survival presses* (white marks) sit on strong beats only, never closer than a beat. A tap on one hops the ball to the next ring. *Flow notes* (gold) are every faster note in the music: optional, and they can never end the run.
-- **Survival is generous.** An opening is clearable within ±120 ms of its note (±160 ms for the big gold presses and the first press after a planet hop). Riding past a mark, or tapping early right next to one, ends the run. Taps away from any opening, or near a flow note, are free.
+- **Survival is generous.** An opening is clearable within the planet's window of its note (the table above; ±160 ms for the big gold presses and the first press after a planet hop, a lens or a gate). The moons (B-sides) are ±100, 90, 80 and 70 ms. Riding past a mark, or tapping early right next to one, ends the run. Taps away from any opening, or near a flow note, are free.
 - **Flow is rhythm.** Taps within ±40 ms of a note build the flow meter (the gold arc round the core). After three off-beat presses in a row the music starts to muffle; two on-beat taps clear it. Mashing earns no flow.
 - **Holds** (`"holds": true` in the level file; all four levels). A hop that flies two beats becomes a *gold rail*: tap the white mark as usual and keep holding through the flight (planet hops and long gravity flips too; in the twin orbit both balls ride it). An empty stretch of ring gets a *gold line*: hold from its first gold note and the ball floats along it. Gold along a hold is collected while the button is down; letting go right on the gold ring at its end counts like an on-beat tap. Holds are drawn slim and under the rings, so they never cover a white mark; white is only ever "tap here". A hold can never end the run, and each one ends at least half a beat before the next white mark. Holding anywhere lifts the ball off its ring. A bar marked `long` is played in two long strides: its presses on beats 2 and 4 fold into the rail before them.
-- **Stars.** Each level has three *star trails* (`"stars": [[from, to], …]` in beats): a stretch marked by a dotted line under the ring, with a star on its last piece of gold. Play it clean (every gold note and every piece of gold along its holds, with no tap that meets nothing) and the star is collected. One slip loses that star for the attempt; it never ends the run. A star is kept only when the run that collected it clears the level (not in practice or autoplay). Kept stars show beside each planet on the map, with the total at the top.
+- **Lens shards.** Each level has three *shard branches* (`"shards": [[from, to], …]` in beats; they are what the stars became, and saves keep theirs): two to four beats where a dotted gold path leaves the safe line, with a shard on its last piece of gold. Play it clean (every gold note and every piece of gold along its holds, with no tap that meets nothing; the notes have the level's own branch window: ±90, 80, 70, 60, 55 ms) and the shard is collected. One slip drops Eko back onto the safe line and loses that shard for the attempt; it never ends the run. A shard is kept only when the run that collected it clears the level. All three reveal the planet's moon. Shards never block the way: the gate opens when the four planets are cleared.
 - **The build-up is a charge.** Nothing can end the run there. Each note you touch fills the drop's charge.
 - **The drop is as big as you made it:** charge times flow scales the whole set piece. Chaos stays in the background; the ball, marks and openings are always drawn last on a clean band.
 - **Planet hops are fair by rule.** They launch on a strong beat at a phrase boundary, fly for two beats, and nothing can end the run for at least 1.5 beats after landing. The camera arrives first and the landing spot is shown ahead.
@@ -35,11 +42,11 @@ Title, the World 1 map, play, pause, results, Orbs, Badges, Quests, Settings, th
 **The map** (`src/game/world.ts` holds its rules, `tests/world.test.ts` checks them). The four levels are planets on one route: Low Orbit, High Orbit, Escape Velocity, Deep Space. Tapping a place moves you there and fills the panel under the map; tapping it again, or PLAY, goes in.
 
 - **Planets** open when the one before is cleared.
-- **Moons** are hidden levels, one per planet: its *B-side*. A moon appears when all three of its planet's stars are kept. A B-side is the same song and notes on the night side (`levels/<id>/bside.json`): openings of ±90 ms instead of ±120, two beats of course shown instead of three, the orbit mirrored and faster, the lights down, and the bars re-dealt with mechanics that level never had (the twin orbit stays in Invincible). No star trails. Clearing one gives an orb.
-- **The gate** at the end opens on 9 stars, and the last level is behind it: **Royalty**, tier *Singularity* (`levels/royalty/`, `FINAL` in `src/game/packs.ts`; it is not on the route, so stars open it, not a clear). Its rules are harder (`"rules"` in its level file: openings of ±100 ms, 2.5 beats of course shown), it may ask for a press on every beat (2.7 a second at its 160 BPM), and it has three star trails of its own, which makes 15.
+- **Moons** are hidden levels, one per planet: its *B-side*. A moon appears when all three of its planet's lens shards are kept. A B-side is the same song and notes on the night side (`levels/<id>/bside.json`): openings of ±90 ms instead of ±120, two beats of course shown instead of three, the orbit mirrored and faster, the lights down, and the bars re-dealt with mechanics that level never had (the twin orbit stays in Invincible). No star trails. Clearing one gives an orb.
+- **The gate** at the end opens when all four planets are cleared (shards never block the way), and the last level is behind it: **Royalty**, tier *Singularity* (`levels/royalty/`, `FINAL` in `src/game/packs.ts`). Its rules are harder (`"rules"` in its level file: openings of ±80 ms, 2.5 beats of course shown), it may ask for a press on every beat (2.7 a second at its 160 BPM), and it has three shard branches of its own, which makes 15.
 - **Tethers** are that level's own mechanic (bar word `tether`): a red rail that must be held. Let go more than 120 ms before its end and the run is over; it is the only hold in the game that can end a run. A tether always starts on a white mark on the beat and is never a planet hop.
 - **Quests**: two per level (`src/game/quests.ts`), each a way of clearing it well (the drop at 100%, every hold, 90% on the beat, no stray taps, a streak of 80). A quest is done by a clear that counts. Both quests of a level give an orb.
-- **"All levels open"** in Settings is a playtest switch, off by default: it opens every planet and shows every moon; the gate always needs its stars. (`?unlock=1` on the address does the same for one visit.)
+- **"All levels open"** in Settings is a playtest switch, off by default: it opens every planet and shows every moon; the gate always needs the four clears. (`?unlock=1` on the address does the same for one visit.)
 
 ## Sync
 
@@ -132,10 +139,10 @@ tests/
 
 Each section in `levels/<id>/level.json` has `bars` (its length) and `core`:
 
-- `bars`: how each bar plays, repeated to fill the section. A bar is words joined by `+`: `up` / `down` / `weave`, `spin`, `twin`, `sling` (planet hop), `turn`, `fast` / `slow` / `normal`, `long` (two long strides to hold, for a bar with a press on every beat).
+- `bars`: how each bar plays, repeated to fill the section. A bar is words joined by `+`: `up` / `down` / `weave`, `spin`, `twin`, `sling` (planet hop), `turn`, `fast` / `slow` / `normal`, `long` (two long strides to hold, for a bar with a press on every beat), and the galaxy's words: a form (`orb`, `meteor`, `sat`, `pulsar`, `comet`), a tempo gate (`x0.5` … `x2`), `mirror`, `spring`, `tide`, `chime`, `slip`, `dual`. Level-wide rules: `"rules": {"tol", "ahead", "branch", "pairs", "intro"}`.
 - `charge` (a build-up), `smash` (the section opens with the drop's big press), `pulse`, `record` (a passage worth recording by hand).
 
-Heroes Tonight, Blank and Invincible are generated by `tools/_levels.py`; Sky High's and Royalty's files are hand-kept. Run `npm test` after any change.
+All five level files are hand-kept (`tools/_levels.py` holds the layouts from before the galaxy rework and refuses to run). Run `npm test` after any change.
 
 ## Dev tools
 

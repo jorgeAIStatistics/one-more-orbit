@@ -5,7 +5,8 @@ const ICONS: Record<string, string> = {
   gear: '<circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',
   orb: '<circle cx="12" cy="12" r="4"/><ellipse cx="12" cy="12" rx="10" ry="4.5" transform="rotate(-25 12 12)"/>',
   badge: '<path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z"/>',
-  star: '<path d="M12 2.6l2.9 5.9 6.5 1-4.7 4.6 1.1 6.5L12 17.5l-5.8 3.1 1.1-6.5L2.6 9.5l6.5-1z"/>',
+  // a lens shard (the key keeps its old name: it is what the stars became)
+  star: '<path d="M12.6 2.2l6.6 9-4.4 10.6L4.8 14.9z"/>',
   quest: '<path d="M12 2.8l8 9.2-8 9.2-8-9.2z"/><path d="M12 8.2l3.3 3.8-3.3 3.8-3.3-3.8z"/>',
   left: '<path d="M15 5l-7 7 7 7"/>',
   right: '<path d="M9 5l7 7-7 7"/>',

@@ -3,7 +3,7 @@ import { audio } from './audio/audio';
 import { BADGES, ORBS, earned, type Orb } from './game/extras';
 import { BSIDES, FINAL, PACKS as ALL_PACKS, SLICE, creditLine, manifest, type LevelPack } from './game/packs';
 import { QUESTS, questSet, questsEarned, questsFor } from './game/quests';
-import { FINAL_ID, GATE_STARS, NODES, TIERS, maxStars, nodeOf, nodeState, playable, totalStars, type MapNode, type Progress } from './game/world';
+import { FINAL_ID, GATE_CLEARS, NODES, TIERS, maxStars, nodeOf, nodeState, playable, totalStars, type MapNode, type Progress } from './game/world';
 import { refreshBars } from './gd/presses';
 import { GdRenderer as Renderer } from './gd/render';
 import { GdRun as Run, TUTORIAL_BEATS } from './gd/run';
@@ -202,9 +202,9 @@ function renderMap(): void {
       lab.className = `lab ${side} gold`;
       lab.textContent = st === 'hidden' ? '' : 'B-side';
     } else {
-      el.setAttribute('aria-label', st === 'locked' ? `The gate, needs ${GATE_STARS} stars` : `The final level, ${shortTitle(FINAL)}, ${TIERS[FINAL_ID]}${st === 'cleared' ? ', cleared' : ''}`);
+      el.setAttribute('aria-label', st === 'locked' ? 'The gate: it opens when all four planets are cleared' : `The final level, ${shortTitle(FINAL)}, ${TIERS[FINAL_ID]}${st === 'cleared' ? ', cleared' : ''}`);
       lab.className = `lab ${side}${st === 'locked' ? ' dim' : ''}`;
-      if (st === 'locked') lab.innerHTML = `<b>???</b><span>Needs ${GATE_STARS} stars</span>`;
+      if (st === 'locked') lab.innerHTML = '<b>???</b><span>Clear the four planets</span>';
       else {
         // the gate is open: what was behind it is the last level
         lab.innerHTML = `<b></b><span class="sub"><span class="stars3"></span><span>${TIERS[FINAL_ID]}</span></span>`;
@@ -223,7 +223,7 @@ function renderMap(): void {
     }
   }
   $('starTotal').innerHTML = `${icon('star')}${starCount()} / ${maxStars}`;
-  $('starTotal').setAttribute('aria-label', `${starCount()} of ${maxStars} stars`);
+  $('starTotal').setAttribute('aria-label', `${starCount()} of ${maxStars} lens shards`);
   renderSheet();
 }
 /** The panel under the map: the place you are at, how you have done there, and PLAY. */
@@ -248,12 +248,12 @@ function renderSheet(): void {
   $('shQuests').innerHTML = '';
   $('shTries').textContent = '';
   if (at.kind === 'gate' && st === 'locked') {
-    const n = totalStars(progress);
+    const n = PACKS.filter((p) => bestFor(p.level.id).cleared).length;
     sheet.style.setProperty('--tint', 'var(--pink)');
     $('shTitle').textContent = '???';
     $('shTier').textContent = 'Locked';
-    $('shMeta').textContent = `Something waits past ${shortTitle(PACKS[PACKS.length - 1])}. It opens on ${GATE_STARS} stars.`;
-    meter('STARS', (n / GATE_STARS) * 100, `${Math.min(n, GATE_STARS)}/${GATE_STARS}`);
+    $('shMeta').textContent = `Something waits past ${shortTitle(PACKS[PACKS.length - 1])}. It opens when all four planets are cleared.`;
+    meter('PLANETS', (n / GATE_CLEARS) * 100, `${n}/${GATE_CLEARS}`);
     $('shLine').classList.add('hidden');
     play.disabled = prac.disabled = true;
     play.textContent = 'LOCKED';
@@ -272,8 +272,8 @@ function renderSheet(): void {
     sheet.style.setProperty('--tint', 'var(--gold)');
     $('shTitle').textContent = st === 'hidden' ? '???' : shortTitle(planet);
     $('shTier').textContent = st === 'hidden' ? 'Hidden' : 'B-side';
-    $('shMeta').textContent = st === 'hidden' ? `Keep all three stars on ${shortTitle(planet)} and something will appear here.` : `${planet.level.artist} · ${pack.level.adds ?? ''}`;
-    if (st === 'hidden') { best.classList.add('hidden'); paintStars($('shStars'), (k) => (kept[k] ? 'kept' : '')); $('shTries').textContent = `${kept.filter(Boolean).length} of 3 stars kept`; } else { meter('BEST', b.cleared ? 100 : b.pct, `${b.cleared ? 100 : b.pct}%`); $('shStars').classList.add('hidden'); $('shTries').innerHTML = tries; }
+    $('shMeta').textContent = st === 'hidden' ? `Keep all three lens shards on ${shortTitle(planet)} and something will appear here.` : `${planet.level.artist} · ${pack.level.adds ?? ''}`;
+    if (st === 'hidden') { best.classList.add('hidden'); paintStars($('shStars'), (k) => (kept[k] ? 'kept' : '')); $('shTries').textContent = `${kept.filter(Boolean).length} of 3 shards kept`; } else { meter('BEST', b.cleared ? 100 : b.pct, `${b.cleared ? 100 : b.pct}%`); $('shStars').classList.add('hidden'); $('shTries').innerHTML = tries; }
     return;
   }
   sheet.style.setProperty('--tint', (LEVEL_UI[lid] ?? { col: '#19e3ff' }).col);
@@ -558,7 +558,7 @@ function showResults(r: Run, cleared: boolean, reached = r.pct): void {
         save.stars[id] = now;
         newStars = now.map((k, i) => k && !had[i]);
         const all = now.every(Boolean);
-        unlocks.push(row(icon('star'), all ? 'ALL THREE STARS' : `${gained} NEW STAR${gained === 1 ? '' : 'S'}`, all ? `Every star trail in ${shortTitle(r.pack)} played clean` : `${now.filter(Boolean).length} of 3 kept on ${shortTitle(r.pack)}`));
+        unlocks.push(row(icon('star'), all ? 'ALL THREE LENS SHARDS' : `${gained} NEW LENS SHARD${gained === 1 ? '' : 'S'}`, all ? `Every shard branch in ${shortTitle(r.pack)} played clean` : `${now.filter(Boolean).length} of 3 kept on ${shortTitle(r.pack)}`));
       }
       // what the stars have just done to the map
       if (!moonWas && nodeState(nodeOf(`${id}-b`), progress) !== 'hidden') {
@@ -567,7 +567,7 @@ function showResults(r: Run, cleared: boolean, reached = r.pct): void {
       }
       if (!gateWas && nodeState(nodeOf('gate'), progress) === 'open') {
         freshNodes.add('gate');
-        unlocks.push(row(icon('flag'), 'THE GATE IS OPEN', `${GATE_STARS} stars: the way past ${shortTitle(PACKS[PACKS.length - 1])} is clear`));
+        unlocks.push(row(icon('flag'), 'THE GATE IS OPEN', `All four planets cleared: the way past ${shortTitle(PACKS[PACKS.length - 1])} is open`));
       }
       // side quests this clear completes
       for (const q of questsEarned(id, { onBeatPct, dropPower: r.dropPower, bestStreak: r.sim.bestStreak, holdsFull: r.sim.holdsFull, holds: r.course.holds.length, strays: r.sim.strays }, save.quests)) {
@@ -617,9 +617,9 @@ function showResults(r: Run, cleared: boolean, reached = r.pct): void {
   else {
     if (cleared && r.dropFull === false) notes.push(`The drop played at ${Math.round(r.dropPower * 100)}%. Tap the roll's notes and arrive in flow for the full one.`);
     if (cleared && r.course.holds.length) notes.push(`Gold holds collected in full: ${r.sim.holdsFull} of ${r.course.holds.length}.`);
-    if (r.opts.practice && carried) notes.push('Practice runs do not keep stars.');
-    else if (!cleared && carried) notes.push('A star is kept when the run that collected it clears the level.');
-    else if (cleared && r.course.stars.length && !keptNow.every(Boolean)) notes.push('Stars: play a star trail clean (all its gold, no extra taps) and clear the level to keep it.');
+    if (r.opts.practice && carried) notes.push('Practice runs do not keep lens shards.');
+    else if (!cleared && carried) notes.push('A lens shard is kept when the run that collected it clears the level.');
+    else if (cleared && r.course.stars.length && !keptNow.every(Boolean)) notes.push('Lens shards: play a shard branch clean (all its gold, no extra taps) and clear the level to keep its shard.');
   }
   $('resNote').textContent = notes.join(' ');
   console.log(`[one more orbit] ${r.opts.bot ? 'autoplay' : 'run'} ${cleared ? 'cleared' : 'left'} ${r.level.title}: ${r.sim.onBeat}/${r.sim.judged} taps on the beat, best streak ${r.sim.bestStreak}, drop at ${Math.round(r.dropPower * 100)}%. Movement check: ${sm.frames} frames, clock speed never more than ${sm.worstPct.toFixed(2)}% off (average ${sm.meanPct.toFixed(3)}%)`);

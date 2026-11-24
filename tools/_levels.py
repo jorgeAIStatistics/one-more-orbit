@@ -1,4 +1,8 @@
 # Layouts for Heroes Tonight, Blank and Invincible (Sky High's is hand-kept in its own level.json).
+import sys
+# Since the galaxy rework (forms, lenses, gates, pads, shard branches, per-planet windows) every level.json is kept by
+# hand. This script still holds the layouts from before it and would overwrite them, so it refuses to run.
+sys.exit("tools/_levels.py is retired: the level files are hand-kept now. Edit levels/<id>/level.json and run npm test.")
 # Re-run with: python tools/_levels.py   then   python tools/chart.py <id>
 from _mk import seg, write
 def L(p, bg='stars', eq='bars', **k): return dict(palette=p, bg=bg, eq=eq, **k)

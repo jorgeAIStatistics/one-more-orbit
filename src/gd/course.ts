@@ -46,9 +46,33 @@ export interface Press {
   bulge: number;
   pitch: number | null;
   seg: number;
+  /** the form Eko is in for this press (a planet hop, the drop's big press and a twin orbit are always the Orb) */
+  form: Form;
+  /** Comet: what the button does on this mark. down: press and keep holding. up: let go. tap: everywhere else. */
+  act: 'tap' | 'down' | 'up';
+  /** the flight is a straight line (the Satellite's zig-zag, a slipstream) instead of a hop's arc */
+  line: boolean;
+  /** a chime: the mark hangs in mid-air, where the hop before it ends; there is no ring under it */
+  chime: boolean;
+  /** a slipstream: the tap is carried along an arrow for a beat, two rings on */
+  slip: boolean;
+  /** a pad the game takes for the player: a springboard (a planet hop) or a tide pad (a gravity flip) */
+  pad: '' | 'spring' | 'tide';
+  /** part of a form's safe introduction: the game plays it, to show the move */
+  intro: boolean;
+  /** the first press after a lens or a gate: a wider opening, and tapping early for it is never punished */
+  wide: boolean;
 }
+/** The forms Eko can take. A lens changes it; each form answers a tap in its own way. */
+export type Form = 'orb' | 'meteor' | 'sat' | 'pulsar' | 'comet';
 /** An optional note: on a ring or in mid-flight, wherever the ball is at that moment. `hold`: it starts that gold line. */
-export interface FlowNote { beat: number; tol: number; pitch: number | null; charge: boolean; rho: number; side: number; air: boolean; twin: 'a' | 'b' | 'both' | null; planet: number; hold: number }
+export interface FlowNote {
+  beat: number; tol: number; pitch: number | null; charge: boolean; rho: number; side: number; air: boolean; twin: 'a' | 'b' | 'both' | null; planet: number; hold: number;
+  /** 0: a note to tap. 1: gold along a Comet's climb, collected by holding. 2: collected for the player (a form's introduction). */
+  ride: 0 | 1 | 2;
+  /** on a shard branch: which one (-1: none) */
+  branch: number;
+}
 /**
  * A hold: keep the button down from `a` to `b` and the gold along it is yours. It can never end the run.
  * A rail rides a long hop: press on the white mark as usual, and keep holding through the flight.
@@ -85,9 +109,9 @@ export interface Star {
 }
 export interface Layers { survival: number[]; flow: number[] }
 /** Things a level can ask of the player; the first time each appears it gets a hint. */
-export type Feature = 'smash' | 'charge' | 'flip' | 'weave' | 'spin' | 'sling' | 'reverse' | 'faster' | 'slower' | 'twin' | 'rail' | 'line' | 'tether';
+export type Feature = 'smash' | 'charge' | 'flip' | 'weave' | 'spin' | 'sling' | 'reverse' | 'faster' | 'slower' | 'twin' | 'rail' | 'line' | 'tether' | 'meteor' | 'sat' | 'pulsar' | 'comet' | 'spring' | 'tide' | 'chime' | 'slip' | 'mirror' | 'dual';
 /** How one bar plays. */
-export interface BarCfg { token: string; mode: 'up' | 'down' | 'weave'; spin: boolean; twin: boolean; sling: boolean; turn: boolean; long: boolean; tether: boolean; speed: number }
+export interface BarCfg { token: string; mode: 'up' | 'down' | 'weave'; spin: boolean; twin: boolean; dual: boolean; sling: boolean; spring: boolean; tide: boolean; turn: boolean; mirror: boolean; long: boolean; tether: boolean; chime: boolean; slip: boolean; speed: number; form: Form }
 
 export interface Course {
   spb: number;
@@ -96,8 +120,10 @@ export interface Course {
   dropBeat: number;
   presses: Press[];
   flow: FlowNote[];
-  /** every tap of a perfect run, in beats (presses and flow notes) */
+  /** every tap of a perfect run, in beats (presses and flow notes): each time the button goes down */
   taps: number[];
+  /** notes a perfect run plays without a tap: a Comet's second marks (letting go) and the gold collected by riding */
+  rides: number[];
   /** the holds, in order; they never overlap */
   holds: Hold[];
   /** a perfect run as the button sees it: [beat, true] = down, [beat, false] = up */
@@ -113,8 +139,18 @@ export interface Course {
   angle(beat: number): number;
   /** beats at which the orbit turns round */
   turns: number[];
-  /** beats at which the orbit changes speed, and whether it gets faster */
-  portals: Array<{ beat: number; faster: boolean }>;
+  /** beats at which the orbit changes speed (tempo gates), whether it gets faster, and the new speed */
+  portals: Array<{ beat: number; faster: boolean; speed: number }>;
+  /** lenses: beats at which Eko changes form. intro: the form is new to the level, and the bar after it is played for the player */
+  lenses: Array<{ beat: number; form: Form; intro: boolean }>;
+  /** mirror gates: beats at which the picture flips left to right */
+  mirrors: number[];
+  /** stretches of twin orbit in which the second spark is a Pulsar (dual mode with two different forms) */
+  duals: Array<[number, number]>;
+  /** the form in force at a beat */
+  formAt(beat: number): Form;
+  /** where a perfect run is at a beat: ring level, side of the ring, planet */
+  at(beat: number): { rho: number; side: number; planet: number };
   /** stretches played as a twin orbit */
   twins: Array<[number, number]>;
   /** the first time each mechanic appears: where the hint goes */
@@ -152,6 +188,9 @@ const TWO_PI = Math.PI * 2;
  * How far through a hop the ball is, 0 to 1, for a share u of its flight time. It leaves the ring from rest, is
  * fastest a fifth of the way in and settles onto the next ring: no sudden start, so the ball never jumps on the tap.
  */
+/** Beats a Meteor's dash, a Pulsar's flip and a Comet's climb take at most. */
+export const QUICK = 0.5;
+export const SLIP_FLIGHT = 1; // beats a slipstream carries the ball
 const RISE_K = 5;
 const RISE_END = 1 - (1 + RISE_K) * Math.exp(-RISE_K);
 export const rise = (u: number) => (u <= 0 ? 0 : u >= 1 ? 1 : (1 - (1 + RISE_K * u) * Math.exp(-RISE_K * u)) / RISE_END);
@@ -161,9 +200,11 @@ export const smoothstep = (t: number) => { const x = t < 0 ? 0 : t > 1 ? 1 : t; 
 /** Radial position (ring levels) of a perfectly timed flight of press p at a beat. */
 export const flightRho = (p: Press, beat: number): number => {
   const u = Math.max(0, Math.min(1, (beat - p.beat) / (p.land - p.beat)));
+  if (p.line) return p.from + (p.to - p.from) * u;
   return p.from + (p.to - p.from) * rise(u) + p.side * p.bulge * arc(u);
 };
 const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
+const FORMS: Form[] = ['orb', 'meteor', 'sat', 'pulsar', 'comet'];
 const snap = (b: number) => Math.round(b * 12) / 12;
 
 /**
@@ -190,19 +231,29 @@ export function autoLayers(beats: number[], accents: number[] = []): Layers {
  * normal set the orbit speed from that bar on. long: the bar is played in two long strides (its presses on beats 2
  * and 4 fold into the hop before them, which becomes a rail to hold); for bars that are a press on every beat.
  * tether: the bar's rails must be held (never a planet hop's).
+ * x0.5 ... x2: a tempo gate, the orbit speed from that bar on. orb | meteor | sat | pulsar | comet: Eko's form from
+ * that bar on (a lens stands on the bar line). spring: the bar's first press is a planet hop the game takes itself.
+ * tide: the bar's first press is taken by the game (with a change of up/down: a gravity flip without a tap).
+ * chime: the bar's chained hops are taken in mid-air. slip: its hops are slipstreams. mirror: the picture flips left
+ * to right at the bar line. dual: a twin orbit whose second spark is a Pulsar.
  */
 export function barPlan(level: Level): BarCfg[] {
   const out: BarCfg[] = [];
   let speed = 1;
+  let form: Form = 'orb';
   for (const s of level.segments) {
     const tokens = s.core?.bars?.length ? s.core.bars : ['up'];
     for (let k = 0; k < s.bars; k++) {
       const token = tokens[k % tokens.length];
       const w = token.split('+');
-      if (w.includes('fast')) speed = 1.25; else if (w.includes('slow')) speed = 0.8; else if (w.includes('normal')) speed = 1;
-      const twin = w.includes('twin');
+      if (w.includes('fast')) speed = 1.25; else if (w.includes('slow')) speed = 0.75; else if (w.includes('normal')) speed = 1;
+      const x = w.find((s) => /^x\d/.test(s)); // a tempo gate: x0.5, x0.75, x1.25, x1.5, x2
+      if (x) speed = clamp(parseFloat(x.slice(1)) || 1, 0.5, 2);
+      for (const f of FORMS) if (w.includes(f)) form = f;
+      const dual = w.includes('dual');
+      const twin = w.includes('twin') || dual;
       // a planet hop only ever starts a phrase or its second half (every other bar), and never in a twin orbit
-      out.push({ token, mode: w.includes('weave') ? 'weave' : w.includes('down') ? 'down' : 'up', spin: w.includes('spin'), twin, sling: w.includes('sling') && !twin && k % 2 === 0, turn: w.includes('turn'), long: w.includes('long'), tether: w.includes('tether'), speed });
+      out.push({ token, mode: w.includes('weave') ? 'weave' : w.includes('down') ? 'down' : 'up', spin: w.includes('spin'), twin, dual, sling: w.includes('sling') && !twin && k % 2 === 0, spring: w.includes('spring') && !twin && k % 2 === 0, tide: w.includes('tide') && !twin, turn: w.includes('turn'), mirror: w.includes('mirror'), long: w.includes('long'), tether: w.includes('tether'), chime: w.includes('chime'), slip: w.includes('slip'), speed, form });
     }
   }
   return out;
@@ -233,6 +284,22 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
   let ground = [...new Set([...layers.survival.map(snap).filter((b) => inRange(b) && !inCharge(b) && counted(b)), ...auto, ...smash])].sort((a, b) => a - b);
   // nothing else within a beat of a smash or a launch: those own their moment
   ground = ground.filter((b) => auto.has(b) || smash.has(b) || ![...auto, ...smash].some((x) => Math.abs(x - b) < MIN_GAP - 1e-6));
+  // A level whose rules allow `pairs` (the slow, heavy one) also takes some of its eighth notes as presses: up to that
+  // many a bar, each a note on the half beat with a press on the beat before it and a kick or snare under it, and
+  // never two within two beats of each other. So the presses come in pairs, never in runs.
+  const pairs = level.file.side ? 0 : level.file.rules?.pairs ?? 0;
+  if (pairs > 0) {
+    const has = new Set(ground);
+    const loud = (b: number) => Math.max(level.energyAt('kick', (b + 0.02) * spb), level.energyAt('snare', (b + 0.02) * spb));
+    const cand = [...new Set(layers.flow.map(snap))].filter((b) => inRange(b) && !inCharge(b) && counted(b) && Math.abs(b - Math.floor(b) - 0.5) < 0.01 && has.has(snap(b - 0.5)) && loud(b) >= 0.5 && !barAt(b).long && ![...auto, ...smash].some((x) => Math.abs(x - b) < MIN_GAP - 1e-6));
+    const took: number[] = [];
+    for (const b of cand.sort((x, y) => x - y)) { // in order through the bar, so a phrase that repeats gets the same pairs every time
+      const bar = Math.floor(b / 4);
+      if (took.filter((t) => Math.floor(t / 4) === bar).length >= pairs || took.some((t) => Math.abs(t - b) < 2 - 1e-6)) continue;
+      took.push(b);
+    }
+    ground = [...ground, ...took].sort((a, b) => a - b);
+  }
   // Long strides. In a bar marked `long` the presses on beats 2 and 4 fold into the press a beat before: that hop
   // flies two beats and becomes a rail, and the folded note is gold along it. (Levels with holds, after the opening.)
   if (level.file.holds) {
@@ -249,6 +316,7 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
   // end the run for the landing grace: presses that fall in the flight or the grace become flow notes.
   const grace = landingGrace(spb);
   const slings = new Set<number>();
+  const springs = new Set<number>();
   const afters = new Set<number>();
   const kept: number[] = [];
   let hold = -Infinity;
@@ -259,8 +327,9 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
     const bar = Math.floor((b + 1e-6) / 4);
     const firstInBar = !kept.some((x) => Math.floor((x + 1e-6) / 4) === bar);
     if (waiting) { afters.add(b); waiting = false; }
-    if (!fixed && barAt(b).sling && firstInBar && Math.abs(b - Math.round(b)) < 0.01 && b - bar * 4 < 2 - 1e-6) {
+    if (!fixed && (barAt(b).sling || barAt(b).spring) && firstInBar && Math.abs(b - Math.round(b)) < 0.01 && b - bar * 4 < 2 - 1e-6) {
       slings.add(b);
+      if (barAt(b).spring && !barAt(b).sling) springs.add(b); // a springboard: the same throw, with no tap
       hold = b + SLING_FLIGHT + grace;
       waiting = true;
     }
@@ -268,6 +337,64 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
   }
   ground = kept;
   const groundSet = new Set(ground);
+  const barOf = (b: number) => Math.floor((b + 1e-6) / 4);
+  // Lenses: where the form changes, bar by bar. The first time a form appears in a level, the bar after its lens is
+  // its safe introduction: the game plays that bar's presses itself, to show the move, and nothing in it can end the run.
+  const lenses: Course['lenses'] = [];
+  const introBars = new Set<number>();
+  const gates: number[] = []; // every bar line something changes on: the first press after it gets a wider opening
+  {
+    const met = new Set<Form>(['orb']);
+    bars.forEach((b, n) => {
+      const was = n > 0 ? bars[n - 1] : null;
+      const beat = n * 4;
+      if (b.form !== (was ? was.form : 'orb')) {
+        const intro = !met.has(b.form) && !level.file.side && level.file.rules?.intro !== false;
+        met.add(b.form);
+        if (beat >= start - 1e-6 && beat < end) { lenses.push({ beat, form: b.form, intro }); gates.push(beat); if (intro) introBars.add(n); }
+      }
+      if (was && (b.turn || b.mirror || b.speed !== was.speed) && beat > start && beat < end) gates.push(beat);
+    });
+  }
+  const formOf = (b: number): Form => (smash.has(b) || auto.has(b) || slings.has(b) || barAt(b).twin ? 'orb' : barAt(b).form);
+  // presses the game takes for the player: a form's introduction, a springboard, a tide pad (the bar's first press)
+  const gift = new Map<number, 'intro' | 'spring' | 'tide'>();
+  {
+    const firstOf = new Map<number, number>();
+    for (const b of ground) if (!firstOf.has(barOf(b))) firstOf.set(barOf(b), b);
+    for (const b of ground) {
+      if (smash.has(b) || auto.has(b)) continue;
+      if (springs.has(b)) gift.set(b, 'spring');
+      else if (introBars.has(barOf(b)) && !slings.has(b)) gift.set(b, 'intro');
+      else if (barAt(b).tide && firstOf.get(barOf(b)) === b && !slings.has(b)) gift.set(b, 'tide');
+    }
+  }
+  const wide = new Set<number>();
+  for (const g of gates) { const b = ground.find((x) => x >= g - 1e-6 && x < g + 4 - 1e-6); if (b !== undefined && !gift.has(b)) wide.add(b); }
+  // after its introduction, a form's first two real presses have openings twice as wide
+  const easy = new Set<number>();
+  for (const n of introBars) {
+    const f = bars[n].form;
+    let left = 2;
+    for (const b of ground) { if (b < (n + 1) * 4 - 1e-6 || left === 0) continue; if (barAt(b).form !== f) break; if (formOf(b) === f && !gift.has(b)) { easy.add(b); left--; } }
+  }
+  // The Comet: its marks come in pairs. Press on the first and keep holding (it climbs to the ring above), let go on
+  // the second (it falls back). Pairs never cross a section, so a practice checkpoint always starts with a press; a
+  // mark left over at the end of a run of them is an ordinary tap.
+  const acts = new Map<number, 'down' | 'up'>();
+  {
+    let run: number[] = [];
+    const close = () => { for (let k = 0; k + 1 < run.length; k += 2) { acts.set(run[k], 'down'); acts.set(run[k + 1], 'up'); } run = []; };
+    let key = '';
+    for (const b of ground) {
+      const k = formOf(b) === 'comet' ? `${level.segAt((b + 1e-6) * spb).index}:${gift.has(b) ? 1 : 0}` : '';
+      if (k !== key) close();
+      key = k;
+      if (k) run.push(b);
+    }
+    close();
+  }
+  const baseTol = level.file.side?.tol ?? level.file.rules?.tol ?? TOL_S;
   // every note that is not a press is a flow note: the flow layer, plus presses inside a charge or crowded out by a smash
   const flowBeats = [...new Set([...layers.flow, ...layers.survival].map(snap))].filter((b) => inRange(b) && !groundSet.has(b)).sort((a, b) => a - b);
   const big = new Set(accents.map(snap));
@@ -286,18 +413,33 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
     const next = i + 1 < ground.length ? ground[i + 1] - beat : 99;
     const isSmash = smash.has(beat);
     const after = afters.has(beat);
-    const tol = clamp(0.45 * Math.min(prev, next) * spb, TOL_MIN_S, isSmash || after ? TOL_SMASH_S : level.file.side?.tol ?? level.file.rules?.tol ?? TOL_S) / spb;
+    const isWide = wide.has(beat);
+    const top = Math.max(baseTol, isSmash || after || isWide ? TOL_SMASH_S : 0, easy.has(beat) ? 2 * baseTol : 0);
+    const tol = clamp(0.45 * Math.min(prev, next) * spb, TOL_MIN_S, top) / spb;
     const seg = level.segAt((beat + 1e-6) * spb);
     const cfg = barAt(beat);
     const sling = slings.has(beat);
-    const land = sling ? beat + SLING_FLIGHT : i + 1 < ground.length ? Math.min(ground[i + 1], beat + CAP) : Math.min(beat + 1, end);
-    const dur = land - beat;
     const plain = isSmash || auto.has(beat); // the drop's own press is never anything else
-    // gravity: a weave flips on every press; otherwise flip only when the bar wants the other side of the ring
-    const weave = !plain && !sling && cfg.mode === 'weave';
+    const form = formOf(beat);
+    const act = acts.get(beat) ?? 'tap';
+    const before = presses[i - 1];
+    const orb = form === 'orb';
+    // a slipstream carries the ball for a beat, two rings on; a chime is a hop taken in mid-air, where the hop before ends
+    const slip = orb && cfg.slip && !sling && !plain && !cfg.twin && next >= SLIP_FLIGHT - 1e-6;
+    const chime = orb && cfg.chime && !sling && !plain && !cfg.twin && !!before && before.form === 'orb' && !before.sling && !before.auto && Math.abs(before.land - beat) < 1e-6;
+    const quick = form === 'meteor' || form === 'pulsar' || (form === 'comet' && act === 'tap') ? Math.min(QUICK, next) : form === 'comet' ? Math.min(QUICK, next * 0.5) : 0;
+    const land = sling ? beat + SLING_FLIGHT : quick ? beat + quick : slip ? beat + SLIP_FLIGHT : i + 1 < ground.length ? Math.min(ground[i + 1], beat + CAP) : Math.min(beat + 1, end);
+    const dur = land - beat;
+    // gravity: a weave flips on every press (so do the Satellite and the Comet, which travel between two rings);
+    // a Pulsar flips on its own ring; otherwise flip only when the bar wants the other side of the ring
+    const pair = form === 'sat' || (form === 'comet' && act !== 'tap');
+    const weave = !plain && !sling && (pair || (orb && cfg.mode === 'weave'));
     const want = cfg.mode === 'up' ? 1 : cfg.mode === 'down' ? -1 : side;
-    const flip = !plain && !sling && (weave || want !== side);
-    const step = weave ? 1 : clamp(dur, 0.6, 1.4);
+    // (a tide pad is only there where the bar turns gravity over: otherwise the press is an ordinary one to tap)
+    const given = gift.get(beat) === 'tide' && !(orb && want !== side) ? '' : gift.get(beat) ?? '';
+    const still = form === 'meteor' || form === 'pulsar' || (form === 'comet' && act === 'tap'); // stays on its ring
+    const flip = !plain && !sling && (weave || form === 'pulsar' || (orb && want !== side));
+    const step = still ? 0 : weave ? 1 : slip ? 2 : clamp(dur, 0.6, 1.4);
     const to = lv + side * step;
     // big hits: the chart's accents, and in a drop the first press of each half of the phrase
     const rel = beat - seg.beat0;
@@ -308,16 +450,21 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
       const whole = Math.abs(beat - Math.round(beat)) < 0.01;
       twin = isSmash || accent || (cfg.long && !!level.file.holds) ? 'both' : whole ? (Math.round(beat) % 2 === 0 ? 'a' : 'b') : lastTwin;
       if (twin !== 'both') lastTwin = twin;
-      first(beat - 0.01, 'twin');
+      first(beat - 0.01, cfg.dual ? 'dual' : 'twin');
     }
-    if (weave) first(beat, 'weave'); else if (flip) first(beat, 'flip');
-    if (sling) first(beat, 'sling');
-    if (cfg.spin && !plain) first(beat, 'spin');
+    if (orb) { if (weave) first(beat, 'weave'); else if (flip && given !== 'tide') first(beat, 'flip'); }
+    if (sling) first(beat, given === 'spring' ? 'spring' : 'sling');
+    if (given === 'tide') first(beat, 'tide');
+    if (chime) first(beat, 'chime');
+    if (slip) first(beat, 'slip');
+    const spin = orb && cfg.spin && !plain && !sling && !chime && !slip;
+    if (spin) first(beat, 'spin');
     presses.push({
-      i, beat, tol, kind: flip ? 'flip' : 'hop', auto: auto.has(beat), smash: isSmash, accent, sling, after, weave, spin: cfg.spin && !plain && !sling, twin,
+      i, beat, tol, kind: flip ? 'flip' : 'hop', auto: auto.has(beat) || !!given, smash: isSmash, accent, sling, after, weave, spin, twin,
       from: lv, to, side, planet, planetTo: sling ? planet + 1 : planet, camLv: weave ? lv + side * 0.5 : to,
       land, bounce: i + 1 < ground.length && ground[i + 1] === land,
-      bulge: flip ? 0 : sling ? 0.5 : clamp(0.35 * dur - 0.1, 0.06, 0.7), pitch: pitchAt(beat), seg: seg.index
+      bulge: form === 'meteor' ? 0.28 : form === 'comet' && act === 'tap' ? 0.45 : flip || slip ? 0 : sling ? 0.5 : clamp(0.35 * dur - 0.1, 0.06, 0.7), pitch: pitchAt(beat), seg: seg.index,
+      form, act, line: form === 'sat' || slip, chime, slip, pad: given === 'spring' || given === 'tide' ? given : '', intro: given === 'intro', wide: isWide || easy.has(beat)
     });
     lv = to;
     if (flip) side = side === 1 ? -1 : 1;
@@ -330,9 +477,9 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
   let free = flowBeats;
   if (level.file.holds) {
     const half = (b: number) => Math.round(b * 2) / 2;
-    const okAt = (b: number) => b >= Math.max(HOLDS_FROM, start + COUNT_IN) - 1e-6 && !inCharge(b) && !barAt(b).twin;
+    const okAt = (b: number) => b >= Math.max(HOLDS_FROM, start + COUNT_IN) - 1e-6 && !inCharge(b) && !barAt(b).twin && barAt(b).form !== 'comet' && !introBars.has(barOf(b));
     // rails also run in a twin orbit (both balls ride them), and a planet hop is a rail from the level's first bars on
-    const railAt = (p: Press) => p.beat >= (p.sling ? start + COUNT_IN : Math.max(HOLDS_FROM, start + COUNT_IN)) - 1e-6 && !inCharge(p.beat);
+    const railAt = (p: Press) => p.beat >= (p.sling ? start + COUNT_IN : Math.max(HOLDS_FROM, start + COUNT_IN)) - 1e-6 && !inCharge(p.beat) && (p.form === 'orb' || p.form === 'sat') && !p.slip;
     const mk = (a: number, b: number, rail: boolean, pos: (beat: number) => { rho: number; side: number; planet: number }, tether = false): void => {
       const eat = free.filter((f) => f > a + 1e-6 && f <= b + 1e-6);
       free = free.filter((f) => !(f > a + 1e-6 && f <= b + 1e-6));
@@ -357,7 +504,7 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
         if (b - p.beat >= HOLD_MIN - 1e-6) {
           // (a gravity flip crosses to the other side of the ring line on the way, as the ball does)
           const u = (beat: number) => (beat - p.beat) / (p.land - p.beat);
-          mk(p.beat, b, true, (beat) => ({ rho: flightRho(p, beat), side: p.kind === 'flip' ? p.side * (1 - 2 * smoothstep(u(beat))) : p.side, planet: p.sling ? p.planet + smoothstep(u(beat)) : p.planetTo }), barAt(p.beat).tether && !p.sling && !p.auto && !p.smash);
+          mk(p.beat, b, true, (beat) => ({ rho: flightRho(p, beat), side: p.kind === 'flip' ? p.side * (1 - 2 * (p.line ? clamp(u(beat), 0, 1) : smoothstep(u(beat)))) : p.side, planet: p.sling ? p.planet + smoothstep(u(beat)) : p.planetTo }), barAt(p.beat).tether && !p.sling && !p.auto && !p.smash);
         }
       }
       // a line: the ball has landed and nothing asks for a tap for a while
@@ -371,7 +518,7 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
       if (lead !== undefined) a = lead;
       let b = Math.min(half(lim - 0.249), a + HOLD_MAX);
       if (b - a < HOLD_MIN - 1e-6) b = Math.min(half(next.beat - LINE_TIGHT - 0.249), a + HOLD_MAX); // a two-beat ride still fits a one-beat line
-      if (b - a < HOLD_MIN - 1e-6 || !okAt(a) || !okAt(b)) return;
+      if (b - a < HOLD_MIN - 1e-6 || !okAt(a) || !okAt(b) || next.chime || next.form === 'comet') return;
       mk(a, b, false, (beat) => ({ rho: p.to + sideNow * LIFT * smoothstep((beat - a) / 0.35), side: sideNow, planet: p.planetTo }));
       flowStart.set(a, holds.length - 1);
       if (!free.includes(a)) free = [...free, a].sort((x, y) => x - y);
@@ -381,6 +528,9 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
     for (const [beat] of flowStart) flowStart.set(beat, holds.findIndex((h) => !h.rail && h.a === beat));
   }
 
+  // shard branches, from the level file: [from, to] in beats. Their notes have the level's own (tighter or wider) window.
+  const branches: Array<[number, number]> = (level.file.shards ?? level.file.stars ?? []).map(([a, b]): [number, number] => [snap(a), snap(b)]).filter(([a, b]) => a >= start && b < end);
+  const branchTol = level.file.rules?.branch ?? FLOW_TOL_S;
   // where the ball is when each flow note comes round: on a ring, or somewhere along a flight
   const all = [...ground, ...free].sort((a, b) => a - b);
   let k = -1;
@@ -393,9 +543,12 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
     const j = all.indexOf(beat);
     const gap = Math.min(j > 0 ? beat - all[j - 1] : 9, j + 1 < all.length ? all[j + 1] - beat : 9) * spb;
     const nextP = presses[k + 1];
-    const tw = barAt(beat).twin ? (nextP && nextP.twin ? nextP.twin : 'a') : null;
+    const tw = barAt(beat).twin ? (barAt(beat).dual ? 'a' : nextP && nextP.twin ? nextP.twin : 'a') : null;
+    // gold along a Comet's climb is collected by holding; in a form's introduction it is collected for the player
+    const ride: FlowNote['ride'] = p && p.form === 'comet' && p.act === 'down' && nextP && beat < nextP.beat ? (p.auto ? 2 : 1) : introBars.has(barOf(beat)) && !inCharge(beat) ? 2 : 0;
+    const branch = branches.findIndex(([a, b]) => beat >= a - 1e-6 && beat <= b + 1e-6);
     const pl = p ? (air && p.sling ? p.planet + smoothstep((beat - p.beat) / (p.land - p.beat)) : p.planetTo) : 0;
-    return { beat, tol: Math.min(FLOW_TOL_S, 0.45 * gap) / spb, pitch: pitchAt(beat), charge: inCharge(beat), rho, side: sd, air, twin: tw, planet: pl, hold: flowStart.get(beat) ?? -1 };
+    return { beat, tol: Math.min(branch >= 0 ? branchTol : FLOW_TOL_S, 0.45 * gap) / spb, pitch: pitchAt(beat), charge: inCharge(beat), rho, side: sd, air, twin: tw, planet: pl, hold: flowStart.get(beat) ?? -1, ride, branch };
   });
   // ---- star trails, from the level file: [from, to] in beats
   const where = (beat: number): { rho: number; side: number; planet: number } => {
@@ -406,7 +559,7 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
     const air = beat < p.land - 1e-6;
     return { rho: air ? flightRho(p, beat) : p.to, side: p.kind === 'flip' ? (air ? p.side : -p.side) : p.side, planet: air && p.sling ? p.planet + smoothstep((beat - p.beat) / (p.land - p.beat)) : p.planetTo };
   };
-  const stars: Star[] = (level.file.stars ?? []).filter(([a, b]) => a >= start && b < end).map(([a, b], i) => {
+  const stars: Star[] = branches.map(([a, b], i) => {
     const gold = flow.filter((f) => f.beat >= a - 1e-6 && f.beat <= b + 1e-6).length + holds.filter((h) => h.a >= a - 1e-6 && h.b <= b + 1e-6).reduce((n, h) => n + h.ticks.length, 0);
     // the star sits on the ball's own path: on the last piece of gold, lifted if that is the end of a gold line
     const on = (beat: number) => {
@@ -416,24 +569,36 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
     return { i, a, b, gold, from: on(a), at: on(b) };
   });
   // a perfect run, as the button sees it: down on every tap, up again at once, or at the end of the hold it starts
+  // (a Comet's pair is one long press: down on its first mark, up on its second; gold collected by riding is not tapped)
   const endOf = new Map(holds.map((h) => [h.a, h.b]));
   const script: Array<[number, boolean]> = [];
-  all.forEach((t, j) => {
+  const ups = new Set<number>();
+  presses.forEach((p, j) => { if (p.act === 'down' && presses[j + 1]) { endOf.set(p.beat, presses[j + 1].beat); ups.add(presses[j + 1].beat); } });
+  const ridden = new Set(flow.filter((f) => f.ride !== 0).map((f) => f.beat));
+  const tapped = all.filter((t) => !ups.has(t) && !ridden.has(t));
+  tapped.forEach((t, j) => {
     script.push([t, true]);
-    script.push([endOf.get(t) ?? Math.min(t + 0.15, j + 1 < all.length ? all[j + 1] - 0.03 : t + 0.15), false]);
+    script.push([endOf.get(t) ?? Math.min(t + 0.15, j + 1 < tapped.length ? tapped[j + 1] - 0.03 : t + 0.15), false]);
   });
 
   // angle round the core, bar by bar: `turn` reverses the orbit at the bar line, the speed words change its rate
   let dir = level.file.side?.mirror ? -1 : 1;
   const quick = level.file.side?.speed ?? 1;
   const turns: number[] = [];
-  const portals: Array<{ beat: number; faster: boolean }> = [];
+  const portals: Course['portals'] = [];
   const twins: Array<[number, number]> = [];
+  const duals: Array<[number, number]> = [];
+  const mirrors: number[] = [];
   const rate = bars.map((b, n) => {
     const beat = n * 4;
     const before = n > 0 ? bars[n - 1].speed : 1;
     if (b.turn) { dir = -dir; if (beat > start && beat < end) { turns.push(beat); first(beat, 'reverse'); } }
-    if (b.speed !== before && beat > start && beat < end) { portals.push({ beat, faster: b.speed > before }); first(beat, b.speed > before ? 'faster' : 'slower'); }
+    if (b.speed !== before && beat > start && beat < end) { portals.push({ beat, faster: b.speed > before, speed: b.speed }); first(beat, b.speed > before ? 'faster' : 'slower'); }
+    if (b.mirror && beat > start && beat < end) { mirrors.push(beat); first(beat, 'mirror'); }
+    if (b.dual && beat + 4 > start && beat < end) {
+      const last = duals[duals.length - 1];
+      if (last && last[1] === beat) last[1] = beat + 4; else duals.push([beat, beat + 4]);
+    }
     if (b.twin && beat + 4 > start && beat < end) {
       const last = twins[twins.length - 1];
       if (last && last[1] === beat) last[1] = beat + 4; else twins.push([beat, beat + 4]);
@@ -441,6 +606,7 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
     return dir * (TWO_PI / LAP) * b.speed * quick;
   });
   for (const s of segs) { if (s.core?.charge) first(s.beat0, 'charge'); if (s.core?.smash) first(s.beat0, 'smash'); }
+  for (const l of lenses) if (l.form !== 'orb') first(l.beat, l.form);
   const a0: number[] = [];
   let acc = 0;
   rate.forEach((r) => { a0.push(acc); acc += r * 4; });
@@ -458,8 +624,9 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
   };
 
   return {
-    spb, start, end, dropBeat: level.dropTime / spb, presses, flow, taps: all, holds, script, stars,
+    spb, start, end, dropBeat: level.dropTime / spb, presses, flow, taps: tapped, rides: all.filter((t) => ups.has(t) || ridden.has(t)), holds, script, stars,
     checkpoints: segs.map((s) => s.beat0).filter((b) => b >= start && b < end),
-    charges, chargeNotes: flow.filter((f) => f.charge).length, inCharge, angle, turns, portals, twins, firsts, bars
+    charges, chargeNotes: flow.filter((f) => f.charge).length, inCharge, angle, turns, portals, twins, firsts, bars,
+    lenses, mirrors, duals, formAt: (beat: number) => (barAt(beat).twin ? 'orb' : barAt(beat).form), at: where
   };
 }

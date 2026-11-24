@@ -40,6 +40,12 @@ export interface SegmentDef {
    *   fast | slow | normal   orbit speed from this bar on
    *   long                the bar is two long strides: its presses on beats 2 and 4 fold into rails to hold
    *   tether              the bar's rails are tethers: let go before the end and the run is over
+   *   orb | meteor | sat | pulsar | comet   Eko's form from this bar on (a lens stands on the bar line)
+   *   x0.5 | x0.75 | x1.25 | x1.5 | x2      a tempo gate: the orbit speed from this bar on
+   *   spring              the bar's first press is a planet hop the game takes (a springboard)
+   *   tide                the bar's first press is taken by the game (a tide pad: with up/down, a flip without a tap)
+   *   chime               the bar's chained hops are taken in mid-air      slip   its hops are slipstreams
+   *   mirror              the picture flips left to right at the bar line   dual   a twin orbit whose second spark is a Pulsar
    * record: one of the passages worth recording by hand (Record Mode lists these first).
    */
   core?: { pulse?: boolean; charge?: boolean; launch?: boolean; smash?: boolean; bars?: string[]; record?: boolean };
@@ -84,8 +90,15 @@ export interface LevelFile {
    */
   side?: { of: string; tol?: number; ahead?: number; mirror?: boolean; speed?: number };
   /** a harder level's own rules: tol = half-width of the openings in seconds (default 0.12), ahead = beats of course shown (default 3) */
-  rules?: { tol?: number; ahead?: number };
-  /** star trails: [from, to] in beats. Play each stretch clean (every piece of gold, no stray taps) for its star. */
+  /**
+   * ...branch = how close a tap must be to a note on a shard branch, in seconds (default 0.07); pairs = how many
+   * eighth notes a bar may take as presses, each right after a press on the beat (default 0); intro = false: forms
+   * arrive with no safe introduction (the last level).
+   */
+  rules?: { tol?: number; ahead?: number; branch?: number; pairs?: number; intro?: boolean };
+  /** shard branches: [from, to] in beats. Play each stretch clean (every piece of gold, no stray taps) for its lens shard. */
+  shards?: Array<[number, number]>;
+  /** the old name for `shards` */
   stars?: Array<[number, number]>;
   segments: SegmentDef[];
 }

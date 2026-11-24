@@ -2,7 +2,7 @@
   "_doc": "The B-side of this level: the same song and notes, played on the night side. 'side' sets the harder rules (tol = half-width of the openings in seconds, ahead = beats of course shown, mirror, speed); 'bars' replaces core.bars section by section.",
   "difficulty": "B-side",
   "adds": "Night side: mirrored and faster, tighter openings, less warning, and the twin orbit where it was not before",
-  "side": {"tol": 0.09, "ahead": 2, "mirror": true, "speed": 1.2},
+  "side": {"tol": 0.07, "ahead": 2, "mirror": true, "speed": 1.2},
   "bars": {
     "groove": ["down", "spin", "weave", "up"],
     "groove2": ["twin", "twin+weave", "twin+long", "twin+spin"],

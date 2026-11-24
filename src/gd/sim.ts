@@ -17,7 +17,7 @@ export interface TapResult {
   /** the game pressed it itself (the launch into the drop, or the run-in before a practice checkpoint) */
   auto?: boolean;
 }
-interface Flight { t0: number; t1: number; from: number; to: number; bulge: number; s0: number; s1: number }
+interface Flight { t0: number; t1: number; from: number; to: number; bulge: number; s0: number; s1: number; lin: boolean }
 
 const SKIP = 0.3; // beats a free hop lasts
 const DEBOUNCE_S = 0.03;
@@ -47,6 +47,8 @@ export class Sim {
   private lastTap = -99;
   private doneUntil = -99;
   private doneBeat = 0;
+  /** when the last press was taken (the Comet's hold is checked from here) */
+  private tookAt = -99;
   private needJudge = false;
   private used = new Set<number>();
   private fi = 0;
@@ -121,7 +123,8 @@ export class Sim {
   }
 
   private takeoff(p: Press, at: number): void {
-    this.fl = { t0: Math.min(at, p.land - 0.05), t1: p.land, from: p.from, to: p.to, bulge: p.bulge, s0: p.side, s1: p.kind === 'flip' ? -p.side : p.side };
+    this.fl = { t0: Math.min(at, p.land - 0.05), t1: p.land, from: p.from, to: p.to, bulge: p.bulge, s0: p.side, s1: p.kind === 'flip' ? -p.side : p.side, lin: p.line };
+    this.tookAt = at;
     this.mode = 'flight';
     this.doneUntil = p.beat + p.tol;
     this.doneBeat = p.beat;
@@ -134,6 +137,7 @@ export class Sim {
     if (this.mode === 'flight' && this.fl) {
       const f = this.fl;
       const u = Math.max(0, Math.min(1, (b - f.t0) / (f.t1 - f.t0)));
+      if (f.lin) return f.from + (f.to - f.from) * u; // the Satellite's zig-zag and a slipstream: a straight line
       return f.from + (f.to - f.from) * rise(u) + f.s1 * f.bulge * arc(u) * (f.s0 === f.s1 ? 1 : 0);
     }
     if (this.mode === 'skip') {
@@ -149,7 +153,7 @@ export class Sim {
   sideAt(b = this.beat): number {
     if (this.mode === 'flight' && this.fl && this.fl.s0 !== this.fl.s1) {
       const u = Math.max(0, Math.min(1, (b - this.fl.t0) / (this.fl.t1 - this.fl.t0)));
-      return this.fl.s0 + (this.fl.s1 - this.fl.s0) * smoothstep(u); // crossing a ring: eased, not a straight line
+      return this.fl.s0 + (this.fl.s1 - this.fl.s0) * (this.fl.lin ? u : smoothstep(u)); // crossing a ring: eased (a straight flight: evenly)
     }
     return this.mode === 'flight' && this.fl ? this.fl.s1 : this.side;
   }
@@ -242,6 +246,7 @@ export class Sim {
     for (let i = Math.max(0, this.fi - 2); i < fl.length; i++) {
       const d = (t - fl[i].beat) * this.c.spb;
       if (d < -0.3) break;
+      if (fl[i].ride !== 0) continue; // gold collected by riding is never tapped
       if (!best || Math.abs(d) < Math.abs(best.d)) best = { f: fl[i], d };
     }
     return best;
@@ -261,6 +266,7 @@ export class Sim {
     this.mashing = this.recent.length === MASH_TAPS && (t - this.recent[0]) * spb < 1 && !this.c.inCharge(t);
     if (this.mashing) { this.off(); this.slip(t); }
     const p = this.c.presses[this.ni];
+    const up = !!p && p.act === 'up'; // a Comet's second mark is taken by letting go, never by a tap
     const d = p ? t - p.beat : -Infinity;
     const nf = this.nearFlow(t);
     const hit = nf && Math.abs(nf.d) <= nf.f.tol * spb && !this.used.has(nf.f.beat) ? nf.f : null;
@@ -273,7 +279,7 @@ export class Sim {
     };
 
     // Survival first: a tap inside the next opening's window always opens it...
-    if (p && d >= -p.tol) {
+    if (p && !up && d >= -p.tol) {
       // ...but if it was really aimed at a flow note just before the press, the flow note gets the credit,
       // and the press is judged by the next tap inside its window (or not at all)
       const spark = hit && Math.abs(nf!.d) < Math.abs(d * spb) ? this.touch(hit, t) : null;
@@ -297,18 +303,24 @@ export class Sim {
       if (this.needJudge) { this.needJudge = false; const err = (t - this.doneBeat) * spb; return { kind: 'none', err, flow: this.judge(err) }; }
       return { kind: 'none' };
     }
+    if (up) return { kind: 'none' };
     if (this.holdAt(t)) return free(); // picking a hold up part-way along: never punished
     if (this.c.inCharge(t)) {
       // charging the drop: tap away, nothing here can end the run; taps that miss the roll just leak a little charge
       this.charge = Math.max(0, this.charge - 0.4 / Math.max(1, 0.75 * this.c.chargeNotes));
       return free();
     }
-    if (!p || p.auto || p.after) return free(); // nothing left to miss, or the first press after a planet hop: tapping early there is never punished
+    if (!p || p.auto || p.after || p.wide) return free(); // nothing left to miss, or the first press after a planet hop: tapping early there is never punished
     // near a flow note, or with one still to come before the opening: the tap was for the flow note, never punished
-    if (this.c.flow.some((f) => f.beat < p.beat && (f.beat - t) * spb > -GRACE_S)) return free();
+    if (this.c.flow.some((f) => f.ride === 0 && f.beat < p.beat && (f.beat - t) * spb > -GRACE_S)) return free();
     if (d < -NEAR) { this.off(); return free(); } // far from any opening: free, though it is not on the beat
     if (this.forgiving) return free();
     return this.crash('early', t); // went for the opening too soon and hit the ring
+  }
+
+  /** Was the button down at a beat that has just gone by (give or take g). */
+  private heldAt(b: number, g: number): boolean {
+    return (this.down && this.downAt <= b + g) || (!this.down && this.upAt >= b - g && this.downAt <= b + g);
   }
 
   /** The button comes up at beat-time t. Letting go right on a hold's end counts like an on-beat tap; nothing else happens. */
@@ -319,6 +331,14 @@ export class Sim {
     this.upAt = t;
     if (this.crashed || t < this.autoUntil) return { kind: 'none' };
     const spb = this.c.spb;
+    // the Comet: letting go on its second mark is the press. (Letting go before it is caught by the hold check.)
+    const cp = this.c.presses[this.ni];
+    if (cp && cp.act === 'up' && !cp.auto && this.mode === 'ground' && t >= cp.beat - cp.tol) {
+      const err = (t - cp.beat) * spb;
+      this.takeoff(cp, t);
+      this.needJudge = false;
+      return { kind: cp.kind, err, flow: this.judge(err), pitch: cp.pitch };
+    }
     for (let i = Math.max(0, this.hi - 1); i < this.c.holds.length && i <= this.hi + 1; i++) {
       const h = this.c.holds[i];
       const err = (t - h.b) * spb;
@@ -348,6 +368,13 @@ export class Sim {
       while (this.fi < fl.length && fl[this.fi].beat + fl[this.fi].tol < nb) {
         const f = fl[this.fi++];
         if (this.used.has(f.beat)) continue;
+        if (f.ride !== 0 && (f.ride === 2 || f.beat < this.autoUntil || this.heldAt(f.beat, FLOW_TOL_S / this.c.spb))) {
+          // gold along the Comet's climb (or in a form's introduction): collected by being there
+          this.used.add(f.beat);
+          if (!this.mashing) this.flow = Math.min(1, this.flow + TICK_GAIN);
+          if (f.beat >= this.autoUntil) this.out.push({ kind: 'tick' });
+          continue;
+        }
         if (!f.charge) this.flow = Math.max(0, this.flow - MISS);
         if (f.beat >= this.autoUntil) this.slip(f.beat);
       }
@@ -377,6 +404,14 @@ export class Sim {
       // a tether: once the ball is on it the button must stay down until just before its end
       const th = this.c.holds[this.hi];
       if (th && th.tether && !this.down && !this.forgiving && th.a >= this.autoUntil && this.mode === 'flight' && this.doneBeat === th.a && nb > th.a + TETHER_GRIP && nb < th.b - TETHER_LET_S / this.c.spb) {
+        this.crashed = true;
+        this.crashBeat = nb;
+        this.crashKind = 'let';
+        break;
+      }
+      // the Comet: between its two marks the button must stay down (as on a tether)
+      const cp = ps[this.ni];
+      if (cp && cp.act === 'up' && !cp.auto && !this.down && !this.forgiving && cp.beat >= this.autoUntil && nb > Math.max(this.doneBeat, this.tookAt) + TETHER_GRIP && nb < cp.beat - cp.tol) {
         this.crashed = true;
         this.crashBeat = nb;
         this.crashKind = 'let';
