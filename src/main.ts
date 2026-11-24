@@ -14,6 +14,7 @@ import { LEVEL_UI, icon } from './ui/art';
 import { SkyMap, type SkyInfo, type SkyNode } from './ui/skymap';
 import { SkyTitle } from './ui/skytitle';
 import { SkyStory } from './ui/skystory';
+import { SkyResult, type ResultInfo } from './ui/skyresult';
 import { PLANETS, STORY, ekoPic, planetName, type Frame } from './ui/galaxy';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -53,6 +54,7 @@ const sky = new SkyMap($<HTMLCanvasElement>('stage'));
 const skyTitle = new SkyTitle($<HTMLCanvasElement>('stage'));
 /** the story: painted scenes with the words written into them */
 const skyStory = new SkyStory($<HTMLCanvasElement>('stage'));
+const skyResult = new SkyResult($<HTMLCanvasElement>('stage'));
 let screen: Screen = 'title';
 let settingsFrom: Screen = 'levels';
 let run: Run | null = null;
@@ -351,7 +353,8 @@ $('levels').addEventListener('click', (e) => {
   const hit = sky.hit(e.clientX, e.clientY);
   if (hit.kind === 'node') {
     if (hit.id === 'lantern') { sky.chosen = sky.chosen === 'lantern' ? null : 'lantern'; return; }
-    if (hit.id === at.id && sky.chosen === hit.id) { if (canPlay()) begin(false); } else select(hit.id); // a second tap on the chosen world flies in
+    if (hit.id === at.id && sky.chosen === hit.id) { if (canPlay()) begin(false); } // a second tap on the chosen world flies in
+    else { select(hit.id); const p = packOf(hit.id); if (p) skyResult.prepare(baseOf(p), () => screen === 'levels' && !$('levels').classList.contains('launch')); } // (its results' skies are painted while the galaxy is at rest)
   } else if (hit.kind === 'practise') { if (canPlay()) begin(true); }
   else if (hit.kind === 'glows') { renderOrbs(); show('orbs'); }
   else if (hit.kind === 'settings') openSettings('levels');
@@ -673,6 +676,9 @@ function showResults(r: Run, cleared: boolean, reached = r.pct): void {
   const prev = bestFor(id);
   const counted = !r.opts.bot && !r.opts.practice;
   const first = cleared && counted && !prev.cleared;
+  const wasHome = !!r.pack.level.side || !!bestFor(baseOf(r.pack)).cleared; // was this world's colour home before the run?
+  const said: string[] = []; // what the run changed, in a few soft lines (the painted results)
+  const won = { quest: [] as string[], badge: [] as string[], glow: [] as string[] };
   const unlocks: string[] = [];
   let newStars = [false, false, false];
   if (cleared && counted) {
@@ -690,8 +696,10 @@ function showResults(r: Run, cleared: boolean, reached = r.pct): void {
       const done = ALL_PACKS.map((p) => p.level.id).filter((x) => bestFor(x).cleared);
       const fresh = earned(id, { onBeatPct, dropPower: r.dropPower, bestStreak: r.sim.bestStreak, attempts: bestFor(id).attempts, practised: !!save.practiced[id] }, done).filter((b) => !save.badges[b]);
       if (first) pendingStory = r.pack === FINAL ? 'end' : id; // its story card plays on the way back to the map
+      if (first) said.push(r.pack === FINAL ? 'The last song is home.' : 'Its song is home, and its colour with it.');
       if (first && r.pack !== FINAL && levelIdx + 1 < PACKS.length) {
         freshNodes.add(PACKS[levelIdx + 1].level.id);
+        if (!progress.unlockAll) said.push(`The way to ${planetName(PACKS[levelIdx + 1].level.id)} is lit.`);
         if (!progress.unlockAll) unlocks.push(row(icon('play'), 'THE WAY IS LIT', `${planetName(PACKS[levelIdx + 1].level.id)} · ${shortTitle(PACKS[levelIdx + 1])}`));
       }
       // stars are kept when the run that collected them clears the level
@@ -702,20 +710,24 @@ function showResults(r: Run, cleared: boolean, reached = r.pct): void {
         save.stars[id] = now;
         newStars = now.map((k, i) => k && !had[i]);
         const all = now.every(Boolean);
+        if (all && !first) said.push(gained === 3 ? 'All three lens shards are home.' : 'The last shard is home.');
         unlocks.push(row(icon('star'), all ? 'ALL THREE LENS SHARDS' : `${gained} NEW LENS SHARD${gained === 1 ? '' : 'S'}`, all ? `Every shard branch in ${shortTitle(r.pack)} played clean` : `${now.filter(Boolean).length} of 3 kept on ${shortTitle(r.pack)}`));
       }
       // what the stars have just done to the map
       if (!moonWas && nodeState(nodeOf(`${id}-b`), progress) !== 'hidden') {
         freshNodes.add(`${id}-b`);
+        said.push(`${planetName(id)} has a moon now.`);
         unlocks.push(row(icon('orb'), 'A MOON APPEARS', `${planetName(id)} has a moon: its B-side is on the map`));
       }
       if (!gateWas && nodeState(nodeOf('gate'), progress) === 'open') {
         freshNodes.add('gate');
+        said.push('All four songs are home: the Hollow is in reach.');
         unlocks.push(row(icon('flag'), 'THE HOLLOW IS IN REACH', 'All four songs are home: the way to the Hollow is open'));
       }
       // side quests this clear completes
       for (const q of questsEarned(id, { onBeatPct, dropPower: r.dropPower, bestStreak: r.sim.bestStreak, holdsFull: r.sim.holdsFull, holds: r.course.holds.length, strays: r.sim.strays }, save.quests)) {
         save.quests[q.id] = true;
+        won.quest.push(q.name);
         unlocks.push(row(icon('quest'), `QUEST: ${q.name.toUpperCase()}`, q.desc));
       }
       // (Game Center has boards and achievements for the four levels of the route)
@@ -729,10 +741,12 @@ function showResults(r: Run, cleared: boolean, reached = r.pct): void {
         save.badges[bid] = true;
         if (bid !== `clear_${FINAL_ID}` && !/^(tune|mender)_/.test(bid)) gameCenter.badge(bid);
         const b = BADGES.find((x) => x.id === bid);
+        if (b) won.badge.push(b.name);
         if (b) unlocks.push(row(icon('badge'), `BADGE: ${b.name.toUpperCase()}`, b.desc));
       }
     }
     // orbs this clear has earned: by a badge, by both quests of a level, or by a B-side
+    for (const o of ORBS) if (owned(o) && !orbsWas.has(o.id)) won.glow.push(o.name);
     for (const o of ORBS) if (owned(o) && !orbsWas.has(o.id)) unlocks.push(row(dot(o), `GLOW: ${o.name.toUpperCase()}`, 'Eko can wear it: look under Glows'));
   }
   if (cleared && r.opts.practice) save.bests[id] = { ...bestFor(id), prac: 100 };
@@ -776,8 +790,51 @@ function showResults(r: Run, cleared: boolean, reached = r.pct): void {
   const next = $<HTMLButtonElement>('nextBtn');
   next.disabled = !!r.pack.level.side || r.pack === FINAL || !(levelIdx + 1 < PACKS.length && levelOpen(levelIdx + 1));
   next.style.opacity = next.disabled ? '0.4' : '1';
+  // the painted results: the planet's sky, and a few soft lines
+  if (cleared && counted && r.pack.level.side && first) said.unshift('The moon\u2019s song is played all the way through.');
+  if (cleared && !said.length) said.push(r.opts.bot ? 'Autoplay, all the way through.' : r.opts.practice ? 'A practice run, all the way through.' : 'Once more, all the way through.');
+  if (!cleared) {
+    if (r.opts.bot) said.push('Autoplay.');
+    else if (r.opts.practice) said.push('A practice run: nothing is kept.');
+    else said.push(session.newBest ? 'Your furthest yet.' : bestFor(id).cleared ? 'Its song is already home.' : `Your furthest is ${Math.max(bestFor(id).pct, pct)}%.`);
+    if (!wasHome) said.push('The colour rose this far, and waits.');
+  }
+  if (won.quest.length) said.push(won.quest.length === 1 ? `A quest done: ${won.quest[0]}.` : `${won.quest.length} quests done.`);
+  if (won.badge.length) said.push(won.badge.length === 1 ? `A constellation lit: ${won.badge[0]}.` : `${won.badge.length} constellations lit.`);
+  if (won.glow.length) said.push(won.glow.length === 1 ? `A new glow for Eko: ${won.glow[0]}.` : `${won.glow.length} new glows for Eko.`);
+  const kept = keptNow.filter(Boolean).length;
+  const more = [`Attempt ${$('resAttempts').textContent}. On the beat ${$('resOnBeat').textContent}, best streak ${session.streak}.`];
+  if (session.drop >= 0) more.push(session.drop >= 0.995 ? 'The drop played at full charge.' : `The drop played at ${Math.round(session.drop * 100)}% charge.`);
+  if (said.length > 3) more.push(said.splice(3).join(' ')); // (three lines in the picture; anything past that is here)
+  if (r.opts.bot) more.push(`Movement check: ${sm.frames} frames, the clock never more than ${sm.worstPct.toFixed(2)}% off.`);
+  else {
+    if (cleared && r.course.holds.length) more.push(`Gold holds in full: ${r.sim.holdsFull} of ${r.course.holds.length}.`);
+    if (r.opts.practice && carried) more.push('Practice runs do not keep lens shards.');
+    else if (!cleared && carried) more.push('A shard is kept when the run that found it clears the song.');
+    else if (cleared && r.course.stars.length && !keptNow.every(Boolean)) more.push('A shard is kept by playing its branch clean.');
+  }
+  resMore = more;
+  skyResult.show({
+    world: baseOf(r.pack), name: r.pack.level.side ? `${planetName(id)}\u2019s moon` : planetName(id), song: shortTitle(r.pack), tag: r.opts.bot ? 'autoplay' : r.opts.practice ? 'practice' : '',
+    pct, cleared, first, home: wasHome,
+    shards: r.course.stars.length ? keptNow : null, fresh: newStars,
+    shardLine: kept === 3 ? 'all three lens shards' : kept === 0 ? 'no shards yet' : `${['', 'one', 'two'][kept]} lens shard${kept === 1 ? '' : 's'} kept`,
+    lines: said, ...syncSaid()
+  });
   botMode = false;
   show('results');
+}
+/** more about the run, apart from the sync line (which can change while the results are up) */
+let resMore: string[] = [];
+/** What the taps say about sync, as the results' last soft line, and the one-tap fix if there is one. */
+function syncSaid(fixed = false): Pick<ResultInfo, 'more' | 'fix'> {
+  const all = spread([...sync.press, ...sync.flow]), fix = $('resSyncFix'), offer = !fixed && !fix.classList.contains('hidden');
+  const line = fixed ? `The audio offset is now ${fmtMs(save.audioOffset)}. Play on, and check again.`
+    : all.n < 12 ? 'Not enough taps yet to judge the sync.'
+    : all.sd > 60 ? 'Your taps are too spread out to judge the sync.'
+    : Math.abs(all.mean) < 15 ? `In sync: your taps centre ${lateEarly(all.mean)}.`
+    : `Your taps ran about ${Math.abs(Math.round(all.mean))} ms ${all.mean > 0 ? 'late' : 'early'}: a delay in sound or screen, not the song.`;
+  return { more: [...resMore, line], fix: offer ? (fix.textContent ?? '').replace(/^Fix it: offset/, 'set the offset to') : '' };
 }
 
 // ------------------------------------------------------------------ HUD
@@ -863,6 +920,14 @@ $('title').addEventListener('click', () => {
   if (!save.story.open) playStory('open', () => show('levels')); else { renderMap(); skyTitle.ascend(() => show('levels')); }
 });
 // the story: a tap anywhere goes on (or brings the rest of the words in); the quiet word in the corner skips
+$('results').addEventListener('click', (e) => {
+  if (screen !== 'results' || (e.target as HTMLElement).closest('.panel')) return; // (the old panel's own buttons are pressed by code, never by a tap)
+  const r = skyResult.tap(e.clientX, e.clientY);
+  if (r === 'again') { session.far = 0; session.newBest = false; startRun(); }
+  else if (r === 'galaxy') toLevels();
+  else if (r === 'check') { run?.stop(); run = null; openCalib(true); }
+  else if (r === 'fix') { $('resSyncFix').click(); if (skyResult.info) Object.assign(skyResult.info, syncSaid(true)); }
+});
 $('story').addEventListener('click', (e) => { if (screen !== 'story') return; const r = skyStory.tap(e.clientX, e.clientY); if (r === 'skip') endStory(); else if (r === 'next') nextStory(); });
 $('storyNext').addEventListener('click', nextStory);
 $('storyArt').addEventListener('click', nextStory);
@@ -1268,6 +1333,7 @@ function tick(now: number): void {
     audio.tick(now);
     if (screen === 'levels') sky.draw(now, dt);
     else if (screen === 'story') skyStory.draw(now);
+    else if (screen === 'results') skyResult.draw(now, dt);
     else if (screen === 'title') { if (skyTitle.between) sky.draw(now, dt); skyTitle.draw(now, dt); } // rising, the galaxy shows through
     else renderer.drawIdle(now, dt);
     if (screen === 'record') record.tick(now);
@@ -1300,7 +1366,7 @@ requestAnimationFrame(loop);
 // Hooks for tests and debugging; the game itself never reads these.
 Object.assign(window, {
   __omo: {
-    audio, save, renderer, sky, session, sync, get run() { return run; }, get screen() { return screen; }, tick, show,
+    audio, save, renderer, sky, skyResult, session, sync, get run() { return run; }, get screen() { return screen; }, tick, show,
     level: (i: number) => focusLevel(i), select: (id: string) => select(id, true), quests: () => { renderQuests(); show('quests'); },
     start: (bot: boolean, prac = false, from = -1) => { botMode = bot; practice = prac; startRun(from); },
     story: (k: string) => playStory(k, () => show('levels'), true),

@@ -464,6 +464,8 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline-color:
 @font-face { font-family: 'Cormorant SC'; font-weight: 700; font-display: swap; src: url('../node_modules/@fontsource/cormorant-sc/files/cormorant-sc-latin-700-normal.woff2') format('woff2'); }
 @font-face { font-family: 'Cormorant Garamond'; font-weight: 500; font-style: normal; font-display: swap; src: url('../node_modules/@fontsource/cormorant-garamond/files/cormorant-garamond-latin-500-normal.woff2') format('woff2'); }
 @font-face { font-family: 'Cormorant Garamond'; font-weight: 500; font-style: italic; font-display: swap; src: url('../node_modules/@fontsource/cormorant-garamond/files/cormorant-garamond-latin-500-italic.woff2') format('woff2'); }
+/* the same face with lining figures, for the results' big number on the canvas (its own old-style 1 reads as an I) */
+@font-face { font-family: 'Cormorant Lining'; font-weight: 500; font-style: normal; font-display: swap; font-feature-settings: 'lnum' 1; src: url('../node_modules/@fontsource/cormorant-garamond/files/cormorant-garamond-latin-500-normal.woff2') format('woff2'); }
 @font-face { font-family: 'Source Sans 3'; font-weight: 600; font-display: swap; src: url('../node_modules/@fontsource/source-sans-3/files/source-sans-3-latin-600-normal.woff2') format('woff2'); }
 @font-face { font-family: 'Source Sans 3'; font-weight: 700; font-display: swap; src: url('../node_modules/@fontsource/source-sans-3/files/source-sans-3-latin-700-normal.woff2') format('woff2'); }
 :root {
@@ -542,3 +544,6 @@ body { font-weight: 600; }
 /* Afterglow, screen 3: the story is painted on the canvas and tapped anywhere; the old card is kept for readers, not shown */
 .screen.veil.story { background: none; cursor: pointer; }
 #story .story-card { visibility: hidden; }
+/* Afterglow, screen 4: the results are painted on the canvas and tapped anywhere; the old panel is kept for readers, not shown */
+.screen.veil#results { background: none; cursor: pointer; }
+#results .panel { visibility: hidden; }

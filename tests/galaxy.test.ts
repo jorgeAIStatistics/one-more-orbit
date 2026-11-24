@@ -4,6 +4,7 @@ import { BADGES } from '../src/game/extras';
 import { FINAL, PACKS } from '../src/game/packs';
 import { STORIES } from '../src/art/storypaint.js';
 import { PLANETS, STORY, planetName } from '../src/ui/galaxy';
+import { RESULTS } from '../src/art/resultpaint.js';
 
 describe('the galaxy', () => {
   it('every level is a planet with its own name and its own palette for when its colour is home', () => {
@@ -53,5 +54,12 @@ describe('the galaxy', () => {
     }
     expect(new Set(BADGES.map((b) => b.id)).size).toBe(BADGES.length);
     expect(BADGES.length).toBe(21);
+  });
+});
+
+describe('the painted results', () => {
+  it('has a sky and a ground for every world a run can end on', () => {
+    for (const id of Object.keys(PLANETS)) expect(RESULTS.LAYERS.has(id), id).toBe(true);
+    for (const dev of ['phone', 'desktop'] as const) { const L = RESULTS.LAYERS.lay(dev); expect(L.horizon).toBeGreaterThan(0.6); expect(L.B.x + L.B.w).toBeLessThan(1); }
   });
 });

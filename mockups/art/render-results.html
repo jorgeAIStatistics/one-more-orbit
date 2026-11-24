@@ -21,6 +21,15 @@ const only = new URLSearchParams(location.search).get('only');
   pair('1-daybreak-again', 'daybreak', 'again');
   pair('2-orbit-first', 'orbit', 'first');
   pair('3-galaxy-first', 'galaxy', 'first');
+  for (const k of ['glassmere', 'glassleft', 'verdance', 'verdleft', 'hollow', 'hollowleft']) pair(`w-${k}`, 'daybreak', k); // the other three worlds
+  if (!only || only === 'layers') { // the game's layers, put together the way the game does it, to check them against the stills
+    const [w, h] = [390, 844], Y = RESULTS.LAYERS;
+    const mk = (W, H, f) => { const c = document.createElement('canvas'); c.width = W; c.height = H; f(c.getContext('2d')); return c; };
+    for (const [id, f, cleared] of [['heroes', 1, true], ['skyhigh', 0.62, false], ['blank', 0.38, false]]) {
+      const cold = mk(w, h, (c) => Y.scene(c, w, h, id, 'phone', 1, 'cold')), warm = mk(w, h, (c) => Y.scene(c, w, h, id, 'phone', 1, 'warm')), fr = Y.front(w, h, id, 'phone', 1), hy = h * Y.lay('phone').horizon;
+      add(`layers-${id}`, w, h, (c) => { c.drawImage(cold, 0, 0); const dy = hy * (1 - f * (cleared ? 1.45 : 1)) - fr.y; const t = mk(w, h, (x) => { x.drawImage(warm, 0, 0); x.globalCompositeOperation = 'destination-in'; x.drawImage(fr.mask, 0, dy); if (!cleared) { const g = x.createLinearGradient(0, hy - 12, 0, hy + 44); g.addColorStop(0, '#000'); g.addColorStop(1, 'rgba(0,0,0,0.25)'); x.fillStyle = g; x.fillRect(0, 0, w, h); } }); c.drawImage(t, 0, 0); if (cleared) c.drawImage(mk(w, h, (x) => Y.scene(x, w, h, id, 'phone', 1, 'blaze')), 0, 0); else { c.globalCompositeOperation = 'screen'; c.drawImage(fr.lip, 0, dy); } });
+    }
+  }
   if (!only || only === 'flood') { // how the colour floods in on a first clear: three moments of the same picture
     const fr = [0.22, 0.62, 1].map((ph, i) => add(`flood-${i + 1}`, ...PH, (c) => RESULTS.draw(c, ...PH, 'daybreak', 'first', 'phone', ph)));
     add('flood-sheet', 3 * 416 + 48, 900, (c) => { c.fillStyle = '#0b0a14'; c.fillRect(0, 0, 1296, 900); c.imageSmoothingQuality = 'high'; fr.forEach((f, i) => c.drawImage(f, i * 440, 0, 416, 900)); });

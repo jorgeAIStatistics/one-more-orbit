@@ -20,7 +20,12 @@ const RESULTS = (() => {
       sky: [[0, [24, 14, 48]], [0.4, [86, 34, 74]], [0.72, [190, 80, 64]], [0.9, [244, 150, 96]], [1, [255, 206, 140]]], aur: [[255, 126, 56], [255, 84, 128], [255, 196, 96]], land: [[112, 46, 66], [66, 26, 52], [26, 12, 30]] },
     skyhigh: { name: 'Cirra', song: 'Sky High', base: [220, 110, 190], lit: [255, 196, 232], dark: [80, 36, 110], bands: [[-0.1, 0.3, [255, 236, 248], 0.2], [0.4, 0.2, [255, 220, 240], 0.14]],
       sky: [[0, [20, 14, 52]], [0.4, [84, 40, 110]], [0.72, [196, 96, 170]], [0.9, [250, 170, 200]], [1, [255, 220, 220]]], aur: [[255, 150, 220], [190, 150, 255], [255, 220, 236]], land: [[132, 84, 150], [84, 50, 112], [34, 20, 58]] },
-    blank: { name: 'Glassmere', song: 'Blank', base: [110, 160, 230], lit: [226, 242, 255], dark: [30, 44, 110], bands: [[0, 0.16, [240, 250, 255], 0.2]] }
+    blank: { name: 'Glassmere', song: 'Blank', base: [110, 160, 230], lit: [226, 242, 255], dark: [30, 44, 110], bands: [[0, 0.16, [240, 250, 255], 0.2]], ground: 'glass',
+      sky: [[0, [8, 14, 44]], [0.4, [30, 50, 110]], [0.72, [80, 130, 200]], [0.9, [170, 210, 240]], [1, [230, 244, 255]]], aur: [[120, 190, 255], [190, 160, 255], [226, 246, 255]], land: [[104, 136, 200], [54, 78, 146], [14, 20, 52]] },
+    invincible: { name: 'Verdance', song: 'Invincible', base: [70, 160, 110], lit: [196, 250, 160], dark: [14, 60, 66], bands: [[-0.25, 0.25, [220, 255, 170], 0.14]], ground: 'woods',
+      sky: [[0, [8, 22, 36]], [0.4, [20, 70, 80]], [0.72, [60, 150, 110]], [0.9, [170, 230, 150]], [1, [230, 255, 190]]], aur: [[120, 240, 130], [70, 220, 190], [236, 255, 160]], land: [[52, 112, 90], [26, 72, 70], [8, 30, 36]] },
+    royalty: { name: 'The Hollow', song: 'Royalty', base: [150, 96, 190], lit: [255, 214, 160], dark: [40, 22, 84], bands: [], ground: 'bare',
+      sky: [[0, [40, 44, 112]], [0.4, [120, 84, 150]], [0.7, [236, 140, 124]], [0.88, [255, 196, 130]], [1, [255, 232, 180]]], aur: [[255, 190, 120], [206, 190, 255], [255, 140, 170]], land: [[104, 62, 112], [58, 36, 82], [20, 14, 40]] }
   };
 
   /** Words written into the picture: a dark breath under them so they hold on any sky, then the letters. Returns their width. */
@@ -99,8 +104,11 @@ const RESULTS = (() => {
         ctx.save(); ctx.globalCompositeOperation = 'screen'; ctx.filter = `blur(${9 * u}px)`; ctx.globalAlpha = 0.8; ctx.drawImage(e, 0, 0); ctx.restore();
       } else ctx.drawImage(cv, 0, 0);
     }
-    const sx = w * sunX;
-    if (blaze > 0) {
+    if (blaze > 0) blazeOn(ctx, w, h, P, hy, w * sunX, seed, u, blaze, r);
+  }
+  /** A clear: light thrown up from the horizon, curtains of it high up, and the day itself where the land meets the sky. */
+  function blazeOn(ctx, w, h, P, hy, sx, seed, u, blaze, r) {
+    {
       ctx.save(); ctx.globalCompositeOperation = 'screen';
       const n = Math.round(12 + 14 * blaze);
       for (let k = 0; k < n; k++) { // light thrown up from the horizon in wide wet strokes
@@ -166,13 +174,74 @@ const RESULTS = (() => {
     for (let i = 0; i + 3 < puffs.length; i += 2 + Math.floor(r() * 3)) { const seg = puffs.slice(i, i + 3 + Math.floor(r() * 2)), near = Math.max(0, 1 - Math.abs(seg[0][0] - lightX) / (w * 0.6)); K.brush(ctx, seg.map(([x, y, , ry]) => [x, y - ry * 0.72]), (9 + r() * 12) * u, rimC, r, { passes: 3, alpha: rimA * 0.3 * (0.25 + 0.75 * near), spread: 0.5 }); }
     ctx.restore();
   }
+  /** Glassmere: one standing piece of glass, its face toward the light a little brighter. */
+  function spire(ctx, x, base, ht, bw, c, lit, warm, side, u, lean = 0) {
+    const apex = [x + bw * (0.2 * side + lean), base - ht], pts = [[x - bw, base], [x - bw * (0.62 - lean * 0.2), base - ht * 0.56], [x - bw * (0.2 - lean * 0.5), base - ht * 0.9], apex, [x + bw * (0.55 + lean * 0.3), base - ht * 0.66], [x + bw * 0.8, base - ht * 0.3], [x + bw, base]];
+    ctx.beginPath(); pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py))); ctx.closePath();
+    const g = ctx.createLinearGradient(0, base - ht, 0, base); g.addColorStop(0, rgba(mix(c, lit, 0.08 + 0.36 * warm))); g.addColorStop(1, rgba(c)); ctx.fillStyle = g; ctx.fill();
+    const far = side > 0 ? [pts[4], pts[6]] : [pts[1], pts[0]];
+    ctx.save(); ctx.globalCompositeOperation = 'screen';
+    ctx.fillStyle = rgba(lit, 0.05 + 0.26 * warm); ctx.beginPath(); ctx.moveTo(apex[0], apex[1]); ctx.lineTo(far[0][0], far[0][1]); ctx.lineTo(far[1][0], far[1][1]); ctx.lineTo(x + bw * 0.12 * side, base); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = rgba(lit, 0.12 + 0.6 * warm); ctx.lineWidth = 1.4 * u; ctx.lineJoin = 'round'; ctx.beginPath(); ctx.moveTo(apex[0], apex[1]); ctx.lineTo(far[0][0], far[0][1]); ctx.lineTo(far[1][0], far[1][1]); ctx.stroke();
+    ctx.restore();
+  }
+  /** Glassmere: still water to the horizon that holds the sky, and glass standing in it. */
+  function glass(ctx, w, h, hy, seed, u, lightX, warm, P, cols, rim, end) {
+    const r = RNG(seed + 21), wy = hy + 3 * u;
+    T.ridge(ctx, w, h, hy - 4 * u, 7 * u, seed, cols[0], lightX, P.lit, rim(0.5)); // the far shore, low
+    const g = ctx.createLinearGradient(0, wy, 0, h); g.addColorStop(0, rgba(mix([62, 56, 112], end, 0.2 + 0.6 * warm))); g.addColorStop(0.3, rgba(mix([30, 30, 80], P.base, 0.1 + 0.55 * warm))); g.addColorStop(1, 'rgb(8,8,26)');
+    ctx.fillStyle = g; ctx.fillRect(0, wy, w, h - wy);
+    const sp = [];
+    for (const [dx, ht, bw] of [[-0.5, 150, 19], [-0.39, 84, 12], [-0.27, 214, 25], [-0.13, 58, 9], [0.15, 112, 14], [0.25, 44, 8]]) { const x = lightX + dx * w + (r() - 0.5) * 12 * u; sp.push([x, ht * u, bw * u, (r() - 0.5) * 1.6]); if (ht > 80) { sp.push([x + bw * u * (1.1 + r() * 0.5), ht * u * (0.34 + r() * 0.2), bw * u * 0.6, (r() - 0.2) * 2]); if (ht > 140) sp.push([x - bw * u * (1.2 + r() * 0.4), ht * u * (0.2 + r() * 0.16), bw * u * 0.5, (r() - 0.8) * 2]); } }
+    ctx.save(); ctx.filter = `blur(${2.5 * u}px)`; ctx.globalAlpha = 0.3; ctx.translate(0, wy * 2); ctx.scale(1, -1); // what the water holds of them
+    for (const [x, ht, bw, lean] of sp) spire(ctx, x, wy, ht * 0.8, bw, cols[0], P.lit, warm, Math.sign(lightX - x) || 1, u, lean);
+    ctx.restore();
+    for (const [x, ht, bw, lean] of sp) spire(ctx, x, wy, ht, bw, mix(cols[0], end, 0.15 * warm), P.lit, warm, Math.sign(lightX - x) || 1, u, lean);
+    ctx.save(); ctx.globalCompositeOperation = 'screen'; ctx.lineCap = 'round'; ctx.filter = `blur(${2.2 * u}px)`; // the light's broken path across the water
+    for (let k = 0; k < 30; k++) { const t = Math.pow(k / 30, 1.3), y = wy + 5 * u + t * (h - wy) * 0.9, half = (14 + t * 70) * u * (0.3 + r()); ctx.strokeStyle = rgba(P.lit, Math.min(1, (0.1 + 0.55 * warm) * (0.95 - t * 0.8) * (0.4 + r() * 0.6))); ctx.lineWidth = (2 + t * 5) * u; ctx.beginPath(); ctx.moveTo(lightX - half + (r() - 0.5) * 24 * u, y); ctx.lineTo(lightX + half + (r() - 0.5) * 24 * u, y + (r() - 0.5) * 2); ctx.stroke(); }
+    ctx.restore();
+    T.ridge(ctx, w, h, hy + 150 * u, 16 * u, seed + 10, cols[2], lightX, P.lit, rim(0.8)); // the near shore
+  }
+  /** Verdance: hills under a canopy, a few tall trees near, and small lights among them when its song is home. */
+  function woods(ctx, w, h, hy, seed, u, lightX, warm, P, cols, rim) {
+    const r = RNG(seed + 31);
+    [[4, 28, 0, 0.5, 0.62], [50, 26, 5, 0.75, 0.9], [104, 22, 10, 0.95, 1.25]].forEach(([dy, amp, ds, ra, k], i) => {
+      const y0 = hy + dy * u, a = amp * u, sd = seed + ds, nz = noise2(sd), crowns = [];
+      const top = (x) => y0 + (fbm(nz, x * 0.004, sd) - 0.5) * a * 2 + Math.pow(Math.abs(x - lightX) / w, 2) * a * 0.6;
+      ctx.fillStyle = rgba(cols[i]); ctx.beginPath();
+      for (let x = -30 * u; x < w + 30 * u; x += (8 + r() * 13) * u * k) { const rx = (9 + r() * 12) * u * k, ry = (8 + r() * 15) * u * k, y = top(x) - ry * 0.3; crowns.push([x, y, rx, ry]); ctx.moveTo(x + rx, y); ctx.ellipse(x, y, rx, ry, 0, 0, TAU); }
+      ctx.fill();
+      T.ridge(ctx, w, h, y0, a, sd, cols[i], lightX, P.lit, 0);
+      if (i === 2) for (const [fx, ht, wd] of [[-0.57, 150, 13], [-0.52, 96, 10], [-0.47, 190, 15], [-0.33, 118, 11], [0.21, 84, 9], [0.26, 132, 12]]) { // a few that stand above the rest: tall and narrow, each a little bent
+        const x = lightX + fx * w, base = top(x) + 8 * u, hh = ht * u, lean = (r() - 0.5) * 14 * u;
+        K.path(ctx, K.jit([[x - wd * u * 0.3, base], [x - wd * u, base - hh * 0.3], [x - wd * u * 0.9 + lean * 0.4, base - hh * 0.62], [x - wd * u * 0.35 + lean * 0.8, base - hh * 0.9], [x + lean, base - hh], [x + wd * u * 0.45 + lean * 0.8, base - hh * 0.86], [x + wd * u + lean * 0.4, base - hh * 0.56], [x + wd * u * 0.95, base - hh * 0.26], [x + wd * u * 0.3, base]], r, 2.4 * u));
+        ctx.fillStyle = rgba(cols[2]); ctx.fill();
+        ctx.save(); ctx.globalCompositeOperation = 'screen'; ctx.filter = `blur(${1.5 * u}px)`; ctx.strokeStyle = rgba(P.lit, rim(0.34)); ctx.lineWidth = 1.6 * u; ctx.lineCap = 'round'; const sd2 = lightX > x ? 1 : -1; ctx.beginPath(); ctx.moveTo(x + lean, base - hh); ctx.quadraticCurveTo(x + sd2 * wd * u + lean * 0.5, base - hh * 0.62, x + sd2 * wd * u * 0.95, base - hh * 0.24); ctx.stroke(); ctx.restore();
+      }
+      ctx.save(); ctx.globalCompositeOperation = 'screen'; ctx.lineCap = 'round'; ctx.filter = `blur(${(1 + i) * u}px)`; // the light on the side of each crown that faces it
+      for (const [x, y, rx, ry] of crowns) { if (r() < 0.35 + i * 0.15) continue; const near = Math.max(0, 1 - Math.abs(x - lightX) / (w * 0.7)), right = lightX > x; ctx.strokeStyle = rgba(P.lit, rim(ra) * (0.55 - i * 0.14) * (0.2 + 0.8 * near) * (0.4 + r() * 0.6)); ctx.lineWidth = (1.2 + r()) * u * k; ctx.beginPath(); ctx.ellipse(x, y, rx * 0.9, ry * 0.9, 0, right ? -Math.PI * 0.55 : -Math.PI * 0.95, right ? -Math.PI * 0.05 : -Math.PI * 0.45); ctx.stroke(); }
+      ctx.restore();
+    });
+    for (let i = 0; i < 80 * warm; i++) { const x = r() * w, t = r() * r(), y = hy + 110 * u - t * hy * 0.3, sz = (0.7 + r() * 1.7) * u; ctx.fillStyle = rgba([214 + r() * 40, 255, 150], (0.3 + r() * 0.6) * (1 - t * 0.6)); ctx.beginPath(); ctx.arc(x, y, sz, 0, TAU); ctx.fill(); if (sz > 1.7 * u) K.glow(ctx, x, y, sz * 6, [190, 255, 140], 0.3); }
+  }
+  /** The Hollow: bare low ground. While the Hush is awake its curtains hang over it; when the last song is home they are gone. */
+  function bare(ctx, w, h, hy, seed, u, lightX, warm, P, cols, rim) {
+    const r = RNG(seed + 41);
+    if (warm < 0.5) for (let i = 0; i < 64; i++) { const x0 = r() * w, len = h * (0.1 + r() * 0.26), bend = (w / 2 - x0) * 0.08 * r(); K.brush(ctx, [[x0, -20], [x0 + bend * 0.4, len * 0.45], [x0 + bend + (r() - 0.5) * 26 * u, len]], (16 + r() * 34) * u, mix([10, 9, 24], [80, 66, 126], r() * r()), r, { passes: 4, alpha: 0.2, spread: 0.5 }); }
+    T.ridge(ctx, w, h, hy + 6 * u, 16 * u, seed, cols[0], lightX, P.lit, rim(0.4));
+    T.ridge(ctx, w, h, hy + 58 * u, 14 * u, seed + 5, cols[1], lightX, P.lit, rim(0.75));
+    T.ridge(ctx, w, h, hy + 118 * u, 14 * u, seed + 10, cols[2], lightX, P.lit, rim(0.9));
+  }
   /** The ground of each world, as a silhouette against its sky. `warm`: 0 night .. 1 in its colour. */
   function land(ctx, w, h, id, hy, seed, u, lightX, warm) {
     const P = PL[id], r = RNG(seed + 70), end = P.sky[P.sky.length - 1][1];
     ctx.save(); ctx.filter = `blur(${26 * u}px)`; ctx.fillStyle = rgba(mix([84, 58, 90], end, warm), 0.36); ctx.fillRect(-40, hy - 36 * u, w + 80, 72 * u); ctx.restore();
     const cols = P.land.map((c) => mix(mix(c, [16, 13, 40], 0.72), c, warm));
     const rim = (a) => a * (0.15 + 0.85 * warm);
-    if (id === 'heroes') {
+    if (P.ground === 'glass') glass(ctx, w, h, hy, seed, u, lightX, warm, P, cols, rim, end);
+    else if (P.ground === 'woods') woods(ctx, w, h, hy, seed, u, lightX, warm, P, cols, rim);
+    else if (P.ground === 'bare') bare(ctx, w, h, hy, seed, u, lightX, warm, P, cols, rim);
+    else if (id === 'heroes') {
       cone(ctx, lightX - w * 0.43, hy + 6 * u, 200 * u, 108 * u, mix(cols[0], end, 0.12 * warm), P.lit, warm, r, u, 3);
       cone(ctx, lightX - w * 0.17, hy + 8 * u, 110 * u, 50 * u, mix(cols[0], end, 0.2 * warm), P.lit, warm, r, u, 8);
       T.ridge(ctx, w, h, hy + 4 * u, 28 * u, seed, cols[0], lightX, P.lit, rim(0.45));
@@ -313,6 +382,40 @@ const RESULTS = (() => {
     again: { id: 'heroes', cleared: true, first: false, pct: 100, drop: 0.58, at: [0.2, 0.46, 0.8], shards: [1, 1, 1], fresh: [0, 0, 1], shardLine: 'all three lens shards', lines: ['The last shard is home.'],
       more: ['Attempt 12. On the beat 91%, best streak 58.', 'The drop played at full charge.', 'Your taps ran about 30 ms late.'], act: 'set it right   ·   check again, 10 s' }
   };
+  for (const [k, id, line] of [['glassmere', 'blank', 'The way to Verdance is lit.'], ['verdance', 'invincible', 'All four songs are home: the Hollow is in reach.'], ['hollow', 'royalty', '']]) RUNS[k] = { ...RUNS.first, id, shards: [1, 1, 1], fresh: [0, 1, 1], shardLine: 'all three lens shards', lines: id === 'royalty' ? ['The last song is home.'] : ['Its song is home, and its colour with it.', line] };
+  RUNS.glassleft = { ...RUNS.left, id: 'blank', pct: 38 }; RUNS.verdleft = { ...RUNS.left, id: 'invincible', pct: 81 }; RUNS.hollowleft = { ...RUNS.left, id: 'royalty', pct: 24 };
+
+  // ---- for the game: Daybreak in layers, so the colour can rise as you watch. The same painters as the stills.
+  const seedOf = (id, dev) => id.length * 131 + (dev === 'phone' ? 3 : 4);
+  const LAYERS = {
+    lay: (dev) => A[dev],
+    has: (id) => !!PL[id],
+    /** The whole picture: under night ('cold'), in its own colour ('warm'), or ablaze as on a first clear ('blaze'). No words, no Eko. */
+    scene(ctx, w, h, id, dev, u, mode) {
+      const L = A[dev], P = PL[id], seed = seedOf(id, dev), hy = h * L.horizon, warm = mode !== 'cold';
+      floodSky(ctx, w, h, P, warm ? 1 : 0, L.horizon, L.sun, seed, u, mode === 'blaze' ? 1 : 0);
+      if (!warm) K.glow(ctx, w * L.sun, hy, 380 * u, P.lit, 0.22, 'screen');
+      land(ctx, w, h, id, hy, seed, u, w * L.sun, warm ? 1 : 0.1);
+      T.finish(ctx, w, h, seed + 9, 0.45);
+    },
+    /** The front of the rising colour: a mask (opaque below an uneven, soft line `y` px down it) and the lip of light that rides on it. */
+    front(w, h, id, dev, u) {
+      const L = A[dev], P = PL[id], seed = seedOf(id, dev), r = RNG(seed + 88), nz = noise2(seed + 5), y = 230 * u, H = Math.ceil(h * (1 + 0.5 * L.horizon) + y + 40);
+      const line = (x) => y + (fbm(nz, (x * 0.0032) / u, 3) - 0.5) * 170 * u;
+      const mask = document.createElement('canvas'); mask.width = w; mask.height = H;
+      const mc = mask.getContext('2d');
+      mc.filter = `blur(${44 * u}px)`; mc.fillStyle = '#000'; mc.beginPath(); mc.moveTo(-300, H + 300);
+      for (let x = -300; x <= w + 300; x += 20) mc.lineTo(x, line(x));
+      mc.lineTo(w + 300, H + 300); mc.closePath(); mc.fill();
+      const e = document.createElement('canvas'); e.width = w; e.height = Math.ceil(y * 2.4);
+      const ec = e.getContext('2d');
+      for (let k = 0; k < 34; k++) { const x0 = r() * w * 1.3 - w * 0.15, len = (160 + r() * 360) * u; K.brush(ec, [0, 0.33, 0.66, 1].map((t) => [x0 + len * t, line(x0 + len * t) + (r() - 0.1) * 70 * u]), (14 + r() * 30) * u, mix(P.lit, P.aur[k % 3], 0.3 + r() * 0.6), r, { passes: 4, alpha: 0.16, spread: 0.7 }); }
+      const lip = document.createElement('canvas'); lip.width = w; lip.height = e.height;
+      const lc = lip.getContext('2d'); lc.filter = `blur(${15 * u}px)`; lc.globalAlpha = 0.62; lc.drawImage(e, 0, 0);
+      return { mask, lip, y };
+    },
+    eko: (ctx, x, y, s, lean) => T.eko(ctx, x, y, s, RNG(7), { wisp: true, lean })
+  };
   const draw = (ctx, w, h, comp, run, dev, phase) => ({ daybreak, orbit, galaxy })[comp](ctx, w, h, phase == null ? RUNS[run] : { ...RUNS[run], phase }, dev);
-  return { RUNS, draw };
+  return { RUNS, draw, LAYERS };
 })();
