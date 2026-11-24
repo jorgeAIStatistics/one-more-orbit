@@ -1,0 +1,12 @@
+<!doctype html><meta charset="utf-8"><title>art stills</title>
+<body style="margin:0;background:#111">
+<script src="kit.js"></script><script src="a-dusk.js"></script><script src="b-atlas.js"></script><script src="c-print.js"></script>
+<script>
+const DIRS = { dusk: typeof DUSK !== 'undefined' ? DUSK : null, atlas: typeof ATLAS !== 'undefined' ? ATLAS : null, print: typeof PRINT !== 'undefined' ? PRINT : null };
+window.errors = [];
+for (const [name, dir] of Object.entries(DIRS)) if (dir) for (const scene of ['hero', 'boss', 'map', 'play']) {
+  const cv = document.createElement('canvas'); cv.width = 1200; cv.height = 800; cv.id = `${name}-${scene}`; cv.style.cssText = 'display:block;margin:8px auto;max-width:100%';
+  document.body.appendChild(cv);
+  try { dir[scene](cv.getContext('2d'), 1200, 800); } catch (e) { window.errors.push(`${name}/${scene}: ${e.stack || e}`); }
+}
+</script>
