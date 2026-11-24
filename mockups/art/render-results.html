@@ -1,0 +1,30 @@
+<!doctype html><meta charset="utf-8"><title>Afterglow: the results</title>
+<style>
+@font-face { font-family: 'Cormorant Garamond'; font-weight: 500; font-style: normal; src: url('../../node_modules/@fontsource/cormorant-garamond/files/cormorant-garamond-latin-500-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Cormorant Garamond'; font-weight: 500; font-style: italic; src: url('../../node_modules/@fontsource/cormorant-garamond/files/cormorant-garamond-latin-500-italic.woff2') format('woff2'); }
+@font-face { font-family: 'Cormorant Lining'; font-weight: 500; font-style: normal; font-feature-settings: 'lnum' 1; src: url('../../node_modules/@fontsource/cormorant-garamond/files/cormorant-garamond-latin-500-normal.woff2') format('woff2'); }
+</style>
+<body style="margin:0;background:#111">
+<script src="kit.js"></script><script src="a-dusk.js"></script><script src="results-afterglow.js"></script>
+<script>
+window.errors = []; window.done = false;
+const add = (id, w, h, draw) => { const cv = document.createElement('canvas'); cv.width = w; cv.height = h; cv.id = id; cv.style.cssText = 'display:block;margin:8px auto;max-width:100%'; document.body.appendChild(cv); try { draw(cv.getContext('2d')); } catch (e) { window.errors.push(`${id}: ${e.stack || e}`); } return cv; };
+const PH = [780, 1688], DK = [1440, 900];
+const only = new URLSearchParams(location.search).get('only');
+(async () => {
+  await Promise.all([document.fonts.load('italic 500 20px "Cormorant Garamond"'), document.fonts.load('normal 500 20px "Cormorant Garamond"'), document.fonts.load('normal 500 20px "Cormorant Lining"')]);
+  const pair = (id, comp, run) => { if (only && !id.startsWith(only)) return; const p = add(`${id}-phone`, ...PH, (c) => RESULTS.draw(c, ...PH, comp, run, 'phone')), d = add(`${id}-desktop`, ...DK, (c) => RESULTS.draw(c, ...DK, comp, run, 'desktop'));
+    // one sheet with both, the phone at the desktop's height
+    add(`${id}-sheet`, 416 + 24 + 1440, 900, (c) => { c.fillStyle = '#0b0a14'; c.fillRect(0, 0, 1880, 900); c.imageSmoothingQuality = 'high'; c.drawImage(p, 0, 0, 416, 900); c.drawImage(d, 440, 0); }); };
+  pair('1-daybreak-first', 'daybreak', 'first');
+  pair('1-daybreak-left', 'daybreak', 'left');
+  pair('1-daybreak-again', 'daybreak', 'again');
+  pair('2-orbit-first', 'orbit', 'first');
+  pair('3-galaxy-first', 'galaxy', 'first');
+  if (!only || only === 'flood') { // how the colour floods in on a first clear: three moments of the same picture
+    const fr = [0.22, 0.62, 1].map((ph, i) => add(`flood-${i + 1}`, ...PH, (c) => RESULTS.draw(c, ...PH, 'daybreak', 'first', 'phone', ph)));
+    add('flood-sheet', 3 * 416 + 48, 900, (c) => { c.fillStyle = '#0b0a14'; c.fillRect(0, 0, 1296, 900); c.imageSmoothingQuality = 'high'; fr.forEach((f, i) => c.drawImage(f, i * 440, 0, 416, 900)); });
+  }
+  window.done = true;
+})();
+</script>
