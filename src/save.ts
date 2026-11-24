@@ -51,10 +51,14 @@ export interface SaveData {
   quests: Record<string, boolean>;
   /** the place on the world map the player was last at (a level id, a B-side's, or "gate") */
   at: string;
+  /** story chapters already shown (open, a planet's id, hollow, end, lens) */
+  story: Record<string, boolean>;
+  /** best share of a level's gold collected on a counted clear, percent */
+  gold: Record<string, number>;
 }
 
 const defaults = (): SaveData => ({
-  music: 0.8, sfx: 0.7, audioOffset: 0, visualOffset: 0, reducedMotion: false, hardcore: false, errorBar: true, level: 0, skin: 'cyan', badges: {}, practiced: {}, bests: {}, teachSeen: {}, core: 4, calibrated: false, calLatency: -1, syncOverlay: false, hitVol: 1, tutorialDone: false, unlockAll: false, rel: 1, haptics: true, stars: {}, quests: {}, at: ''
+  music: 0.8, sfx: 0.7, audioOffset: 0, visualOffset: 0, reducedMotion: false, hardcore: false, errorBar: true, level: 0, skin: 'cyan', badges: {}, practiced: {}, bests: {}, teachSeen: {}, core: 4, calibrated: false, calLatency: -1, syncOverlay: false, hitVol: 1, tutorialDone: false, unlockAll: false, rel: 1, haptics: true, stars: {}, quests: {}, at: '', story: {}, gold: {}
 });
 
 function load(): SaveData {
@@ -63,7 +67,7 @@ function load(): SaveData {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const p = JSON.parse(raw) as Partial<SaveData>;
-      Object.assign(d, p, { bests: {}, teachSeen: { ...(p.teachSeen || {}) }, badges: { ...(p.badges || {}) }, practiced: { ...(p.practiced || {}) }, stars: { ...(p.stars || {}) }, quests: { ...(p.quests || {}) } });
+      Object.assign(d, p, { bests: {}, teachSeen: { ...(p.teachSeen || {}) }, badges: { ...(p.badges || {}) }, practiced: { ...(p.practiced || {}) }, stars: { ...(p.stars || {}) }, quests: { ...(p.quests || {}) }, story: { ...(p.story || {}) }, gold: { ...(p.gold || {}) } });
       // bests are per level now; entries from the three-difficulty build ("skyhigh:hard") are dropped
       // ...and so are bests from the judged one-button build: its progress and clears say nothing about this core
       if (p.core === 4) for (const [k, v] of Object.entries(p.bests || {})) if (!k.includes(':')) d.bests[k] = v as LevelBest;

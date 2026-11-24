@@ -3,6 +3,7 @@ export interface Badge { id: string; name: string; desc: string }
 /** needs: a badge id, or "quests:<level>" (both of its quests done), or "moon:<level>" (its B-side cleared) */
 export interface Orb { id: string; name: string; rgb: [number, number, number]; needs: string | null; how: string }
 
+const MASTERY: Array<[string, string, string]> = [['heroes', 'Emberwick', 'Heroes Tonight'], ['skyhigh', 'Cirra', 'Sky High'], ['blank', 'Glassmere', 'Blank'], ['invincible', 'Verdance', 'Invincible'], ['royalty', 'The Hollow', 'Royalty']];
 export const BADGES: Badge[] = [
   { id: 'clear_heroes', name: 'First Light', desc: 'Clear Heroes Tonight' },
   { id: 'clear_skyhigh', name: 'Sky High', desc: 'Clear Sky High' },
@@ -14,7 +15,12 @@ export const BADGES: Badge[] = [
   { id: 'full_drop', name: 'Full Send', desc: 'Set off a drop at 100%: fully charged and in flow' },
   { id: 'streak', name: 'Locked In', desc: 'Reach a streak of 60 on-beat taps' },
   { id: 'few_tries', name: 'Quick Study', desc: 'Clear a level within 10 attempts' },
-  { id: 'no_practice', name: 'Sight Read', desc: 'Clear a level you have never practised' }
+  { id: 'no_practice', name: 'Sight Read', desc: 'Clear a level you have never practised' },
+  // mastery, per planet: every piece of gold on a clear, and all three lens shards
+  ...MASTERY.flatMap(([id, planet, song]): Badge[] => [
+    { id: `tune_${id}`, name: `In Tune: ${planet}`, desc: `Clear ${song} with every piece of gold collected` },
+    { id: `mender_${id}`, name: `Lens Mender: ${planet}`, desc: `Keep all three lens shards on ${song}` }
+  ])
 ];
 
 export const ORBS: Orb[] = [

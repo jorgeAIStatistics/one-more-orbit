@@ -5,6 +5,7 @@ import { audio } from '../audio/audio';
 import { orbColour } from '../game/extras';
 import type { Level } from '../game/level';
 import { PALETTES, type Palette, type RGB } from '../render/palettes';
+import { PLANETS } from '../ui/galaxy';
 import { bestFor, save, starsFor } from '../save';
 import { LIFT, flightRho, smoothstep, type Course, type Feature, type Form, type Star } from './course';
 import type { GdRun } from './run';
@@ -410,7 +411,7 @@ export class GdRenderer {
   }
 
   /** Audio-reactive equalizer round the core, with the flow meter and the drop's charge as arcs round it. */
-  private core(pal: Palette, rc: number, len: number, kick: number, snare: number, dt: number, flow: number, charge: number, drive: number, span: number): void {
+  private core(pal: Palette, rc: number, len: number, kick: number, snare: number, dt: number, flow: number, charge: number, drive: number, span: number, planet?: [RGB, RGB, RGB], night = false): void {
     const c = this.ctx;
     const spec = audio.spectrum();
     for (let i = 0; i < EQ_BARS; i++) {
@@ -438,6 +439,24 @@ export class GdRenderer {
     glow.addColorStop(1, this.col(pal.ring, 0));
     c.fillStyle = glow;
     c.beginPath(); c.arc(0, 0, rc * (1.1 + kick * 0.4), 0, TWO_PI); c.fill();
+    if (planet) {
+      // the planet whose song this is, at the heart of its rings. It loses its colour with the rest of the world when
+      // the rhythm is lost; a B-side shows its night side.
+      const rp = rc * 1.08;
+      const body = c.createRadialGradient(-rp * 0.3, -rp * 0.35, rp * 0.1, 0, 0, rp);
+      body.addColorStop(0, this.col(planet[0]));
+      body.addColorStop(0.7, this.col(planet[1]));
+      body.addColorStop(1, this.col(planet[2]));
+      c.fillStyle = body;
+      c.beginPath(); c.arc(0, 0, rp, 0, TWO_PI); c.fill();
+      c.save();
+      c.beginPath(); c.arc(0, 0, rp, 0, TWO_PI); c.clip();
+      c.fillStyle = this.col(planet[2], 0.5);
+      c.beginPath(); c.moveTo(-rp, rp * 0.1); c.quadraticCurveTo(-rp * 0.4, -rp * 0.22, 0, rp * 0.08); c.quadraticCurveTo(rp * 0.5, rp * 0.4, rp, rp * 0.02); c.lineTo(rp, rp); c.lineTo(-rp, rp); c.closePath(); c.fill();
+      c.beginPath(); c.moveTo(-rp, rp * 0.55); c.quadraticCurveTo(-rp * 0.3, rp * 0.3, rp * 0.2, rp * 0.52); c.quadraticCurveTo(rp * 0.6, rp * 0.66, rp, rp * 0.4); c.lineTo(rp, rp); c.lineTo(-rp, rp); c.closePath(); c.fill();
+      if (night) { c.fillStyle = 'rgba(7,4,26,0.55)'; c.fillRect(-rp, -rp, rp * 2, rp * 2); }
+      c.restore();
+    }
     c.lineWidth = Math.max(2, ((rc * TWO_PI) / EQ_BARS) * 0.5);
     for (let i = 0; i < EQ_BARS; i++) {
       const a = (i / EQ_BARS) * TWO_PI - Math.PI / 2 + Math.PI / EQ_BARS;
@@ -474,21 +493,48 @@ export class GdRenderer {
     c.lineCap = 'butt';
   }
 
-  private drawBall(x: number, y: number, r: number, col: RGB, angle = 0, along = 1, across = 1): void {
+  /** eko: the hero himself, with his face, his flame tuft and his hoop in the chosen Glow (a plain ball otherwise). */
+  private drawBall(x: number, y: number, r: number, col: RGB, angle = 0, along = 1, across = 1, eko = false): void {
     const c = this.ctx;
+    // Eko's hoop: a tilted ring worn round the middle. Its far half goes behind him, its near half in front.
+    const hoop = (front: boolean) => {
+      c.save();
+      c.translate(x, y);
+      c.rotate(-0.31);
+      c.lineWidth = Math.max(1.6, r * 0.34);
+      c.lineCap = 'round';
+      c.strokeStyle = rgba(col, front ? 1 : 0.5);
+      c.beginPath(); c.ellipse(0, r * 0.1, r * 1.62, r * 0.5, 0, front ? 0 : Math.PI, front ? Math.PI : TWO_PI); c.stroke();
+      c.restore();
+    };
+    if (eko) {
+      hoop(false);
+      c.fillStyle = '#ffd36b'; // the flame tuft
+      c.beginPath(); c.moveTo(x - r * 0.34, y - r * 0.8); c.quadraticCurveTo(x - r * 0.3, y - r * 1.55, x + r * 0.1, y - r * 1.95); c.quadraticCurveTo(x + r * 0.52, y - r * 1.4, x + r * 0.34, y - r * 0.8); c.closePath(); c.fill();
+    }
     c.save();
     c.translate(x, y);
     c.rotate(angle);
     c.scale(along, across);
     c.shadowColor = rgba(col, 0.9);
     c.shadowBlur = r * 2.2;
-    c.fillStyle = '#ffffff';
+    c.fillStyle = eko ? '#fff6dc' : '#ffffff';
     c.beginPath(); c.arc(0, 0, r, 0, TWO_PI); c.fill();
     c.shadowBlur = 0;
-    c.lineWidth = r * 0.35;
-    c.strokeStyle = rgba(col, 0.95);
-    c.beginPath(); c.arc(0, 0, r * 1.25, 0, TWO_PI); c.stroke();
+    if (!eko) {
+      c.lineWidth = r * 0.35;
+      c.strokeStyle = rgba(col, 0.95);
+      c.beginPath(); c.arc(0, 0, r * 1.25, 0, TWO_PI); c.stroke();
+    }
     c.restore();
+    if (eko) {
+      // the face, always upright: two dark eyes, and a smile when there is room for one
+      c.fillStyle = '#2a1b4d';
+      c.beginPath(); c.ellipse(x - r * 0.36, y - r * 0.08, r * 0.17, r * 0.25, 0, 0, TWO_PI); c.fill();
+      c.beginPath(); c.ellipse(x + r * 0.36, y - r * 0.08, r * 0.17, r * 0.25, 0, 0, TWO_PI); c.fill();
+      if (r >= 7) { c.strokeStyle = '#2a1b4d'; c.lineWidth = Math.max(1, r * 0.1); c.lineCap = 'round'; c.beginPath(); c.arc(x, y + r * 0.2, r * 0.22, 0.15 * Math.PI, 0.85 * Math.PI); c.stroke(); }
+      hoop(true);
+    }
   }
 
   /** A lens shard: a splinter of the Lantern's lens. A dark edge, an outline, and a filling that grows with `fill` (0..1). */
@@ -580,7 +626,7 @@ export class GdRenderer {
       }
       c.restore();
     }
-    this.drawBall(x, y, r, form === 'orb' ? col : mix(col, FORM_COL[form], 0.45), angle, along, across);
+    this.drawBall(x, y, r, form === 'orb' ? col : mix(col, FORM_COL[form], 0.45), angle, along, across, true);
   }
 
   private text(s: string, x: number, y: number, size: number, col: RGB, alpha: number): void {
@@ -1515,7 +1561,7 @@ export class GdRenderer {
     }
     c.translate(this.coreX, this.coreY);
     const chargeShown = afterDrop ? this.chargeV * clamp(1 - this.dropAge / 0.35, 0, 1) : course.charges.length && beat > course.charges[0][0] - 4 ? Math.max(this.chargeV, 0.006) : 0;
-    this.core(pal, m * 0.045, m * 0.04 * (0.4 + 1.1 * inten) * (1 + wound * 0.7 + drive * 0.5), kick * (0.3 + 0.7 * inten), snare * inten, dt, this.flowV, chargeShown, drive, span);
+    this.core(pal, m * 0.045, m * 0.04 * (0.4 + 1.1 * inten) * (1 + wound * 0.7 + drive * 0.5), kick * (0.3 + 0.7 * inten), snare * inten, dt, this.flowV, chargeShown, drive, span, PLANETS[level.file.side?.of ?? level.id]?.rgb, !!level.file.side);
 
     for (let i = this.waves.length - 1; i >= 0; i--) {
       const wv = this.waves[i];

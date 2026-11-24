@@ -1,20 +1,21 @@
 import './style.css';
 import { audio } from './audio/audio';
-import { BADGES, ORBS, earned, type Orb } from './game/extras';
+import { BADGES, ORBS, earned, orbColour, type Orb } from './game/extras';
 import { BSIDES, FINAL, PACKS as ALL_PACKS, SLICE, creditLine, manifest, type LevelPack } from './game/packs';
 import { QUESTS, questSet, questsEarned, questsFor } from './game/quests';
-import { FINAL_ID, GATE_CLEARS, NODES, TIERS, maxStars, nodeOf, nodeState, playable, totalStars, type MapNode, type Progress } from './game/world';
+import { FINAL_ID, GATE_CLEARS, NODES, maxStars, nodeOf, nodeState, playable, totalStars, type MapNode, type Progress } from './game/world';
 import { refreshBars } from './gd/presses';
 import { GdRenderer as Renderer } from './gd/render';
 import { GdRun as Run, TUTORIAL_BEATS } from './gd/run';
 import { canHaptics, feel, fullScreen, gameCenter, isNative, watchBackground } from './native';
 import { initRecord } from './record';
 import { bestFor, persist, save, starCount, starsFor } from './save';
-import { LEVEL_UI, icon, levelArt } from './ui/art';
+import { LEVEL_UI, icon } from './ui/art';
+import { PLANETS, STORY, ekoSvg, installDefs, lanternSvg, planetCard, planetName, planetSvg, titleArt, type Frame } from './ui/galaxy';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-type Screen = 'title' | 'levels' | 'play' | 'pause' | 'results' | 'settings' | 'calib' | 'orbs' | 'badges' | 'quests' | 'record';
-const SCREENS: Screen[] = ['title', 'levels', 'pause', 'results', 'settings', 'calib', 'orbs', 'badges', 'quests', 'record'];
+type Screen = 'title' | 'levels' | 'play' | 'pause' | 'results' | 'settings' | 'calib' | 'orbs' | 'badges' | 'quests' | 'record' | 'story';
+const SCREENS: Screen[] = ['title', 'levels', 'pause', 'results', 'settings', 'calib', 'orbs', 'badges', 'quests', 'record', 'story'];
 
 const PACKS = ALL_PACKS.filter((p) => SLICE.includes(p.level.id));
 const shortTitle = (p: LevelPack) => p.level.title.replace(/ \(.*/, '');
@@ -33,8 +34,8 @@ let levelIdx = Math.min(PACKS.length - 1, at.index);
 let pack = packOf(at.id) ?? PACKS[levelIdx];
 const levelOpen = (i: number) => playable(nodeOf(PACKS[i].level.id), progress);
 const canPlay = () => playable(at, progress);
-/** "LEVEL 2 · SKY HIGH · HIGH ORBIT", or "B-SIDE · SKY HIGH" for a moon. */
-const levelLabel = (p: LevelPack) => (p.level.side ? `B-SIDE · ${shortTitle(p)}` : `${p === FINAL ? 'FINAL LEVEL' : `LEVEL ${PACKS.indexOf(p) + 1}`} · ${shortTitle(p)} · ${TIERS[p.level.id] ?? ''}`).toUpperCase();
+/** "PLANET 2 · CIRRA · SKY HIGH", or "MOON · CIRRA · SKY HIGH" for a B-side. */
+const levelLabel = (p: LevelPack) => `${p.level.side ? 'MOON' : p === FINAL ? 'THE DARK PLANET' : `PLANET ${PACKS.indexOf(p) + 1}`} · ${planetName(p.level.id)} · ${shortTitle(p)}`.toUpperCase();
 /** An orb is yours from the start, or for a badge, or for both quests of a level, or for clearing its B-side. */
 const owned = (o: Orb): boolean => {
   if (!o.needs) return true;
@@ -81,10 +82,60 @@ function show(s: Screen): void {
   $('levels').classList.remove('launch');
   // the scene behind the menus: beside the wordmark on a wide title screen, centred otherwise, in the focused level's colours
   placeScene(s);
-  renderer.idleBare = s !== 'title'; // the map draws its own planets; only the title has the living orbit
-  renderer.idlePal = s === 'title' ? 'deep' : at.kind === 'gate' && !canPlay() ? 'void' : levelPalette(pack);
-  if (s === 'levels') { layoutMap(); renderMap(); queuePreview(); }
+  renderer.idleBare = true; // the title, the map and the story draw their own pictures over the sky
+  renderer.idlePal = 'lantern';
+  if (s === 'levels') {
+    renderMap(); queuePreview();
+    if (starCount() >= maxStars && save.story.end && !save.story.lens) window.setTimeout(() => { if (screen === 'levels') playStory('lens', () => show('levels')); }, 600);
+  }
   if (s === 'title' || s === 'play') audio.stopPreview(s === 'play' ? 0.9 : 0.4);
+}
+
+// ------------------------------------------------------------------ the story
+/** the chapter waiting to be told on the way back to the map (a planet just restored, or the ending) */
+let pendingStory = '';
+let storyFrames: Frame[] = [];
+let storyAt = 0;
+let storyThen: (() => void) | null = null;
+function renderStory(): void {
+  const f = storyFrames[storyAt];
+  $('storyArt').innerHTML = f.art;
+  $('storyArt').setAttribute('aria-label', f.text);
+  const text = $('storyText');
+  text.textContent = f.text;
+  text.classList.remove('in');
+  void text.offsetWidth; // restart its little entrance
+  text.classList.add('in');
+  $('storyDots').innerHTML = storyFrames.length > 1 ? storyFrames.map((_, i) => `<i class="${i === storyAt ? 'on' : ''}"></i>`).join('') : '';
+  $('storyNext').textContent = storyAt + 1 < storyFrames.length ? 'NEXT' : 'CONTINUE';
+  $('storySkip').classList.toggle('hidden', storyFrames.length < 2 || storyAt + 1 >= storyFrames.length);
+}
+function endStory(): void {
+  const then = storyThen;
+  storyThen = null;
+  storyFrames = [];
+  then?.();
+}
+function nextStory(): void {
+  if (screen !== 'story') return;
+  if (storyAt + 1 < storyFrames.length) { storyAt++; renderStory(); } else endStory();
+}
+/** Tells a chapter once (always, with `again`), then carries on. Autoplay never stops for it. */
+function playStory(key: string, then: () => void, again = false): void {
+  const frames = key === 'all' ? Object.values(STORY).flat() : STORY[key];
+  if (!frames || botMode || (!again && save.story[key])) { then(); return; }
+  if (key !== 'all') { save.story[key] = true; persist(); }
+  storyFrames = frames;
+  storyAt = 0;
+  storyThen = then;
+  renderStory();
+  show('story');
+}
+/** Back to the map by way of whatever story is waiting. */
+function viaStory(then: () => void): void {
+  const key = pendingStory;
+  pendingStory = '';
+  if (key) playStory(key, then); else then();
 }
 
 // ------------------------------------------------------------------ the world map
@@ -98,22 +149,32 @@ function paintStars(el: Element, state: (i: number) => '' | 'kept' | 'got' | 'lo
 // side. Wide: it zigzags left to right, labels under the low planets and over the high ones, each moon on the far side.
 type XY = [number, number];
 type Side = 'left' | 'right' | 'below' | 'above';
-const LAYOUT: Record<'tall' | 'wide', { planets: XY[]; moons: XY[]; gate: XY; sides: Side[]; gateSide: Side }> = {
-  tall: { planets: [[0.27, 0.87], [0.72, 0.67], [0.3, 0.46], [0.7, 0.26]], moons: [[0.08, 0.775], [0.91, 0.545], [0.09, 0.345], [0.9, 0.14]], gate: [0.4, 0.075], sides: ['right', 'left', 'right', 'left'], gateSide: 'right' },
-  wide: { planets: [[0.14, 0.68], [0.36, 0.36], [0.58, 0.68], [0.8, 0.36]], moons: [[0.14, 0.27], [0.36, 0.8], [0.58, 0.27], [0.8, 0.8]], gate: [0.93, 0.66], sides: ['below', 'above', 'below', 'above'], gateSide: 'above' }
+const LAYOUT: Record<'tall' | 'wide', { planets: XY[]; moons: XY[]; gate: XY; sides: Side[]; gateSide: Side; hub: XY }> = {
+  tall: { planets: [[0.2, 0.92], [0.8, 0.78], [0.2, 0.46], [0.8, 0.32]], moons: [[0.06, 0.74], [0.94, 0.64], [0.06, 0.33], [0.95, 0.46]], gate: [0.3, 0.13], sides: ['right', 'left', 'right', 'left'], gateSide: 'right', hub: [0.5, 0.67] },
+  wide: { planets: [[0.12, 0.7], [0.3, 0.33], [0.7, 0.72], [0.86, 0.36]], moons: [[0.12, 0.3], [0.3, 0.78], [0.7, 0.3], [0.86, 0.8]], gate: [0.5, 0.13], sides: ['below', 'above', 'below', 'above'], gateSide: 'right', hub: [0.5, 0.6] }
 };
 const mapEl = $('map');
 const nodeEls = new Map<string, HTMLElement>();
 const labEls = new Map<string, HTMLElement>();
 /** places that have just changed (a planet unlocked, a moon found, the gate opened): they pop once when the map is next shown */
 const freshNodes = new Set<string>();
+/** where each place sits on the map right now, in pixels (Eko flies between them) */
+const posOf = new Map<string, [number, number, number]>();
+const hubEl = document.createElement('div');
+const ekoEl = document.createElement('div');
 function buildMap(): void {
+  // the Lantern in the middle, and Eko, who waits at the place you have chosen
+  hubEl.className = 'hub';
+  hubEl.innerHTML = lanternSvg();
+  ekoEl.className = 'map-eko';
+  ekoEl.innerHTML = ekoSvg();
+  mapEl.append(hubEl);
   for (const n of NODES) {
     const el = document.createElement('button');
     el.type = 'button';
     el.className = `node ${n.kind}`;
     el.dataset.id = n.id;
-    el.innerHTML = '<span class="orbit"></span><span class="glyph"></span>';
+    el.innerHTML = `${n.kind === 'moon' ? '' : planetSvg(n.kind === 'gate' ? FINAL_ID : n.id)}<span class="glyph"></span>`;
     const lab = document.createElement('div');
     lab.className = 'lab';
     lab.dataset.id = n.id;
@@ -121,6 +182,7 @@ function buildMap(): void {
     nodeEls.set(n.id, el);
     labEls.set(n.id, lab);
   }
+  mapEl.append(ekoEl);
   mapEl.addEventListener('click', (e) => {
     const el = (e.target as HTMLElement).closest<HTMLElement>('[data-id]');
     if (!el) return;
@@ -140,21 +202,31 @@ function layoutMap(): void {
   const xy = (n: MapNode): XY => { const [x, y] = n.kind === 'gate' ? L.gate : n.kind === 'moon' ? L.moons[n.index] : L.planets[n.index]; return [x * w, y * h]; };
   for (const n of NODES) {
     const [x, y] = xy(n);
-    const rr = n.kind === 'planet' ? r : n.kind === 'moon' ? Math.max(10, r * 0.45) : r * 0.8;
+    const rr = n.kind === 'planet' ? r : n.kind === 'moon' ? Math.max(10, r * 0.45) : r * 1.55; // the dark planet looms
+    posOf.set(n.id, [x, y, rr]);
     const el = nodeEls.get(n.id)!;
     el.style.left = `${x}px`;
     el.style.top = `${y}px`;
     el.style.setProperty('--r', `${rr}px`);
     const lab = labEls.get(n.id)!;
     const side = n.kind === 'moon' ? 'below' : n.kind === 'gate' ? L.gateSide : L.sides[n.index];
-    const reach = rr * (n.kind === 'planet' ? 1.6 : n.kind === 'gate' ? (side === 'right' ? 2.1 : 1.3) : 1.3) + 8;
+    const reach = rr * (n.kind === 'planet' ? 1.5 : n.kind === 'gate' ? 1.25 : 1.3) + 8;
     lab.className = `lab ${side}`;
     lab.style.left = `${side === 'right' ? x + reach : side === 'left' ? x - reach : x}px`;
     lab.style.top = `${side === 'below' ? y + reach - 2 : side === 'above' ? y - reach + 2 : y}px`;
   }
+  // the Lantern: as tall as the map can spare
+  const hubH = Math.max(64, Math.min(170, h * (wideMap ? 0.42 : 0.2)));
+  const [hx, hy] = [L.hub[0] * w, L.hub[1] * h];
+  hubEl.style.left = `${hx}px`;
+  hubEl.style.top = `${hy}px`;
+  hubEl.style.setProperty('--h', `${hubH}px`);
+  const lamp: XY = [hx - hubH * 0.05, hy - hubH * 0.47]; // where its lamp is: the beams start here
   // the route: planet to planet and on to the gate, each stretch its own path so the travelled part can light up
   const stops = [...NODES.filter((n) => n.kind === 'planet'), nodeOf('gate')].map(xy);
   let d = '';
+  // the Lantern's beams, one to each planet: lit when that planet's song is home
+  for (const n of NODES.filter((m) => m.kind === 'planet')) { const [x, y] = xy(n); d += `<path data-beam="${n.id}" class="beam" d="M${lamp[0]} ${lamp[1]} L${x} ${y}"/>`; }
   for (let i = 0; i + 1 < stops.length; i++) {
     const [x0, y0] = stops[i];
     const [x1, y1] = stops[i + 1];
@@ -172,6 +244,8 @@ function layoutMap(): void {
 }
 /** Every place's state (open, cleared, locked, hidden), the route travelled so far, the star total and the panel. */
 function renderMap(): void {
+  renderSheet(); // first: the card's height decides how much room the map has
+  layoutMap();
   for (const n of NODES) {
     const st = nodeState(n, progress);
     const el = nodeEls.get(n.id)!;
@@ -184,14 +258,13 @@ function renderMap(): void {
     el.className = `node ${n.kind} ${st === 'hidden' ? 'hidden-moon' : st}${n.id === at.id ? ' sel' : ''}${freshNodes.has(n.id) ? ' fresh' : ''}${unseen ? ' hidden' : ''}`;
     el.querySelector('.glyph')!.innerHTML = st === 'cleared' ? icon('check') : st === 'locked' && n.kind === 'planet' ? icon('lock') : st === 'hidden' ? '?' : '';
     if (n.kind === 'planet') {
-      const ui = LEVEL_UI[n.id] ?? { col: '#19e3ff', dots: 1 };
       const b = bestFor(n.id);
-      el.style.setProperty('--c', ui.col);
-      el.setAttribute('aria-label', `Level ${n.index + 1}, ${title}, ${TIERS[n.id]}${st === 'locked' ? ', locked' : st === 'cleared' ? ', cleared' : `, best ${b.pct} percent`}`);
-      const sub = st === 'locked' ? `Clear ${shortTitle(PACKS[n.index - 1])}` : st === 'open' && b.pct > 0 ? `Best ${b.pct}%` : TIERS[n.id];
+      el.style.setProperty('--c', PLANETS[n.id].col);
+      el.setAttribute('aria-label', `Planet ${n.index + 1}, ${planetName(n.id)}, ${title}${st === 'locked' ? ', dark and silent' : st === 'cleared' ? ', restored' : `, best ${b.pct} percent`}`);
+      const sub = st === 'locked' ? `Restore ${planetName(PACKS[n.index - 1].level.id)}` : st === 'open' && b.pct > 0 ? `Best ${b.pct}%` : title;
       lab.className = `lab ${side}${st === 'locked' ? ' dim' : ''}`;
       lab.innerHTML = `<b></b><span class="sub">${st === 'locked' ? '' : '<span class="stars3"></span>'}<span></span></span>${st === 'locked' ? '' : `<span class="gems">${questsFor(n.id).map((q) => `<i class="${save.quests[q.id] ? 'on' : ''}"></i>`).join('')}</span>`}`;
-      lab.querySelector('b')!.textContent = title;
+      lab.querySelector('b')!.textContent = planetName(n.id);
       lab.querySelector('.sub > span:last-child')!.textContent = sub;
       const kept = starsFor(n.id);
       const row = lab.querySelector('.stars3');
@@ -202,13 +275,13 @@ function renderMap(): void {
       lab.className = `lab ${side} gold`;
       lab.textContent = st === 'hidden' ? '' : 'B-side';
     } else {
-      el.setAttribute('aria-label', st === 'locked' ? 'The gate: it opens when all four planets are cleared' : `The final level, ${shortTitle(FINAL)}, ${TIERS[FINAL_ID]}${st === 'cleared' ? ', cleared' : ''}`);
+      el.style.setProperty('--c', PLANETS[FINAL_ID].col);
+      el.setAttribute('aria-label', st === 'locked' ? 'The Hollow, the dark planet: the way opens when all four planets are restored' : `The Hollow, the dark planet, ${shortTitle(FINAL)}${st === 'cleared' ? ', the Hush put to sleep' : ''}`);
       lab.className = `lab ${side}${st === 'locked' ? ' dim' : ''}`;
-      if (st === 'locked') lab.innerHTML = '<b>???</b><span>Clear the four planets</span>';
+      if (st === 'locked') lab.innerHTML = '<b>The Hollow</b><span>Restore the four planets</span>';
       else {
-        // the gate is open: what was behind it is the last level
-        lab.innerHTML = `<b></b><span class="sub"><span class="stars3"></span><span>${TIERS[FINAL_ID]}</span></span>`;
-        lab.querySelector('b')!.textContent = shortTitle(FINAL);
+        lab.innerHTML = '<b>The Hollow</b><span class="sub"><span class="stars3"></span><span></span></span>';
+        lab.querySelector('.sub > span:last-child')!.textContent = shortTitle(FINAL);
         const kept = starsFor(FINAL_ID);
         paintStars(lab.querySelector('.stars3')!, (k) => (kept[k] ? 'kept' : ''));
       }
@@ -217,14 +290,26 @@ function renderMap(): void {
   freshNodes.clear();
   for (const path of $('mapRoute').querySelectorAll<SVGPathElement>('path')) {
     if (path.dataset.seg !== undefined) path.setAttribute('class', bestFor(PACKS[Number(path.dataset.seg)].level.id).cleared ? 'done' : 'todo');
-    else if (path.dataset.moon) {
+    else if (path.dataset.beam) {
+      path.setAttribute('class', `beam${bestFor(path.dataset.beam).cleared ? ' on' : ''}`);
+      path.style.stroke = PLANETS[path.dataset.beam].col;
+    } else if (path.dataset.moon) {
       const m = nodeOf(path.dataset.moon);
       path.setAttribute('class', `side${nodeState(m, progress) === 'hidden' ? '' : ' found'}${nodeState(nodeOf(m.planet), progress) === 'locked' ? ' hidden' : ''}`);
     }
   }
+  // the Lantern is as bright as the songs that are home; Eko waits beside the place you have chosen
+  hubEl.style.setProperty('--lit', String(PACKS.filter((p) => bestFor(p.level.id).cleared).length / PACKS.length));
+  const here = posOf.get(at.id);
+  if (here) {
+    // up and to the left of a planet; beside the dark planet, lower down (it sits at the very top of the map)
+    ekoEl.style.left = `${here[0] - here[2] * (at.kind === 'gate' ? 1.15 : 1.05)}px`;
+    ekoEl.style.top = `${here[1] + here[2] * (at.kind === 'gate' ? 0.55 : -1.05)}px`;
+    ekoEl.style.setProperty('--s', `${Math.max(30, Math.min(54, here[2] * 1.5))}px`);
+    ekoEl.style.color = `rgb(${orbColour(save.skin).join(',')})`;
+  }
   $('starTotal').innerHTML = `${icon('star')}${starCount()} / ${maxStars}`;
   $('starTotal').setAttribute('aria-label', `${starCount()} of ${maxStars} lens shards`);
-  renderSheet();
 }
 /** The panel under the map: the place you are at, how you have done there, and PLAY. */
 function renderSheet(): void {
@@ -241,7 +326,9 @@ function renderSheet(): void {
   const prac = $<HTMLButtonElement>('practiceBtn');
   const art = $('shArt');
   const artOf = at.kind === 'gate' ? 'gate' : at.planet;
-  if (art.dataset.of !== artOf) { art.dataset.of = artOf; art.innerHTML = levelArt(artOf); }
+  const artKey = `${artOf}${at.kind === 'moon' ? ':moon' : ''}`;
+  if (art.dataset.of !== artKey) { art.dataset.of = artKey; art.innerHTML = planetCard(artOf === 'gate' ? FINAL_ID : artOf, at.kind === 'moon'); }
+  $('shMastery').innerHTML = '';
   art.style.filter = at.kind === 'moon' ? (st === 'hidden' ? 'grayscale(1) brightness(0.3)' : 'saturate(0.5) brightness(0.62)') : at.kind === 'gate' ? 'none' : st === 'locked' ? 'grayscale(0.85) brightness(0.45)' : 'none';
   $('shLine').classList.remove('hidden');
   $('shStars').classList.remove('hidden');
@@ -250,10 +337,10 @@ function renderSheet(): void {
   if (at.kind === 'gate' && st === 'locked') {
     const n = PACKS.filter((p) => bestFor(p.level.id).cleared).length;
     sheet.style.setProperty('--tint', 'var(--pink)');
-    $('shTitle').textContent = '???';
-    $('shTier').textContent = 'Locked';
-    $('shMeta').textContent = `Something waits past ${shortTitle(PACKS[PACKS.length - 1])}. It opens when all four planets are cleared.`;
-    meter('PLANETS', (n / GATE_CLEARS) * 100, `${n}/${GATE_CLEARS}`);
+    $('shTitle').textContent = 'The Hollow';
+    $('shTier').textContent = 'The dark planet';
+    $('shMeta').textContent = 'No beam reaches it and no song comes out of it. The way there opens when all four planets are restored.';
+    meter('LIT', (n / GATE_CLEARS) * 100, `${n}/${GATE_CLEARS}`);
     $('shLine').classList.add('hidden');
     play.disabled = prac.disabled = true;
     play.textContent = 'LOCKED';
@@ -267,19 +354,23 @@ function renderSheet(): void {
   const open = st === 'open' || st === 'cleared';
   play.disabled = prac.disabled = !open;
   play.textContent = open ? 'PLAY' : st === 'hidden' ? 'HIDDEN' : 'LOCKED';
-  const tries = b.attempts ? `<b>${b.attempts}</b> attempt${b.attempts === 1 ? '' : 's'}${b.cleared ? ' · <b>cleared</b>' : (b.prac ?? 0) > 0 ? ` · practice <b>${b.prac}%</b>` : ''}` : 'Not played yet';
+  const tries = b.attempts ? `<b>${b.attempts}</b> attempt${b.attempts === 1 ? '' : 's'}${(b.prac ?? 0) > 0 ? ` · practice <b>${b.prac}%</b>` : ''}${(save.gold[lid] ?? 0) > 0 ? ` · gold <b>${save.gold[lid]}%</b>` : ''}` : 'Not played yet';
   if (at.kind === 'moon') {
     sheet.style.setProperty('--tint', 'var(--gold)');
-    $('shTitle').textContent = st === 'hidden' ? '???' : shortTitle(planet);
-    $('shTier').textContent = st === 'hidden' ? 'Hidden' : 'B-side';
-    $('shMeta').textContent = st === 'hidden' ? `Keep all three lens shards on ${shortTitle(planet)} and something will appear here.` : `${planet.level.artist} · ${pack.level.adds ?? ''}`;
+    $('shTitle').textContent = st === 'hidden' ? '???' : `${planetName(planet.level.id)}'s moon`;
+    $('shTier').textContent = st === 'hidden' ? 'Hidden' : 'Moon · B-side';
+    $('shMeta').textContent = st === 'hidden' ? `Keep all three lens shards on ${planetName(planet.level.id)} and something will appear here.` : `${shortTitle(planet)} · ${planet.level.artist} · ${pack.level.adds ?? ''}`;
     if (st === 'hidden') { best.classList.add('hidden'); paintStars($('shStars'), (k) => (kept[k] ? 'kept' : '')); $('shTries').textContent = `${kept.filter(Boolean).length} of 3 shards kept`; } else { meter('BEST', b.cleared ? 100 : b.pct, `${b.cleared ? 100 : b.pct}%`); $('shStars').classList.add('hidden'); $('shTries').innerHTML = tries; }
     return;
   }
-  sheet.style.setProperty('--tint', (LEVEL_UI[lid] ?? { col: '#19e3ff' }).col);
-  $('shTitle').textContent = shortTitle(planet);
-  $('shTier').textContent = TIERS[lid] ?? '';
-  $('shMeta').textContent = st === 'locked' ? `Clear ${shortTitle(PACKS[at.index - 1])} to open the way here.` : `${planet.level.artist} · ${planet.level.adds ?? ''}`;
+  sheet.style.setProperty('--tint', (PLANETS[lid] ?? PLANETS.heroes).col);
+  $('shTitle').textContent = planetName(lid);
+  $('shTier').textContent = at.kind === 'gate' ? 'The dark planet' : `Planet ${at.index + 1}`;
+  $('shMeta').textContent = st === 'locked' ? `Dark and silent. Restore ${planetName(PACKS[at.index - 1].level.id)} to light the way here.` : `${shortTitle(planet)} · ${planet.level.artist} · ${planet.level.adds ?? ''}`;
+  // mastery: the three things there are to do here beyond getting through
+  const gold = save.gold[lid] ?? 0;
+  if (open) $('shMastery').innerHTML = ([['Restored', b.cleared, 'Clear it in one run'], ['In Tune', !!save.badges[`tune_${lid}`], `Every piece of gold on a clear${gold ? ` (best ${gold}%)` : ''}`], ['Lens Mender', kept.every(Boolean), 'All three lens shards']] as Array<[string, boolean, string]>)
+    .map(([name, on, how]) => `<span class="mchip${on ? ' on' : ''}" title="${how}">${icon(on ? 'check' : 'badge')}${name}</span>`).join('');
   meter('BEST', b.cleared ? 100 : b.pct, `${b.cleared ? 100 : b.pct}%`);
   paintStars($('shStars'), (k) => (kept[k] ? 'kept' : ''));
   $('shTries').innerHTML = tries;
@@ -294,7 +385,6 @@ function select(id: string, quiet = false): void {
   pack = packOf(n.id) ?? PACKS[levelIdx];
   if (changed) { save.at = n.id; save.level = levelIdx; persist(); }
   renderMap();
-  renderer.idlePal = n.kind === 'gate' && !canPlay() ? 'void' : levelPalette(pack);
   if (changed && !quiet) queuePreview();
 }
 /** Moves to a planet by its place on the route (0 = the first level). */
@@ -329,6 +419,8 @@ function begin(asPractice: boolean): void {
   enter();
 }
 function enter(): void {
+  // the first time at the Hollow, its two story cards come first
+  if (pack === FINAL && !save.story.hollow && !botMode && !practice) { playStory('hollow', () => { show('levels'); enter(); }); return; }
   session.far = session.onBeat = session.judged = session.streak = session.attempts = 0;
   session.newBest = false;
   session.drop = -1;
@@ -374,7 +466,7 @@ function startRun(from = -1, quick = false): void {
   const card = $('titleCard');
   card.classList.remove('show');
   if (from < 0 && !quick) {
-    $('tcLevel').textContent = `${pack.level.side ? 'B-SIDE' : `${pack === FINAL ? 'FINAL LEVEL' : `LEVEL ${levelIdx + 1}`} · ${(TIERS[pack.level.id] ?? '').toUpperCase()}`}${practice ? ' · PRACTICE' : ''}`;
+    $('tcLevel').textContent = `${pack.level.side ? 'MOON' : pack === FINAL ? 'THE DARK PLANET' : `PLANET ${levelIdx + 1}`} · ${planetName(pack.level.id).toUpperCase()}${practice ? ' · PRACTICE' : ''}`;
     $('tcSong').textContent = shortTitle(pack);
     $('tcArtist').textContent = pack.level.artist;
     void card.offsetWidth;
@@ -546,9 +638,10 @@ function showResults(r: Run, cleared: boolean, reached = r.pct): void {
     if (!moon) {
       const done = ALL_PACKS.map((p) => p.level.id).filter((x) => bestFor(x).cleared);
       const fresh = earned(id, { onBeatPct, dropPower: r.dropPower, bestStreak: r.sim.bestStreak, attempts: bestFor(id).attempts, practised: !!save.practiced[id] }, done).filter((b) => !save.badges[b]);
+      if (first) pendingStory = r.pack === FINAL ? 'end' : id; // its story card plays on the way back to the map
       if (first && r.pack !== FINAL && levelIdx + 1 < PACKS.length) {
         freshNodes.add(PACKS[levelIdx + 1].level.id);
-        if (!progress.unlockAll) unlocks.push(row(icon('play'), 'NEXT LEVEL UNLOCKED', `${shortTitle(PACKS[levelIdx + 1])} · ${TIERS[PACKS[levelIdx + 1].level.id]}`));
+        if (!progress.unlockAll) unlocks.push(row(icon('play'), 'THE WAY IS LIT', `${planetName(PACKS[levelIdx + 1].level.id)} · ${shortTitle(PACKS[levelIdx + 1])}`));
       }
       // stars are kept when the run that collected them clears the level
       const had = starsFor(id);
@@ -563,11 +656,11 @@ function showResults(r: Run, cleared: boolean, reached = r.pct): void {
       // what the stars have just done to the map
       if (!moonWas && nodeState(nodeOf(`${id}-b`), progress) !== 'hidden') {
         freshNodes.add(`${id}-b`);
-        unlocks.push(row(icon('orb'), 'A MOON APPEARS', `${shortTitle(r.pack)} has a B-side: find it on the map`));
+        unlocks.push(row(icon('orb'), 'A MOON APPEARS', `${planetName(id)} has a moon: its B-side is on the map`));
       }
       if (!gateWas && nodeState(nodeOf('gate'), progress) === 'open') {
         freshNodes.add('gate');
-        unlocks.push(row(icon('flag'), 'THE GATE IS OPEN', `All four planets cleared: the way past ${shortTitle(PACKS[PACKS.length - 1])} is open`));
+        unlocks.push(row(icon('flag'), 'THE HOLLOW IS IN REACH', 'All four songs are home: the way to the Hollow is open'));
       }
       // side quests this clear completes
       for (const q of questsEarned(id, { onBeatPct, dropPower: r.dropPower, bestStreak: r.sim.bestStreak, holdsFull: r.sim.holdsFull, holds: r.course.holds.length, strays: r.sim.strays }, save.quests)) {
@@ -576,15 +669,20 @@ function showResults(r: Run, cleared: boolean, reached = r.pct): void {
       }
       // (Game Center has boards and achievements for the four levels of the route)
       if (PACKS.includes(r.pack)) { gameCenter.best(id, 100); gameCenter.flow(id, onBeatPct); }
+      // mastery: the share of the level's gold this clear collected, and the badges for all of it and for all three shards
+      const gold = Math.round((100 * (r.course.flow.filter((f) => r.sim.noteUsed(f.beat)).length + r.sim.holdsFull)) / Math.max(1, r.course.flow.length + r.course.holds.length));
+      save.gold[id] = Math.max(save.gold[id] ?? 0, gold);
+      if (gold >= 100 && !save.badges[`tune_${id}`]) fresh.push(`tune_${id}`);
+      if (starsFor(id).every(Boolean) && !save.badges[`mender_${id}`]) fresh.push(`mender_${id}`);
       for (const bid of fresh) {
         save.badges[bid] = true;
-        if (bid !== `clear_${FINAL_ID}`) gameCenter.badge(bid);
+        if (bid !== `clear_${FINAL_ID}` && !/^(tune|mender)_/.test(bid)) gameCenter.badge(bid);
         const b = BADGES.find((x) => x.id === bid);
         if (b) unlocks.push(row(icon('badge'), `BADGE: ${b.name.toUpperCase()}`, b.desc));
       }
     }
     // orbs this clear has earned: by a badge, by both quests of a level, or by a B-side
-    for (const o of ORBS) if (owned(o) && !orbsWas.has(o.id)) unlocks.push(row(dot(o), `ORB: ${o.name.toUpperCase()}`, 'Equip it under Orbs'));
+    for (const o of ORBS) if (owned(o) && !orbsWas.has(o.id)) unlocks.push(row(dot(o), `GLOW: ${o.name.toUpperCase()}`, 'Eko can wear it: look under Glows'));
   }
   if (cleared && r.opts.practice) save.bests[id] = { ...bestFor(id), prac: 100 };
   persist();
@@ -707,7 +805,11 @@ window.addEventListener('blur', () => { fingers.clear(); keysDown.clear(); letGo
 for (const type of ['pointerup', 'touchend', 'click'] as const) window.addEventListener(type, () => { if (audio.ctx && !audio.running && !(run && (run.state === 'paused' || run.state === 'resuming'))) void audio.resume(); }, { capture: true, passive: true });
 // The title opens on the finished tap (a click), not on the touch going down: a touch that changes the screen under the
 // finger would land its click on whatever appears there, and start a level. A click is also what lets iOS start the sound.
-$('title').addEventListener('click', () => { if (screen !== 'title') return; audio.ensure(); audio.setVolumes(save.music, save.sfx); show('levels'); });
+$('title').addEventListener('click', () => { if (screen !== 'title') return; audio.ensure(); audio.setVolumes(save.music, save.sfx); playStory('open', () => show('levels')); });
+$('storyNext').addEventListener('click', nextStory);
+$('storyArt').addEventListener('click', nextStory);
+$('storySkip').addEventListener('click', () => { if (screen === 'story') endStory(); });
+$('storyBtn').addEventListener('click', () => { const back: Screen = settingsFrom === 'pause' ? 'pause' : 'levels'; playStory('all', () => show(back), true); });
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 
 window.addEventListener('keydown', (e) => {
@@ -753,7 +855,7 @@ function toLevels(): void {
   run?.stop();
   run = null;
   botMode = false;
-  show('levels');
+  viaStory(() => show('levels'));
 }
 /** Quitting shows what the visit came to (how far, flow, sync) before going back to the levels. */
 function quit(): void {
@@ -973,10 +1075,10 @@ function renderOrbs(): void {
     el.type = 'button';
     el.className = `tile${save.skin === o.id ? ' on' : ''}${open ? '' : ' locked'}`;
     el.style.setProperty('--c', `rgb(${o.rgb.join(',')})`);
-    el.innerHTML = `<span class="swatch"></span><b></b><small></small><span class="state">${save.skin === o.id ? `${icon('check')}EQUIPPED` : open ? '' : `${icon('lock')}LOCKED`}</span>`;
+    el.innerHTML = `<span class="glow">${ekoSvg()}</span><b></b><small></small><span class="state">${save.skin === o.id ? `${icon('check')}EQUIPPED` : open ? '' : `${icon('lock')}LOCKED`}</span>`;
     el.querySelector('b')!.textContent = o.name;
-    el.querySelector('small')!.textContent = open ? (save.skin === o.id ? 'Your ball right now' : 'Tap to equip') : o.how;
-    el.setAttribute('aria-label', `${o.name} orb${open ? '' : `, locked: ${o.how}`}`);
+    el.querySelector('small')!.textContent = open ? (save.skin === o.id ? 'Eko wears it now' : 'Tap to wear') : o.how;
+    el.setAttribute('aria-label', `${o.name} glow${open ? '' : `, locked: ${o.how}`}`);
     el.addEventListener('click', () => { if (!open) return; save.skin = o.id; persist(); renderOrbs(); });
     list.appendChild(el);
   }
@@ -1015,7 +1117,7 @@ function renderQuests(): void {
       if (on) done++;
       return `<div class="qrow${on ? ' on' : ''}">${icon('quest')}<div><b>${q.name}</b>${q.desc}</div><span class="state">${on ? 'DONE' : ''}</span></div>`;
     });
-    g.innerHTML = `<h4><span></span><small>${TIERS[id] ?? ''}</small></h4>${rows.join('')}${orb ? `<div class="qreward${both ? ' on' : ''}"><span class="dot" style="background:rgb(${orb.rgb.join(',')})"></span>${both ? `Both done: the ${orb.name} orb is yours` : `Both quests: the ${orb.name} orb`}</div>` : ''}`;
+    g.innerHTML = `<h4><span></span><small>${planetName(id)}</small></h4>${rows.join('')}${orb ? `<div class="qreward${both ? ' on' : ''}"><span class="dot" style="background:rgb(${orb.rgb.join(',')})"></span>${both ? `Both done: the ${orb.name} orb is yours` : `Both quests: the ${orb.name} orb`}</div>` : ''}`;
     g.querySelector('h4 span')!.textContent = shortTitle(p);
     list.appendChild(g);
   }
@@ -1042,7 +1144,7 @@ $('pauseSettingsBtn').addEventListener('click', () => openSettings('pause'));
 $('pauseQuitBtn').addEventListener('click', quit);
 $('pauseSyncCal').addEventListener('click', () => { run?.stop(); run = null; openCalib(true); });
 $('retryBtn').addEventListener('click', () => { session.far = 0; session.newBest = false; startRun(); });
-$('nextBtn').addEventListener('click', () => { if (levelIdx + 1 < PACKS.length && levelOpen(levelIdx + 1)) { run?.stop(); run = null; focusLevel(levelIdx + 1); show('levels'); } });
+$('nextBtn').addEventListener('click', () => { if (levelIdx + 1 < PACKS.length && levelOpen(levelIdx + 1)) { run?.stop(); run = null; const to = levelIdx + 1; viaStory(() => { focusLevel(to); show('levels'); }); } });
 $('resLevelsBtn').addEventListener('click', toLevels);
 $('resSyncCal').addEventListener('click', () => { run?.stop(); run = null; openCalib(true); });
 $('tutorSkip').addEventListener('click', () => { run?.stop(); endTutorial(); });
@@ -1120,13 +1222,15 @@ fullScreen();
 void gameCenter.signIn().then((ok) => {
   if (!ok) return;
   for (const [id, b] of Object.entries(save.bests)) if (b.pct > 0 && PACKS.some((p) => p.level.id === id)) gameCenter.best(id, b.pct);
-  for (const id of Object.keys(save.badges)) if (save.badges[id] && id !== `clear_${FINAL_ID}`) gameCenter.badge(id);
+  for (const id of Object.keys(save.badges)) if (save.badges[id] && id !== `clear_${FINAL_ID}` && !/^(tune|mender)_/.test(id)) gameCenter.badge(id);
 });
 // The website keeps a copy of itself, so it opens with no connection after the first visit.
 if (import.meta.env.PROD && import.meta.env.MODE !== 'single' && !isNative && 'serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
   window.addEventListener('load', () => { void navigator.serviceWorker.register('./sw.js').catch(() => undefined); });
 }
 
+installDefs();
+$('titleArt').innerHTML = `${titleArt()}<span class="title-eko">${ekoSvg()}</span>`;
 buildMap();
 document.body.classList.add('boot');
 show('title');
@@ -1139,6 +1243,7 @@ Object.assign(window, {
     audio, save, renderer, session, sync, get run() { return run; }, get screen() { return screen; }, tick, show,
     level: (i: number) => focusLevel(i), select: (id: string) => select(id, true), quests: () => { renderQuests(); show('quests'); },
     start: (bot: boolean, prac = false, from = -1) => { botMode = bot; practice = prac; startRun(from); },
+    story: (k: string) => playStory(k, () => show('levels'), true),
     tutorial: startTutorial, results: (cleared: boolean) => { if (run) showResults(run, cleared, run.pct); }, orbs: () => { renderOrbs(); show('orbs'); }, badges: () => { renderBadges(); show('badges'); }, settings: () => openSettings('levels')
   }
 });

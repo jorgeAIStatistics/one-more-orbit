@@ -377,3 +377,87 @@ body.boot .screen { transition: none; }
 #attempt.flash { animation: flashA 0.7s ease-out; transform-origin: 0 50%; }
 @keyframes flashA { 0% { transform: scale(1.7); color: var(--cyan); } 100% { transform: scale(1); color: var(--text); } }
 #calStart.hidden + #calClose { grid-column: 1 / -1; }
+
+/* ================= the galaxy: storybook indigo, cream and warm gold ================= */
+:root { --ink: #0b0a24; --surf: #17143a; --surf2: #221d52; --line: #3d3680; --text: #fff3dc; --mute: #b0a8dc; --gold-d: #c28a22; --peach: #ffb37a; --story: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif; }
+.btn.primary { background: linear-gradient(#ffe38f, #ffc95c); color: #2a1b4d; box-shadow: 0 6px 0 var(--gold-d); }
+.btn.primary:active { box-shadow: 0 1px 0 var(--gold-d); }
+.btn.primary:disabled { background: var(--surf2); color: var(--mute); box-shadow: 0 6px 0 #0a0820; }
+.btn.secondary { background: rgba(23, 20, 58, 0.82); }
+.btn.secondary.toggle.on { border-color: var(--gold); color: var(--gold); background: rgba(255, 214, 90, 0.1); }
+button:focus-visible, select:focus-visible, input:focus-visible { outline-color: var(--gold); }
+.mark small, .world small { color: var(--gold); }
+.mark .o i::after { background: var(--gold); box-shadow: 0 0 0.3em var(--gold); }
+#levels { background: none; }
+
+/* ---- title: the Lantern and its planets, with Eko riding round the lamp ---- */
+.title-in { padding: 7vh 0 5vh; }
+.mark { font-size: clamp(46px, 17vw, 104px); }
+.title-art { grid-row: 2; position: relative; width: min(94vw, 62vh, 620px); align-self: center; }
+.title-art > svg { width: 100%; height: auto; display: block; overflow: visible; }
+.title-eko { position: absolute; left: 30%; right: 30%; top: 6%; bottom: 30%; animation: lap calc(var(--beat) * 14) linear infinite; pointer-events: none; }
+.title-eko svg { position: absolute; left: 50%; top: -12%; width: 34%; margin-left: -17%; color: var(--cyan); animation: lap calc(var(--beat) * 14) linear infinite reverse; }
+
+/* ---- the galaxy map ---- */
+#levels.on .map { animation: arrive calc(var(--beat) * 1.4) cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes arrive { from { transform: scale(1.45); opacity: 0; } }
+@keyframes bob { 50% { transform: translateY(-5px); } }
+.hub { position: absolute; width: calc(var(--h) * 0.884); height: var(--h); margin: calc(var(--h) * -0.705) 0 0 calc(var(--h) * -0.442); pointer-events: none; filter: brightness(calc(0.42 + 0.58 * var(--lit, 0))) saturate(calc(0.35 + 0.65 * var(--lit, 0))); transition: filter 1.2s; }
+.hub svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.map-eko { position: absolute; width: var(--s, 40px); height: var(--s, 40px); margin: calc(var(--s, 40px) * -0.5) 0 0 calc(var(--s, 40px) * -0.5); transition: left 0.75s cubic-bezier(0.5, 0, 0.2, 1), top 0.75s cubic-bezier(0.5, 0, 0.2, 1); pointer-events: none; z-index: 3; filter: drop-shadow(0 2px 6px rgba(5, 4, 20, 0.6)); }
+.map-eko svg { width: 100%; height: 100%; display: block; overflow: visible; animation: bob calc(var(--beat) * 4) ease-in-out infinite; }
+.node.planet, .node.gate, .node.planet.locked, .node.gate.locked { background: none; box-shadow: none; animation: none; }
+.node.planet::before, .node.gate::before { display: none; }
+.node .pl { position: absolute; left: -24%; top: -24%; width: 148%; height: 148%; pointer-events: none; transition: filter 0.8s; overflow: visible; }
+.node.planet.locked .pl { filter: grayscale(1) brightness(0.3) contrast(1.15); }
+.node.planet.cleared .pl { filter: drop-shadow(0 0 calc(var(--r) * 0.4) var(--c)); }
+.node.gate.locked .pl { filter: brightness(0.72); }
+.node.gate.open .pl { filter: drop-shadow(0 0 16px var(--c)); animation: bob calc(var(--beat) * 6) ease-in-out infinite; }
+.node.planet .glyph, .node.gate .glyph { position: absolute; right: -16%; bottom: -16%; width: 46%; height: 46%; min-width: 18px; min-height: 18px; border-radius: 50%; background: var(--c); color: #2a1b4d; display: grid; place-items: center; box-shadow: 0 0 0 2.5px var(--ink); }
+.node .glyph:empty { display: none; }
+.node.planet .glyph .ico, .node.gate .glyph .ico { width: 68%; height: 68%; }
+.node.planet.locked .glyph { background: #2a2660; color: #9a93d0; }
+.node.sel::after { border: 2.5px dashed var(--c); inset: calc(var(--r) * -0.44); animation: lap calc(var(--beat) * 32) linear infinite; opacity: 0.9; }
+.node.gate.sel::after { border-color: var(--c); }
+.node .orbit { display: none !important; }
+.route .done { stroke: var(--gold); }
+.route .todo, .route .side { stroke: #4a4490; }
+.route .beam { stroke-width: 16; stroke-linecap: round; opacity: 0; transition: opacity 1.4s; }
+.route .beam.on { opacity: 0.2; }
+.lab b { font-size: 13px; }
+#levels.launch .hub, #levels.launch .map-eko { opacity: 0; transition: opacity calc(var(--beat) / 2); }
+.sheet { background: rgba(20, 17, 52, 0.95); }
+.mastery { display: flex; gap: 6px; flex-wrap: wrap; }
+.mastery:empty { display: none; }
+.mchip { display: inline-flex; align-items: center; gap: 5px; font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 6px 9px; border-radius: 999px; border: 2px solid var(--line); color: var(--mute); white-space: nowrap; }
+.mchip .ico { width: 12px; height: 12px; }
+.mchip.on { border-color: var(--gold); color: var(--gold); background: rgba(255, 214, 90, 0.1); }
+@media (max-height: 760px) and (orientation: portrait) { .mastery { display: none; } }
+
+/* ---- story cards ---- */
+.story-card { display: grid; gap: var(--s3); max-width: 600px; }
+.story-art { border-radius: 20px; overflow: hidden; aspect-ratio: 16 / 10; border: 2px solid var(--line); cursor: pointer; background: var(--ink); }
+.story-art svg { width: 100%; height: 100%; display: block; }
+.story-text { font-family: var(--story); font-size: clamp(16px, 2.4vh + 6px, 21px); line-height: 1.5; color: var(--text); text-align: center; min-height: 6em; font-weight: 500; }
+.story-text.in { animation: rise calc(var(--beat) * 1.2) both; }
+.story-foot { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: var(--s2); }
+.story-foot .chip { justify-self: start; }
+.story-foot .btn.primary { width: auto; justify-self: end; padding: 13px 24px; font-size: 15px; }
+.story-dots { display: flex; gap: 6px; justify-content: center; }
+.story-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }
+.story-dots i.on { background: var(--gold); }
+@media (prefers-reduced-motion: reduce) { #levels.on .map, .map-eko svg, .title-eko, .title-eko svg, .node.gate.open .pl { animation: none; } .map-eko { transition: none; } }
+.screen.veil { background: rgba(11, 10, 36, 0.93); }
+.screen.veil.story { background: rgba(11, 10, 36, 0.72); }
+.panel h3 { color: var(--gold); }
+.tile { background: rgba(23, 20, 58, 0.88); }
+.tile.on { border-color: var(--gold); } .tile.on .state { color: var(--gold); }
+.tile .glow { width: 58px; height: 58px; color: var(--c); display: block; }
+.tile .glow svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.tile.locked .glow { filter: grayscale(1) brightness(0.55); }
+.mchip { font-size: 9px; padding: 5px 8px; letter-spacing: 0.06em; }
+.mastery { flex-wrap: nowrap; }
+@media (max-width: 899px) and (orientation: portrait) { .sheet .sh-quests { display: none; } .sheet .sh-meta { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; } }
+.world b { white-space: nowrap; }
+@media (max-width: 420px) { .world b { font-size: 16px; } .world small { font-size: 9px; letter-spacing: 0.22em; } }
+.node.gate .glyph { width: 30%; height: 30%; right: -4%; bottom: -4%; }

@@ -4,6 +4,8 @@ export interface Palette { bg0: RGB; bg1: RGB; ring: RGB; acc: RGB }
 
 export const PALETTES: Record<string, Palette> = {
   deep: { bg0: [10, 18, 52], bg1: [2, 4, 14], ring: [80, 130, 255], acc: [130, 190, 255] },
+  // the sky behind the title, the galaxy map and the story: storybook indigo with warm light
+  lantern: { bg0: [52, 38, 112], bg1: [10, 8, 34], ring: [255, 214, 150], acc: [255, 190, 150] },
   ocean: { bg0: [6, 38, 60], bg1: [2, 8, 20], ring: [40, 210, 225], acc: [120, 255, 240] },
   violet: { bg0: [40, 16, 72], bg1: [8, 3, 22], ring: [176, 96, 255], acc: [220, 170, 255] },
   dusk: { bg0: [58, 12, 30], bg1: [10, 2, 10], ring: [255, 128, 96], acc: [255, 190, 120] },
