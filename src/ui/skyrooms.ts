@@ -102,7 +102,8 @@ export class SkyRooms {
     return '';
   }
 
-  private write(s: string, x: number, y: number, px: number, o: Parameters<typeof C.write>[5] = {}): number { return C.write(this.ctx, s, x, y, px, o); }
+  /** Words in the room's hand. Nothing is ever written smaller than 13 px: small lines have to be read on a phone. */
+  private write(s: string, x: number, y: number, px: number, o: Parameters<typeof C.write>[5] = {}): number { return C.write(this.ctx, s, x, y, Math.max(13, px), o); }
   private wrap(s: string, px: number, max: number): string[] {
     const c = this.ctx, out: string[] = [];
     c.font = `italic 500 ${px}px ${FACE}`;
@@ -113,8 +114,8 @@ export class SkyRooms {
   }
   /** The way back, top left: an arrow in ink and where it leads. */
   private back(label: string, x0: number, u: number, dev: Dev): void {
-    const y = Math.max(30, (dev === 'phone' ? 64 : 46) * u), px = Math.max(15, 15 * u);
-    C.back(this.ctx, x0, y, px, label, Math.max(1, u));
+    const y = Math.max(30, (dev === 'phone' ? 64 : 46) * u), px = Math.max(16, 16 * u);
+    C.back(this.ctx, x0, y, px, label, Math.max(1, u), { alpha: 0.9 });
     this.ctx.font = `italic 500 ${px}px ${FACE}`;
     this.hits.push({ x: 0, y: 0, w: x0 + 40 * u + this.ctx.measureText(label).width + 20, h: y + 26, id: 'back' });
   }
@@ -174,15 +175,15 @@ export class SkyRooms {
     this.back('out to the galaxy', x0, u, dev);
     let y = (dev === 'phone' ? 122 : 108) * u;
     this.write('By the hearth', x0, y, 44 * u, { glow: 0.8 }); y += 26 * u;
-    this.write('Eko’s glows', x0, y, 15 * u, { alpha: 0.7, color: SAND }); y += (dev === 'phone' ? 110 : 90) * u;
-    this.write(read.name, x0, y, 40 * u, { glow: read.lit ? 0.6 : 0, alpha: read.lit ? 1 : 0.7 }); y += 28 * u;
-    for (const l of this.wrap(read.lit ? read.says : 'still dark', 18 * u, max)) { this.write(l, x0, y, 18 * u, { alpha: read.lit ? 0.9 : 0.7 }); y += 22 * u; }
+    this.write('Eko’s glows', x0, y, 15.5 * u, { alpha: 0.88, color: SAND }); y += (dev === 'phone' ? 110 : 90) * u;
+    this.write(read.name, x0, y, 40 * u, { glow: read.lit ? 0.6 : 0, alpha: read.lit ? 1 : 0.8 }); y += 28 * u;
+    for (const l of this.wrap(read.lit ? read.says : 'still dark', 18 * u, max)) { this.write(l, x0, y, 18 * u, { alpha: read.lit ? 0.95 : 0.82 }); y += 22 * u; }
     y += 2 * u;
-    for (const l of this.wrap(read.lit ? 'worn now' : `what lights it: ${read.how}`, 15 * u, max)) { this.write(l, x0, y, 15 * u, { alpha: 0.7, color: SAND }); y += 19 * u; }
+    for (const l of this.wrap(read.lit ? 'worn now' : `what lights it: ${read.how}`, 15 * u, max)) { this.write(l, x0, y, 15.5 * u, { alpha: 0.9, color: SAND }); y += 19.5 * u; }
     y += 27 * u;
     const lit = info.glows.filter((g) => g.lit).length, dark = info.glows.length - lit;
-    this.write(dark ? `${count(lit)} lit, ${count(dark)} still dark` : `all ${count(lit)} lit`, x0, y, 15 * u, { alpha: 0.65, color: SAND }); y += 22 * u;
-    for (const l of this.wrap('touch a flame to wear it; touch a wick to see what lights it', 14 * u, max)) { this.write(l, x0, y, 14 * u, { alpha: 0.55, color: SAND }); y += 18 * u; }
+    this.write(dark ? `${count(lit)} lit, ${count(dark)} still dark` : `all ${count(lit)} lit`, x0, y, 15.5 * u, { alpha: 0.88, color: SAND }); y += 22 * u;
+    for (const l of this.wrap('touch a flame to wear it; touch a wick to see what lights it', 14 * u, max)) { this.write(l, x0, y, 14.5 * u, { alpha: 0.84, color: SAND }); y += 18.5 * u; }
   }
 
   // ---------------------------------------------------------------- the gallery rail: the star chart
@@ -201,28 +202,28 @@ export class SkyRooms {
       const sc = i >= 3 ? Math.min(slot[2], (32 * u) / Math.max(0.3, maxY)) : slot[2], n = g.rows.filter((r) => r.lit).length;
       C.constellation(c, pts, g.rows.map((r) => r.lit), sc, slot[0], slot[1], u, n ? 1 : 0.6, tw);
       const ly = slot[1] + maxY * sc + 30 * u;
-      this.write(g.name, slot[0], ly, 19 * u, { alpha: 0.85 });
-      this.write(g.note || `${n} of ${g.rows.length}`, slot[0], ly + 18 * u, 13 * u, { alpha: 0.55, color: SAND });
+      this.write(g.name, slot[0], ly, 19 * u, { alpha: 0.92 });
+      this.write(g.note || `${n} of ${g.rows.length}`, slot[0], ly + 18 * u, 14 * u, { alpha: 0.86, color: SAND });
       this.hits.push({ x: slot[0] - 16, y: slot[1] + minY * sc - 16, w: Math.max(110, Math.max(...xs) * sc + 32), h: ly + 26 * u - (slot[1] + minY * sc - 16), id: `place:${g.id}` });
     });
     const x0 = dev === 'phone' ? w * 0.09 : w * 0.07;
     this.back('out to the galaxy', x0, u, dev);
     const y = (dev === 'phone' ? 122 : 108) * u;
     this.write('The star chart', x0, y, 44 * u, { glow: 0.8 });
-    this.write(`${info.lit} of ${info.total} lit`, x0, y + 26 * u, 15 * u, { alpha: 0.7, color: SAND });
+    this.write(`${info.lit} of ${info.total} lit`, x0, y + 26 * u, 15.5 * u, { alpha: 0.88, color: SAND });
     // the chosen constellation's stars, each with its one line
     const lx = P.lines[0];
     let ly = P.lines[1] + (dev === 'phone' ? 16 * u : 0); // (clear of the lowest star of the figure above)
     this.write(chosen.name, lx, ly, 30 * u, { glow: 0.5 });
-    if (chosen.note) { ly += 22 * u; this.write(chosen.note, lx, ly, 15 * u, { alpha: 0.65, color: SAND }); }
+    if (chosen.note) { ly += 22 * u; this.write(chosen.note, lx, ly, 15.5 * u, { alpha: 0.88, color: SAND }); }
     ly += 40 * u;
     for (const r of chosen.rows) {
       C.dab(c, lx + 6 * u, ly - 6 * u, 4 * u, r.lit);
-      const nw = this.write(r.name, lx + 24 * u, ly, 20 * u, { alpha: r.lit ? 1 : 0.6 });
-      c.font = `italic 500 ${15 * u}px ${FACE}`;
+      const nw = this.write(r.name, lx + 24 * u, ly, 20 * u, { alpha: r.lit ? 1 : 0.8 });
+      c.font = `italic 500 ${Math.max(13, 15.5 * u)}px ${FACE}`;
       const fits = lx + 24 * u + nw + 12 * u + c.measureText(r.what).width < w - 10;
-      if (fits) this.write(r.what, lx + 24 * u + nw + 12 * u, ly, 15 * u, { alpha: r.lit ? 0.75 : 0.5, color: SAND });
-      else { ly += 19 * u; this.write(r.what, lx + 24 * u, ly, 15 * u, { alpha: r.lit ? 0.75 : 0.5, color: SAND }); }
+      if (fits) this.write(r.what, lx + 24 * u + nw + 12 * u, ly, 15.5 * u, { alpha: r.lit ? 0.95 : 0.8, color: SAND });
+      else { ly += 19 * u; this.write(r.what, lx + 24 * u, ly, 15.5 * u, { alpha: r.lit ? 0.95 : 0.8, color: SAND }); }
       ly += 34 * u;
     }
     void h;
@@ -236,10 +237,10 @@ export class SkyRooms {
     // everything on the page, top to bottom: [words, size, strength, room after them, a rule before them]
     const rows: Array<{ s: string; px: number; a: number; after: number; rule?: boolean; id?: string }> = [
       { s: 'The last page', px: 38, a: 0.92, after: 60 },
-      { s: 'the songs, and who made them', px: 15, a: 0.7, after: 38 },
-      ...info.tracks.flatMap((k) => [{ s: k.title, px: 22, a: 0.92, after: 24 }, { s: k.by, px: 15.5, a: 0.72, after: 34 }]),
+      { s: 'the songs, and who made them', px: 15.5, a: 0.82, after: 38 },
+      ...info.tracks.flatMap((k) => [{ s: k.title, px: 22, a: 0.92, after: 24 }, { s: k.by, px: 15.5, a: 0.85, after: 34 }]),
       ...info.lines.map((s, i) => ({ s, px: 17, a: 0.9, after: i + 1 < info.lines.length ? 26 : 56 })),
-      { s: info.foot, px: 15.5, a: 0.75, after: 24, rule: true },
+      { s: info.foot, px: 15.5, a: 0.86, after: 24, rule: true },
       { s: info.link, px: 15.5, a: 0.95, after: 0, id: 'privacy' }
     ];
     const top = (dev === 'phone' ? 64 : 62) * u;
@@ -299,25 +300,25 @@ export class SkyRooms {
     // the count follows your taps: one, two, three, four, and round again
     const on = s.counting > 0 ? (s.counting - 1) % 4 : -1;
     let cx = x0;
-    ['one', 'two', 'three', 'four'].forEach((word, i) => { cx += this.write(word, cx, y, (i === on ? 40 : 30) * u, { alpha: i === on ? 1 : 0.5, glow: i === on ? 1 : 0 }) + 26 * u; });
+    ['one', 'two', 'three', 'four'].forEach((word, i) => { cx += this.write(word, cx, y, (i === on ? 40 : 30) * u, { alpha: i === on ? 1 : 0.62, glow: i === on ? 1 : 0 }) + 26 * u; });
     y += 52 * u;
     // your taps so far, set down against his: left of the mark is early, right is late
     const tx0 = x0, tx1 = x0 + (dev === 'phone' ? w * 0.8 : w * 0.36), mid = (tx0 + tx1) / 2, half = (tx1 - tx0) / 2;
     C.rule(c, tx0, tx1, y, 0.3);
     c.strokeStyle = 'rgba(255,241,216,0.8)'; c.lineWidth = 1.5 * u; c.beginPath(); c.moveTo(mid, y - 9 * u); c.lineTo(mid, y + 9 * u); c.stroke();
     s.taps.forEach((d, i) => C.dab(c, mid + Math.max(-1, Math.min(1, d / 180)) * half, y + (((i * 7919) % 9) - 4) * u, 2.6 * u, true));
-    this.write('early', tx0, y + 24 * u, 12.5 * u, { alpha: 0.55, color: SAND }); this.write('late', tx1, y + 24 * u, 12.5 * u, { align: 'right', alpha: 0.55, color: SAND }); this.write('him', mid, y - 16 * u, 12.5 * u, { align: 'center', alpha: 0.7 });
+    this.write('early', tx0, y + 24 * u, 14 * u, { alpha: 0.86, color: SAND }); this.write('late', tx1, y + 24 * u, 14 * u, { align: 'right', alpha: 0.86, color: SAND }); this.write('him', mid, y - 16 * u, 14 * u, { align: 'center', alpha: 0.9 });
     y += 58 * u;
     for (const l of this.wrap(s.line, 19 * u, max)) { this.write(l, x0, y, 19 * u, { alpha: 0.95 }); y += 23 * u; }
     y += 7 * u;
     let ax = x0;
     s.acts.forEach((a, i) => {
-      if (i) ax += this.write('   ·   ', ax, y, 17 * u, { alpha: 0.5, color: SAND });
+      if (i) ax += this.write('   ·   ', ax, y, 17 * u, { alpha: 0.7, color: SAND });
       const aw = this.write(a.label, ax, y, Math.max(16, 17 * u), { alpha: 0.95 });
       this.hits.push({ x: ax - 12, y: y - 30, w: aw + 24, h: 46, id: a.id });
       ax += aw;
     });
-    if (s.foot) this.write(s.foot, x0, y + 30 * u, 13.5 * u, { alpha: 0.55, color: SAND });
+    if (s.foot) this.write(s.foot, x0, y + 30 * u, 14.5 * u, { alpha: 0.84, color: SAND });
   }
 
   // ---------------------------------------------------------------- pause: the scene dims and holds its breath

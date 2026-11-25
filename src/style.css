@@ -8,6 +8,7 @@
      .light    a toggle: a light, lit or unlit
      .step     a stepper: two words either side of the value
    No boxes, no chips, no filled buttons. Every target is at least 44 points tall, however small the words.
+   Small lines are never under 13 px and never faint: sand on dusk at about nine parts in ten, with the dark breath under them.
    The developer tools at the end (test chambers, record mode) are plain on purpose and share nothing with the above. */
 
 @font-face { font-family: 'Cormorant SC'; font-weight: 500; font-display: swap; src: url('../node_modules/@fontsource/cormorant-sc/files/cormorant-sc-latin-500-normal.woff2') format('woff2'); }
@@ -56,19 +57,19 @@ body.boot .screen { transition: none; } /* the first screen is simply there when
 .act:active { opacity: 1; transform: translateX(3px); }
 .act:disabled { opacity: 0.35; cursor: default; }
 .act.first { min-height: 68px; font-size: 58px; line-height: 1; opacity: 1; text-shadow: var(--glow); }
-.act.quiet { opacity: 0.62; }
+.act.quiet { opacity: 0.74; }
 .act.small { font-size: 16px; min-height: 44px; padding: 10px 0; }
-.way { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 15px; opacity: 0.72; text-shadow: var(--shade); transition: opacity 0.15s, transform 0.08s ease-out; }
+.way { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 16px; opacity: 0.9; text-shadow: var(--shade); transition: opacity 0.15s, transform 0.08s ease-out; }
 .way:hover { opacity: 1; } .way:active { opacity: 1; transform: translateX(-3px); }
 .way svg { width: 26px; height: 20px; flex: none; overflow: visible; filter: drop-shadow(0 0 3px rgba(10, 6, 24, 0.8)); }
-.head { font-size: 14.5px; color: var(--sand); opacity: 0.75; margin: 22px 0 2px; text-shadow: var(--shade); }
+.head { font-size: 15px; color: var(--sand); opacity: 0.92; margin: 22px 0 2px; text-shadow: var(--shade); }
 .head:first-child { margin-top: 4px; }
-.whisper { font-size: 15px; line-height: 1.35; color: var(--sand); opacity: 0.8; text-shadow: var(--shade); }
+.whisper { font-size: 15.5px; line-height: 1.35; color: var(--sand); opacity: 0.94; text-shadow: var(--shade); }
 .hair { height: 1px; background: rgba(255, 236, 206, 0.2); }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; min-height: 50px; padding: 5px 0; border-bottom: 1px solid rgba(255, 236, 206, 0.16); font-size: 20px; line-height: 1.2; opacity: 0.96; text-shadow: var(--shade); }
 .row > span:first-child { flex: 1; min-width: 0; }
-.row small { display: block; margin-top: 2px; font-size: 13px; line-height: 1.25; color: var(--sand); opacity: 0.75; }
-.row > small { flex: none; margin: 0; font-size: 14px; text-align: right; }
+.row small { display: block; margin-top: 3px; font-size: 14.5px; line-height: 1.25; color: var(--sand); opacity: 0.94; }
+.row > small { flex: none; margin: 0; font-size: 15px; text-align: right; }
 .row.act:active, .row.light:active { transform: translateX(3px); }
 /* the slider: a thread, brighter where it has been drawn through, and a flame to draw it by (--f is how far, 0 to 1).
    (The flame is the same drawing as #flame in index.html; a slider's handle can only take it as a picture.) */
@@ -83,9 +84,9 @@ body.boot .screen { transition: none; } /* the first screen is simply there when
 /* the light: the whole row is the switch */
 .light .lamp { flex: none; width: 30px; height: 33px; margin: -8px 3px 0 0; overflow: visible; }
 .light[aria-pressed='true'] .unlit, .light[aria-pressed='false'] .lit { display: none; }
-.light[aria-pressed='false'] > span { opacity: 0.8; }
+.light[aria-pressed='false'] > span { opacity: 0.88; }
 .step { display: inline-flex; align-items: baseline; flex: none; gap: 2px; margin-right: -6px; }
-.step button { min-width: 44px; min-height: 44px; font-size: 14px; color: var(--sand); opacity: 0.75; text-align: center; }
+.step button { min-width: 44px; min-height: 44px; font-size: 15.5px; color: var(--sand); opacity: 0.95; text-align: center; }
 .step button:active { opacity: 1; transform: scale(1.08); }
 .step b { min-width: 56px; font: normal 500 19px var(--hand); font-variant-numeric: lining-nums tabular-nums; text-align: center; }
 
@@ -96,7 +97,7 @@ body.boot .screen { transition: none; } /* the first screen is simply there when
 #attempt { font-size: 15px; opacity: 0.85; text-shadow: var(--shade); font-variant-numeric: lining-nums; transform-origin: 0 50%; }
 #attempt.flash { animation: flashA 0.7s ease-out; }
 @keyframes flashA { 0% { transform: scale(1.5); opacity: 1; } 100% { transform: scale(1); } }
-#section { font-size: 13.5px; color: var(--sand); opacity: 0.75; text-shadow: var(--shade); }
+#section { font-size: 14px; color: var(--sand); opacity: 0.92; text-shadow: var(--shade); }
 .hud-mid { text-align: center; }
 .pct { display: inline-flex; align-items: baseline; gap: 3px; line-height: 1; text-shadow: var(--glow); }
 .pct b { font: normal 500 30px/1 var(--hand); font-variant-numeric: lining-nums tabular-nums; }
@@ -114,17 +115,17 @@ body.boot .screen { transition: none; } /* the first screen is simply there when
 .pause-mark svg { width: 100%; height: 100%; fill: none; stroke: rgba(255, 241, 216, 0.82); stroke-width: 2.6; stroke-linecap: round; filter: drop-shadow(0 0 4px rgba(10, 6, 24, 0.9)); }
 .pause-mark:active svg { stroke: #fff1d8; transform: scale(0.92); transform-origin: 50% 50%; }
 /* the song as a thread */
-.song { position: absolute; left: calc(var(--left) + 8px); right: calc(var(--right) + 8px); bottom: calc(var(--bottom) + 24px); height: 0; font-size: 11.5px; line-height: 1; }
+.song { position: absolute; left: calc(var(--left) + 8px); right: calc(var(--right) + 8px); bottom: calc(var(--bottom) + 26px); height: 0; font-size: 13px; line-height: 1; }
 .song .strand { position: absolute; left: 0; right: 0; top: -0.5px; height: 1px; background: rgba(255, 236, 206, 0.3); }
 .song .drawn { position: absolute; left: 0; top: -0.8px; width: 100%; height: 1.6px; background: rgba(255, 241, 216, 0.92); box-shadow: 0 0 5px rgba(10, 6, 24, 0.8); transform-origin: 0 50%; transform: scaleX(0); }
 .song .mark { position: absolute; top: 0; }
 .song .mark em { position: absolute; left: 50%; transform: translateX(-50%); white-space: nowrap; text-shadow: var(--shade); }
 .song .drop { width: 1.4px; height: 12px; margin: -6px 0 0 -0.7px; background: rgba(255, 208, 106, 0.9); }
-.song .drop em { bottom: 16px; color: var(--gold); opacity: 0.65; }
+.song .drop em { bottom: 16px; color: var(--gold); opacity: 0.9; }
 .song .best { width: 8px; height: 8px; margin: -4px 0 0 -4px; border: 1.2px solid rgba(255, 236, 206, 0.7); border-radius: 50%; }
-.song .best em { top: 12px; color: var(--sand); opacity: 0.6; }
+.song .best em { top: 12px; color: var(--sand); opacity: 0.88; }
 .song .from { width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%; background: rgba(255, 240, 206, 0.98); box-shadow: 0 0 7px rgba(255, 220, 150, 0.7); }
-.song .from em { top: 12px; color: var(--sand); opacity: 0.65; }
+.song .from em { top: 12px; color: var(--sand); opacity: 0.88; }
 #checks i { position: absolute; top: -4px; width: 1.2px; height: 8px; margin-left: -0.6px; background: rgba(255, 236, 206, 0.6); }
 .song .at { position: absolute; left: 0; top: 0; width: 0; height: 0; }
 .song .at svg { position: absolute; left: -12px; top: -18.4px; width: 24px; height: 26.4px; overflow: visible; }
@@ -134,7 +135,7 @@ body.boot .screen { transition: none; } /* the first screen is simply there when
 .toast.show { animation: toast 1.4s ease-out both; }
 @keyframes toast { 0% { opacity: 0; transform: translate(-50%, 6px); } 14% { opacity: 1; transform: translate(-50%, 0); } 72% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -4px); } }
 .title-card { position: absolute; left: var(--left); right: var(--right); bottom: 16%; display: grid; gap: 2px; justify-items: center; text-align: center; opacity: 0; }
-.title-card small { font-size: 15px; color: var(--sand); opacity: 0.85; text-shadow: var(--shade); }
+.title-card small { font-size: 16px; color: var(--sand); opacity: 0.94; text-shadow: var(--shade); }
 .title-card b { font: italic 500 clamp(34px, 10vw, 54px) / 1.05 var(--hand); text-shadow: var(--glow); }
 .title-card span { font-size: 17px; opacity: 0.85; text-shadow: var(--shade); }
 .title-card.show { animation: card 3.4s ease-out both; }
@@ -151,7 +152,7 @@ body.boot .screen { transition: none; } /* the first screen is simply there when
 .finale .strand { position: relative; width: min(440px, 80%); height: 1px; background: rgba(255, 236, 206, 0.3); }
 .finale .strand i { position: absolute; left: 0; top: -0.3px; width: 100%; height: 1.6px; background: rgba(255, 241, 216, 0.92); transform-origin: 0 50%; transform: scaleX(0); }
 .finale span { min-height: 1em; font-size: 16px; color: var(--sand); text-shadow: var(--shade); }
-.sync-overlay { position: absolute; left: calc(var(--left) + 6px); bottom: calc(var(--bottom) + 62px); font: italic 500 13.5px/1.4 var(--hand); font-variant-numeric: lining-nums tabular-nums; color: var(--sand); opacity: 0.85; white-space: pre; text-shadow: var(--shade); }
+.sync-overlay { position: absolute; left: calc(var(--left) + 6px); bottom: calc(var(--bottom) + 62px); font: italic 500 14.5px/1.4 var(--hand); font-variant-numeric: lining-nums tabular-nums; color: var(--sand); opacity: 0.94; white-space: pre; text-shadow: var(--shade); }
 
 /* ---------- pause: the choices, written over the held scene ---------- */
 #pause { overflow-y: auto; }
@@ -189,9 +190,9 @@ body.boot .screen { transition: none; } /* the first screen is simply there when
 /* a desk-sized screen: the same hand, a little larger */
 @media (min-aspect-ratio: 115/100) and (min-height: 700px) {
   .act { font-size: 28px; min-height: 48px; } .act.first { font-size: 64px; min-height: 76px; } .act.small { font-size: 18px; }
-  .way { font-size: 17px; } .whisper { font-size: 17px; } .head { font-size: 16px; }
-  .room-name { font-size: 50px; } .row { font-size: 22px; } .row small { font-size: 14.5px; } .row > small { font-size: 15.5px; }
-  #attempt { font-size: 17px; } #section { font-size: 15px; } .song { font-size: 13px; }
+  .way { font-size: 17.5px; } .whisper { font-size: 17px; } .head { font-size: 16.5px; }
+  .room-name { font-size: 50px; } .row { font-size: 22px; } .row small { font-size: 15.5px; } .row > small { font-size: 16px; }
+  #attempt { font-size: 17px; } #section { font-size: 15.5px; } .song { font-size: 14px; }
   .toast { font-size: 34px; } .tutor p { font-size: 23px; max-width: 480px; }
 }
 @media (max-height: 520px) {

@@ -246,7 +246,7 @@ export class SkyResult {
     if (i.shards) {
       y += 36 * U; const a = turn();
       for (let k = 0; k < 3; k++) this.dab(x + (8 + k * 27) * U, y - 5.5 * U, 5.4 * U, !!i.shards[k], !!i.fresh[k], a);
-      if (i.shardLine) this.write(i.shardLine, x + 92 * U, y, 16.5 * U, 0.8 * a, { color: SAND });
+      if (i.shardLine) this.write(i.shardLine, x + 92 * U, y, 16.5 * U, 0.9 * a, { color: SAND });
       y += 48 * U;
     } else y += 44 * U;
     // on a short screen there is not room for both: opened, "more about this run" takes the place of what the run changed
@@ -257,7 +257,7 @@ export class SkyResult {
     if (!swap) y += 12 * U;
     const aM = turn(), ready = this.ready;
     if (!this.open) {
-      const mw = this.write('more about this run', x, y, 15 * U, 0.74 * aM, { color: SAND });
+      const mw = this.write('more about this run', x, y, Math.max(14, 15.5 * U), 0.9 * aM, { color: SAND });
       if (ready) this.hits.push({ x: x - 12, y: y - 30, w: mw + 24, h: 48, kind: 'more' });
     } else {
       // opened: the same hand, a little smaller. Nothing here is needed to go on.
@@ -280,7 +280,7 @@ export class SkyResult {
     if (aH > 0) {
       const p = 0.78 + 0.14 * Math.sin(this.now * 1.6);
       this.write('tap, for one more orbit', w * lay.hint[0], h * lay.hint[1], Math.max(17, 17.5 * U), p * aH, { align: lay.hint[2] });
-      const gy = Math.max(34, (dev === 'phone' ? 64 : 40) * u), gw = this.write('up to the galaxy', w - Math.max(18, 22 * u), gy, Math.max(15, 15.5 * U), 0.66 * aH, { align: 'right' });
+      const gy = Math.max(34, (dev === 'phone' ? 64 : 40) * u), gw = this.write('up to the galaxy', w - Math.max(18, 22 * u), gy, Math.max(15.5, 16 * U), 0.88 * aH, { align: 'right' });
       if (ready) this.hits.push({ x: w - gw - 44, y: 0, w: gw + 44, h: gy + 26, kind: 'galaxy' });
     }
     c.textAlign = 'left';

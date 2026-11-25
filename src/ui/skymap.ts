@@ -184,9 +184,9 @@ export class SkyMap {
     c.strokeStyle = 'rgba(255,236,206,0.35)'; c.lineWidth = 1; c.beginPath();
     L.stars.forEach(([x, y], i) => (i ? c.lineTo(x * sx, y * sy) : c.moveTo(x * sx, y * sy))); c.stroke();
     L.stars.forEach(([x, y], i) => this.dab(x * sx, y * sy, (i % 2 ? 2.2 : 3) * u + 0.6, true, 0.75 + 0.25 * Math.sin(t * 1.6 + i * 2)));
-    const quiet = this.chosen && this.chosen !== 'lantern' ? 0.45 : 0.8;
+    const quiet = this.chosen && this.chosen !== 'lantern' ? 0.66 : 0.9; // (small lines have to be read on a phone: never faint)
     // (on a tall screen the count sits low on the right: it steps aside while the lowest world's lines are written there)
-    if (!(at && L === LAYS.tall && at.y > h * 0.6)) this.text(this.info.lit, L.starsAt[0] * sx, L.starsAt[1] * sy, 15, quiet, L.starsAt[2], SAND);
+    if (!(at && L === LAYS.tall && at.y > h * 0.6)) this.text(this.info.lit, L.starsAt[0] * sx, L.starsAt[1] * sy, 15.5, quiet, L.starsAt[2], SAND);
     const sxs = L.stars.map((p) => p[0] * sx), sys = L.stars.map((p) => p[1] * sy);
     this.hits.push({ x: Math.min(...sxs) - 20, y: Math.min(...sys) - 20, w: Math.max(...sxs) - Math.min(...sxs) + 40, h: L.starsAt[1] * sy + 4 - Math.min(...sys) + 20, hit: { kind: 'stars' } });
     const [wx, wy, wa] = [L.words[0] * sx, L.words[1] * sy, L.words[2]];
@@ -198,14 +198,14 @@ export class SkyMap {
       const rooms: Array<['glows' | 'settings' | 'stars', string, string]> = [['glows', 'the hearth', 'Eko’s glows'], ['settings', 'the desk', 'settings'], ['stars', 'the gallery', 'the star chart']];
       rooms.forEach(([kind, room, what], i) => {
         const y = wy - 27 + i * 30, rw = this.text(room, wx, y, 20, this.fade, wa);
-        this.text(what, wx + rw + 10, y, 14, this.fade * 0.6, wa, SAND);
+        this.text(what, wx + rw + 10, y, 15, this.fade * 0.86, wa, SAND);
         this.hits.push({ x: wx - 8, y: y - 21, w: 210, h: 30, hit: { kind } });
       });
-      this.text(this.info.lens, wx, wy + 56, 14.5, this.fade * 0.7, wa, SAND);
+      this.text(this.info.lens, wx, wy + 56, 15, this.fade * 0.86, wa, SAND);
     } else {
       this.text('the Lantern', wx, wy, 18, quiet + 0.1, wa, CREAM, 600);
-      this.text('the hearth  ·  the desk  ·  the gallery', wx, wy + 19, 14, quiet * 0.8, wa, SAND);
-      this.text(this.info.lens, wx, wy + 36, 14, quiet * 0.8, wa, SAND);
+      this.text('the hearth  ·  the desk  ·  the gallery', wx, wy + 19, 14.5, quiet * 0.95, wa, SAND);
+      this.text(this.info.lens, wx, wy + 37, 14.5, quiet * 0.95, wa, SAND);
     }
 
     // the worlds: far ones first, the chosen one last and larger, each with what is written beside it
@@ -226,12 +226,12 @@ export class SkyMap {
       this.hits.push({ x: p.x - tap, y: p.y - tap, w: tap * 2, h: tap * 2, hit: { kind: 'node', id: n.id } });
       const left = p.side === 'left', below = p.side === 'below';
       const al: CanvasTextAlign = below ? 'center' : left ? 'right' : 'left', dir = left ? -1 : 1;
-      const x0 = below ? p.x : p.x + dir * (R + 12 * u + 4), dim = n.state === 'dark' ? 0.55 : 0.95;
+      const x0 = below ? p.x : p.x + dir * (R + 12 * u + 4), dim = n.state === 'dark' ? 0.74 : 0.97;
       if (!on) {
         if (n.kind === 'moon') continue;
-        if (n.kind === 'hollow') { this.text(n.name, L.hollowAt[0] * sx, L.hollowAt[1] * sy, 19, n.state === 'dark' ? 0.5 : 0.85, L.hollowAt[2], CREAM, 600); continue; }
-        this.text(n.name, x0, p.y + 3, 20, dim * (this.chosen ? 0.7 : 1), al, CREAM, 600);
-        if (n.state === 'dark') this.text('dark and silent', x0, p.y + 21, 14, 0.5, al, SAND);
+        if (n.kind === 'hollow') { this.text(n.name, L.hollowAt[0] * sx, L.hollowAt[1] * sy, 19, n.state === 'dark' ? 0.72 : 0.9, L.hollowAt[2], CREAM, 600); continue; }
+        this.text(n.name, x0, p.y + 3, 20, dim * (this.chosen ? 0.82 : 1), al, CREAM, 600);
+        if (n.state === 'dark') this.text('dark and silent', x0, p.y + 21, 14.5, 0.8, al, SAND);
         else for (let i = 0; i < 3; i++) this.dab(x0 + dir * (6 + i * 14), p.y + 17, 3, n.shards[i], 0.9);
         continue;
       }
@@ -239,14 +239,14 @@ export class SkyMap {
       const a = this.fade, y0 = below ? p.y + R + 40 * u + 20 : p.y - 26;
       this.text(n.name, x0, y0, 34, a, al, CREAM, 600);
       this.text(n.song, x0, y0 + 25, 18, a * 0.92, al);
-      this.text(`by ${n.by}`, x0, y0 + 43, 14.5, a * 0.7, al, SAND);
-      if (n.state === 'dark') { this.text('dark and silent', x0, y0 + 72, 18, a * 0.8, al); this.text(n.why, x0, y0 + 94, 15, a * 0.65, al, SAND); continue; }
+      this.text(`by ${n.by}`, x0, y0 + 43, 15, a * 0.88, al, SAND);
+      if (n.state === 'dark') { this.text('dark and silent', x0, y0 + 72, 18, a * 0.8, al); this.text(n.why, x0, y0 + 94, 15.5, a * 0.86, al, SAND); continue; }
       const bw = this.text(n.best >= 100 ? 'restored' : n.best > 0 ? `best ${n.best}%` : 'not yet played', x0, y0 + 74, 19, a * 0.95, al);
       if (n.kind !== 'moon') for (let i = 0; i < 3; i++) this.dab(below ? p.x - 16 + i * 16 : x0 + dir * (bw + 16 + i * 16), below ? y0 + 92 : y0 + 68, 4, n.shards[i], a);
       const y1 = y0 + (below ? 118 : 104);
-      this.text('tap again to fly in', x0, y1, 16, a * 0.75, al);
+      this.text('tap again to fly in', x0, y1, 16.5, a * 0.9, al);
       if (!n.dare) {
-        this.text('or practise', x0, y1 + 30, 15.5, a * 0.6, al, SAND);
+        this.text('or practise', x0, y1 + 30, 15.5, a * 0.88, al, SAND);
         this.hits.push({ x: below ? x0 - 70 : left ? x0 - 130 : x0 - 10, y: y1 + 8, w: 140, h: 40, hit: { kind: 'practise' } });
       } else {
         // a world whose song is home can also be dared: one attempt, and a fall sends you back here (its Daredevil star).
@@ -254,8 +254,8 @@ export class SkyMap {
         const dareIt = n.dare === 'done' ? 'or dare it again' : 'or dare it', gap = 26;
         c.font = `italic 500 15.5px ${SERIF}`;
         const pw = c.measureText('or practise').width, dw = c.measureText(dareIt).width, xs = below ? x0 - (pw + gap + dw) / 2 : left ? x0 - (pw + gap + dw) : x0;
-        this.text('or practise', xs, y1 + 30, 15.5, a * 0.6, 'left', SAND);
-        this.text(dareIt, xs + pw + gap, y1 + 30, 15.5, a * 0.6, 'left', SAND);
+        this.text('or practise', xs, y1 + 30, 15.5, a * 0.88, 'left', SAND);
+        this.text(dareIt, xs + pw + gap, y1 + 30, 15.5, a * 0.88, 'left', SAND);
         this.hits.push({ x: xs - 12, y: y1 + 8, w: pw + 12 + gap / 2, h: 40, hit: { kind: 'practise' } }, { x: xs + pw + gap / 2, y: y1 + 8, w: dw + gap / 2 + 12, h: 40, hit: { kind: 'dare' } });
       }
     }
@@ -268,7 +268,7 @@ export class SkyMap {
     c.restore();
     // the way back down to the title: a quiet word in the corner of the screen itself, so the camera never hides it
     this.screenHits = [];
-    if (fly === 0) { this.text('down to the horizon', w - 14, h - 14, 14.5, 0.55, 'right', SAND); this.screenHits.push({ x: w - 170, y: h - 46, w: 170, h: 46, hit: { kind: 'title' } }); }
+    if (fly === 0) { this.text('down to the horizon', w - 14, h - 14, 15, 0.84, 'right', SAND); this.screenHits.push({ x: w - 170, y: h - 46, w: 170, h: 46, hit: { kind: 'title' } }); }
     if (fly > 0) { c.fillStyle = `rgba(255,226,180,${Math.min(1, fly * fly) * 0.9})`; c.fillRect(0, 0, w, h); if (fly >= 1 && t - this.launchAt > 1.2) this.launchAt = -1; }
   }
 
