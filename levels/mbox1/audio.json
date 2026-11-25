@@ -1,0 +1,15 @@
+{
+  "file": "audio/mbox1.mp3",
+  "frames": 1128960,
+  "firstSig": 399,
+  "bpm": 150,
+  "offset": 0.0,
+  "length": 25.6,
+  "dropTime": 12.8,
+  "source": [
+    [
+      0.001,
+      25.601
+    ]
+  ]
+}

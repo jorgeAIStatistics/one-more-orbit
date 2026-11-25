@@ -139,6 +139,8 @@ export class GdRenderer {
    * else is quiet. 1 is the look before it.
    */
   private _look: 1 | 2 = 1;
+  /** the core's flare: 1 on the drop's big hits (its great node, an accent, the finish), falling away in half a second */
+  private coreFlare = 0;
   get look(): 1 | 2 { return this._look; }
   set look(v: 1 | 2) { this._look = v; const P = v === 2 ? QUIET : LOUD; GOLD = P.gold; STONE = P.stone; WOKEN = P.woken; STAR = P.star; }
   /** the beat of the second tap still to come: nodes after it wait, unlit */
@@ -236,7 +238,7 @@ export class GdRenderer {
     this.ripples = [];
     this.waves = [];
     this.trail = [];
-    this.flash = this.strobe = this.punch = this.zoomKick = this.ringFlash = this.landPulse = this.shake = this.dark = this.drain = this.glitch = this.flipK = this.burstK = 0;
+    this.flash = this.strobe = this.punch = this.zoomKick = this.ringFlash = this.landPulse = this.shake = this.dark = this.drain = this.glitch = this.flipK = this.burstK = this.coreFlare = 0;
     this.punchS = this.zoomS = 0;
     this.lift = this.liftV = 0;
     this.branchV = this.branchK = 0;
@@ -497,6 +499,8 @@ export class GdRenderer {
       this.eq[i] += (v - this.eq[i]) * Math.min(1, dt * (v > this.eq[i] ? 40 : 9));
     }
     c.lineCap = 'round';
+    const quiet = this.look === 2, flare = this.coreFlare;
+    if (quiet) drive *= flare; // (the new look: beams only on the big hits)
     if (drive > 0.05 && !save.reducedMotion) {
       // in the drop the equalizer's bars reach right across the screen on the kick, as beams behind the course
       c.globalCompositeOperation = 'lighter';
@@ -512,7 +516,7 @@ export class GdRenderer {
       c.globalCompositeOperation = 'source-over';
     }
     const glow = c.createRadialGradient(0, 0, 0, 0, 0, rc * (1.1 + kick * 0.4));
-    glow.addColorStop(0, this.col(pal.ring, 0.5 + kick * 0.35));
+    glow.addColorStop(0, this.col(pal.ring, quiet ? 0.1 + 0.6 * flare : 0.5 + kick * 0.35));
     glow.addColorStop(1, this.col(pal.ring, 0));
     c.fillStyle = glow;
     c.beginPath(); c.arc(0, 0, rc * (1.1 + kick * 0.4), 0, TWO_PI); c.fill();
@@ -541,7 +545,7 @@ export class GdRenderer {
     for (let i = 0; i < EQ_BARS; i++) {
       const a = (i / EQ_BARS) * TWO_PI - Math.PI / 2 + Math.PI / EQ_BARS;
       const v = this.eq[i];
-      c.strokeStyle = this.col(mix(pal.ring, pal.acc, v), 0.4 + v * 0.6);
+      c.strokeStyle = quiet ? rgba(STONE, 0.14 + v * 0.2 + flare * 0.5) : this.col(mix(pal.ring, pal.acc, v), 0.4 + v * 0.6);
       c.beginPath(); c.moveTo(Math.cos(a) * rc * 1.12, Math.sin(a) * rc * 1.12); c.lineTo(Math.cos(a) * (rc * 1.2 + v * len), Math.sin(a) * (rc * 1.2 + v * len)); c.stroke();
     }
     if (flow >= 0) {
@@ -549,11 +553,11 @@ export class GdRenderer {
       const rm = rc * 1.2 + len + 7;
       const hot = flow >= 0.66;
       c.lineWidth = 3.5;
-      c.strokeStyle = 'rgba(255,255,255,0.13)';
+      c.strokeStyle = quiet ? 'rgba(150,158,204,0.1)' : 'rgba(255,255,255,0.13)';
       c.beginPath(); c.arc(0, 0, rm, 0, TWO_PI); c.stroke();
       if (flow > 0.005) {
-        c.strokeStyle = hot ? rgba(GOLD) : rgba(mix(pal.acc, WHITE, 0.4), 0.9);
-        if (hot) { c.shadowColor = rgba(GOLD, 0.9); c.shadowBlur = 10; }
+        c.strokeStyle = quiet ? rgba(WOKEN, hot ? 0.75 : 0.45) : hot ? rgba(GOLD) : rgba(mix(pal.acc, WHITE, 0.4), 0.9);
+        if (hot && !quiet) { c.shadowColor = rgba(GOLD, 0.9); c.shadowBlur = 10; }
         c.beginPath(); c.arc(0, 0, rm, -Math.PI / 2, -Math.PI / 2 + flow * TWO_PI); c.stroke();
         c.shadowBlur = 0;
       }
@@ -850,13 +854,14 @@ export class GdRenderer {
         // ceiling: the ring above, closed until its opening. Hazard colours: touching it ends the run.
         arc(pl.cs, pl.ce);
         c.lineCap = 'butt';
-        c.strokeStyle = HALO;
-        c.lineWidth = 10;
-        c.stroke();
-        c.strokeStyle = rgba(DANGER);
-        c.lineWidth = 5;
-        c.stroke();
-        if (this.look !== 2) { c.strokeStyle = '#ffffff'; c.lineWidth = 2; c.stroke(); } // (the second look keeps white and gold off everything but the tap)
+        if (this.look === 2) {
+          // the ring above, closed: a thin line in the quiet family. Nothing red stands beside the tap that is coming.
+          c.strokeStyle = rgba(STONE, 0.55); c.lineWidth = 2.2; c.stroke();
+        } else {
+          c.strokeStyle = HALO; c.lineWidth = 10; c.stroke();
+          c.strokeStyle = rgba(DANGER); c.lineWidth = 5; c.stroke();
+          c.strokeStyle = '#ffffff'; c.lineWidth = 2; c.stroke();
+        }
       }
       // gravity flip: the ring above takes you on its underside
       if (!Number.isNaN(pl.flipAt)) {
@@ -912,8 +917,8 @@ export class GdRenderer {
           if (pl.form === 'meteor') {
             c.lineCap = 'round';
             c.beginPath(); c.moveTo(Math.cos(e) * (r - rb * 2.8), Math.sin(e) * (r - rb * 2.8)); c.lineTo(Math.cos(e) * (r + rb * 2.8), Math.sin(e) * (r + rb * 2.8));
-            c.strokeStyle = rgba(INK_RIM); c.lineWidth = rb * 1.25; c.stroke();
-            c.strokeStyle = rgba(INK); c.lineWidth = rb * 0.85; c.stroke();
+            if (this.look === 2) { c.strokeStyle = HALO; c.lineWidth = rb * 1.5; c.stroke(); c.strokeStyle = rgba(WOKEN, 0.92); c.lineWidth = rb * 1.05; c.stroke(); c.strokeStyle = 'rgba(20,26,62,0.96)'; c.lineWidth = rb * 0.62; c.stroke(); } // (soft blue: a wall is scenery until its node is the next tap)
+            else { c.strokeStyle = rgba(INK_RIM); c.lineWidth = rb * 1.25; c.stroke(); c.strokeStyle = rgba(INK); c.lineWidth = rb * 0.85; c.stroke(); }
           } else {
             const bx = Math.cos(e) * (r + pl.side * rb * 1.5);
             const by = Math.sin(e) * (r + pl.side * rb * 1.5);
@@ -990,7 +995,7 @@ export class GdRenderer {
           }
           c.globalAlpha = alpha;
         }
-        if (!pl.auto) {
+        if (!pl.auto && this.look !== 2) {
           // and the edge: ride past it and the run ends
           const e = ang(fe);
           c.fillStyle = rgba(DANGER);
@@ -1199,7 +1204,7 @@ export class GdRenderer {
         const d = ln.beat - beat;
         if (d > this.ahead || d < -0.4) continue;
         const al = clamp((this.ahead - d) / 0.6, 0, 1) * clamp(1 + d / 0.4, 0, 1);
-        const col = FORM_COL[ln.form];
+        const col = this.look === 2 ? WOKEN : FORM_COL[ln.form];
         const H = rb * 4.2;
         const W = rb * 1.7;
         c.save();
@@ -1211,11 +1216,11 @@ export class GdRenderer {
         c.strokeStyle = HALO; c.lineWidth = 8; c.stroke();
         c.fillStyle = rgba(col, 0.22); c.fill();
         c.strokeStyle = rgba(col); c.lineWidth = 3; c.stroke();
-        c.strokeStyle = 'rgba(255,255,255,0.8)'; c.lineWidth = 1.5;
+        c.strokeStyle = this.look === 2 ? rgba(WOKEN, 0.6) : 'rgba(255,255,255,0.8)'; c.lineWidth = 1.5;
         c.beginPath(); c.moveTo(-W * 0.18, -H * 0.55); c.quadraticCurveTo(-W * 0.42, -H * 0.1, -W * 0.2, H * 0.3); c.stroke();
         c.restore();
         const la = ang(ln.beat);
-        this.tag(FORM_NAME[ln.form], bx0 + Math.cos(la) * (rr + rb * 6.4), by0 + Math.sin(la) * (rr + rb * 6.4), clamp(rb * 1.5, 10, 15), col, al);
+        if (this.look !== 2 || ln.intro) this.tag(FORM_NAME[ln.form], bx0 + Math.cos(la) * (rr + rb * 6.4), by0 + Math.sin(la) * (rr + rb * 6.4), clamp(rb * 1.5, 13, 16), col, al); // (a form is named once, where it is given; after that its shape speaks)
       }
       // mirror and upside-down gates: a cyan line across the path, with an arrow each way along the orbit (mirror) or
       // toward and away from the core (upside-down), and its name. In its last two beats the sign beats with the music.
@@ -1579,6 +1584,7 @@ export class GdRenderer {
           if (press && !calm) this.punch = Math.max(this.punch, 0.3);
         }
         if (ev.accent) {
+          if (afterDrop) this.coreFlare = Math.max(this.coreFlare, 0.7);
           // a big hit: the camera bumps, a wide shockwave, a flicker of colour
           this.wave(this.ball.r || r0, WHITE, r0 * 4, 6, 0.7, 0.6);
           this.burst(this.ball.x, this.ball.y, 22, WHITE, r0 * 1.6);
@@ -1597,6 +1603,7 @@ export class GdRenderer {
         this.dropFull = !!ev.full;
         this.dropPower = pw;
         this.dropAge = 0;
+        this.coreFlare = 1;
         this.punch = 0.3 + 0.7 * pw;
         this.ringFlash = 1;
         if (pw >= 0.3) {
@@ -1621,6 +1628,7 @@ export class GdRenderer {
         this.flash = 1;
         this.ringFlash = 1;
         this.burstK = 1;
+        this.coreFlare = 1;
         this.zoomKick = calm ? 0 : 0.7;
         this.punch = 1;
         for (let k = 0; k < 4; k++) this.wave(r0 * (0.3 + k * 0.45), k % 2 ? WHITE : pal.acc, r0 * (4 + k * 1.6), 9 - k, 0.8, 0.8 + k * 0.15);
@@ -1640,7 +1648,7 @@ export class GdRenderer {
     if (this.ripples.length > 8) this.ripples.splice(0, this.ripples.length - 8);
 
     // the music drives the drop too: every kick throws a burst off the core and bumps the camera, every snare flickers the colour
-    if (kick > 0.55 && this.kickWas <= 0.55 && drive > 0.2 && run.state === 'playing') {
+    if (kick > 0.55 && this.kickWas <= 0.55 && drive > 0.2 && run.state === 'playing' && this.look !== 2) {
       if (!calm) {
         const n = Math.round(6 + 12 * drive);
         for (let i = 0; i < n && this.particles.length < 420; i++) {
@@ -1746,6 +1754,7 @@ export class GdRenderer {
     this.flash = Math.max(0, this.flash - dt / 0.18);
     this.flipK = Math.max(0, this.flipK - dt / 0.11);
     this.burstK = Math.max(0, this.burstK - dt / 0.16);
+    this.coreFlare = Math.max(0, this.coreFlare - dt / 0.55);
     this.glitch = Math.max(0, this.glitch - dt);
     this.strobe = Math.max(0, this.strobe - dt / 0.12);
     this.ringFlash = Math.max(0, this.ringFlash - dt / 0.3);
@@ -1792,7 +1801,8 @@ export class GdRenderer {
     const chargeShown = afterDrop ? this.chargeV * clamp(1 - this.dropAge / 0.35, 0, 1) : course.charges.length && beat > course.charges[0][0] - 4 ? Math.max(this.chargeV, 0.006) : 0;
     this.core(pal, m * 0.045, m * 0.04 * (0.4 + 1.1 * inten) * (1 + wound * 0.7 + drive * 0.5), kick * (0.3 + 0.7 * inten), snare * inten, dt, this.flowV, chargeShown, this.plain ? 0 : drive, span, PLANETS[level.file.side?.of ?? level.id]?.rgb, !!level.file.side);
     if (this.look === 2) { // (the second look: the core is scenery, and steps back; nothing bright sits in the middle of the course)
-      const veil = c.createRadialGradient(0, 0, 0, 0, 0, m * 0.2); veil.addColorStop(0, 'rgba(12,10,28,0.62)'); veil.addColorStop(0.7, 'rgba(12,10,28,0.5)'); veil.addColorStop(1, 'rgba(12,10,28,0)');
+      const va = 0.8 * (1 - 0.85 * this.coreFlare);
+      const veil = c.createRadialGradient(0, 0, 0, 0, 0, m * 0.2); veil.addColorStop(0, `rgba(12,10,28,${va})`); veil.addColorStop(0.62, `rgba(12,10,28,${va * 0.9})`); veil.addColorStop(1, 'rgba(12,10,28,0)');
       c.fillStyle = veil; c.beginPath(); c.arc(0, 0, m * 0.2, 0, TWO_PI); c.fill();
     }
 

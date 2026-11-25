@@ -1,0 +1,15 @@
+{
+  "file": "audio/sting2.mp3",
+  "frames": 396900,
+  "firstSig": 34,
+  "bpm": 60,
+  "offset": 0.0,
+  "length": 9.0,
+  "dropTime": 4.0,
+  "source": [
+    [
+      0.0,
+      9.0
+    ]
+  ]
+}

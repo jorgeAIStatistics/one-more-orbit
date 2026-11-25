@@ -116,7 +116,7 @@ export interface Layers { survival: number[]; flow: number[] }
 /** Things a level can ask of the player; the first time each appears it gets a hint. */
 export type Feature = 'smash' | 'charge' | 'flip' | 'weave' | 'spin' | 'sling' | 'reverse' | 'faster' | 'slower' | 'twin' | 'rail' | 'line' | 'tether' | 'meteor' | 'sat' | 'pulsar' | 'comet' | 'spring' | 'tide' | 'chime' | 'slip' | 'grav' | 'combo' | 'mirror' | 'invert' | 'dual';
 /** How one bar plays. */
-export interface BarCfg { token: string; mode: 'up' | 'down' | 'weave'; spin: boolean; twin: boolean; dual: boolean; echo: Form; sling: boolean; spring: boolean; tide: boolean; turn: boolean; mirror: boolean; invert: boolean; long: boolean; tether: boolean; chime: boolean; slip: boolean; grav: boolean; combo: string; sparse: boolean; strong: boolean; beats: boolean; every: boolean; speed: number; form: Form }
+export interface BarCfg { token: string; mode: 'up' | 'down' | 'weave'; spin: boolean; twin: boolean; dual: boolean; echo: Form; sling: boolean; spring: boolean; tide: boolean; turn: boolean; mirror: boolean; invert: boolean; long: boolean; tether: boolean; chime: boolean; slip: boolean; grav: boolean; combo: string; sparse: boolean; strong: boolean; beats: boolean; every: boolean; hold: boolean; sync: boolean; speed: number; form: Form }
 
 export interface Course {
   spb: number;
@@ -251,6 +251,9 @@ export function autoLayers(beats: number[], accents: number[] = []): Layers {
  * strong: only the bar's three strongest presses stay (its downbeat, then the hardest hits); the rest become gold.
  * beats: a press on every beat of the bar that the music clearly hits (a kick or a snare), charted or not.
  * every: the same, and also on the charted eighth notes between them that are hit as hard (a climax: "a wall on every beat").
+ * hold: the bar's last press is kept down: a ribbon runs on from it along the path, to three quarters of a beat before
+ * the next mark (the charge before a drop; a held note over a pad). It can never end the run.
+ * sync: in a twin orbit, every press is taken by both sparks at once (the brothers in step).
  */
 export function barPlan(level: Level): BarCfg[] {
   const out: BarCfg[] = [];
@@ -271,7 +274,7 @@ export function barPlan(level: Level): BarCfg[] {
       const twin = w.includes('twin') || dual;
       const combo = (w.find((s) => s.startsWith('c=')) ?? '').slice(2);
       // a planet hop only ever starts a phrase or its second half (every other bar), and never in a twin orbit
-      out.push({ token, mode: w.includes('weave') ? 'weave' : w.includes('down') ? 'down' : 'up', spin: w.includes('spin'), twin, dual, echo, sling: w.includes('sling') && !twin && k % 2 === 0, spring: w.includes('spring') && !twin && k % 2 === 0, tide: w.includes('tide') && !twin, turn: w.includes('turn'), mirror: w.includes('mirror'), invert: w.includes('invert'), long: w.includes('long'), tether: w.includes('tether'), chime: w.includes('chime'), slip: w.includes('slip'), grav: w.includes('grav'), combo, sparse: w.includes('sparse'), strong: w.includes('strong'), beats: w.includes('beats') || w.includes('every'), every: w.includes('every'), speed, form });
+      out.push({ token, mode: w.includes('weave') ? 'weave' : w.includes('down') ? 'down' : 'up', spin: w.includes('spin'), twin, dual, echo, sling: w.includes('sling') && !twin && k % 2 === 0, spring: w.includes('spring') && !twin && k % 2 === 0, tide: w.includes('tide') && !twin, turn: w.includes('turn'), mirror: w.includes('mirror'), invert: w.includes('invert'), long: w.includes('long'), tether: w.includes('tether'), chime: w.includes('chime'), slip: w.includes('slip'), grav: w.includes('grav'), combo, sparse: w.includes('sparse'), strong: w.includes('strong'), beats: w.includes('beats') || w.includes('every'), every: w.includes('every'), hold: w.includes('hold'), sync: w.includes('sync'), speed, form });
     }
   }
   return out;
@@ -519,7 +522,7 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
     if (cfg.twin) {
       // call and response: beats 1 and 3 of the bar on one ball, 2 and 4 on the other, off-beats with the press before; big hits on both
       const whole = Math.abs(beat - Math.round(beat)) < 0.01;
-      twin = isSmash || accent || (cfg.long && !!level.file.holds) ? 'both' : whole ? (Math.round(beat) % 2 === 0 ? 'a' : 'b') : lastTwin;
+      twin = isSmash || accent || cfg.sync || (cfg.long && !!level.file.holds) ? 'both' : whole ? (Math.round(beat) % 2 === 0 ? 'a' : 'b') : lastTwin;
       if (twin !== 'both') lastTwin = twin;
       first(beat - 0.01, cfg.dual ? 'dual' : 'twin');
     }
@@ -548,7 +551,7 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
   const holds: Hold[] = [];
   const flowStart = new Map<number, number>(); // beat of a line's first note -> hold index
   let free = flowBeats;
-  if (level.file.holds) {
+  if (level.file.holds || bars.some((b) => b.hold)) {
     const half = (b: number) => Math.round(b * 2) / 2;
     const okAt = (b: number) => b >= Math.max(HOLDS_FROM, start + COUNT_IN) - 1e-6 && !inCharge(b) && !barAt(b).twin && barAt(b).form !== 'comet' && !introBars.has(barOf(b));
     // rails also run in a twin orbit (both balls ride them), and a planet hop is a rail from the level's first bars on
@@ -567,6 +570,17 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
     };
     presses.forEach((p, i) => {
       const next = presses[i + 1];
+      // a held note (a bar marked `hold`): the bar's last press is kept down, and the ribbon runs on from its mark along
+      // the ball's own path (its hop, then the ring it lands on) until there is just time to let go and tap again
+      if (barAt(p.beat).hold && !p.auto && !p.smash && !p.sling && next && barOf(next.beat) !== barOf(p.beat) && !inCharge(p.beat)) {
+        const b = Math.min(half(next.beat - LINE_CLEAR - 0.249), p.beat + 3.5);
+        if (b - p.beat >= HOLD_MIN - 1e-6) {
+          const after = p.kind === 'flip' ? -p.side : p.side;
+          mk(p.beat, b, true, (beat) => (beat < p.land ? { rho: flightRho(p, beat), side: p.side, planet: p.planetTo } : { rho: p.to, side: after, planet: p.planetTo }));
+          return;
+        }
+      }
+      if (!level.file.holds) return;
       // a rail: the hop is long enough to hold through. It ends on the landing, or half a beat before it when the
       // next white mark is right there, so there is always time to let go and tap again.
       if (!p.auto && railAt(p) && p.land - p.beat >= RAIL_FLIGHT - 1e-6) {

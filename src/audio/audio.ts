@@ -185,14 +185,15 @@ export class AudioEngine {
 
   /**
    * Plays a piece of a decoded track on the music's channel: from `from` seconds in, at audio-clock time `when`.
-   * loop: seconds; the piece goes round on itself. dur: it stops by itself after that long. Returns its volume and its stop.
+   * loop: seconds; the piece goes round on itself (loopAt: the stretch that goes round starts that many seconds after
+   * `from`: what comes before it is played once). dur: it stops by itself after that long. Returns its volume and its stop.
    */
-  playPart(track: LoadedTrack, meta: AudioMeta, when: number, from: number, o: { gain?: number; loop?: number; dur?: number } = {}): { gain: AudioParam; stop: (fade?: number, at?: number) => void } {
+  playPart(track: LoadedTrack, meta: AudioMeta, when: number, from: number, o: { gain?: number; loop?: number; loopAt?: number; dur?: number } = {}): { gain: AudioParam; stop: (fade?: number, at?: number) => void } {
     const c = this.ctx!;
     const src = c.createBufferSource();
     src.buffer = track.buffer;
     const a = Math.max(0, meta.offset + track.shift + from);
-    if (o.loop) { src.loop = true; src.loopStart = a; src.loopEnd = a + o.loop; }
+    if (o.loop) { src.loop = true; src.loopStart = a + (o.loopAt ?? 0); src.loopEnd = src.loopStart + o.loop; }
     const g = c.createGain();
     g.gain.setValueAtTime(o.gain ?? 1, Math.max(when, c.currentTime));
     src.connect(g);

@@ -1,0 +1,15 @@
+{
+  "file": "audio/fire0.mp3",
+  "frames": 1190700,
+  "firstSig": 238,
+  "bpm": 80,
+  "offset": 0.0,
+  "length": 27.0,
+  "dropTime": 24.0,
+  "source": [
+    [
+      0.0,
+      27.0
+    ]
+  ]
+}

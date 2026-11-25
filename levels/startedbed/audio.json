@@ -1,0 +1,15 @@
+{
+  "file": "audio/startedbed.mp3",
+  "frames": 1146600,
+  "firstSig": 15039,
+  "bpm": 150,
+  "offset": 0.0,
+  "length": 26.0,
+  "dropTime": 12.8,
+  "source": [
+    [
+      0.0,
+      26.0
+    ]
+  ]
+}

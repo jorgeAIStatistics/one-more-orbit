@@ -1,0 +1,15 @@
+{
+  "file": "audio/started.mp3",
+  "frames": 3951360,
+  "firstSig": 0,
+  "bpm": 150,
+  "offset": 0.0,
+  "length": 89.6,
+  "dropTime": 38.4,
+  "source": [
+    [
+      25.623,
+      115.224
+    ]
+  ]
+}

@@ -1,0 +1,99 @@
+{
+ "_doc": "Notes recorded by hand in Record Mode. Per bar: t = survival presses, f = flow notes, as ticks inside the bar (12 per beat). The tools never overwrite this file.",
+ "bars": {
+  "0": {
+   "by": "hand",
+   "t": []
+  },
+  "1": {
+   "by": "hand",
+   "t": []
+  },
+  "2": {
+   "by": "hand",
+   "t": []
+  },
+  "3": {
+   "by": "hand",
+   "t": [
+    0
+   ]
+  },
+  "4": {
+   "by": "hand",
+   "t": [
+    0
+   ]
+  },
+  "5": {
+   "by": "hand",
+   "t": [
+    0,
+    24
+   ]
+  },
+  "6": {
+   "by": "hand",
+   "t": [
+    0,
+    24
+   ]
+  },
+  "7": {
+   "by": "hand",
+   "t": [
+    0,
+    24
+   ]
+  },
+  "8": {
+   "by": "hand",
+   "t": [
+    0,
+    24
+   ]
+  },
+  "9": {
+   "by": "hand",
+   "t": [
+    0
+   ]
+  },
+  "10": {
+   "by": "hand",
+   "t": [
+    0
+   ]
+  },
+  "11": {
+   "by": "hand",
+   "t": [
+    0
+   ]
+  },
+  "12": {
+   "by": "hand",
+   "t": [
+    0
+   ]
+  },
+  "13": {
+   "by": "hand",
+   "t": []
+  },
+  "14": {
+   "by": "hand",
+   "t": [
+    24
+   ]
+  },
+  "15": {
+   "by": "hand",
+   "t": []
+  },
+  "16": {
+   "by": "hand",
+   "t": []
+  }
+ }
+}

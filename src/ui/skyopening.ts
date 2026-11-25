@@ -9,6 +9,7 @@
 //
 // Time here is the audio clock's (the scene and its sound are one thing), so if the app is put away both stop together.
 import openingAudio from '../../levels/opening/audio.json';
+import bedAudio from '../../levels/startedbed/audio.json';
 import { audio, type LoadedTrack } from '../audio/audio';
 import { CANON } from '../art/canonpaint.js';
 import { DUSK, K } from '../art/painter.js';
@@ -17,15 +18,20 @@ import { save } from '../save';
 import { Actor } from './actor';
 
 const META = openingAudio as AudioMeta;
+/** the first stage's own song, from its first second to where its drums come in: what the scene is played over */
+const SONG = bedAudio as AudioMeta;
 const T = DUSK.tools, P = CANON.parts;
 const SERIF = '"Cormorant Garamond", "Hoefler Text", Baskerville, Palatino, Georgia, serif';
 const H = 1688;                 // the scene is painted on a canvas this tall (the approved stills' size); its width follows the screen
-const SPB = 60 / 128;           // the pulse is at the song's own tempo
+const SPB = 0.8;                // the pulse: two to a bar of the first stage's song (150 BPM, felt at half that)
 // where each piece of sound is in the file (tools/opening.py), and when the scene uses it
-const BED = 0, PULSE = 24, NOTE = 30, CHORD = 36, LOOP = 8 * SPB;
+const BED = 0, PULSE = 24, NOTE = 30, CHORD = 36, LOOP = 4 * SPB;
+// the song's quiet opening is sixteen bars (25.6 s): it starts so that its drums would come in as "tap" appears, and
+// its last eight bars go round until the tap comes. The pulse and the note fall on the song's own beats.
+const SONG_LEN = 25.6, SONG_ROUND = 12.8;
 /** how far up the path the first Star-Node is, and the ones that light after it */
 const NODE = 0.34, CHAIN = [0.47, 0.58, 0.67, 0.75];
-const T_PULSE = 20, T_NOTE = 20 + 2 * LOOP, T_READY = 28.2;
+const T_READY = 28.2, T_SONG = T_READY - SONG_LEN, T_PULSE = T_SONG + 22 * SPB, T_NOTE = T_PULSE + 2 * LOOP;
 const THUMPS = [10.0, 10.32, 12.0, 12.32];
 const GOLD: [number, number, number] = [255, 214, 130];
 const smooth = (x: number) => { const t = x < 0 ? 0 : x > 1 ? 1 : x; return t * t * (3 - 2 * t); };
@@ -52,6 +58,7 @@ export class SkyOpening {
   private key = '';
   private W = 780; private k = 1; private q = 1;
   private track: LoadedTrack | null = null;
+  private song: LoadedTrack | null = null;
   private t0 = 0;            // audio-clock time of the scene's first moment
   private perf0 = 0;         // the page's clock for the same, when there is no sound to keep time by
   private own = false;       // (and whether that is the clock in use)
@@ -77,7 +84,7 @@ export class SkyOpening {
     const token = ++this.token;
     Object.assign(this, { state: 'paint', again, armed: false, perf0: 0, own: false, touched: false, waitFrom: 0, touchAt: 0, shot: '', trail: [], motes: [], bounced: 0, tapAt: -1, last: 0 });
     this.orbin = new Actor('orbin');
-    if (audio.prime()) void audio.loadTrack(META).then((t) => { if (token === this.token) this.track = t; }, () => undefined);
+    if (audio.prime()) { void audio.loadTrack(META).then((t) => { if (token === this.token) this.track = t; }, () => undefined); void audio.loadTrack(SONG).then((t) => { if (token === this.token) this.song = t; }, () => undefined); }
     this.paint(token);
   }
   /** Leaves at once. */
@@ -168,6 +175,10 @@ export class SkyOpening {
     const note = audio.playPart(tr, META, t0 + T_PULSE, NOTE, { loop: LOOP, gain: 0 });
     note.gain.setValueAtTime(0, t0 + T_NOTE - 0.06); note.gain.linearRampToValueAtTime(1, t0 + T_NOTE - 0.01);
     this.parts = [audio.playPart(tr, META, t0, BED, { dur: 22 }), pulse, note];
+    if (this.song) { // the song itself, from nothing: it is what the tap will wake
+      const bed = audio.playPart(this.song, SONG, t0 + T_SONG, 0, { loopAt: SONG_ROUND, loop: SONG_LEN - SONG_ROUND, gain: 0.9 });
+      this.parts.push(bed);
+    }
   }
   /** For tests and stills: be at second `t` of the scene (its sound does not follow). */
   seek(t: number): void {

@@ -1,0 +1,11 @@
+<!doctype html><meta charset="utf-8"><title>the Landing, as the game paints it</title>
+<style>body{margin:0;background:#07060f;display:flex;flex-wrap:wrap;gap:12px;padding:12px}canvas{display:block}</style>
+<script type="module">
+import { LANDING } from '/src/art/landingpaint.js';
+await document.fonts.ready;
+for (const [w, h, stars] of [[390, 844, 1], [390, 844, 3], [390, 844, 5], [1280, 800, 1], [1280, 800, 3]]) {
+  const cv = document.createElement('canvas'); cv.width = w * 2; cv.height = h * 2; cv.style.width = w + 'px'; cv.dataset.name = `${w}x${h}-${stars}`;
+  const c = cv.getContext('2d'); c.scale(2, 2); LANDING.paint(c, w, h, stars, 3.1); document.body.append(cv);
+}
+document.title = 'ready';
+</script>

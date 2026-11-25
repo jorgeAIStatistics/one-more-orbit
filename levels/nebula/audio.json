@@ -1,0 +1,15 @@
+{
+  "file": "audio/nebula.mp3",
+  "frames": 2288790,
+  "firstSig": 18,
+  "bpm": 80,
+  "offset": 0.0,
+  "length": 51.9,
+  "dropTime": 48.0,
+  "source": [
+    [
+      0.0,
+      51.9
+    ]
+  ]
+}

@@ -7,11 +7,23 @@ import skyAudio from '../../levels/skyhigh/audio.json';
 import skyChart from '../../levels/skyhigh/chart.json';
 import skyPresses from '../../levels/skyhigh/presses.json';
 import skyAudit from '../../levels/skyhigh/audit.json';
-import heroesLevel from '../../levels/heroes/level.json';
-import heroesAudio from '../../levels/heroes/audio.json';
-import heroesChart from '../../levels/heroes/chart.json';
-import heroesPresses from '../../levels/heroes/presses.json';
-import heroesAudit from '../../levels/heroes/audit.json';
+// (Emberwick's song is Volcano now; the level keeps the world's id, "heroes", so saves, scenes and stars still find it)
+import heroesLevel from '../../levels/volcano/level.json';
+import heroesAudio from '../../levels/volcano/audio.json';
+import heroesChart from '../../levels/volcano/chart.json';
+import heroesPresses from '../../levels/volcano/presses.json';
+import startedLevel from '../../levels/started/level.json';
+import startedAudio from '../../levels/started/audio.json';
+import startedChart from '../../levels/started/chart.json';
+import startedPresses from '../../levels/started/presses.json';
+import nebulaLevel from '../../levels/nebula/level.json';
+import nebulaAudio from '../../levels/nebula/audio.json';
+import nebulaChart from '../../levels/nebula/chart.json';
+import nebulaPresses from '../../levels/nebula/presses.json';
+import mboxLevel from '../../levels/mbox1/level.json';
+import mboxAudio from '../../levels/mbox1/audio.json';
+import mboxChart from '../../levels/mbox1/chart.json';
+import mboxPresses from '../../levels/mbox1/presses.json';
 import blankLevel from '../../levels/blank/level.json';
 import blankAudio from '../../levels/blank/audio.json';
 import blankChart from '../../levels/blank/chart.json';
@@ -27,9 +39,6 @@ import royAudio from '../../levels/royalty/audio.json';
 import royChart from '../../levels/royalty/chart.json';
 import royPresses from '../../levels/royalty/presses.json';
 import royAudit from '../../levels/royalty/audit.json';
-import mem1Level from '../../levels/memory1/level.json';
-import mem1Audio from '../../levels/memory1/audio.json';
-import mem1Chart from '../../levels/memory1/chart.json';
 import heroesB from '../../levels/heroes/bside.json';
 import skyB from '../../levels/skyhigh/bside.json';
 import blankB from '../../levels/blank/bside.json';
@@ -56,7 +65,7 @@ export const creditLine = (t: TrackCredit) => `${t.title} – ${t.artist} [${t.r
 const pack = (level: unknown, audio: unknown, chart: unknown, presses?: unknown, audit?: unknown): LevelPack => ({ level: level as LevelFile, audio: audio as AudioMeta, chart: chart as ChartFile, presses: presses as LevelPack['presses'], audit: audit as LevelPack['audit'] });
 
 export const PACKS: LevelPack[] = [
-  pack(heroesLevel, heroesAudio, heroesChart, heroesPresses, heroesAudit),
+  pack(heroesLevel, heroesAudio, heroesChart, heroesPresses),
   pack(skyLevel, skyAudio, skyChart, skyPresses, skyAudit),
   pack(blankLevel, blankAudio, blankChart, blankPresses, blankAudit),
   pack(invLevel, invAudio, invChart, invPresses, invAudit)
@@ -91,4 +100,14 @@ export const FINAL: LevelPack = pack(royLevel, royAudio, royChart, royPresses, r
  * Memories of Helion: one after each world's first clear, played as a twin orbit in the Harmonic Nebula. They cannot
  * be failed and keep no record. Keyed by the world whose star, reignited, gives the memory back. (One is built so far.)
  */
-export const MEMORIES: Record<string, LevelPack> = { heroes: pack(mem1Level, mem1Audio, mem1Chart) };
+export const MEMORIES: Record<string, LevelPack> = { heroes: pack(mboxLevel, mboxAudio, mboxChart, mboxPresses) };
+
+/**
+ * The first stage: the Drifting Edge, the planetoid Orbin fell on. It is not on the map: the opening's first tap starts
+ * it, and it ends with the planetoid's own star, the first of all. (It can be flown again from the still pool.)
+ */
+export const FIRST: LevelPack = pack(startedLevel, startedAudio, startedChart, startedPresses);
+export const FIRST_ID = FIRST.level.id;
+
+/** The cold open: the Harmonic Nebula before the Stillness. A twin orbit that cannot be failed, on Helion's theme. */
+export const COLD: LevelPack = pack(nebulaLevel, nebulaAudio, nebulaChart, nebulaPresses);

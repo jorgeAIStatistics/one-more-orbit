@@ -1,0 +1,18 @@
+{
+  "_doc": ["The cold open: the Harmonic Nebula, on Helion's theme (written for the game). The brothers on one orbit, in step: every tap is taken by both. It cannot be failed (the game starts it as a memory). Bars: 0-2 the nebula alone; 3-8 the dance, ten taps; 9-12 the Stillness, a tap a bar while the tune comes apart; 13 the dark; 14 one tap, the reach; 16 the shockwave.", "then re-run: python tools/chart.py nebula"],
+  "id": "nebula",
+  "title": "The Harmonic Nebula",
+  "artist": "written for the game",
+  "release": "original",
+  "hitsoundNote": 68,
+  "scale": [8, 10, 0, 1, 3, 5, 7],
+  "difficulty": "Before",
+  "adds": "The twin orbit: both brothers, one tap",
+  "rules": {"tol": 0.25, "ahead": 4, "intro": false},
+  "segments": [
+    {"id": "alone", "core": {"bars": ["orb+twin+sync"]}, "bars": 3, "label": "THE NEBULA", "lap": 8, "follow": "snare", "lead": "snare", "look": {"palette": "gold", "bg": "stars", "eq": "wave"}, "plan": ["-", "-", "-"]},
+    {"id": "dance", "core": {"bars": ["orb+twin+sync"]}, "bars": 6, "label": "THE NEBULA", "lap": 8, "follow": "snare", "lead": "snare", "look": {"palette": "gold", "bg": "stars", "eq": "wave"}, "plan": ["L=@x...............", "L=@x...............", "L=@x.......x.......", "L=@x.......x.......", "L=@x.......x.......", "L=@x.......x......."]},
+    {"id": "still", "core": {"bars": ["orb+twin+sync"]}, "bars": 4, "label": "THE NEBULA", "lap": 8, "follow": "snare", "lead": "snare", "look": {"palette": "gold", "bg": "stars", "eq": "wave"}, "plan": ["L=@x...............", "L=@x...............", "L=@x...............", "L=@x..............."]},
+    {"id": "reach", "core": {"bars": ["orb+twin+sync"]}, "bars": 4, "label": "THE NEBULA", "lap": 8, "follow": "snare", "lead": "snare", "look": {"palette": "gold", "bg": "stars", "eq": "wave"}, "plan": ["-", "L=@........x.......", "-", "-"]}
+  ]
+}

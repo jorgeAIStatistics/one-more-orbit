@@ -1,0 +1,15 @@
+{
+  "file": "audio/volcano.mp3",
+  "frames": 3655890,
+  "firstSig": 0,
+  "bpm": 100,
+  "offset": 0.0,
+  "length": 82.9,
+  "dropTime": 40.8,
+  "source": [
+    [
+      77.429,
+      160.33
+    ]
+  ]
+}
