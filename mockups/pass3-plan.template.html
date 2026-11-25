@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ONE MORE ORBIT · difficulty, modes, companions, the vessel, the cold open</title>
+{{STYLE}}
+</head><body><main>
+<span class="tag">The next pass · step 1, again · waiting for your OK</span>
+<h1>Difficulty you can measure, one new mode per world, companions, the vessel, and a cold open that is a scene</h1>
+<p class="lede">Everything your brief asks to see before anything is rebuilt: the two current charts measured against your table, the World 1 mode plan on the songs, three companion designs, the vessel as two stills, and the cold open as five stills with its sound. Nothing on this page is in the game yet. The decisions I need are at the end.</p>
+
+<h2>1. The difficulty audit of the current charts</h2>
+<p>Measured on the courses the game builds (<code>npx vite-node tools/variety.ts</code>), in taps per second. A section counts as a peak if it is a drop or a build; everything else is calm.</p>
+<h3>The Drifting Edge (Where We Started, 150 BPM): far over</h3>
+<div class="scroll"><table>
+<tr><th>Section</th><th>Kind</th><th>Taps/s</th><th>Busiest bar</th><th>Your limit</th><th></th></tr>
+<tr><td>Verse (bars 0–7)</td><td>calm</td><td>1.72</td><td>2.50</td><td>0.7</td><td>over ×2.5</td></tr>
+<tr><td>Quiet stretch (8–15)</td><td>calm</td><td>1.88</td><td>2.50</td><td>0.7</td><td>over ×2.7</td></tr>
+<tr><td>Build (16–22)</td><td>peak</td><td>2.77</td><td>3.13</td><td>1.5</td><td>over ×1.8</td></tr>
+<tr><td>Drop (24–31)</td><td>peak</td><td>2.81</td><td>3.13</td><td>1.5</td><td>over ×1.9</td></tr>
+<tr><td>Second drop (32–39)</td><td>peak</td><td>2.66</td><td>3.13</td><td>1.5</td><td>over ×1.8</td></tr>
+</table></div>
+<ul>
+<li><b>Not allowed on this stage, and used:</b> 6 direction turns (3 of them in a drop), 3 spin gates, the world turning over twice, weaving in 3 bars, and gravity in 17 bars. That last one I had not seen myself: in this engine every “down” bar sends him round the underside of the ring, which is a gravity flip. My “height changes” were gravity flips.</li>
+<li><b>Bars above the peak:</b> almost all of it; one run is 16 bars long (the limit is 2).</li>
+<li><b>Stacked demands:</b> 4 places where a turn lands on the same beat as a gravity flip.</li>
+<li>Openings ±160 ms: on target.</li>
+</ul>
+<h3>Emberwick (Volcano, 100 BPM swung): closer, but over in four ways</h3>
+<div class="scroll"><table>
+<tr><th>Section</th><th>Kind</th><th>Taps/s</th><th>Busiest bar</th><th>Your limit</th><th></th></tr>
+<tr><td>Verse (1–8)</td><td>calm</td><td>1.30</td><td>1.67</td><td>1.0</td><td>over</td></tr>
+<tr><td>Stabs (9–12)</td><td>peak</td><td>1.15</td><td>1.67</td><td>2.0</td><td>ok</td></tr>
+<tr><td>Roll (13–15)</td><td>peak</td><td>2.36</td><td>2.50</td><td>2.0</td><td>over</td></tr>
+<tr><td>Drop (17–24)</td><td>peak</td><td>1.93</td><td>2.50</td><td>2.0</td><td>ok on average</td></tr>
+<tr><td>Second drop (25–32)</td><td>peak</td><td>1.93</td><td>2.50</td><td>2.0</td><td>ok on average</td></tr>
+</table></div>
+<ul>
+<li><b>Bursts:</b> four runs of 3–4 bars above 2 taps/s (bars 13–15, 17–19, 21–23, 28–31). The limit is 2 bars, on the song's biggest moments only.</li>
+<li><b>Turns:</b> 6 (the limit is 2), and 4 of them inside a drop (the limit is none).</li>
+<li><b>Not allowed:</b> one spin gate (bar 7) and gravity in 3 bars.</li>
+<li><b>Stacked demands:</b> a turn on the same beat as a gravity flip (bar 5), and a turn on the same beat as the speed gate (bar 31).</li>
+<li>Openings ±140 ms: on target.</li>
+</ul>
+<p class="note">The audit is now a tool and a test: the rebuild will not be sent until both levels are inside the table, with no stacked demands and no identical run longer than 2 bars.</p>
+
+<h2>2. The World 1 mode plan</h2>
+<p>One new mode per world, entering where the song turns a corner, then explored, twisted, and at its best on the drop. The times are in each song, from the step-1 measurements.</p>
+<div class="scroll"><table>
+<tr><th>World</th><th>Song</th><th>New mode</th><th>Where it enters, and the sound it answers</th><th>Explored, twisted, peak</th></tr>
+<tr><td>The Drifting Edge</td><td>Where We Started</td><td>Jump; jump orbs; jump pads; one slow and one fast speed portal</td><td>Jump from the first tap (0:25.6, the drums). Jump orbs at the quiet stretch (0:38.4), on the lead's pickups, which already float between beats. The slow portal at the same corner: the energy really drops there. Jump pads in the build (0:51.2), on the roll's accents</td><td>The fast portal a bar before the drop (1:02.4), announced, stars streaking; the drop (1:04.0) at ≤ 1.5 taps/s with orbs and pads in the song's figure. The star rises where the song falls quiet (1:29.6)</td></tr>
+<tr><td>Emberwick</td><td>Volcano</td><td><b>I recommend keeping the Meteor</b> (tap to dash), made a true mode: the tap no longer hops, it drives him forward through the wall</td><td>The stabs (1:39.0): low staccato hits with no drums under them, the clearest thing in the song</td><td>The roll (1:48.6) develops it; the drop (1:58.2) is the hammer of the forge; the double hit (“da-dum”) in the drop's second half (2:17.4) is the twist</td></tr>
+<tr><td>Cirra</td><td>Flutter</td><td>Wave (hold up, release down); mini in the tight gusts</td><td>The snare build (2:36.1), under the fast hats: the only one of the nine with hats running on eighths and faster</td><td>Wave at its best on the drop (2:48.1, 32 bars); mini in its second half (about 3:12) where the figure tightens; the quiet close (3:36.1)</td></tr>
+<tr><td>Glassmere</td><td>Luna</td><td>Ball (each tap flips inner/outer ring) and teleport portals</td><td>Ball on the clap's call and response (1:30.0). Teleports in the eight near-empty bars (1:45.0 to 2:00.0): no pulse to tap to, so the lake throws him into his reflection instead</td><td>The drop (2:00.0): ball on the clap, teleports at the phrase ends</td></tr>
+<tr><td>Verdance</td><td>Willow Tree</td><td><b>Glide</b> (hold to rise, release to sink)</td><td>The three near-silent bars (2:08.0): the canopy breathes in, and he is lifted. Willow Tree is the one song of the nine built on held chords at half speed: glide answers held sound</td><td>The drop (2:14.4, 28 bars) on the half-time chords: a corridor through the branches that narrows in its second half</td></tr>
+<tr><td>The guardian</td><td>Throne</td><td>Everything, plus <b>snap</b> as the surprise, plus dual</td><td>Phase 1, the verse (2:04.7): the modes he knows. Phase 2, the heavy stabs every other bar (2:29.7): snap, each stab throwing him to the opposite surface as the guardian strikes</td><td>Phase 3, the drop (2:54.6): dual, two Orbins on one button, to the end</td></tr>
+</table></div>
+<p><b>Two changes from your suggested pairing, and why.</b> <i>Emberwick keeps the Meteor:</i> Volcano is staccato almost everywhere (a clap, off-beat stabs, a four-on-the-floor kick, the double hit); its only held sounds are the two risers (bars 8 and 16), so a hold-to-rise glide would have almost nothing to follow, and a dash answers a hammer. <i>Glide moves to Verdance:</i> Willow Tree is the one song built on long held chords, so the hold has its sound for 28 bars. Snap then goes to the guardian's second phase, where Throne's heavy stabs fall every other bar like blows. If your ear disagrees with Emberwick, glide can still go there: it would enter at the riser (1:55.8) and fly the drop as a corridor of heat drafts.</p>
+<p class="note">Rules for every level from here: one demand at a time (never a speed change, a mode change, a turn and a gravity change within the same 2 beats); a mode lasts at least a phrase and changes on a section change; when speed goes up, spacing goes up, the camera eases out, and there is always at least 1.5 s of course in view; turns are rare, announced a bar ahead and eased; the one gold signal stays.</p>
+
+<h2>3. Companions: three designs</h2>
+<p>Children of each reignited star. One of each kind lives by the fire at the Landing; in a level, a companion <i>is</i> the mechanic: it becomes the mode portal and gives Orbin its shape, or folds itself into a launch and throws him. Each is met in a short moment before its planet's level, so the new mode is a gift. None is star-shaped, none has eyes.</p>
+<div><img style="width:100%;height:auto;display:block" src="{{img:companions}}" alt="Three companion designs: the Kindlings, the Orrlets and the Bellseeds"></div>
+<ul>
+<li><b>A. The Kindlings</b>: a drop of the star's own fire with two pairs of moth wings made of light. Personality by flight, flicker and the way they circle the fire. Emberwick's gives him its heat (the Meteor's fire, or wings of heat if glide goes there); Verdance's would lift him (glide).</li>
+<li><b>B. The Orrlets</b>: a pebble of starlight with its own small moons. They act by opening their orbit: the ring he flies through is the mode portal, and spinning their moons up makes a launch ring. The most natural fit for a game about orbits; the plainest to look at.</li>
+<li><b>C. The Bellseeds</b>: a seed pod like a small hanging bell, one upright seam of light where it sings. Its note is the mode change, so each one adds a sound layer to the music; it opens like a flower to throw him.</li>
+</ul>
+<p><b>My recommendation: A, the Kindlings.</b> Moths come to a fire: they make sense living by the Landing's fire, they read clearly at a small size, and their wings can wrap Orbin for the half-second transformation without hiding the next tap.</p>
+
+<h2>4. The vessel: each star powers something you can see</h2>
+<div class="scroll"><img src="{{img:vessel}}" alt="The Landing with one star home and with five: sockets along the Sleeper's back, lit one by one"></div>
+<p>The Sleeper is the vessel, and the Landing is its deck. Along its back are six sockets, one for each of World 1's great stars (the planetoid's own, the four worlds, the guardian's). The flight home ends with the star flying into the next socket: a power-up sound, the socket taking the star, light running down the old channels in the stone into the hand that holds the fire, the fire answering, a Kindling settling by it, and a new path lighting on the map.</p>
+<ul>
+<li><b>First star</b> (left): one socket lit, one channel of light, the seam where its eye would be barely open.</li>
+<li><b>Five stars</b> (right): five lit, the channels joined into a constellation along its spine, the seam open, mist running off the edge of the hand, and the line of a keel showing under the moss: it is about to rise.</li>
+<li><b>Six</b>: it wakes and carries Orbin off the planetoid toward Helion's signal. That is the end of World 1 and the bridge to World 2.</li>
+</ul>
+
+<h2>5. The cold open, as a scene</h2>
+<p>No circular tapping. One interaction only. About 45 seconds before your storyboard.</p>
+<div class="scroll"><img src="{{img:cold}}" alt="Five stills of the cold open: calm, wrongness, the taking, the three lines, the crash"></div>
+<div class="scroll"><table>
+<tr><th></th><th>Time</th><th>You see</th><th>You hear</th></tr>
+<tr><td>1. Calm</td><td>0:00–0:10</td><td>The Harmonic Nebula in gold. Orbin and Helion playing their music of light: ribbons of notes passing between their hands</td><td>Helion's theme on the music box, played in two voices that answer each other; warm air; comets humming past. Nothing to do: just watch</td></tr>
+<tr><td>2. Wrongness</td><td>0:10–0:24</td><td>A closer shot. One ribbon kinks: the wrong note. Colour drains to ash from the edges; something dark reaches in from the corner. Orbin turns toward it; Helion has already seen it</td><td>One note bends flat. The theme slows and detunes, its voices thin to one. Under it, a low drone, then a heartbeat, slow</td></tr>
+<tr><td>3. The taking</td><td>0:24–0:38</td><td>The Stillness reaches Helion and draws him back into it, wrapped in its tendrils, still reaching. Orbin reaches for him. “Reach for him”: the one press-and-hold. The ring fills as you hold; their hands close to touching; then his slips, however long you hold</td><td>The heartbeat quickens; the drone swells; the music box plays its motif one last time and breaks on its last note. Letting go, or not, the same silence follows</td></tr>
+<tr><td>4. Black</td><td>0:38–0:46</td><td>The shockwave, white; then black, and three plain lines</td><td>Silence, after the shockwave's single low boom</td></tr>
+<tr><td>5. The crash</td><td>0:46–</td><td>Your storyboard, as it is now: Orbin falling onto the planetoid</td><td>Where We Started's quiet opening</td></tr>
+</table></div>
+<p>The three lines (a draft for you to change):</p>
+<ul>
+<li class="q"><i>Orbin and Helion were the twin sparks of the Harmonic Nebula.</i></li>
+<li class="q"><i>The Stillness took Helion, and the music with him.</i></li>
+<li class="q"><i>Wake the fallen stars. Bring your brother home.</i></li>
+</ul>
+<p class="note">The one-sentence test: I cannot run it on a person. Once it is built, the check is yours: show it to someone who has never seen the game, then ask them what happened. If the answer is not close to “a dark thing took his brother, and he has to wake the stars to get him back”, I change what failed.</p>
+
+<h2>6. The decisions I need</h2>
+<ol>
+<li><b>Emberwick's mode:</b> keep the Meteor as a true dash mode (my recommendation), or glide on its heat drafts.</li>
+<li><b>Glide to Verdance and snap to the guardian's second phase</b>, instead of snap on Verdance.</li>
+<li><b>Companions:</b> A, B or C (I recommend A, the Kindlings), or a change to one of them.</li>
+<li><b>The vessel:</b> the Sleeper with six sockets that carries Orbin on when World 1 is done, or another idea.</li>
+<li><b>The cold open's three lines:</b> as drafted, or your words.</li>
+<li><b>Darkness (the ambush):</b> still open from before: keep its vocals, or look for <i>Dead of Night</i> as an instrumental.</li>
+</ol>
+<p>On your OK I rebuild the cold open, the Drifting Edge and Emberwick to these rules, run the audit (every section inside the table, no stacked demands, no identical run over 2 bars), and wait for your playtest.</p>
+</main></body></html>

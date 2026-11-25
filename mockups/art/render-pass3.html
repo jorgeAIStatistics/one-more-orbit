@@ -1,0 +1,12 @@
+<!doctype html><meta charset="utf-8"><title>the next pass, step 1 again: stills</title>
+<style>body{margin:0;background:#07060f;display:flex;flex-wrap:wrap;gap:12px;padding:12px}canvas{display:block}</style>
+<script type="module">
+import { cold, vessel, companions } from './pass3-stills.js';
+await document.fonts.ready;
+const make = (name, w, h, draw) => { const cv = document.createElement('canvas'); cv.width = w * 2; cv.height = h * 2; cv.style.width = w + 'px'; cv.dataset.name = name; const c = cv.getContext('2d'); c.scale(2, 2); draw(c, w, h); document.body.append(cv); };
+for (const n of [1, 2, 3, 4]) make(`cold-${n}`, 390, 844, (c, w, h) => cold(c, w, h, n));
+make('vessel-1', 390, 844, (c, w, h) => vessel(c, w, h, 1));
+make('vessel-5', 390, 844, (c, w, h) => vessel(c, w, h, 5));
+make('companions', 1560, 900, (c, w, h) => companions(c, w, h));
+document.title = 'ready';
+</script>
