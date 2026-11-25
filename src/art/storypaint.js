@@ -2,6 +2,7 @@
 // story with exactly the scenes the approved stills were made from. STORIES.draw(ctx, w, h, scene, 'phone' | 'desktop', -1, u)
 // paints the picture alone; the game writes the words over it itself.
 import { K, DUSK } from './painter.js';
+import { CANON } from './canonpaint.js';
 // Afterglow, step 3: the story, as painted scenes with the words written into them. No card, no dots, no buttons:
 // the picture fills the screen, the words fade in a sentence at a time, and a tap anywhere goes on.
 // Five of the twelve scenes are painted here, for a phone and a desktop, plus three frames of how the words arrive.
@@ -157,7 +158,7 @@ const STORIES = (() => {
       for (let i = 0; i < 14; i++) K.brush(ctx, [[sx - 40 * ss + i * 6 * ss, sy - (20 - Math.abs(i - 7) * 2.4) * ss], [sx - 42 * ss + i * 6.4 * ss, sy]], 7 * ss, mix([20, 16, 40], [84, 66, 124], r() * 0.6), r, { passes: 3, alpha: 0.3 });
       ctx.strokeStyle = 'rgba(236,230,255,0.75)'; ctx.lineWidth = 1.4 * ss; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(sx, sy - 16 * ss, 9 * ss, 0.25 * Math.PI, 0.75 * Math.PI); ctx.stroke();
     }
-    if (L.eko) { K.glow(ctx, w * L.eko[0], Math.min(hy + 20 * u, h), 240 * u * L.eko[2], [255, 170, 100], 0.22, 'screen'); T.eko(ctx, w * L.eko[0], h * L.eko[1], L.eko[2] * u, r, { wisp: L.eko[2] > 0.18, lean: 0.25 }); }
+    if (L.eko) { K.glow(ctx, w * L.eko[0], Math.min(hy + 20 * u, h), 240 * u * L.eko[2], [255, 170, 100], 0.22, 'screen'); CANON.parts.spark(ctx, w * L.eko[0], h * L.eko[1], L.eko[2] * u * 1.5, { lean: -0.15, crest: 0.8, eyes: 'open', look: [0.8, -0.4] }); } // (Orbin: the game's story is the canon's now)
     T.finish(ctx, w, h, name.length * 31, 0.5);
     if (shown >= 0) words(ctx, w, h, S.text, L.B, u, shown);
   }

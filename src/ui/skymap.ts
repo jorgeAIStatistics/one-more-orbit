@@ -68,7 +68,6 @@ export class SkyMap {
   private bg: HTMLCanvasElement | null = null;
   private key = '';
   private sprites = new Map<string, HTMLCanvasElement>();
-  private eko: HTMLCanvasElement | null = null;
   private w = 0; private h = 0; private u = 1; private dpr = 1;
   private L: Lay = LAYS.tall;
   private pos = new Map<string, { x: number; y: number; r: number; side: Side }>();
@@ -186,10 +185,6 @@ export class SkyMap {
         this.sprites.set(`${id}:${st}`, sp);
       }
     }
-    const [ek, ec] = cvs(240 * dpr * u, 320 * dpr * u);
-    ec.scale(dpr * u, dpr * u);
-    T.eko(ec, 150, 120, 0.3, K.RNG(5), { wisp: true });
-    this.eko = ek;
     const at = this.pos.get(this.chosen ?? '') ?? this.pos.get('heroes')!;
     this.ex = at.x; this.ey = at.y; this.fx = w / 2; this.fy = h / 2;
   }

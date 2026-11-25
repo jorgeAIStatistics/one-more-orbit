@@ -107,9 +107,9 @@ export const LISTEN: Listen[] = [
   { id: 'helion', name: 'Helion\u2019s signal', what: 'Thump-thump, then a music box as if from the bottom of an ocean. His theme, far off', audio: helionAudio as AudioMeta, from: 0 },
   { id: 'openinga', name: 'The opening \u00b7 with a synthesised chord', what: 'Wind, the heartbeat, the far music box, the pulse, one note; at 0:16 the first tap: a synth chord, and Heroes Tonight under it', audio: openingAAudio as AudioMeta, from: 0 },
   { id: 'openingb', name: 'The opening \u00b7 straight into the song', what: 'The same, but the first tap goes straight into Heroes Tonight: no chord', audio: openingBAudio as AudioMeta, from: 0 },
-  { id: 'lullaby', name: 'The lullaby · music box', what: 'Original. The prologue, the ending, and the quietest song. One bar of four taps, then 24 bars', audio: lullabyAudio as AudioMeta, from: 0 },
-  { id: 'lullabyb', name: 'The lullaby · pipe', what: 'The same tune in a warmer voice', audio: lullabyBAudio as AudioMeta, from: 0 },
-  { id: 'fallback', name: 'Fallback · Heroes Tonight, its opening', what: 'If neither lullaby is right: the song’s first 67 seconds, cut off where its first drop would land', audio: fallbackAudio as AudioMeta, from: 0 },
+  { id: 'lullaby', name: 'Helion’s theme · the whole tune', what: 'Original. The music box: the memories play its first eight bars. One bar of four taps, then 24 bars', audio: lullabyAudio as AudioMeta, from: 0 },
+  { id: 'lullabyb', name: 'Helion’s theme · pipe', what: 'The same tune in a warmer voice', audio: lullabyBAudio as AudioMeta, from: 0 },
+  { id: 'fallback', name: 'Fallback · Heroes Tonight, its opening', what: 'An earlier sketch: the song’s first 67 seconds, cut off where its first drop would land', audio: fallbackAudio as AudioMeta, from: 0 },
   { id: 'ambush', name: 'The ambush · a cut of Royalty', what: 'Second verse, build and drop: the guardian’s song, heard again in the finale', audio: ambushAudio as AudioMeta, from: 0 },
   { id: 'royalty', name: 'For comparison · the finale’s first drop', what: 'Royalty as the fight uses it, from four bars before the drop', audio: FINAL.audio, from: bar(FINAL.audio, 28) }
 ];
