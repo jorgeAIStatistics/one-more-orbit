@@ -116,7 +116,7 @@ export interface Layers { survival: number[]; flow: number[] }
 /** Things a level can ask of the player; the first time each appears it gets a hint. */
 export type Feature = 'smash' | 'charge' | 'flip' | 'weave' | 'spin' | 'sling' | 'reverse' | 'faster' | 'slower' | 'twin' | 'rail' | 'line' | 'tether' | 'meteor' | 'sat' | 'pulsar' | 'comet' | 'spring' | 'tide' | 'chime' | 'slip' | 'grav' | 'combo' | 'mirror' | 'invert' | 'dual';
 /** How one bar plays. */
-export interface BarCfg { token: string; mode: 'up' | 'down' | 'weave'; spin: boolean; twin: boolean; dual: boolean; echo: Form; sling: boolean; spring: boolean; tide: boolean; turn: boolean; mirror: boolean; invert: boolean; long: boolean; tether: boolean; chime: boolean; slip: boolean; grav: boolean; combo: string; sparse: boolean; speed: number; form: Form }
+export interface BarCfg { token: string; mode: 'up' | 'down' | 'weave'; spin: boolean; twin: boolean; dual: boolean; echo: Form; sling: boolean; spring: boolean; tide: boolean; turn: boolean; mirror: boolean; invert: boolean; long: boolean; tether: boolean; chime: boolean; slip: boolean; grav: boolean; combo: string; sparse: boolean; strong: boolean; beats: boolean; every: boolean; speed: number; form: Form }
 
 export interface Course {
   spb: number;
@@ -248,6 +248,9 @@ export function autoLayers(beats: number[], accents: number[] = []): Layers {
  * mirror: the picture flips left to right at the bar line. invert: it flips top to bottom.
  * dual: a twin orbit whose second spark is a Pulsar; dual=sat: a Satellite.
  * sparse: only the bar's first and third beats are presses; its other presses become gold (for fast songs played early).
+ * strong: only the bar's three strongest presses stay (its downbeat, then the hardest hits); the rest become gold.
+ * beats: a press on every beat of the bar that the music clearly hits (a kick or a snare), charted or not.
+ * every: the same, and also on the charted eighth notes between them that are hit as hard (a climax: "a wall on every beat").
  */
 export function barPlan(level: Level): BarCfg[] {
   const out: BarCfg[] = [];
@@ -268,7 +271,7 @@ export function barPlan(level: Level): BarCfg[] {
       const twin = w.includes('twin') || dual;
       const combo = (w.find((s) => s.startsWith('c=')) ?? '').slice(2);
       // a planet hop only ever starts a phrase or its second half (every other bar), and never in a twin orbit
-      out.push({ token, mode: w.includes('weave') ? 'weave' : w.includes('down') ? 'down' : 'up', spin: w.includes('spin'), twin, dual, echo, sling: w.includes('sling') && !twin && k % 2 === 0, spring: w.includes('spring') && !twin && k % 2 === 0, tide: w.includes('tide') && !twin, turn: w.includes('turn'), mirror: w.includes('mirror'), invert: w.includes('invert'), long: w.includes('long'), tether: w.includes('tether'), chime: w.includes('chime'), slip: w.includes('slip'), grav: w.includes('grav'), combo, sparse: w.includes('sparse'), speed, form });
+      out.push({ token, mode: w.includes('weave') ? 'weave' : w.includes('down') ? 'down' : 'up', spin: w.includes('spin'), twin, dual, echo, sling: w.includes('sling') && !twin && k % 2 === 0, spring: w.includes('spring') && !twin && k % 2 === 0, tide: w.includes('tide') && !twin, turn: w.includes('turn'), mirror: w.includes('mirror'), invert: w.includes('invert'), long: w.includes('long'), tether: w.includes('tether'), chime: w.includes('chime'), slip: w.includes('slip'), grav: w.includes('grav'), combo, sparse: w.includes('sparse'), strong: w.includes('strong'), beats: w.includes('beats') || w.includes('every'), every: w.includes('every'), speed, form });
     }
   }
   return out;
@@ -301,14 +304,44 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
   ground = ground.filter((b) => auto.has(b) || smash.has(b) || ![...auto, ...smash].some((x) => Math.abs(x - b) < MIN_GAP - 1e-6));
   // A bar marked `sparse` keeps only the presses on its first and third beats: the rest are gold, there to take or leave.
   ground = ground.filter((b) => { if (!barAt(b).sparse || auto.has(b) || smash.has(b)) return true; const off = b - Math.floor((b + 1e-6) / 4) * 4; return Math.abs(off) < 0.01 || Math.abs(off - 2) < 0.01; });
+  // A bar marked `strong` keeps its three strongest presses: the downbeat if it has one, then the hardest hits (an
+  // accent first, then kick or snare). The rest are gold. For a form that needs room to breathe between actions.
+  const loud = (b: number) => Math.max(level.energyAt('kick', (b + 0.02) * spb), level.energyAt('snare', (b + 0.02) * spb));
+  if (bars.some((b) => b.strong)) {
+    const big = new Set(accents.map(snap));
+    const keep = new Set<number>();
+    bars.forEach((cfg, bar) => {
+      if (!cfg.strong) return;
+      const mine = ground.filter((b) => Math.floor((b + 1e-6) / 4) === bar);
+      const rank = (b: number) => (Math.abs(b - bar * 4) < 0.01 ? 9 : 0) + (big.has(b) ? 2 : 0) + loud(b);
+      for (const b of [...mine].sort((x, y) => rank(y) - rank(x) || x - y).slice(0, 3)) keep.add(b);
+    });
+    ground = ground.filter((b) => !barAt(b).strong || keep.has(b) || auto.has(b) || smash.has(b));
+  }
+  // A bar marked `beats` takes a press on every beat the music clearly hits (a kick or a snare under it), whether or
+  // not the chart had a note there; `every` also takes the charted eighth notes between them that are hit as hard.
+  // Never beside the drop's big press.
+  if (bars.some((b) => b.beats)) {
+    const charted = new Set([...layers.survival, ...layers.flow].map(snap));
+    const all = [...ground];
+    bars.forEach((cfg, bar) => {
+      if (!cfg.beats) return;
+      for (let k = 0; k < 8; k++) {
+        const b = snap(bar * 4 + k / 2);
+        // (`beats` keeps a beat between presses: it fills in the beats the chart left bare. `every` goes down to eighth notes.)
+        if (!inRange(b) || inCharge(b) || !counted(b) || all.some((x) => Math.abs(x - b) < (cfg.every ? 0.5 : MIN_GAP) - 1e-6) || [...auto, ...smash].some((x) => Math.abs(x - b) < MIN_GAP - 1e-6)) continue;
+        if (loud(b) >= 0.5 && (k % 2 === 0 || (cfg.every && charted.has(b)))) all.push(b);
+      }
+    });
+    ground = all.sort((a, b) => a - b);
+  }
   // A level whose rules allow `pairs` (the slow, heavy one) also takes some of its eighth notes as presses: up to that
   // many a bar, each a note on the half beat with a press on the beat before it and a kick or snare under it, and
   // never two within two beats of each other. So the presses come in pairs, never in runs.
   const pairs = level.file.side ? 0 : level.file.rules?.pairs ?? 0;
   if (pairs > 0) {
     const has = new Set(ground);
-    const loud = (b: number) => Math.max(level.energyAt('kick', (b + 0.02) * spb), level.energyAt('snare', (b + 0.02) * spb));
-    const cand = [...new Set(layers.flow.map(snap))].filter((b) => inRange(b) && !inCharge(b) && counted(b) && Math.abs(b - Math.floor(b) - 0.5) < 0.01 && has.has(snap(b - 0.5)) && loud(b) >= 0.5 && !barAt(b).long && ![...auto, ...smash].some((x) => Math.abs(x - b) < MIN_GAP - 1e-6));
+    const cand = [...new Set(layers.flow.map(snap))].filter((b) => inRange(b) && !inCharge(b) && counted(b) && Math.abs(b - Math.floor(b) - 0.5) < 0.01 && has.has(snap(b - 0.5)) && loud(b) >= 0.5 && !barAt(b).long && !barAt(b).sparse && !barAt(b).strong && ![...auto, ...smash].some((x) => Math.abs(x - b) < MIN_GAP - 1e-6));
     const took: number[] = [];
     for (const b of cand.sort((x, y) => x - y)) { // in order through the bar, so a phrase that repeats gets the same pairs every time
       const bar = Math.floor(b / 4);

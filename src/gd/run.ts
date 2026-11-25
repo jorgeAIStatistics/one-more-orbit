@@ -10,7 +10,7 @@ import { Sim, type TapResult } from './sim';
 export type RunState = 'loading' | 'playing' | 'paused' | 'resuming' | 'failed' | 'done' | 'error';
 /** partial: started part-way through from the menu ("start at the build-up"); plays like a normal run but is not saved */
 /** tutorial: the first-run lesson: nothing ends the run, missed marks are taken for the player, and it stops after a few bars */
-export interface RunOptions { bot?: boolean; practice?: boolean; partial?: boolean; tutorial?: boolean; startAt?: number; leadIn?: number }
+export interface RunOptions { bot?: boolean; practice?: boolean; partial?: boolean; tutorial?: boolean; startAt?: number; leadIn?: number; /** the ambush, from a checkpoint: how each light note before it went */ lights?: Array<boolean | null> }
 /** beats the tutorial lasts */
 export const TUTORIAL_BEATS = 24;
 export interface RunEvent { kind: 'hop' | 'flip' | 'spark' | 'skip' | 'land' | 'crash' | 'drop' | 'finale' | 'tick' | 'held' | 'release' | 'star' | 'starlost'; star?: number; flow?: boolean; charge?: boolean; accent?: boolean; smash?: boolean; sling?: boolean; full?: boolean; power?: number }
@@ -54,6 +54,8 @@ export class GdRun {
   private bi = 0;
   private tickRun = 0;
   private ended = false;
+  /** a light note set off by the roll's last tap, waiting for its own strike */
+  private awaiting: { beat: number; on: boolean | null } | null = null;
   private lastNow = 0;
   private seenLand = -99;
   private readonly leadIn: number;
@@ -74,12 +76,13 @@ export class GdRun {
     if (lastPress && !opts.tutorial) this.finaleAt = lastPress.land * spb;
     while (this.bi < this.course.script.length && this.course.script[this.bi][0] * spb < this.startAt) this.bi++;
     if (this.startAt / spb > this.course.dropBeat) this.dropFull = true;
-    this.lights = this.course.presses.filter((p) => p.smash).map((p) => ({ beat: p.beat, on: p.beat * spb < this.startAt ? true : null }));
+    this.lights = this.course.presses.filter((p) => p.smash).map((p, i) => ({ beat: p.beat, on: p.beat * spb < this.startAt ? opts.lights?.[i] ?? true : null }));
   }
 
   /**
    * The Lantern's windows still lit: a light note struck off the beat lets one go dark, one struck on the beat
-   * relights one. lost: has any window gone dark at any point.
+   * relights one. lost: has any window gone dark at any point. When the last one goes dark the Snuffer has won, and
+   * the run ends there.
    */
   get windows(): { lit: number; lost: boolean; struck: number } {
     let lit = WINDOWS, lost = false, struck = 0;
@@ -140,6 +143,7 @@ export class GdRun {
   }
 
   private react(r: TapResult): void {
+    if (this.awaiting && !Number.isNaN(this.sim.openErr)) this.strike(this.awaiting, Math.abs(this.sim.openErr) <= LIGHT_S); // the strike that was waited for
     if (r.kind === 'none' || r.kind === 'crash') return;
     if (r.kind === 'skip') { audio.hit('stray', 0.3); this.events.push({ kind: 'skip' }); return; }
     if (r.kind === 'tick') {
@@ -172,8 +176,19 @@ export class GdRun {
       audio.pluck(60 + 12 * Math.floor(k / scale.length) + scale[k % scale.length], 0.4 * save.hitVol);
     }
     const press = r.kind === 'spark' ? null : this.course.presses[this.sim.ni - 1];
-    if (press?.smash) { const l = this.lights.find((x) => x.beat === press.beat); if (l && l.on === null) l.on = !!r.auto || r.err === undefined || Math.abs(r.err) <= LIGHT_S; }
+    if (press?.smash) {
+      const l = this.lights.find((x) => x.beat === press.beat);
+      // (a roll runs right up to a light note: if the tap that set it off was the roll's last, the strike itself is still to come)
+      if (l && l.on === null) { if (r.auto) l.on = true; else if (Number.isNaN(this.sim.openErr)) this.awaiting = l; else this.strike(l, Math.abs(this.sim.openErr) <= LIGHT_S); }
+    }
     this.events.push({ kind: r.kind, flow: !!r.flow || !!r.auto, charge: !!r.charge, accent: !!press?.accent, smash: !!press?.smash, sling: !!press?.sling });
+  }
+
+  /** A light note is settled: struck on the beat, or not. When the last window goes dark the Snuffer has won. */
+  private strike(l: { beat: number; on: boolean | null }, on: boolean): void {
+    l.on = on;
+    this.awaiting = null;
+    if (!on && this.lights.length > 1 && this.windows.lit === 0) this.sim.snuff(Math.max(l.beat, this.time / this.level.spb));
   }
 
   /** The one button. The tap is applied at the moment it happened, not when the next frame runs. */
@@ -206,6 +221,8 @@ export class GdRun {
     if (this.opts.bot) while (this.bi < this.course.script.length && this.course.script[this.bi][0] <= beat) { const [at, down] = this.course.script[this.bi++]; this.react(down ? this.sim.press(at) : this.sim.release(at)); }
     this.sim.advance(beat);
     while (this.sim.out.length) this.react(this.sim.out.shift()!);
+    // a light note whose strike never came (only the roll's last tap did): the window goes dark
+    if (this.awaiting && beat > this.awaiting.beat + 0.2 / this.level.spb) this.strike(this.awaiting, false);
     if (this.sim.landedAt !== this.seenLand) { this.seenLand = this.sim.landedAt; this.events.push({ kind: 'land' }); }
     audio.setMuffle(this.sim.muffle);
     if (this.dropFull === null && beat >= this.course.dropBeat) {

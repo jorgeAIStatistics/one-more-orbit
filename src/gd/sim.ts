@@ -57,7 +57,13 @@ export class Sim {
   crashed = false;
   crashBeat = -1;
   /** edge: rode off a ring. early: tapped into the ring before an opening. let: let go of a tether. */
-  crashKind: 'edge' | 'early' | 'let' | '' = '';
+  crashKind: 'edge' | 'early' | 'let' | 'snuffed' | '' = '';
+  /**
+   * How far off the beat (seconds) the last press was struck. Where the tap that opened it was really aimed at a gold
+   * note just before it (a roll runs right up to a light note), this is not known yet (NaN) until the next tap inside
+   * the opening settles it.
+   */
+  openErr = 0;
   landedAt = -99;
   // flow
   flow = 0.5;
@@ -232,6 +238,13 @@ export class Sim {
     return { kind: 'spark', err, flow: ok, pitch: f.pitch, charge: f.charge };
   }
 
+  /** The ambush: the last of the Lantern's windows has gone dark. The run ends where it stands. */
+  snuff(at: number): void {
+    this.crashed = true;
+    this.crashBeat = at;
+    this.crashKind = 'snuffed';
+  }
+
   private crash(kind: 'edge' | 'early', at: number): TapResult {
     this.crashed = true;
     this.crashBeat = at;
@@ -284,6 +297,7 @@ export class Sim {
       // and the press is judged by the next tap inside its window (or not at all)
       const spark = hit && Math.abs(nf!.d) < Math.abs(d * spb) ? this.touch(hit, t) : null;
       if (this.mode === 'ground') {
+        this.openErr = spark ? NaN : d * spb;
         this.takeoff(p, t);
         this.needJudge = !!spark;
         if (spark) return { ...spark, kind: p.kind };
@@ -300,7 +314,7 @@ export class Sim {
     }
     if (t <= this.doneUntil) {
       // a second tap inside the opening the ball has just used: it can settle that press's timing, nothing more
-      if (this.needJudge) { this.needJudge = false; const err = (t - this.doneBeat) * spb; return { kind: 'none', err, flow: this.judge(err) }; }
+      if (this.needJudge) { this.needJudge = false; const err = (t - this.doneBeat) * spb; this.openErr = err; return { kind: 'none', err, flow: this.judge(err) }; }
       return { kind: 'none' };
     }
     if (up) return { kind: 'none' };
@@ -435,6 +449,7 @@ export class Sim {
       if (!Number.isNaN(this.pending) && nb >= p.beat - p.tol) {
         const err = (this.pending - p.beat) * this.c.spb;
         const quiet = this.pendingQuiet;
+        this.openErr = quiet ? NaN : err;
         this.takeoff(p, nb);
         this.needJudge = quiet;
         this.out.push(quiet ? { kind: p.kind } : { kind: p.kind, err, flow: this.judge(err), pitch: p.pitch });

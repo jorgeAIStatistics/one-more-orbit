@@ -51,11 +51,11 @@ export const CHAMBERS: Chamber[] = [
     id: 'room-meteor', name: 'The Meteor', what: 'Emberwick’s gift: tap to dash through a wall',
     // Heroes Tonight, the count bar and the whole drop (bars 16-32)
     pack: room(HEROES, 'room-meteor', 16, 32, [
-      'up', 'up', 'meteor', 'up', 'up',          // the big press, then one bar shown and two real, wide
-      'up', 'up', 'up', 'up',                     // develop: four bars running, gold between the walls
-      'orb+up+spring', 'meteor', 'up', 'up',      // twist: thrown by a spring pad, and straight into walls on landing
-      'up', 'up', 'up', 'orb+up'                  // climax: every press a wall, then out
-    ], { pairs: 1 }),
+      'up', 'up', 'meteor', 'up', 'up',                  // the big press, then one bar shown and two real, wide
+      'beats', 'beats', 'beats', 'beats',                 // develop: a wall on every beat the music hits, gold between them
+      'orb+up+spring', 'meteor', 'beats', 'beats',        // twist: thrown by a spring pad, and straight into walls on landing
+      'every', 'every', 'every', 'orb+up'                 // climax: a wall on every beat and on the eighth notes the hook plays, then out
+    ]),
     beats: [17, 21, 25, 29].map((bar, i) => ({ bar, label: FOUR[i] }))
   },
   {
@@ -84,17 +84,17 @@ export const CHAMBERS: Chamber[] = [
     id: 'room-comet', name: 'The Comet', what: 'Verdance’s gift: press and hold to climb, let go to fall',
     // Invincible, the last bar of the roll and the first four phrases of the drop (bars 16-32)
     pack: room(INV, 'room-comet', 16, 32, [
-      'up', 'up', 'comet', 'comet', 'comet',
-      'comet', 'comet', 'comet', 'comet',
-      'x1.5+comet', 'turn+comet', 'comet', 'comet',                         // twist: faster, and the orbit turns in the middle of a climb
-      'invert+comet', 'comet', 'turn+comet', 'invert+normal+orb+up'         // climax: the long climb, upside-down
+      'up', 'up', 'comet+strong', 'sparse', 'sparse',                       // shown once, then two bars of one climb each: hold, let go
+      'strong', 'strong', 'strong', 'strong',                               // develop: the three strongest notes of each bar, room to breathe
+      'x1.5+strong', 'turn+strong', 'strong', 'strong',                     // twist: faster, and the orbit turns in the middle of a climb
+      'invert+comet', 'comet', 'turn+comet', 'invert+normal+orb+up'         // climax: every note, the eighth-note pairs too, upside-down
     ]),
     beats: [17, 21, 25, 29].map((bar, i) => ({ bar, label: FOUR[i] }))
   },
   {
-    id: 'ambush', name: 'The ambush', what: 'The Snuffer on the beam: 48 seconds, six light notes, four windows', ambush: true,
+    id: 'ambush', name: 'The ambush', what: 'The Snuffer on the beam: 48 seconds, six light notes, four windows. Lose all four and it wins', ambush: true,
     pack: { level: ambushLevel as unknown as LevelFile, audio: ambushAudio as AudioMeta, chart: ambushChart as unknown as ChartFile },
-    beats: [{ bar: 1, label: 'IT ARRIVES' }, { bar: 9, label: 'IT REACHES THE LAMP' }, { bar: 17, label: 'DRIVE IT OFF' }, { bar: 25, label: 'EVERYTHING YOU HAVE' }]
+    beats: [{ bar: 1, label: 'IT ARRIVES' }, { bar: 8, label: 'IT REACHES THE LAMP' }, { bar: 17, label: 'DRIVE IT OFF' }, { bar: 25, label: 'EVERYTHING YOU HAVE' }]
   }
 ];
 

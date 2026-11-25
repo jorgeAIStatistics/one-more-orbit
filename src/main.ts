@@ -278,7 +278,8 @@ function startRun(from = -1, quick = false): void {
   const spb = 60 / pack.audio.bpm;
   // a fresh start plays the whole count-in bar under the title card; an instant restart cuts in for the last two counts
   const opts = from >= 0 ? { startAt: from, leadIn: 1.5 } : quick ? { startAt: 2 * spb, leadIn: 0.3 } : { leadIn: 2.4 };
-  const r = (run = new Run(pack, { bot: botMode, practice: practice && !botMode, ...opts }, onRunEnd));
+  const r = (run = new Run(pack, { bot: botMode, practice: practice && !botMode, ...opts, lights: carryLights ?? undefined }, onRunEnd));
+  carryLights = null;
   const b = bestFor(pack.level.id);
   // the song's thread: a tick at the drop, a ring at your best; in practice, a tick where each section begins and a dab where this run set off
   const along = (t: number) => `${(Math.max(0, Math.min(1, (t - r.t0) / (r.t1 - r.t0))) * 100).toFixed(2)}%`;
@@ -431,7 +432,21 @@ function tally(r: Run): void {
 function onRunEnd(r: Run): void {
   if (r !== run) return;
   harvest(r);
-  if (chamber) { tally(r); if (r.state === 'failed') startRun(-1, true); else chamberDone(r, true); return; } // a room: straight back in, or back to the list
+  if (chamber) { // a room: straight back in, or back to the list
+    tally(r);
+    if (r.state !== 'failed') { chamberDone(r, true); return; }
+    if (!chamber.ambush) { startRun(-1, true); return; }
+    // the ambush has a checkpoint at each phrase: back to two bars before the light note of the phrase it fell in (never
+    // further back than that phrase's roll), with the windows as they stood there
+    const spb = r.level.spb, fell = r.crashTime / spb + 0.01;
+    const light = [...r.lights].reverse().find((l) => l.beat <= fell);
+    const roll = light ? [...r.level.segments].reverse().find((s) => s.core?.charge && s.t0 / spb <= light.beat) : undefined;
+    const cp = light ? Math.max(roll ? roll.t0 : 0, (light.beat - 8) * spb) : -1;
+    if (cp <= r.t0 + 0.01) { startRun(-1, true); return; }
+    carryLights = r.lights.map((l) => (l.beat * spb < cp ? l.on : null));
+    startRun(cp);
+    return;
+  }
   const id = r.pack.level.id;
   const prev = bestFor(id);
   const counted = !r.opts.bot && !r.opts.practice;
@@ -573,6 +588,8 @@ function syncSaid(fixed = false): Pick<ResultInfo, 'more' | 'fix'> {
 // Short rooms in plain shapes, to judge the play and the sound before any art. Reached from Settings (Playtest) or
 // with ?chambers on the address. Nothing here reads or writes the saved game.
 let chamber: Chamber | null = null;
+/** the ambush, restarting from a checkpoint: how the light notes before it went */
+let carryLights: Array<boolean | null> | null = null;
 let packWas: LevelPack | null = null;
 let listening = '';
 function renderChambers(said = ''): void {
@@ -673,7 +690,7 @@ function updateHud(r: Run): void {
     hud.crashShown = true;
     const best = !r.opts.bot && !r.opts.practice && pct > bestFor(r.pack.level.id).pct;
     // (letting go of a tether says so: it is the one fall that is not a missed mark)
-    toast(r.sim.crashKind === 'let' ? `let go: ${pct}%` : best && pct >= 2 ? `your furthest yet: ${pct}%` : pct >= 80 ? `so close: ${pct}%` : `${pct}%`, best);
+    toast(r.sim.crashKind === 'snuffed' ? 'the last window is out' : r.sim.crashKind === 'let' ? `let go: ${pct}%` : best && pct >= 2 ? `your furthest yet: ${pct}%` : pct >= 80 ? `so close: ${pct}%` : `${pct}%`, best);
   }
   if (r.finale !== hud.finale) {
     hud.finale = r.finale;

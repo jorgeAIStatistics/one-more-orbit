@@ -96,4 +96,42 @@ describe('test chambers', () => {
     expect(LISTEN[0].audio.length).toBeGreaterThan(60);
     expect(LISTEN[0].audio.length).toBeLessThan(90);
   });
+
+  it('the Meteor room has a wall on every beat the music hits, and its climax on the hook\'s eighth notes too', () => {
+    const { course } = of('room-meteor');
+    const inBar = (n: number) => course.presses.filter((p) => bar(p.beat) === n && !p.auto);
+    const gaps = (n: number) => inBar(n).slice(1).map((p, i) => p.beat - inBar(n)[i].beat);
+    for (const n of [21, 22, 23, 27, 28]) { expect(inBar(n).length, `develop/twist bar ${n}`).toBeGreaterThanOrEqual(3); expect(Math.min(...gaps(n)), `bar ${n}: never under a beat`).toBeGreaterThanOrEqual(1 - 1e-6); }
+    for (const n of [29, 30, 31]) expect(inBar(n).length, `climax bar ${n}`).toBeGreaterThanOrEqual(4);
+    expect([29, 30, 31].some((n) => gaps(n).some((g) => Math.abs(g - 0.5) < 1e-6)), 'the climax has eighth notes').toBe(true);
+    for (const p of course.presses.filter((x) => bar(x.beat) >= 21 && bar(x.beat) <= 31 && !x.pad)) expect(p.form === 'meteor' || bar(p.beat) === 25).toBe(true);
+  });
+
+  it('the Comet room breathes: two or three actions a bar until the climax, and eighth-note pairs only there', () => {
+    const { course } = of('room-comet');
+    const inBar = (n: number) => course.presses.filter((p) => bar(p.beat) === n);
+    for (let n = 18; n <= 28; n++) {
+      expect(inBar(n).length, `bar ${n}`).toBeGreaterThanOrEqual(2);
+      expect(inBar(n).length, `bar ${n}`).toBeLessThanOrEqual(3);
+    }
+    const close = (n: number) => inBar(n).slice(1).some((p, i) => p.beat - inBar(n)[i].beat < 1 - 1e-6);
+    for (let n = 18; n <= 28; n++) expect(close(n), `bar ${n}: no eighth notes`).toBe(false);
+    expect([29, 30, 31].some(close), 'the climax keeps its pairs').toBe(true);
+  });
+
+  it('the ambush: four bars of play and a roll of five before the second light note', () => {
+    const { course } = of('ambush');
+    for (const n of [8, 9, 10, 11]) expect(course.presses.some((p) => bar(p.beat) === n), `bar ${n} is played`).toBe(true);
+    for (const n of [12, 13, 14, 15, 16]) { expect(course.inCharge((n - 1) * 4 + 1), `bar ${n} is roll`).toBe(true); expect(course.presses.some((p) => bar(p.beat) === n)).toBe(false); }
+    expect(course.inCharge(7 * 4 + 1)).toBe(false);
+  });
+
+  it('the Snuffer wins when the last window goes dark: the run ends where it stands', () => {
+    const { course } = of('ambush');
+    const sim = new Sim(course, course.start - 3);
+    sim.snuff(40);
+    expect(sim.crashed).toBe(true);
+    expect(sim.crashKind).toBe('snuffed');
+    expect(sim.crashBeat).toBe(40);
+  });
 });
