@@ -138,7 +138,7 @@ function show(s: Screen): void {
     sky.settle();
     renderMap(); queuePreview();
     if (arrived) { // home, with a star newly awake: the Landing is where the picture rests, and it says so once
-      const n = PACKS.filter((p) => bestFor(p.level.id).cleared).length;
+      const n = starsHome(); // (the planetoid's own star counts: it is in the fire)
       sky.chosen = null;
       sky.say(`${['No', 'One', 'Two', 'Three', 'Four'][n] ?? n} star${n === 1 ? '' : 's'} awake. He\u2019s a little clearer.`);
       arrived = '';
