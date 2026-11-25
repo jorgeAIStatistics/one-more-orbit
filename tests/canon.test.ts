@@ -28,13 +28,12 @@ describe('the opening\'s first tap starts Emberwick', () => {
 
 describe('the first memory of Helion', () => {
   const p = MEMORIES[PACKS[0].level.id], { level, course } = courseOf(p);
-  it('is a twin orbit from its first beat to its last, about twenty-seven seconds on his theme, with a bar of his heartbeat before it', () => {
-    expect(course.twins).toEqual([[0, 36]]);
+  it('is a twin orbit from its first beat to its last, about twenty-six seconds of Memory Box (its first part), the brothers in step', () => {
+    expect(p.level.title).toBe('Memory Box');
+    expect(course.twins).toEqual([[0, 64]]); // sixteen bars at 150 beats a minute
     expect(level.endTime).toBeGreaterThan(24); expect(level.endTime).toBeLessThan(30);
-    expect(p.audio.offset).toBeCloseTo(3, 3); // one bar at 80 beats a minute
     expect(course.presses.length).toBeGreaterThanOrEqual(20);
-    expect(course.presses.every((x) => x.twin !== null)).toBe(true);
-    expect(course.presses[0].beat).toBeGreaterThanOrEqual(4); // its first bar only turns
+    expect(course.presses.every((x) => x.twin === 'both')).toBe(true); // one tap moves both
   });
   it('is simple: a tap a beat at most, and nothing but the orbit (no forms, gates, pads or holds)', () => {
     for (let i = 1; i < course.presses.length; i++) expect(course.presses[i].beat - course.presses[i - 1].beat).toBeGreaterThanOrEqual(1 - 1e-6);

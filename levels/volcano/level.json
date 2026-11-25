@@ -10,7 +10,7 @@
   "difficulty": "Easy",
   "adds": "The Meteor: tap to dash through walls",
   "holds": false,
-  "rules": {"tol": 0.14, "ahead": 3.5},
+  "rules": {"tol": 0.14, "ahead": 3.5, "branch": 0.09},
   "shards": [[20, 27.5], [56, 63.5], [116, 123.5]],
   "segments": [
     {"id": "still", "core": {"bars": ["up"]}, "bars": 1, "label": "INTRO", "lap": 16, "follow": "snare", "lead": "snare", "look": {"palette": "dusk", "bg": "stars", "eq": "bars", "zoom": [0.92, 0.96]}, "plan": ["-"]},

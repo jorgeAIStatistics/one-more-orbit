@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
@@ -34,6 +34,26 @@ function pressesApi(): Plugin {
         } else { res.statusCode = 405; res.end(); }
       });
     }
+  };
+}
+
+/**
+ * Dev and preview servers: the phone check (`?phonecheck`) sends its frame times here, and they are appended to
+ * frames-phone.log in the project folder (one JSON line per run), so the numbers from the iPhone can be read on the Mac.
+ */
+function framesApi(): Plugin {
+  const handle = (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse): void => {
+    if (req.method !== 'POST') { res.statusCode = 405; res.end(); return; }
+    let body = '';
+    req.on('data', (d) => { body += d; if (body.length > 2e5) req.destroy(); });
+    req.on('end', () => {
+      try { JSON.parse(body); appendFileSync(resolve(root, 'frames-phone.log'), body.replace(/\n/g, ' ') + '\n'); res.end('{"ok":true}'); } catch (e) { res.statusCode = 400; res.end(String(e)); }
+    });
+  };
+  return {
+    name: 'omo-frames',
+    configureServer(server) { server.middlewares.use('/__frames', handle); },
+    configurePreviewServer(server) { server.middlewares.use('/__frames', handle); }
   };
 }
 
@@ -83,7 +103,7 @@ function offline(): Plugin {
 // `vite build --mode single` -> dist-single/  one HTML file; tools/build-single.mjs then embeds the audio
 export default defineConfig(({ mode }) => ({
   base: './',
-  plugins: mode === 'single' ? [viteSingleFile()] : [pressesApi(), offline()],
+  plugins: mode === 'single' ? [viteSingleFile()] : [pressesApi(), framesApi(), offline()],
   build: {
     outDir: mode === 'single' ? 'dist-single' : 'dist',
     target: 'es2020',

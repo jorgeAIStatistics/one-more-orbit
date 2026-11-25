@@ -128,6 +128,8 @@ export class GdRenderer {
   /** how much of the planet's colour is showing, 0..1: none in a calm engraved stretch, all of it in an earned drop */
   private colour = 0;
   private heroDir = 1;
+  /** a form change morphs over 150 ms: the form he is becoming, the one he was, and when it began (page ms) */
+  private morphTo: Form = 'orb'; private morphFrom: Form = 'orb'; private morphAt = -1e9;
   /** which twin is being drawn (the second spark of a twin orbit is Helion in a memory) */
   private who: 'orbin' | 'helion' = 'orbin';
   private heroSide = 1;
@@ -149,6 +151,8 @@ export class GdRenderer {
   private cueFrom = -Infinity;
   /** where the lit nodes were drawn in the last frame, in screen points, soonest first (for the freeze-frame test's answer sheet) */
   cues: Array<{ x: number; y: number; beat: number }> = [];
+  /** where Orbin was drawn last, on the screen (css px): the star sequence starts from him */
+  heroAt: [number, number] = [0, 0];
   private globeCv: HTMLCanvasElement | null = null;
   /** the menus' sky: how much of the galaxy's colour is home, 0..1 */
   idleColour = 0;
@@ -228,10 +232,13 @@ export class GdRenderer {
     // hints: the first mark, the first gold note, and each mechanic the first time the level uses it
     this.hints = [];
     const first = c.presses[0];
-    if (first) this.hints.push([c.start - 9, first.beat + 1.5, 'tap as he reaches each Star-Node']);
+    // (the one-signal look writes on the course only what is new: the tap and the hold are taught once, in the first
+    // stage's own lessons, and a form is named once, where it is given. Nothing else is labelled.)
+    const quiet = this.look === 2, taught = (w: Feature) => quiet && (w === 'rail' || w === 'line' || w === 'twin' || w === 'charge' || w === 'smash');
+    if (first && !quiet) this.hints.push([c.start - 9, first.beat + 1.5, 'tap as he reaches each Star-Node']);
     const gold = c.flow.find((f) => !f.charge);
-    if (gold) this.hints.push([gold.beat - 3, gold.beat + 2.5, 'gold lights: bonus taps']);
-    for (const f of c.firsts) this.hints.push(f.what === 'charge' ? [f.beat - 2.5, f.beat + 4, HINT.charge] : f.what === 'smash' ? [f.beat - 5, f.beat, HINT.smash] : [f.beat - 4.5, f.beat + 1.5, HINT[f.what]]);
+    if (gold && !quiet) this.hints.push([gold.beat - 3, gold.beat + 2.5, 'gold lights: bonus taps']);
+    for (const f of c.firsts) if (!taught(f.what)) this.hints.push(f.what === 'charge' ? [f.beat - 2.5, f.beat + 4, HINT.charge] : f.what === 'smash' ? [f.beat - 5, f.beat, HINT.smash] : [f.beat - 4.5, f.beat + 1.5, HINT[f.what]]);
     this.hints.sort((a, b) => a[0] - b[0]);
     this.energy = barEnergy(level);
     this.particles = [];
@@ -556,7 +563,8 @@ export class GdRenderer {
       c.strokeStyle = quiet ? 'rgba(150,158,204,0.1)' : 'rgba(255,255,255,0.13)';
       c.beginPath(); c.arc(0, 0, rm, 0, TWO_PI); c.stroke();
       if (flow > 0.005) {
-        c.strokeStyle = quiet ? rgba(WOKEN, hot ? 0.75 : 0.45) : hot ? rgba(GOLD) : rgba(mix(pal.acc, WHITE, 0.4), 0.9);
+        c.strokeStyle = quiet ? rgba(WOKEN, hot ? 0.34 : 0.22) : hot ? rgba(GOLD) : rgba(mix(pal.acc, WHITE, 0.4), 0.9);
+        if (quiet) c.lineWidth = 2; // (the flow ring is scenery: fainter and finer than anything on the course)
         if (hot && !quiet) { c.shadowColor = rgba(GOLD, 0.9); c.shadowBlur = 10; }
         c.beginPath(); c.arc(0, 0, rm, -Math.PI / 2, -Math.PI / 2 + flow * TWO_PI); c.stroke();
         c.shadowBlur = 0;
@@ -590,9 +598,11 @@ export class GdRenderer {
       c.save();
       c.translate(x, y);
       c.rotate(angle + (side >= 0 ? Math.PI / 2 : -Math.PI / 2));
+      // squash and stretch: the figure's height runs away from the path (a hop stretches him, a landing or the crouch
+      // before a tap presses him down); kept to about half the ball's, so the figure reads as alive, not as rubber
+      c.scale(1 + (across - 1) * 0.6, 1 + (along - 1) * 0.6);
       CANON.parts.spark(c, 0, -34 * s, s, { who: this.who, lite: true, glow: 1, lean: -0.42, crest: 1, arms: 'back', face: this.heroDir * (side >= 0 ? 1 : -1), eyes: 'set', beat: 1, t: performance.now() / 1000, tint: col });
       c.restore();
-      void across;
       return;
     }
     c.save();
@@ -700,8 +710,20 @@ export class GdRenderer {
    * `dir` is which way round the orbit it is travelling (1 or -1); `angle` points out from the core.
    */
   private drawHero(x: number, y: number, r: number, col: RGB, angle: number, dir: number, form: Form, along: number, across: number, lit: number): void {
+    const c = this.ctx, now = performance.now();
+    if (form !== this.morphTo) { this.morphFrom = this.morphTo; this.morphTo = form; this.morphAt = now; }
+    const mk = smooth((now - this.morphAt) / 150);
+    if (mk < 1 && this.morphFrom !== 'orb' && this.morphFrom !== form) { c.save(); c.globalAlpha *= 1 - mk; this.formDeco(x, y, r * (1 - 0.3 * mk), angle, dir, this.morphFrom, lit); c.restore(); }
+    if (form !== 'orb') { c.save(); c.globalAlpha *= mk; this.formDeco(x, y, r * (0.6 + 0.4 * mk), angle, dir, form, lit); c.restore(); }
+    this.heroDir = dir;
+    { const t = this.ctx.getTransform(), k = this.canvas.width / Math.max(1, this.w); this.heroAt = [(t.a * x + t.c * y + t.e) / k, (t.b * x + t.d * y + t.f) / k]; }
+    const tint = form === 'orb' ? col : mix(col, FORM_COL[form], 0.45 * mk);
+    this.drawBall(x, y, r, tint, angle, along, across, true);
+  }
+  /** What a form adds round him: the Meteor's flame, the Satellite's panels, the Pulsar's beams. */
+  private formDeco(x: number, y: number, r: number, angle: number, dir: number, form: Form, lit: number): void {
     const c = this.ctx;
-    if (form !== 'orb') {
+    {
       const fc = FORM_COL[form];
       c.save();
       c.translate(x, y);
@@ -734,8 +756,6 @@ export class GdRenderer {
       }
       c.restore();
     }
-    this.heroDir = dir;
-    this.drawBall(x, y, r, form === 'orb' ? col : mix(col, FORM_COL[form], 0.45), angle, along, across, true);
   }
 
   /** A line of words near the core: a hint, the count back in after a pause. One quiet line with a dark breath under it; never a pill. */
@@ -1220,7 +1240,7 @@ export class GdRenderer {
         c.beginPath(); c.moveTo(-W * 0.18, -H * 0.55); c.quadraticCurveTo(-W * 0.42, -H * 0.1, -W * 0.2, H * 0.3); c.stroke();
         c.restore();
         const la = ang(ln.beat);
-        if (this.look !== 2 || ln.intro) this.tag(FORM_NAME[ln.form], bx0 + Math.cos(la) * (rr + rb * 6.4), by0 + Math.sin(la) * (rr + rb * 6.4), clamp(rb * 1.5, 13, 16), col, al); // (a form is named once, where it is given; after that its shape speaks)
+        if (this.look !== 2) this.tag(FORM_NAME[ln.form], bx0 + Math.cos(la) * (rr + rb * 6.4), by0 + Math.sin(la) * (rr + rb * 6.4), clamp(rb * 1.5, 13, 16), col, al); // (a form is named once, where it is given; after that its shape speaks)
       }
       // mirror and upside-down gates: a cyan line across the path, with an arrow each way along the orbit (mirror) or
       // toward and away from the core (upside-down), and its name. In its last two beats the sign beats with the music.
@@ -1344,7 +1364,11 @@ export class GdRenderer {
     // the ball: its place round the core is a pure function of the clock, so it moves exactly as smoothly as the clock does
     if (run.state === 'failed') return;
     const rho = this.ballRho(sim, beat);
-    const squash = 4 * this.landPulse * (1 - this.landPulse); // a landing presses the ball down and lets it up again, from rest
+    // a landing presses him down and lets him up again; and on the ground, as the ring closes on the node he is about to
+    // leave from, he gathers himself a little (the anticipation before the hop)
+    const cue = this.cues.reduce((m, q) => (q.beat >= beat - 0.02 && q.beat < m ? q.beat : m), Infinity);
+    const crouch = sim.mode === 'ground' && !twin && this.look === 2 ? clamp(1 - (cue - beat) * course.spb / 0.16, 0, 1) : 0;
+    const squash = 4 * this.landPulse * (1 - this.landPulse) + 0.35 * crouch * crouch;
     const off = sim.sideAt(beat) * rb * (1 - 0.3 * squash);
     // at the finish the ball launches straight out through every ring and off the screen
     const away = run.finale ? Math.pow(Math.min(1.4, run.finaleAge / 0.9), 2.2) * this.r0 * 7 : 0;
@@ -1801,9 +1825,9 @@ export class GdRenderer {
     const chargeShown = afterDrop ? this.chargeV * clamp(1 - this.dropAge / 0.35, 0, 1) : course.charges.length && beat > course.charges[0][0] - 4 ? Math.max(this.chargeV, 0.006) : 0;
     this.core(pal, m * 0.045, m * 0.04 * (0.4 + 1.1 * inten) * (1 + wound * 0.7 + drive * 0.5), kick * (0.3 + 0.7 * inten), snare * inten, dt, this.flowV, chargeShown, this.plain ? 0 : drive, span, PLANETS[level.file.side?.of ?? level.id]?.rgb, !!level.file.side);
     if (this.look === 2) { // (the second look: the core is scenery, and steps back; nothing bright sits in the middle of the course)
-      const va = 0.8 * (1 - 0.85 * this.coreFlare);
-      const veil = c.createRadialGradient(0, 0, 0, 0, 0, m * 0.2); veil.addColorStop(0, `rgba(12,10,28,${va})`); veil.addColorStop(0.62, `rgba(12,10,28,${va * 0.9})`); veil.addColorStop(1, 'rgba(12,10,28,0)');
-      c.fillStyle = veil; c.beginPath(); c.arc(0, 0, m * 0.2, 0, TWO_PI); c.fill();
+      const va = 0.6 * (1 - 0.85 * this.coreFlare), vr = m * 0.12;
+      const veil = c.createRadialGradient(0, 0, 0, 0, 0, vr); veil.addColorStop(0, `rgba(12,10,28,${va})`); veil.addColorStop(0.45, `rgba(12,10,28,${va * 0.8})`); veil.addColorStop(1, 'rgba(12,10,28,0)');
+      c.fillStyle = veil; c.beginPath(); c.arc(0, 0, vr, 0, TWO_PI); c.fill();
     }
 
     for (let i = this.waves.length - 1; i >= 0; i--) {
@@ -1832,10 +1856,14 @@ export class GdRenderer {
     // a dark band under the play area, deeper the wilder the backdrop gets: the course always sits on a calm ground
     const reach = r0 * 3.3;
     const dim = c.createRadialGradient(this.coreX, this.coreY, r0 * 0.4, this.coreX, this.coreY, reach);
-    const deep = 0.32 + 0.4 * Math.max(drive, this.colour);
+    // (over a painted sky in the one-signal look the sky keeps its own soft veil, so this is light and has no edge:
+    // two darks stacked read as a disc behind the orbit)
+    const soft = this.look === 2 && !!this.backdrop;
+    const deep = soft ? 0.16 + 0.12 * drive : 0.32 + 0.4 * Math.max(drive, this.colour);
     dim.addColorStop(0, 'rgba(4,5,12,0)');
     dim.addColorStop(0.16, `rgba(4,5,12,${deep})`);
-    dim.addColorStop(0.74, `rgba(4,5,12,${deep})`);
+    if (soft) { dim.addColorStop(0.45, `rgba(4,5,12,${deep})`); dim.addColorStop(0.75, `rgba(4,5,12,${deep * 0.35})`); }
+    else dim.addColorStop(0.74, `rgba(4,5,12,${deep})`);
     dim.addColorStop(1, 'rgba(4,5,12,0)');
     c.fillStyle = dim;
     c.beginPath(); c.arc(this.coreX, this.coreY, reach, 0, TWO_PI); c.fill();
@@ -1872,7 +1900,7 @@ export class GdRenderer {
       let shown: [number, number, string] | null = null;
       // (a B-side explains nothing: whoever found it has cleared the level it is the night side of)
       if ((!bestFor(level.id).cleared || run.opts.practice) && !level.file.side) for (const hnt of this.hints) if (beat >= hnt[0] && beat <= hnt[1]) shown = hnt;
-      if (ahead && !run.opts.tutorial) shown = [ahead.a - 5, ahead.a + 1, 'shard branch: all the gold, no extra taps'];
+      if (ahead && !run.opts.tutorial && this.look !== 2) shown = [ahead.a - 5, ahead.a + 1, 'shard branch: all the gold, no extra taps'];
       if (shown) {
         const al = Math.min(1, (beat - Math.max(shown[0], run.startAt / level.spb - 4)) / 0.5, (shown[1] - beat) / 0.5);
         // the star trail's line sits under the three stars at the top of the screen, clear of the course

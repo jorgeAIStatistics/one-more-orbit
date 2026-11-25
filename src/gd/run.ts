@@ -300,6 +300,15 @@ export class GdRun {
     this.onEnd(this);
   }
 
+  /** Lets the run go without cutting its song: the music fades over `secs` (the star sequence, the camera's rise). */
+  fadeOut(secs: number): void {
+    clearTimeout(this.endTimer);
+    this.ended = true;
+    this.music?.stop(secs);
+    this.state = 'done';
+    audio.setMuffle(0);
+  }
+
   stop(): void {
     clearTimeout(this.endTimer);
     this.ended = true;

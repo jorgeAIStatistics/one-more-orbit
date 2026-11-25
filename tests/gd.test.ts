@@ -16,6 +16,8 @@ for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), FINAL, .
   const TOL_MS = (pack.level.side?.tol ?? pack.level.rules?.tol ?? TOL_S) * 1000;
   /** presses a second at most: 2.5, and one a beat (2.7) in the final level */
   const RATE = id === FINAL.level.id ? 2.7 : 2.5;
+  /** charted under the next pass's rules (one idea per world, no gold notes, no roll: tests/nextpass.test.ts); the dosage-era rules marked below are not theirs */
+  const NEXT = base === 'heroes';
   const level = new Level(pack.level, pack.audio, pack.chart);
   const course = buildCourse(level, layers(pack), pitchLookup(pack), pack.level.lab, accentBeats(pack));
   const ms = (x: number) => x / 1000 / course.spb; // milliseconds as beats
@@ -77,7 +79,7 @@ for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), FINAL, .
       expect(secs).toBeLessThanOrEqual(120);
     });
 
-    it('survival presses are strong beats only: never closer than a beat and never faster than 2.5 a second, openings at least ±120 ms (±90 on a B-side)', () => {
+    it.skipIf(NEXT)('survival presses are strong beats only: never closer than a beat and never faster than 2.5 a second, openings at least ±120 ms (±90 on a B-side)', () => {
       const gaps = allBeats.slice(1).map((b, i) => b - allBeats[i]);
       if (pairs) {
         // the slow, heavy level also takes pairs of eighth notes: never closer than half a beat, never more than `pairs`
@@ -109,7 +111,7 @@ for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), FINAL, .
       });
     });
 
-    it('there is a charge before the drop, nothing in it can crash, and the drop opens with the smash', () => {
+    it.skipIf(NEXT)('there is a charge before the drop, nothing in it can crash, and the drop opens with the smash', () => {
       expect(course.charges.length).toBeGreaterThanOrEqual(1);
       const [c0, c1] = course.charges[course.charges.length - 1];
       expect(c1).toBeCloseTo(course.dropBeat, 1);
@@ -126,7 +128,7 @@ for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), FINAL, .
       expect(run([...before, ...spam(c0, 8, 0, c1 + 0.3)], course.start - 3, c1 + 0.5).crashed).toBe(false);
     });
 
-    it('the roll charges the drop: no taps leaves it empty, three notes in four fills it, mashing does not', () => {
+    it.skipIf(NEXT)('the roll charges the drop: no taps leaves it empty, three notes in four fills it, mashing does not', () => {
       const [c0, c1] = course.charges[0];
       const before = pressBeats.filter((b) => b < c0);
       const roll = course.flow.filter((f) => f.charge).map((f) => f.beat);
@@ -191,11 +193,11 @@ for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), FINAL, .
       sim.advance(cp - 0.01);
       expect(sim.crashed).toBe(false);
       expect(sim.judged).toBe(0);
-      sim.advance(cp + 6);
+      sim.advance((course.presses.filter((p) => p.beat >= cp && !p.auto)[1]?.beat ?? cp + 5) + 1);
       expect(sim.crashed).toBe(true); // nobody tapped after the handover
     });
 
-    it('variety: no mode runs longer than 8 bars, sections mix several kinds of bar, and the level\'s own mode stars in its drop', () => {
+    it.skipIf(NEXT)('variety: no mode runs longer than 8 bars, sections mix several kinds of bar, and the level\'s own mode stars in its drop', () => {
       const playable = (n: number) => !course.inCharge(n * 4) && n * 4 < course.end - 4;
       let run = 0;
       let worst = 0;
@@ -249,11 +251,11 @@ for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), FINAL, .
     });
 
     it('holds can never end the run (tethers apart), leave time to let go, and swallow the notes they cover', () => {
-      if (!level.file.holds) { expect(course.holds).toEqual([]); return; }
-      expect(course.holds.length).toBeGreaterThan(8);
+      if (!level.file.holds && !NEXT) { expect(course.holds).toEqual([]); return; }
+      expect(course.holds.length).toBeGreaterThan(NEXT ? 0 : 8); // (a next-pass world holds once: the charge before its drop)
       course.holds.forEach((h, i) => {
         expect(h.b - h.a, `hold at ${h.a}`).toBeGreaterThanOrEqual(HOLD_MIN - 1e-9);
-        expect(h.b - h.a, `hold at ${h.a}`).toBeLessThanOrEqual(HOLD_MAX + 1e-9);
+        expect(h.b - h.a, `hold at ${h.a}`).toBeLessThanOrEqual((NEXT ? 3.5 : HOLD_MAX) + 1e-9); // (a held charge lasts its bar, up to three and a half beats)
         if (i > 0) expect(h.a - course.holds[i - 1].b, `gap before the hold at ${h.a}`).toBeGreaterThanOrEqual(0.5 - 1e-9);
         // after a hold ends there is time to let go before the next white mark
         const next = course.presses.find((p) => p.beat > h.a + 1e-6);
@@ -337,7 +339,7 @@ for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), FINAL, .
       }
     });
 
-    it('three star trails: a clean run collects them all; a stray tap, a missed gold note, a hold let go or mashing loses that star and nothing else', () => {
+    it.skipIf(NEXT)('three star trails: a clean run collects them all; a stray tap, a missed gold note, a hold let go or mashing loses that star and nothing else', () => {
       if (pack.level.side) { expect(course.stars).toEqual([]); return; } // a B-side has no star trails
       const perfect = play(course.script);
       expect(course.stars.length).toBe(3);

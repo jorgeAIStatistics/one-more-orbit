@@ -3,6 +3,11 @@
 // four beats: introduce (shown, then safe), develop, twist, climax. Nothing here touches the saved game.
 import type { AudioMeta, ChartFile, LevelFile } from './types';
 import { FINAL, PACKS, type LevelPack } from './packs';
+import heroesLevel from '../../levels/heroes/level.json';
+import heroesAudio from '../../levels/heroes/audio.json';
+import heroesChart from '../../levels/heroes/chart.json';
+import heroesPresses from '../../levels/heroes/presses.json';
+import heroesAudit from '../../levels/heroes/audit.json';
 import ambushLevel from '../../levels/ambush/level.json';
 import ambushAudio from '../../levels/ambush/audio.json';
 import ambushChart from '../../levels/ambush/chart.json';
@@ -47,7 +52,9 @@ function room(base: LevelPack, id: string, from: number, to: number, bars: strin
   return { ...base, level };
 }
 
-const [HEROES, SKY, BLANK, INV] = PACKS;
+const [, SKY, BLANK, INV] = PACKS;
+/** the Meteor's room keeps the song it was built on (Heroes Tonight), now that Emberwick itself is flown to Volcano */
+const HEROES: LevelPack = { level: heroesLevel as unknown as LevelFile, audio: heroesAudio as AudioMeta, chart: heroesChart as unknown as ChartFile, presses: heroesPresses as LevelPack['presses'], audit: heroesAudit as LevelPack['audit'] };
 
 export const CHAMBERS: Chamber[] = [
   {

@@ -245,8 +245,8 @@ export class SkyLanding {
       if (up > 0) K.glow(c, g.seam[0], g.seam[1] + STAGE_TILT * h * PAR.sleeper, 200 * g.u, [120, 235, 215], 0.3 * up * (0.7 + 0.3 * st.kick), 'screen');
       // the air round the course is kept dark, so the path and its nodes are the clearest things there are
       if (this.veil > 0.003) {
-        const cx = w / 2, cy = h * 0.52, span = Math.min(w, h) * 0.56, gr = c.createRadialGradient(cx, cy, span * 0.1, cx, cy, span), a = 0.5 * this.veil;
-        gr.addColorStop(0, `rgba(4,10,20,${a})`); gr.addColorStop(0.74, `rgba(4,10,20,${a})`); gr.addColorStop(1, 'rgba(4,10,20,0)');
+        const cx = w / 2, cy = h * 0.52, span = Math.min(w, h) * 0.74, gr = c.createRadialGradient(cx, cy, 0, cx, cy, span), a = 0.5 * this.veil;
+        gr.addColorStop(0, `rgba(4,10,20,${a})`); gr.addColorStop(0.4, `rgba(4,10,20,${a})`); gr.addColorStop(0.62, `rgba(4,10,20,${a * 0.62})`); gr.addColorStop(0.82, `rgba(4,10,20,${a * 0.22})`); gr.addColorStop(1, 'rgba(4,10,20,0)');
         c.fillStyle = gr; c.fillRect(0, 0, w, h);
       }
     }

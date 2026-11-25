@@ -119,8 +119,9 @@ export class PlanetScene {
     }
     // the air round the course is kept dark: the rings and the white marks stay the clearest things there are
     // (only the ring of air the course is in: the sky above it and the land below keep their colour)
-    const cx = w / 2, cy = h * 0.52, span = Math.min(w, h) * 0.56, g = c.createRadialGradient(cx, cy, span * 0.1, cx, cy, span);
-    g.addColorStop(0, `rgba(12,8,26,${0.42 + 0.1 * k})`); g.addColorStop(0.74, `rgba(12,8,26,${0.42 + 0.16 * k})`); g.addColorStop(1, 'rgba(12,8,26,0)');
+    // (it falls off slowly, like dusk round the course, never as a disc with an edge)
+    const cx = w / 2, cy = h * 0.52, span = Math.min(w, h) * 0.74, g = c.createRadialGradient(cx, cy, 0, cx, cy, span), va = 0.4 + 0.12 * k;
+    g.addColorStop(0, `rgba(12,8,26,${va})`); g.addColorStop(0.4, `rgba(12,8,26,${va})`); g.addColorStop(0.62, `rgba(12,8,26,${va * 0.62})`); g.addColorStop(0.82, `rgba(12,8,26,${va * 0.22})`); g.addColorStop(1, 'rgba(12,8,26,0)');
     c.fillStyle = g; c.fillRect(0, 0, w, h);
     if (st.dark > 0.01) { c.fillStyle = `rgba(6,5,18,${st.dark * 0.6})`; c.fillRect(0, 0, w, h); }
     write(c, w, h, this.u, this.says, st.song);
@@ -169,8 +170,9 @@ export class NebulaScene {
       c.fillStyle = 'rgba(255,250,232,0.9)'; c.beginPath(); c.arc(x, y, (1.8 + (i % 3) * 0.5) * u, 0, Math.PI * 2); c.fill();
     }
     // the air round the orbit a little deeper, so the path and its Star-Nodes read against all that gold
-    const cx = w / 2, cy = h * 0.52, span = Math.min(w, h) * 0.58, g = c.createRadialGradient(cx, cy, span * 0.1, cx, cy, span);
-    g.addColorStop(0, 'rgba(60,26,14,0.5)'); g.addColorStop(0.74, 'rgba(60,26,14,0.5)'); g.addColorStop(1, 'rgba(60,26,14,0)');
+    // (falling off slowly, never a disc with an edge)
+    const cx = w / 2, cy = h * 0.52, span = Math.min(w, h) * 0.76, g = c.createRadialGradient(cx, cy, 0, cx, cy, span);
+    g.addColorStop(0, 'rgba(60,26,14,0.42)'); g.addColorStop(0.4, 'rgba(60,26,14,0.42)'); g.addColorStop(0.62, 'rgba(60,26,14,0.26)'); g.addColorStop(0.82, 'rgba(60,26,14,0.09)'); g.addColorStop(1, 'rgba(60,26,14,0)');
     c.fillStyle = g; c.fillRect(0, 0, w, h);
     write(c, w, h, u, this.says, st.song);
   }

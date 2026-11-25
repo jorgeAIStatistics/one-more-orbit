@@ -126,6 +126,9 @@ export class Sim {
     if (prev && prev.land > start) { this.takeoff(prev, prev.beat); this.needJudge = false; } // starting in mid-flight
     // starting after the charge has begun: there was no chance to fill it, so the drop is not held back
     if (c.charges.length && Math.max(start, autoUntil) > c.charges[0][0] + 0.5) this.charge = 1;
+    // a level with no roll to charge (the new charts: no gold notes) holds nothing back: the drop's power is the flow the
+    // nodes themselves built, tapped on the beat
+    if (!c.charges.length || !c.chargeNotes) this.charge = 1;
   }
 
   private takeoff(p: Press, at: number): void {

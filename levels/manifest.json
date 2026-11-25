@@ -1,13 +1,69 @@
 {
-  "licenceNote": "Music used under a game licence from NoCopyrightSounds (ncs.io).",
+  "licenceNote": "Music provided by NoCopyrightSounds (ncs.io). Private test build.",
   "creditSuffix": "Music provided by NoCopyrightSounds",
   "tracks": [
     {
-      "id": "heroes",
-      "title": "Heroes Tonight (feat. Johnning)",
-      "artist": "Janji",
+      "id": "started",
+      "title": "Where We Started (feat. Jex)",
+      "artist": "Lost Sky",
       "release": "NCS Release",
       "playable": true
+    },
+    {
+      "id": "heroes",
+      "title": "Volcano (feat. Scarlett)",
+      "artist": "Jim Yosef",
+      "release": "NCS Release",
+      "playable": true
+    },
+    {
+      "id": "flutter",
+      "title": "Flutter",
+      "artist": "Diamond Eyes",
+      "release": "NCS Release",
+      "playable": false
+    },
+    {
+      "id": "luna",
+      "title": "Luna",
+      "artist": "Abandoned, GalaxyTones, DNAKM",
+      "release": "NCS Release",
+      "playable": false
+    },
+    {
+      "id": "willow",
+      "title": "Willow Tree (feat. Rosendale)",
+      "artist": "Rival, CADMIUM",
+      "release": "NCS Release",
+      "playable": false
+    },
+    {
+      "id": "memorybox",
+      "title": "Memory Box",
+      "artist": "ROY KNOX",
+      "release": "NCS Release",
+      "playable": true
+    },
+    {
+      "id": "darkness",
+      "title": "Darkness",
+      "artist": "Lost Sky, She Is Jules",
+      "release": "NCS Release",
+      "playable": false
+    },
+    {
+      "id": "throne",
+      "title": "Throne",
+      "artist": "Rival, Neoni",
+      "release": "NCS Release",
+      "playable": false
+    },
+    {
+      "id": "longroad",
+      "title": "The Long Road Home",
+      "artist": "Inukshuk",
+      "release": "NCS Release",
+      "playable": false
     },
     {
       "id": "skyhigh",
@@ -37,5 +93,6 @@
       "release": "NCS Release",
       "playable": true
     }
-  ]
+  ],
+  "_doc": "The first nine are the next pass's soundtrack (the user's picks; instrumentals where NCS has one). The last four are still flown on planets not yet re-charted. Until the user confirms an NCS game licence for the new songs, the credits say \"Private test build\"."
 }

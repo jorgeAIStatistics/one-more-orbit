@@ -6,3 +6,4 @@ tools/.venv/
 __pycache__/
 .DS_Store
 .claude/
+frames-phone.log

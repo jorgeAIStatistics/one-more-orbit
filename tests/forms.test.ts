@@ -32,7 +32,8 @@ describe('escalation: each planet is tighter, shows less and asks for more', () 
       const tol = pack.level.rules!.tol! * 1000;
       const plain = course.presses.filter((p) => !p.smash && !p.after && !p.wide && !p.auto);
       expect(plain.length).toBeGreaterThan(20);
-      for (const p of plain) expect(p.tol * course.spb * 1000, `${pack.level.id} at ${p.beat}`).toBeCloseTo(tol, 3);
+      // (Emberwick's double strike: two walls half a beat apart share the room between them, so they may be a little narrower)
+      for (const p of plain) if (!(pack.level.id === 'heroes' && course.presses.some((q) => q !== p && Math.abs(q.beat - p.beat) < 0.99))) expect(p.tol * course.spb * 1000, `${pack.level.id} at ${p.beat}`).toBeCloseTo(tol, 3);
       // the first press after a planet hop, a lens or a gate, and the drop's big press: ±160 ms (or all the room there is)
       for (const p of course.presses.filter((x) => (x.smash || x.after) && !x.auto)) expect(p.tol * course.spb, `${pack.level.id} at ${p.beat}`).toBeGreaterThanOrEqual(0.159);
     }
@@ -49,7 +50,7 @@ describe('escalation: each planet is tighter, shows less and asks for more', () 
     // the fourth planet is the slow song: it reaches its pace with pairs of eighth notes, the others never go under a beat
     built.forEach(({ course, pack }) => {
       const gap = Math.min(...course.presses.slice(1).map((p, i) => p.beat - course.presses[i].beat));
-      expect(gap).toBe(pack.level.id === 'invincible' ? 0.5 : 1);
+      expect(gap).toBe(pack.level.id === 'invincible' || pack.level.id === 'heroes' ? 0.5 : 1); // (Emberwick: the double strike, its twist)
     });
   });
 });
@@ -102,10 +103,12 @@ describe('forms: one new one per planet, each with a safe introduction', () => {
       for (let k = 1; k < at.length; k++) expect(at[k] - at[k - 1], `${id}: bars ${at[k - 1] + 1} to ${at[k] + 1} without a lens`).toBeLessThanOrEqual(16);
       expect(course.lenses.length, id).toBeGreaterThanOrEqual(10);
     }
+    // the first planet (the next pass): one form change in the whole level, at a section change, and the form then lasts
+    // for the rest of it (at least eight bars)
     const h = of('heroes').course;
-    expect(h.lenses.length).toBeGreaterThanOrEqual(3);
-    const stretches = h.lenses.filter((l) => l.form === 'meteor').map((l) => { const next = h.lenses.find((x) => x.beat > l.beat); return ((next ? next.beat : h.end) - l.beat) / 4; });
-    expect(Math.max(...stretches)).toBeGreaterThan(2);
+    expect(h.lenses.length).toBe(1);
+    expect(h.lenses[0].form).toBe('meteor');
+    expect((h.end - h.lenses[0].beat) / 4).toBeGreaterThanOrEqual(8);
     // and in those bars the player really is the Meteor: at least four presses of their own in one stretch
     expect(h.presses.filter((p) => p.form === 'meteor' && !p.auto).length).toBeGreaterThanOrEqual(8);
   });
@@ -263,16 +266,14 @@ describe('gates, pads, chimes and slipstreams', () => {
   });
 
   it('pads are tapped: a spring pad throws the ball to the next planet, a tide pad turns gravity over, and missing either ends the run', () => {
-    const spring = of('heroes').course.presses.filter((p) => p.pad === 'spring');
-    expect(spring.length).toBeGreaterThanOrEqual(2);
-    for (const p of spring) { expect(p.auto).toBe(false); expect(p.sling).toBe(true); }
-    expect(of('heroes').course.presses.some((p) => p.sling && !p.pad)).toBe(true); // and the plain planet hop is still there
+    // (spring pads were on the first planet; the next pass leaves Emberwick to its one idea, and they wait for a later world)
+    expect(of('heroes').course.presses.some((p) => p.pad)).toBe(false);
     const tide = of('skyhigh').course.presses.filter((p) => p.pad === 'tide');
     expect(tide.length).toBeGreaterThanOrEqual(3);
     for (const p of tide) { expect(p.auto).toBe(false); expect(p.kind).toBe('flip'); }
     // nothing but a form's introduction, the launch into a drop and the run-in is ever played for the player
     for (const { course } of built) expect(course.presses.filter((p) => p.auto && !p.intro && !p.smash).every((p) => !p.pad)).toBe(true);
-    for (const [id, pad] of [['heroes', 'spring'], ['skyhigh', 'tide']] as const) {
+    for (const [id, pad] of [['skyhigh', 'tide']] as const) {
       const { course } = of(id);
       const p = course.presses.find((x) => x.pad === pad)!;
       const skipped = course.script.filter(([t]) => Math.abs(t - p.beat) > 1e-6 && !(t > p.beat && t < p.beat + 0.3));

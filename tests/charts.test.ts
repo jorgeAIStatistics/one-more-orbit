@@ -24,6 +24,8 @@ describe('orbit shapes', () => {
 for (const pack of PACKS) {
   const level = new Level(pack.level, pack.audio, pack.chart);
   const notes = level.notes;
+  /** charted under the next pass's rules: one idea, nothing that the song is not playing (tests/nextpass.test.ts) */
+  const NEXT = pack.level.id === 'heroes';
   describe(`${pack.level.id}: one-button chart`, () => {
     it('is at most 2:00 and the layout covers the excerpt', () => {
       expect(pack.audio.length).toBeLessThanOrEqual(120);
@@ -78,12 +80,12 @@ for (const pack of PACKS) {
         }
       }
     });
-    it('big hits are marked: the first gate of the drop is an accent', () => {
+    it.skipIf(NEXT)('big hits are marked: the first gate of the drop is an accent', () => {
       const first = notes.find((n) => n.t >= level.dropTime - 0.01);
       expect(first && first.t - level.dropTime).toBeLessThan(4 * level.spb);
       expect(first?.accent).toBe(true);
     });
-    it('uses enough one-button elements for its length, with something new at least every 20 s', () => {
+    it.skipIf(NEXT)('uses enough one-button elements for its length, with something new at least every 20 s', () => {
       const used = new Set<string>();
       if (level.rings.some((r) => r.last > r.first)) used.add('bursts');
       if (notes.some((n) => n.kind === 'flip')) used.add('flip gates');
