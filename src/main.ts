@@ -633,11 +633,11 @@ const LESSONS: Array<[number, string]> = [
 const FIRST_LESSONS: Array<[number, string]> = [
   [-9, ''],
   [0.5, 'Tap as each gold ring closes on its <i>Star-Node</i>.'],
-  [14, ''],
-  [33, 'A blue ribbon: keep your finger down along it, and let go at its end.'],
-  [46, ''],
-  [60, 'Only a missed <i>Star-Node</i> ends a flight, and the next begins at once.'],
-  [74, '']
+  [13, ''],
+  [26, 'A blue ribbon: keep your finger down along it, and let go at its end.'],
+  [36, ''],
+  [62, 'Only a missed <i>Star-Node</i> ends a flight, and the next begins at once.'],
+  [76, '']
 ];
 function startTutorial(): void {
   run?.stop();
@@ -1669,6 +1669,6 @@ Object.assign(window, {
     story: (k: string) => playStory(k, () => show('levels'), true),
     chambers: () => openChambers(), chamber: (id: string, bot = false) => { const c = CHAMBERS.find((x) => x.id === id); if (c) startChamber(c, bot); }, get room() { return chamber; },
     tutorial: startTutorial, results: (cleared: boolean) => { if (run) showResults(run, cleared, run.pct); }, pause,
-    opening, startOpening, startCold, landing, skyStar, toTitle, toLanding, first: (bot = false) => { botMode = bot; practice = false; pack = FIRST; startRun(); }, moment: (k: 'gift' | 'road', stars = 1) => { moment.play(k, 'heroes', stars, () => show('levels')); show('moment'); }, memory: (w = 'heroes') => startMemory(w, () => show('levels')), firstClear: (w = 'heroes') => firstClear(w, () => show('levels')), logbook: openLogbook, orbs: openGlows, stars: openStars, credits: openCredits, sync10: () => openCalib(), calTap, settings: () => openSettings('levels')
+    opening, startOpening, startCold, landing, skyStar, toTitle, toLanding, first: (bot = false, from = -1) => { botMode = bot; practice = false; pack = FIRST; startRun(from); }, moment: (k: 'gift' | 'road', stars = 1) => { moment.play(k, 'heroes', stars, () => show('levels')); show('moment'); }, memory: (w = 'heroes') => startMemory(w, () => show('levels')), firstClear: (w = 'heroes') => firstClear(w, () => show('levels')), logbook: openLogbook, orbs: openGlows, stars: openStars, credits: openCredits, sync10: () => openCalib(), calTap, settings: () => openSettings('levels')
   }
 });

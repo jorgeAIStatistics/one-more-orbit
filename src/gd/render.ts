@@ -19,8 +19,8 @@ const LOOK = 2; // beats before an opening that the ring above shows as a ceilin
 const WHITE: RGB = [255, 255, 255];
 const DANGER: RGB = [232, 70, 54]; // vermilion, the atlas's one warning colour: // the edge of everything that ends the run
 let GOLD: RGB = [240, 200, 98]; // flow notes, flow, the smash
-const VIOLET: RGB = [178, 150, 255]; // gravity flip
-const CYAN: RGB = [112, 220, 204]; // speed portals, turns, planet hops
+let VIOLET: RGB = [178, 150, 255]; // gravity flip
+let CYAN: RGB = [112, 220, 204]; // speed portals, turns, planet hops
 const FLOOR: RGB = [247, 240, 222]; // the rings you ride: one fixed colour, whatever the world behind is doing
 let STONE: RGB = [158, 172, 214]; // the gravity path asleep: stone tiles, ahead of Orbin
 let WOKEN: RGB = [255, 224, 160]; // and awake: where he has been
@@ -49,8 +49,9 @@ const TAP: RGB = [255, 204, 72];
 /** what a hold is drawn in: a calm ribbon to follow while the finger stays down */
 const HOLD: RGB = [110, 206, 222];
 /** The second look's quiet family: everything that is not a tap or a danger steps back into cool, low-contrast tones. */
-const QUIET = { gold: [150, 158, 204] as RGB, stone: [84, 94, 140] as RGB, woken: [128, 150, 222] as RGB, star: [150, 158, 204] as RGB };
-const LOUD = { gold: [240, 200, 98] as RGB, stone: [158, 172, 214] as RGB, woken: [255, 224, 160] as RGB, star: [255, 244, 200] as RGB };
+// (gates, spikes, planet-hop arrows and speed signs are the soft blue of the legend too: only the gold ring stands out)
+const QUIET = { gold: [150, 158, 204] as RGB, stone: [84, 94, 140] as RGB, woken: [128, 150, 222] as RGB, star: [150, 158, 204] as RGB, cyan: [146, 180, 232] as RGB, violet: [150, 160, 226] as RGB };
+const LOUD = { gold: [240, 200, 98] as RGB, stone: [158, 172, 214] as RGB, woken: [255, 224, 160] as RGB, star: [255, 244, 200] as RGB, cyan: [112, 220, 204] as RGB, violet: [178, 150, 255] as RGB };
 /** Each form's own colour: its lens, and the trim of the hero while in it. */
 export const FORM_COL: Record<Form, RGB> = { orb: [255, 255, 255], meteor: [255, 150, 90], sat: [120, 220, 255], pulsar: [200, 140, 255], comet: [150, 255, 200] };
 const FORM_NAME: Record<Form, string> = { orb: 'ORB', meteor: 'METEOR', sat: 'SATELLITE', pulsar: 'PULSAR', comet: 'COMET' };
@@ -144,7 +145,7 @@ export class GdRenderer {
   /** the core's flare: 1 on the drop's big hits (its great node, an accent, the finish), falling away in half a second */
   private coreFlare = 0;
   get look(): 1 | 2 { return this._look; }
-  set look(v: 1 | 2) { this._look = v; const P = v === 2 ? QUIET : LOUD; GOLD = P.gold; STONE = P.stone; WOKEN = P.woken; STAR = P.star; }
+  set look(v: 1 | 2) { this._look = v; const P = v === 2 ? QUIET : LOUD; GOLD = P.gold; STONE = P.stone; WOKEN = P.woken; STAR = P.star; CYAN = P.cyan; VIOLET = P.violet; }
   /** the beat of the second tap still to come: nodes after it wait, unlit */
   private cueUntil = Infinity;
   /** the beat of the first tap still to come: a node behind it has been dealt with, and is unlit again */
@@ -231,14 +232,18 @@ export class GdRenderer {
     this.ahead = level.file.side?.ahead ?? level.file.rules?.ahead ?? 3;
     // hints: the first mark, the first gold note, and each mechanic the first time the level uses it
     this.hints = [];
-    const first = c.presses[0];
+    const firstPress = c.presses[0];
     // (the one-signal look writes on the course only what is new: the tap and the hold are taught once, in the first
     // stage's own lessons, and a form is named once, where it is given. Nothing else is labelled.)
-    const quiet = this.look === 2, taught = (w: Feature) => quiet && (w === 'rail' || w === 'line' || w === 'twin' || w === 'charge' || w === 'smash');
-    if (first && !quiet) this.hints.push([c.start - 9, first.beat + 1.5, 'tap as he reaches each Star-Node']);
+    // (in the one-signal look a thing is explained once, in the level that first has it: the first stage teaches the tap,
+    // the ribbon, the spike, the spin gate, the planet hop and the speed gate; after it, only a world's own gift is told)
+    const first = level.id === 'started', quiet = this.look === 2;
+    const taught = (w: Feature) => quiet && (w === 'rail' || w === 'line' || w === 'twin' || w === 'charge' || w === 'smash' || (!first && (w === 'reverse' || w === 'spin' || w === 'sling' || w === 'faster' || w === 'slower')));
+    const said = (w: Feature) => (!quiet ? HINT[w] : w === 'reverse' ? 'a spike: tap it, and he turns round' : w === 'sling' && !level.file.holds ? 'a planet hop: tap, and he leaps to the next world' : w === 'spin' ? 'spin gate: tap as the gap comes round' : HINT[w]);
+    if (firstPress && !quiet) this.hints.push([c.start - 9, firstPress.beat + 1.5, 'tap as he reaches each Star-Node']);
     const gold = c.flow.find((f) => !f.charge);
     if (gold && !quiet) this.hints.push([gold.beat - 3, gold.beat + 2.5, 'gold lights: bonus taps']);
-    for (const f of c.firsts) if (!taught(f.what)) this.hints.push(f.what === 'charge' ? [f.beat - 2.5, f.beat + 4, HINT.charge] : f.what === 'smash' ? [f.beat - 5, f.beat, HINT.smash] : [f.beat - 4.5, f.beat + 1.5, HINT[f.what]]);
+    for (const f of c.firsts) if (!taught(f.what)) this.hints.push(f.what === 'charge' ? [f.beat - 2.5, f.beat + 4, HINT.charge] : f.what === 'smash' ? [f.beat - 5, f.beat, HINT.smash] : [f.beat - 4.5, f.beat + 1.5, said(f.what)]);
     this.hints.sort((a, b) => a[0] - b[0]);
     this.energy = barEnergy(level);
     this.particles = [];
@@ -863,10 +868,10 @@ export class GdRenderer {
           c.lineCap = 'butt';
           c.beginPath(); c.arc(0, 0, rs, g + hw, g - hw + TWO_PI);
           c.strokeStyle = HALO; c.lineWidth = 7.5; c.stroke();
-          c.strokeStyle = rgba(DANGER); c.lineWidth = 3.6; c.stroke();
-          c.strokeStyle = '#ffffff'; c.lineWidth = 1.4; c.stroke();
+          c.strokeStyle = this.look === 2 ? rgba(WOKEN, 0.95) : rgba(DANGER); c.lineWidth = 3.6; c.stroke();
+          c.strokeStyle = this.look === 2 ? 'rgba(20,26,62,0.9)' : '#ffffff'; c.lineWidth = 1.4; c.stroke();
           // the gap's two lips, so the opening itself is easy to follow
-          c.fillStyle = '#ffffff';
+          c.fillStyle = this.look === 2 ? rgba(CYAN) : '#ffffff';
           for (const e of [g - hw, g + hw]) { c.beginPath(); c.arc(Math.cos(e) * rs, Math.sin(e) * rs, 3.4, 0, TWO_PI); c.fill(); }
           c.globalAlpha = alpha;
         }
@@ -1264,7 +1269,7 @@ export class GdRenderer {
         else for (const k of [-1, 1]) { c.beginPath(); c.moveTo(k * rb * 2.6, -rr); c.lineTo(k * rb * 1.2, -rr - rb * 1.1); c.lineTo(k * rb * 1.2, -rr + rb * 1.1); c.closePath(); c.fill(); }
         c.restore();
         const ma = ang(mb);
-        this.tag(flipV ? 'UPSIDE-DOWN' : 'MIRROR', bx0 + Math.cos(ma) * (rr + rb * 6.6), by0 + Math.sin(ma) * (rr + rb * 6.6), clamp(rb * 1.5, 10, 15), CYAN, al);
+        if (this.look !== 2) this.tag(flipV ? 'UPSIDE-DOWN' : 'MIRROR', bx0 + Math.cos(ma) * (rr + rb * 6.6), by0 + Math.sin(ma) * (rr + rb * 6.6), clamp(rb * 1.5, 10, 15), CYAN, al);
       }
       for (const tb of course.turns) {
         const d = tb - beat;

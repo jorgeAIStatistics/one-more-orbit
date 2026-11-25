@@ -1,12 +1,15 @@
-// The next pass (the owner's rules of 2026-11-24): one main idea per world, a mechanic only where the music has its
-// sound, a form lasts at least eight bars, no optional gold notes (flow is earned on the nodes), nothing red or
-// sudden beside the tap; and the first ten minutes: the cold open, the first stage, Emberwick, the first memory.
+// The next pass. The owner's rules of 2026-11-24 (one NEW idea per world, a mechanic only where the music has its
+// sound, a form lasts at least eight bars, no optional gold notes, nothing red beside the tap) as corrected on
+// 2026-11-25: everything the player already knows stays in play; charts follow the music's most interesting part; no
+// bar pattern more than twice running and something changing every four bars; every phrase mixes its actions;
+// verses 2-4 taps a bar, drops 4-8; three set pieces a planet; the first stage gentle for 20-30 s only.
 import { describe, expect, it } from 'vitest';
 import { COLD, FIRST, MEMORIES, PACKS, type LevelPack } from '../src/game/packs';
 import { Level } from '../src/game/level';
 import { buildCourse } from '../src/gd/course';
 import { accentBeats, layers, pitchLookup } from '../src/gd/presses';
 import { Sim } from '../src/gd/sim';
+import { audit } from '../tools/variety';
 
 const build = (p: LevelPack) => { const level = new Level(p.level, p.audio, p.chart); return { level, course: buildCourse(level, layers(p), pitchLookup(p), p.level.lab, accentBeats(p)) }; };
 const play = (c: ReturnType<typeof build>['course'], moves: Array<[number, boolean]>) => {
@@ -34,7 +37,7 @@ describe('Emberwick on Volcano: the Meteor, and nothing the song is not playing'
     expect(course.lenses.map((l) => [l.form, bar(l.beat)])).toEqual([['meteor', 9]]);
     expect(course.lenses[0].intro).toBe(true); // named once, where it is given
     // (the drop's great node is struck, not dashed: it has no wall; Orbin stays the Meteor through it)
-    for (const p of course.presses) if (!p.smash) expect(p.form, `press at ${p.beat}`).toBe(bar(p.beat) < 9 ? 'orb' : 'meteor');
+    for (const p of course.presses) if (!p.smash && !p.sling) expect(p.form, `press at ${p.beat}`).toBe(bar(p.beat) < 9 ? 'orb' : 'meteor'); // (a planet hop and the great node are struck as the Orb)
     for (let b = 36; b < course.end; b += 0.5) expect(course.formAt(b), `form at ${b}`).toBe('meteor');
   });
   it('the Meteor is given safely: its first walls are played for him, and the drums are not there yet', () => {
@@ -45,25 +48,14 @@ describe('Emberwick on Volcano: the Meteor, and nothing the song is not playing'
   it('has no gold notes: flow is earned on the nodes themselves', () => {
     expect(course.flow.length).toBe(0);
   });
-  it('has nothing the plan leaves out: no pads, orbs, portals, gates, flips, twins, slings or tethers', () => {
-    expect(course.presses.some((p) => p.pad || p.orb || p.sling || p.twin || p.kind === 'flip')).toBe(false);
-    expect(course.portals.length + course.turns.length + course.mirrors.length + course.inverts.length + course.twins.length).toBe(0);
+  it('keeps everything the first stage taught in play: spikes, spin gates, holds, doubles, height changes, a planet hop and a speed gate; no pads, orbs, twins or tethers', () => {
+    expect(course.turns.length).toBeGreaterThanOrEqual(3);
+    expect(course.presses.some((p) => p.spin)).toBe(true);
+    expect(course.presses.some((p) => p.sling)).toBe(true);
+    expect(course.portals.some((g) => g.faster)).toBe(true);
+    expect(course.holds.length).toBeGreaterThanOrEqual(2);
+    expect(course.presses.some((p) => p.pad || p.orb || p.twin)).toBe(false);
     expect(course.holds.some((h) => h.tether)).toBe(false);
-  });
-  it('one hold: the charge in bar 16, let go on the drop', () => {
-    expect(course.holds.map((h) => bar(h.a))).toEqual([16]);
-    expect(Math.abs(course.holds[0].b + 0.75 - course.dropBeat)).toBeLessThan(0.76);
-  });
-  it('taps are at least a beat apart (0.6 s), except the double strike: two walls half a beat apart, only in the drop\'s second half, never two bars running before its last two', () => {
-    const doubles: number[] = [];
-    for (let i = 1; i < course.presses.length; i++) {
-      const g = course.presses[i].beat - course.presses[i - 1].beat;
-      if (g < 1 - 1e-6) { expect(g).toBeGreaterThanOrEqual(0.5 - 1e-6); doubles.push(bar(course.presses[i].beat)); }
-    }
-    expect(doubles.length).toBeGreaterThanOrEqual(3);
-    expect(Math.min(...doubles)).toBeGreaterThanOrEqual(25);
-    const early = doubles.filter((b) => b < 31);
-    for (let i = 1; i < early.length; i++) expect(early[i] - early[i - 1]).toBeGreaterThanOrEqual(2);
   });
   it('a clean run clears with a full drop; doing nothing, or tapping 180 ms late everywhere, does not', () => {
     const s = play(course, course.script);
@@ -76,17 +68,21 @@ describe('Emberwick on Volcano: the Meteor, and nothing the song is not playing'
 
 describe('the first stage: the Drifting Edge, on Where We Started', () => {
   const { course } = build(FIRST);
-  it('is the song from where its drums come in, taught on Star-Nodes and the ribbon only', () => {
+  it('is the song from where its drums come in: no forms, no gold notes, no tethers; it teaches the tap, the double, the spike, the ribbon, the spin gate, the weave, the planet hop and the speed gate', () => {
     expect(FIRST.level.title).toMatch(/^Where We Started/);
     expect(course.lenses.length).toBe(0);
     expect(course.flow.length).toBe(0);
-    expect(course.presses.every((p) => p.form === 'orb' && !p.pad && !p.orb && !p.sling && p.kind !== 'flip')).toBe(true);
+    expect(course.presses.every((p) => p.form === 'orb' && !p.pad && !p.orb)).toBe(true);
     expect(course.holds.some((h) => h.tether)).toBe(false);
-    expect(course.holds.length).toBe(4); // three in the quiet stretch, and the charge
+    expect(course.holds.length).toBeGreaterThanOrEqual(3);
+    expect(course.turns.length).toBeGreaterThanOrEqual(3);
+    expect(course.presses.some((p) => p.spin) && course.presses.some((p) => p.weave) && course.presses.some((p) => p.sling)).toBe(true);
+    expect(course.portals.some((g) => g.faster)).toBe(true);
   });
-  it('starts slow: its first eight bars are taps two beats apart (0.8 s)', () => {
-    const first = course.presses.filter((p) => bar(p.beat) < 8);
-    for (let i = 1; i < first.length; i++) expect(first[i].beat - first[i - 1].beat).toBeGreaterThanOrEqual(2 - 1e-6);
+  it('is gentle for its first twenty-odd seconds only (2-4 taps a bar), then a real level', () => {
+    const perBar = (n: number) => course.presses.filter((p) => bar(p.beat) === n).length;
+    for (let n = 1; n < 16; n++) { expect(perBar(n), `bar ${n}`).toBeGreaterThanOrEqual(2); expect(perBar(n), `bar ${n}`).toBeLessThanOrEqual(4); }
+    expect(16 * 4 * course.spb).toBeLessThanOrEqual(30);
   });
   it('a clean run clears, and the star rises in the song\'s own quiet after it', () => {
     expect(play(course, course.script).crashed).toBe(false);
@@ -104,6 +100,24 @@ describe('the cold open and the first memory: twin orbits, one tap moves both, n
       const sim = new Sim(course, -4, -Infinity, true);
       for (let b = -4; b <= course.end && !sim.crashed; b += 0.25) { sim.advance(b); sim.out.length = 0; }
       expect(sim.crashed).toBe(false);
+    });
+  }
+});
+
+describe('the variety audit: the owner\'s charting rules, measured on the courses the game builds', () => {
+  for (const pack of [FIRST, EMBER]) {
+    it(pack.level.id, () => {
+      const a = audit(pack);
+      expect(a.uniquePct, 'unique bar patterns').toBeGreaterThanOrEqual(60);
+      expect(a.longestRun, 'identical bars in a row').toBeLessThanOrEqual(2);
+      expect(a.setpieces.length).toBeGreaterThanOrEqual(3);
+      for (const sp of a.setpieces) expect(sp.found, sp.name).toBe(true);
+      for (const p of a.phrases) expect(p.actions.length, `actions in bars ${p.bars}`).toBeGreaterThanOrEqual(4);
+      for (const s of a.sections) {
+        if (/VERSE/.test(s.label)) { expect(s.mean, s.id).toBeGreaterThanOrEqual(2); expect(Math.max(...s.perBar), s.id).toBeLessThanOrEqual(4); }
+        if (/DROP/.test(s.label)) { expect(s.mean, s.id).toBeGreaterThanOrEqual(4); expect(Math.max(...s.perBar), s.id).toBeLessThanOrEqual(8); }
+      }
+      expect(a.rest.longestGapBeats, 'never long with nothing to tap').toBeLessThanOrEqual(4);
     });
   }
 });

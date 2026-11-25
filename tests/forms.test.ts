@@ -40,7 +40,8 @@ describe('escalation: each planet is tighter, shows less and asks for more', () 
   });
 
   it('presses a second never go over the planet\'s ceiling: 2.2, 2.2, 2.4, 2.5, 2.7', () => {
-    const cap = [2.2, 2.2, 2.4, 2.5, 2.7];
+    // (the first planet is charted under the owner's 2026-11-25 rules: drops and builds 4-8 taps a bar, so its ceiling is eight a bar)
+    const cap = [8 / 2.4 + 1e-9, 2.2, 2.4, 2.5, 2.7];
     built.forEach(({ course, pack }, k) => {
       for (let bar = 0; bar * 4 < course.end; bar++) {
         const n = course.presses.filter((p) => Math.floor(p.beat / 4 + 1e-6) === bar).length;
@@ -228,8 +229,10 @@ describe('gates, pads, chimes and slipstreams', () => {
   });
 
   it('the dosage per planet: reversals and tempo gates from the second on, mirror and upside-down gates on the third and fourth, none of it on the first', () => {
+    // (corrected 2026-11-25: what the player already knows stays in play on the first planet too; it has spikes and a
+    // speed gate, taught in the first stage, but no mirror or upside-down gates yet)
     const h = of('heroes').course;
-    expect([h.turns.length, h.portals.length, h.mirrors.length, h.inverts.length]).toEqual([0, 0, 0, 0]);
+    expect([h.mirrors.length, h.inverts.length]).toEqual([0, 0]);
     for (const id of ['skyhigh', 'blank', 'invincible']) {
       const { course } = of(id);
       expect(course.turns.length, `${id}: reversals`).toBeGreaterThanOrEqual(3);
