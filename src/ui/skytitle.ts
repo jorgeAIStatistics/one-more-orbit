@@ -1,6 +1,8 @@
 // The title, Afterglow ("The Horizon"): the bottom of the same painting as the galaxy map. A wide dusk, the land a
-// low band, the Lantern far off, Eko drifting where the last light is, and the name written softly into the sky with
-// an orbit of light round it. A tap and Eko rises: the land sinks away, the name fades, and the galaxy is there.
+// low band, the guardian and its three rings far off, Orbin drifting where the last light is, and the name written
+// softly into the sky with an orbit of light round it. A tap and Orbin rises: the land sinks away, the name fades,
+// and the galaxy is there.
+import { CANON } from '../art/canonpaint.js';
 import { DUSK, K } from '../art/painter.js';
 
 const T = DUSK.tools;
@@ -55,15 +57,16 @@ export class SkyTitle {
     c.save(); c.filter = `blur(${26 * u}px)`; c.fillStyle = 'rgba(255,196,140,0.4)'; c.fillRect(-40, hy - 46 * u, w + 80, 70 * u); c.restore();
     RIDGES.forEach(([dy, amp, col, rim], i) => T.ridge(c, w, h, hy + dy * u, amp * u, 401 + i * 7, col, w * L.sun, [255, 214, 150], rim));
     const [lx, ly, ls] = [w * L.lantern[0], h * L.lantern[1], L.lantern[2] * u];
-    K.glow(c, lx - 10 * ls, ly - 132 * ls, 150 * ls, [255, 214, 150], 0.6);
-    T.lighthouse(c, lx, ly, ls, r);
+    // far off on the horizon: the guardian, kneeling, and the three shattered rings over it
+    CANON.parts.trials(c, lx - 6 * ls, ly - 150 * ls, 0.78 * ls, K.RNG(41), 0.8);
+    CANON.parts.guardian(c, lx, ly + 4 * ls, 0.2 * ls, K.RNG(42), 0);
     T.finish(c, w, h, 410, 0.5);
     this.bg = cv;
     const s = L.eko[2] * u, ek = document.createElement('canvas');
     ek.width = Math.round(700 * s * dpr); ek.height = Math.round(760 * s * dpr); // (room for the whole of his glow: a cut-off glow shows as a box)
     const ec = ek.getContext('2d')!;
     ec.scale(dpr * s, dpr * s);
-    T.eko(ec, 350, 330, 1, K.RNG(7), { wisp: true, lean: 0.3 });
+    CANON.parts.spark(ec, 350, 300, 1.5, { lean: -0.2, crest: 0.9, arms: 'rest', eyes: 'open', look: [-0.6, -0.5], face: 1 });
     this.eko = ek;
   }
 

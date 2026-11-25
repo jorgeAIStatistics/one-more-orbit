@@ -1,6 +1,6 @@
-// Stars: the one thing to collect. Each planet has a constellation of five, the Hollow has three, the ambush two and
+// Stars: the one thing to collect. Each world has a constellation of five, the guardian has three, the ambush two and
 // the hidden moon one: 26 in all. They take the place of the old quests and of the badges screen. This file is the
-// rules only (which star is lit); the star chart on the gallery rail draws them.
+// rules only (which star is lit); the sky from the rim draws them.
 // Every star's id is stable ("star_heroes_dare"), so each can be given a Game Center achievement later.
 import { FINAL, PACKS } from './packs';
 
@@ -26,7 +26,7 @@ export interface StarProgress {
 const FINAL_ID = FINAL.level.id;
 const star = (place: string, kind: StarKind, name: string, what: string, tag: string = kind): Star => ({ id: `star_${place}_${tag}`, place, kind, name, what });
 const five = (id: string): Star[] => [
-  star(id, 'restore', 'Restore', 'bring its song home'),
+  star(id, 'restore', 'Reignite', 'wake its star'),
   star(id, 'shards', 'Shard run', 'all three shards in one flight'),
   star(id, 'dare', 'Daredevil', 'one attempt: a fall sends you home'),
   star(id, 'master', 'Rhythm master', 'touch every gold note'),
@@ -37,7 +37,7 @@ export const STARS: Star[] = [
   // the ambush is not in the sky yet: its two stars are shown, faint, and cannot be lit
   star('ambush', 'soon', 'Stand', 'come through it', 'stand'),
   star('ambush', 'soon', 'Every window', 'lose none of the four', 'windows'),
-  star(FINAL_ID, 'restore', 'Restore', 'bring the last song home'),
+  star(FINAL_ID, 'restore', 'Reignite', 'light the guardian\u2019s star'),
   star(FINAL_ID, 'dare', 'Daredevil', 'one attempt: a fall sends you home'),
   star(FINAL_ID, 'master', 'Rhythm master', 'touch every gold note')
 ];

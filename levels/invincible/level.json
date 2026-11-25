@@ -17,7 +17,7 @@
   "scale": [0, 1, 3, 5, 7, 8, 10],
   "swing": true,
   "difficulty": "Insane",
-  "adds": "Every form so far, long combos, Eko's echo in step and out of it, and the Comet: hold to climb, let go to fall",
+  "adds": "Every form so far, long combos, Helion's echo in step and out of it, and the Comet: hold to climb, let go to fall",
   "holds": true,
   "rules": {"tol": 0.09, "ahead": 2.5, "branch": 0.06, "pairs": 2, "known": ["meteor", "sat", "pulsar"]},
   "shards": [[18.5, 21.5], [71.5, 74.5], [135.3333333, 139.3333333]],

@@ -1,18 +1,20 @@
-// The rooms of the Lantern, and the held breath of a pause (Afterglow). Each room is painted once (the wall, the
-// fire, the glass, the sky over the gallery rail, the logbook's page) and kept; the live things are drawn over it
-// every frame: flames that can be touched, Marlow's taps coming down the dark, constellations, and the writing.
+// The Landing's places, and the held breath of a pause (Afterglow). Each place is painted once (art/landpaint.ts)
+// and kept; the live things are drawn over it every frame: flames that can be touched, Helion's heartbeat coming
+// down the dark, constellations, and the writing.
 // No panels, no tiles, no buttons: a tap goes to whatever is painted there.
-//   desk     Marlow's desk: the picture behind the settings (their rows are real controls, laid over it)
-//   lamp     the lamp room: the sync check. Marlow taps the glass, and you tap along
-//   hearth   Eko's glows, a flame for each along the mantel
-//   gallery  the star chart
-//   page     the last page of the logbook: who made the music
+//   desk     the crater: the picture behind the settings (their rows are real controls, laid over it)
+//   lamp     listening for Helion: the sync check. His heartbeat comes, and you tap along
+//   hearth   Ossa's fire: Orbin's glows, a flame for each on the stones
+//   gallery  the sky from the rim: the stars
+//   page     the still pool: the story so far, and who made the music
 import { K } from '../art/painter.js';
 import { UI } from '../art/uipaint.js';
+import { LAND } from '../art/landpaint';
+import { CANON } from '../art/canonpaint.js';
 
 const C = UI.C;
 const SAND = '#e6cfae';
-const INK: [number, number, number] = [44, 28, 40];
+const INK: [number, number, number] = [255, 236, 206]; // what is written on the still pool: light, on dark water
 const FACE = '"Cormorant Garamond", "Hoefler Text", Baskerville, Palatino, Georgia, serif';
 const smooth = (x: number) => { const t = x < 0 ? 0 : x > 1 ? 1 : x; return t * t * (3 - 2 * t); };
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -63,6 +65,8 @@ export class SkyRooms {
   credits: CreditsInfo | null = null;
   /** the logbook, when it is the page being read (it takes the place of the credits on the page) */
   book: BookInfo | null = null;
+  /** where leaving the pool goes, in words */
+  bookBack = 'out to the galaxy';
   sync: SyncInfo | null = null;
   /** the hearth: the glow being read about (the one worn, unless a dark wick was touched) */
   look = '';
@@ -83,7 +87,7 @@ export class SkyRooms {
       if (this.kept.size >= 4) this.kept.delete(this.kept.keys().next().value as string);
       const s = Math.max(1, Math.min(dpr, 2, Math.sqrt(1.4e6 / (w * h)))), cv = document.createElement('canvas');
       cv.width = Math.round(w * s); cv.height = Math.round(h * s);
-      const geo = UI.ROOMS[room](cv.getContext('2d')!, cv.width, cv.height, dev, u * s);
+      const geo = LAND[room](cv.getContext('2d')!, cv.width, cv.height, dev, u * s);
       // (the painter worked in the picture's own pixels: what it says about places is brought back to the screen's)
       const back = (v: unknown): unknown => (typeof v === 'number' ? v / s : Array.isArray(v) ? v.map(back) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([n, x]) => [n, n === 'rot' ? x : back(x)])) : v);
       k = { cv, geo: back(geo) };
@@ -170,7 +174,7 @@ export class SkyRooms {
       ek.width = Math.round(700 * es * dpr); ek.height = Math.round(760 * es * dpr);
       const ec = ek.getContext('2d')!;
       ec.scale(dpr * es, dpr * es);
-      C.ekoIn(ec, 350, 330, 1, K.RNG(242), worn.rgb, { wisp: true, lean: 0.2 });
+      CANON.parts.spark(ec, 350, 300, 1.6, { tint: worn.rgb, eyes: 'soft', arms: 'rest', crest: 0.6, face: -1, look: [0.7, 0.5] });
       this.eko = ek;
     }
     if (this.eko) c.drawImage(this.eko, ex - 350 * es + (this.calm ? 0 : Math.sin(t * 0.5) * 3 * u), ey - 330 * es + (this.calm ? 0 : Math.sin(t * 0.9) * 5 * u), 700 * es, 760 * es);
@@ -178,8 +182,8 @@ export class SkyRooms {
     const x0 = dev === 'phone' ? w * 0.09 : w * 0.07, max = dev === 'phone' ? w * 0.5 : w * 0.3;
     this.back('out to the galaxy', x0, u, dev);
     let y = (dev === 'phone' ? 122 : 108) * u;
-    this.write('By the hearth', x0, y, 44 * u, { glow: 0.8 }); y += 26 * u;
-    this.write('Eko’s glows', x0, y, 15.5 * u, { alpha: 0.88, color: SAND }); y += (dev === 'phone' ? 110 : 90) * u;
+    this.write('Ossa’s fire', x0, y, 44 * u, { glow: 0.8 }); y += 26 * u;
+    this.write('Orbin’s glows', x0, y, 15.5 * u, { alpha: 0.88, color: SAND }); y += (dev === 'phone' ? 110 : 90) * u;
     this.write(read.name, x0, y, 40 * u, { glow: read.lit ? 0.6 : 0, alpha: read.lit ? 1 : 0.8 }); y += 28 * u;
     for (const l of this.wrap(read.lit ? read.says : 'still dark', 18 * u, max)) { this.write(l, x0, y, 18 * u, { alpha: read.lit ? 0.95 : 0.82 }); y += 22 * u; }
     y += 2 * u;
@@ -213,7 +217,7 @@ export class SkyRooms {
     const x0 = dev === 'phone' ? w * 0.09 : w * 0.07;
     this.back('out to the galaxy', x0, u, dev);
     const y = (dev === 'phone' ? 122 : 108) * u;
-    this.write('The star chart', x0, y, 44 * u, { glow: 0.8 });
+    this.write('The sky from the rim', x0, y, (dev === 'phone' ? 38 : 44) * u, { glow: 0.8 });
     this.write(`${info.lit} of ${info.total} lit`, x0, y + 26 * u, 15.5 * u, { alpha: 0.88, color: SAND });
     // the chosen constellation's stars, each with its one line
     const lx = P.lines[0];
@@ -241,7 +245,7 @@ export class SkyRooms {
     const { pw, ph, ix } = G, max = pw - ix * 2, ink = `rgb(${INK.join(',')})`;
     // everything on the page, top to bottom: [words, size, strength, room after them, a rule before them]
     const rows: Array<{ s: string; px: number; a: number; after: number; rule?: boolean; id?: string }> = [
-      { s: 'The last page', px: 38, a: 0.92, after: 60 },
+      { s: 'Who made the music', px: 36, a: 0.92, after: 60 },
       { s: 'the songs, and who made them', px: 15.5, a: 0.82, after: 38 },
       ...info.tracks.flatMap((k) => [{ s: k.title, px: 22, a: 0.92, after: 24 }, { s: k.by, px: 15.5, a: 0.85, after: 34 }]),
       ...info.lines.map((s, i) => ({ s, px: 17, a: 0.9, after: i + 1 < info.lines.length ? 26 : 56 })),
@@ -263,7 +267,7 @@ export class SkyRooms {
     laid.forEach(({ r, lines }, i) => {
       if (r.rule) C.rule(c, ix, pw - ix, y - 26 * u * f, 0.3, INK);
       for (const [k, l] of lines.entries()) {
-        const wd = this.write(l, ix, y, r.px * u * f, { color: ink, alpha: r.a, ink: true });
+        const wd = this.write(l, ix, y, r.px * u * f, { color: ink, alpha: r.a, ink: false });
         if (r.id) { C.rule(c, ix, ix + wd, y + 4 * u, 0.45, INK); this.hits.push({ x: G.px + ix - 12, y: G.py + y - 32, w: wd + 24, h: 48, id: r.id }); }
         if (k + 1 < lines.length) y += r.px * 1.15 * u * f;
       }
@@ -271,7 +275,7 @@ export class SkyRooms {
       y += r.after * u * f;
     });
     c.restore();
-    this.back('back to the desk', dev === 'phone' ? w * 0.09 : w * 0.07, u, dev);
+    this.back(this.bookBack, dev === 'phone' ? w * 0.09 : w * 0.07, u, dev);
   }
 
   /** The Keeper's logbook, a page at a time, in his hand: a tap on the page turns it. */
@@ -289,18 +293,18 @@ export class SkyRooms {
     }
     c.save();
     c.translate(G.px + pw / 2, G.py + ph / 2); c.rotate(G.rot); c.translate(-pw / 2, -ph / 2);
-    this.write(b.chapter, ix, (dev === 'phone' ? 54 : 52) * u, 15.5 * u, { color: ink, alpha: 0.9, ink: true });
-    this.write(b.title, ix, (dev === 'phone' ? 94 : 92) * u, 34 * u, { color: ink, alpha: 0.92, ink: true });
+    this.write(b.chapter, ix, (dev === 'phone' ? 54 : 52) * u, 15.5 * u, { color: ink, alpha: 0.9, ink: false });
+    this.write(b.title, ix, (dev === 'phone' ? 94 : 92) * u, 34 * u, { color: ink, alpha: 0.92, ink: false });
     C.rule(c, ix, pw - ix, (dev === 'phone' ? 112 : 110) * u, 0.35, INK);
     let y = top;
-    for (const lines of laid) { for (const l of lines) { this.write(l, ix, y, 21 * u * f, { color: ink, alpha: 0.92, ink: true }); y += 29 * u * f; } y += 16 * u * f; }
+    for (const lines of laid) { for (const l of lines) { this.write(l, ix, y, 21 * u * f, { color: ink, alpha: 0.92, ink: false }); y += 29 * u * f; } y += 16 * u * f; }
     C.rule(c, ix, pw - ix, ph - 52 * u, 0.3, INK);
-    this.write(b.foot, ix, ph - 26 * u, 16 * u, { color: ink, alpha: 0.92, ink: true });
-    this.write(`${b.page + 1} of ${b.pages.length}`, pw - ix, ph - 26 * u, 15.5 * u, { color: ink, alpha: 0.92, ink: true, align: 'right', style: 'normal', figs: true });
+    this.write(b.foot, ix, ph - 26 * u, 16 * u, { color: ink, alpha: 0.92, ink: false });
+    this.write(`${b.page + 1} of ${b.pages.length}`, pw - ix, ph - 26 * u, 15.5 * u, { color: ink, alpha: 0.92, ink: false, align: 'right', style: 'normal', figs: true });
     c.restore();
     // the left third of the page turns back, the rest turns on
     this.hits.push({ x: G.px, y: G.py, w: pw * 0.32, h: ph, id: 'prev' }, { x: G.px + pw * 0.32, y: G.py, w: pw * 0.68, h: ph, id: 'next' });
-    this.back('back to the desk', dev === 'phone' ? w * 0.09 : w * 0.07, u, dev);
+    this.back(this.bookBack, dev === 'phone' ? w * 0.09 : w * 0.07, u, dev);
   }
 
   // ---------------------------------------------------------------- the lamp room: Marlow taps the glass

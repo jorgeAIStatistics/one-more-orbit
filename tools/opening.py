@@ -10,7 +10,8 @@
             starting under it. 32 s.
   openingb  The same, but the first tap goes straight into Heroes Tonight with only a soft impact: no chord. 32 s.
 Everything but the song is made here from sines and noise. The chord is a synth pad: warm, not an orchestra.
-Then cut and encode like any track:  python tools/excerpt.py helion openinga openingb"""
+  opening   The same sound in pieces, as the game plays it (see parts()). 44 s.
+Then cut and encode like any track:  python tools/excerpt.py helion openinga openingb opening"""
 import pathlib
 import numpy as np, soundfile as sf
 from scipy.signal import fftconvolve, butter, sosfilt
@@ -103,6 +104,41 @@ def opening(chord):
     return out
 
 
+def parts():
+    """The opening as the game plays it: one file, four pieces, each started by the game on the audio clock.
+       0.0  the bed: wind, the heartbeat, the far music box losing its last note (22 s)
+      24.0  the pulse: eight beats at the song's tempo, made to go round (3.75 s)
+      30.0  the note: one piano-like note on the first and fifth of those beats, made to go round (3.75 s)
+      36.0  the chord for the first tap: pad, low swell, stardust (5 s)"""
+    beat = 60 / 128; out = np.zeros((int(44 * SR), 2))
+    w = wind(21.0); out[:len(w)] += w
+    for at, v in ((10.0, 0.45), (10.32, 0.45), (12.0, 0.3), (12.32, 0.3)): L.place(out, at, thump(v))
+    box = far_box([('C5', 1), ('Eb5', 1), ('Ab5', 2), ('F5', 2), ('Eb5', 1), ('C5', 1)], 0.75) * 0.55
+    n0 = int(4.5 * SR); n1 = int(5.1 * SR); box[n0:n1] *= np.linspace(1, 0, n1 - n0)[:, None]; box[n1:] = 0  # the last note never comes
+    a = int(10.9 * SR); out[a:a + len(box)] += box
+    out *= 0.36 / np.abs(out).max()  # the bed sits well under the song that is coming (the sketches were levelled as a whole; the game plays the song at full scale)
+    def loop(at, fill):
+        buf = np.zeros((int(16 * beat * SR) + SR * 3, 2)); fill(buf)
+        n = int(round(8 * beat * SR)); a = int(at * SR); m = int(0.12 * SR)
+        out[a - m:a + n + m] += buf[n - m:2 * n + m]  # the second time round (the first one's tails are in it), and a little of its neighbours either side, so a decoder that pads the file still goes round cleanly
+    loop(24.0, lambda b: [L.place(b, k * beat, thump(0.55 if k % 2 == 0 else 0.42)) for k in range(16)])
+    def plink(b):
+        for k in (0, 4, 8, 12): L.place(b, k * beat, L.tine(hz('Eb5'), 1.4, 0.5), pan=0.15)
+        b[:] = room(b, 0.5, 0.02)
+    loop(30.0, plink)
+    a0, a1 = int(30.0 * SR), int(33.75 * SR); out[a0:a1] *= 0.6
+    # the chord: in the sketch it stood well over the song. The game cannot play louder than full scale, so the chord
+    # is written near full scale and the game brings the song up under it instead (see skyopening.ts)
+    ch = np.zeros((int(5 * SR), 2))
+    c = pad(['Ab2', 'Eb3', 'Ab3', 'C4', 'Eb4', 'Bb4', 'C5'], 4.5) * 0.07; ch[:len(c)] += c
+    L.place(ch, 0, np.sin(2 * np.pi * 51.9 * np.arange(int(1.2 * SR)) / SR) * np.exp(-np.arange(int(1.2 * SR)) / SR / 0.35) * 0.28)
+    sh = bandpass(rng.standard_normal((int(2.5 * SR), 2)), 3000, 9000) * np.exp(-np.arange(int(2.5 * SR)) / SR / 0.6)[:, None] * 0.03; ch[:len(sh)] += sh
+    a = int(36.0 * SR); out[a:a + len(ch)] += ch * (0.8 / np.abs(ch).max())
+    for name, t0, t1 in (('bed', 0, 22), ('pulse', 24, 27.75), ('note', 30, 33.75), ('chord', 36, 41)):
+        x = out[int(t0 * SR):int(t1 * SR)]; print(f'  {name}: peak {np.abs(x).max():.2f}, level {20 * np.log10(np.sqrt(np.mean(x ** 2)) + 1e-9):.1f} dB')
+    return out
+
+
 if __name__ == '__main__':
     a, b = opening(True), opening(False)
     k = 0.9 / max(np.abs(a).max(), np.abs(b).max())  # one level for both, so the two can be compared fairly
@@ -110,3 +146,7 @@ if __name__ == '__main__':
         path = ROOT / f'tools/cache/{name}-src.wav'
         sf.write(str(path), x, SR, subtype='PCM_16')
         print(f'{name}: {len(x) / SR:.1f} s, peak {np.abs(x).max():.2f}, level {20 * np.log10(np.sqrt(np.mean(x ** 2))):.1f} dB -> {path.name}')
+    x = parts()
+    assert np.abs(x).max() < 0.98, np.abs(x).max()
+    sf.write(str(ROOT / 'tools/cache/opening-src.wav'), x, SR, subtype='PCM_16')
+    print(f'opening (the game\'s pieces): {len(x) / SR:.1f} s, peak {np.abs(x).max():.2f} -> opening-src.wav')

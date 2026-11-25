@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""The Lantern's own theme: what the hub hums while you are at home in it.
+"""The Landing's own theme: what the hub sounds like, on the planetoid where Orbin fell.
 
   python tools/hub.py            # writes tools/cache/hub0-src.wav and hub1-src.wav
 
 Original music, built on the lullaby's harmony (D major, 80 BPM), synthesised from sines and noise like the lullaby.
-It gains a voice with each planet restored. So far:
-  hub0  nothing restored: the lamp's low drone, and four faint taps from far up (Marlow, under glass)
-  hub1  Emberwick home: Ossa's voice joins, struck metal, low, one slow note a bar
+It gains a voice with each star reignited. So far:
+  hub0  nothing awake: a low drone, Orbin's pulse (thump-thump), and the far music box: Helion's signal, dark and far
+  hub1  Emberwick awake: Ossa's voice joins, struck metal, low, one slow note a bar; the music box a little clearer
 Each is an eight-bar loop (24 s). Nine bars are written: the ninth is the first again, so the loop's seam has the
 ring of the bar before it under it. Then cut and encode like any track:  python tools/excerpt.py hub0 hub1"""
 import pathlib
 import numpy as np, soundfile as sf
-from scipy.signal import fftconvolve
+from scipy.signal import fftconvolve, butter, sosfilt
 import lullaby as L
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -35,10 +35,16 @@ def anvil(f, vel=1.0):
     return out * vel * 0.34
 
 
+def thump(vel=1.0):
+    """One beat of a heart: a low soft thud."""
+    n = int(0.5 * SR); t = np.arange(n) / SR
+    return np.sin(2 * np.pi * (52 * t + 30 * (1 - np.exp(-t * 30)) / 30)) * np.exp(-t / 0.09) * vel * 0.5
+
+
 def render(voices):
     cycles = 2  # two turns of the loop are written, and the second is kept: it has the first one's ring under it
     total = (8 * cycles + 1) * BAR + 5.0
-    dry = np.zeros((int(total * SR), 2))
+    dry = np.zeros((int(total * SR), 2)); far = np.zeros_like(dry)
     for cyc in range(cycles + 1):
         for b in range(8 if cyc < cycles else 1):
             t0 = (cyc * 8 + b) * BAR
@@ -46,10 +52,19 @@ def render(voices):
             global rng
             rng = np.random.default_rng(200 + b)
             L.place(dry, t0, L.hum(L.CH[CHORDS[b]], BAR) * 1.5)
-            if b in (0, 4):  # four faint taps, far up
-                for k in range(4): L.place(dry, t0 + k * BEAT, L.tap(0.22 if k == 0 else 0.16), pan=0.35)
+            if b in (0, 4):  # Orbin's pulse: thump-thump
+                for at in (0.0, 0.32): L.place(dry, t0 + at, thump(0.5 if b == 0 else 0.38))
+            if b == 2:  # Helion's signal: the first phrase of his tune, from far off
+                at = 0.0
+                for name, beats in (('F#4', 1), ('A4', 1), ('D5', 2), ('B4', 2), ('A4', 1), ('F#4', 1)):
+                    L.place(far, t0 + at * BEAT, L.tine(L.hz(name), beats * BEAT, 0.9), pan=0.3); at += beats
             if voices >= 1:
                 L.place(dry, t0, anvil(L.hz(OSSA[b]), 0.9 if b % 4 == 0 else 0.7), pan=-0.3)
+    # the music box is far: dark, and with more room round it. One star awake, it is a little clearer
+    far = sosfilt(butter(2, 900 if voices == 0 else 1500, 'low', fs=SR, output='sos'), far, axis=0) * (0.5 if voices == 0 else 0.62)
+    n = int(3.6 * SR); t = np.arange(n) / SR
+    ir = rng.standard_normal((n, 2)) * np.exp(-t / 1.4)[:, None]; ir[:int(0.012 * SR)] = 0
+    dry += far + np.stack([fftconvolve(far[:, c], ir[:, c])[:len(far)] for c in range(2)], axis=1) * 0.1
     n = int(2.2 * SR); t = np.arange(n) / SR
     ir = rng.standard_normal((n, 2)) * np.exp(-t / 0.6)[:, None]; ir[:int(0.012 * SR)] = 0
     wet = np.stack([fftconvolve(dry[:, c], ir[:, c])[:len(dry)] for c in range(2)], axis=1)

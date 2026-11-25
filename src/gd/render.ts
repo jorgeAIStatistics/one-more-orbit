@@ -7,6 +7,7 @@ import type { Level } from '../game/level';
 import { PALETTES, type Palette, type RGB } from '../render/palettes';
 import { PLANETS } from '../ui/galaxy';
 import { INK as ATLAS_INK, globe, rng, stamp, tooth } from '../art/atlas';
+import { CANON } from '../art/canonpaint.js';
 import { bestFor, save, starsFor } from '../save';
 import { LIFT, flightRho, smoothstep, type Course, type Feature, type Form, type Star } from './course';
 import type { GdRun } from './run';
@@ -21,10 +22,12 @@ const GOLD: RGB = [240, 200, 98]; // flow notes, flow, the smash
 const VIOLET: RGB = [178, 150, 255]; // gravity flip
 const CYAN: RGB = [112, 220, 204]; // speed portals, turns, planet hops
 const FLOOR: RGB = [247, 240, 222]; // the rings you ride: one fixed colour, whatever the world behind is doing
+const STONE: RGB = [158, 172, 214]; // the gravity path asleep: stone tiles, ahead of Orbin
+const WOKEN: RGB = [255, 224, 160]; // and awake: where he has been
 const STAR: RGB = [255, 244, 200]; // star trails: pale gold, between the white you must hit and the gold you may
 const HALO = 'rgba(3,5,14,0.88)'; // the dark edge under everything in the foreground
 const HINT: Record<Feature, string> = {
-  charge: 'tap the roll: it charges the drop', smash: 'the drop: hit the big gold mark', flip: 'violet: gravity turns over', weave: 'weave: bounce between the two rings',
+  charge: 'tap the roll: it charges the drop', smash: 'the drop: strike the great gold node', flip: 'violet: gravity turns over', weave: 'weave: bounce between the two rings',
   spin: 'spin gate: the gap comes round to the mark', sling: 'cyan arrows: tap and hold, and ride to the next planet', reverse: 'the orbit turns round', faster: 'faster now', slower: 'slower now',
   twin: 'twin orbit: one tap moves both',
   rail: 'gold rail: tap and hold through the hop', line: 'gold line: hold, and float along it',
@@ -36,7 +39,7 @@ const HINT: Record<Feature, string> = {
 };
 /** the hand the play field's few words are written in (the same as the rest of the interface); plain sans in a test chamber */
 const HAND = '"Cormorant Garamond", "Hoefler Text", Baskerville, Palatino, Georgia, serif';
-const INK: RGB = [78, 42, 150]; // what the Hush leaves in the way: dark violet with a pale rim
+const INK: RGB = [78, 42, 150]; // what the Stillness leaves in the way: dark violet with a pale rim
 const INK_RIM: RGB = [205, 178, 255];
 /** Each form's own colour: its lens, and the trim of the hero while in it. */
 export const FORM_COL: Record<Form, RGB> = { orb: [255, 255, 255], meteor: [255, 150, 90], sat: [120, 220, 255], pulsar: [200, 140, 255], comet: [150, 255, 200] };
@@ -106,7 +109,8 @@ export class GdRenderer {
   /** test chambers: no backdrop at all, only the course on a flat ground */
   plain = false;
   /** a painted sky for this level (its planet's own, with its soul in it), in place of the atlas's plate */
-  backdrop: { draw: (c: CanvasRenderingContext2D, w: number, h: number, st: { time: number; colour: number; drive: number; kick: number; woke: number; strike: number; dark: number; calm: boolean }) => void } | null = null;
+  backdrop: { draw: (c: CanvasRenderingContext2D, w: number, h: number, st: { time: number; song?: number; colour: number; drive: number; kick: number; woke: number; strike: number; dark: number; calm: boolean }) => void } | null = null;
+  private songT = 0;
   private woke = -1;
   private strike = 0;
   /** test chambers: draw the Lantern's four windows and the cap coming down on them (the ambush) */
@@ -114,6 +118,11 @@ export class GdRenderer {
   /** how much of the planet's colour is showing, 0..1: none in a calm engraved stretch, all of it in an earned drop */
   private colour = 0;
   private heroDir = 1;
+  /** which twin is being drawn (the second spark of a twin orbit is Helion in a memory) */
+  private who: 'orbin' | 'helion' = 'orbin';
+  private heroSide = 1;
+  /** a memory of Helion: the twin orbit's second spark is him */
+  twinIs: 'orbin' | 'helion' = 'orbin';
   private globeCv: HTMLCanvasElement | null = null;
   /** the menus' sky: how much of the galaxy's colour is home, 0..1 */
   idleColour = 0;
@@ -193,9 +202,9 @@ export class GdRenderer {
     // hints: the first mark, the first gold note, and each mechanic the first time the level uses it
     this.hints = [];
     const first = c.presses[0];
-    if (first) this.hints.push([c.start - 9, first.beat + 1.5, 'TAP ON EACH WHITE MARK']);
+    if (first) this.hints.push([c.start - 9, first.beat + 1.5, 'tap as he reaches each Star-Node']);
     const gold = c.flow.find((f) => !f.charge);
-    if (gold) this.hints.push([gold.beat - 3, gold.beat + 2.5, 'gold notes: bonus taps']);
+    if (gold) this.hints.push([gold.beat - 3, gold.beat + 2.5, 'gold lights: bonus taps']);
     for (const f of c.firsts) this.hints.push(f.what === 'charge' ? [f.beat - 2.5, f.beat + 4, HINT.charge] : f.what === 'smash' ? [f.beat - 5, f.beat, HINT.smash] : [f.beat - 4.5, f.beat + 1.5, HINT[f.what]]);
     this.hints.sort((a, b) => a[0] - b[0]);
     this.energy = barEnergy(level);
@@ -328,7 +337,7 @@ export class GdRenderer {
     const span = Math.max(this.w, this.h) * 0.75;
     if (this.plain) { c.fillStyle = '#0d0e17'; c.fillRect(0, 0, this.w, this.h); return; }
     const calm = save.reducedMotion;
-    if (this.backdrop) { this.backdrop.draw(c, this.w, this.h, { time, colour: this.colour, drive, kick, woke: this.woke, strike: this.strike, dark, calm }); return; }
+    if (this.backdrop) { this.backdrop.draw(c, this.w, this.h, { time, song: this.songT, colour: this.colour, drive, kick, woke: this.woke, strike: this.strike, dark, calm }); return; }
     const k = 0.4 + inten * 0.95 + groove * 0.7 + drive * kick * 0.5;
     // the bass warps the backdrop: its bright centre swells on every kick
     const g = c.createRadialGradient(cx, cy, 0, cx, cy, span * (1 + (calm ? 0 : drive * kick * 0.18)));
@@ -542,26 +551,18 @@ export class GdRenderer {
   private drawBall(x: number, y: number, r: number, col: RGB, angle = 0, along = 1, across = 1, eko = false): void {
     const c = this.ctx;
     if (eko) {
-      // Eko in play: a flame cut thick enough for a phone. Its round foot sits where the ball is, its tip points out
-      // from the core and leans back from the way he is going; a seed of gold in it, and the ring he wears round it
-      // in the chosen Glow. When colour is home he glows warm.
-      const k = this.colour;
-      const tx = r * 2.9 * along, ty = -this.heroDir * r * 1.05;
-      const body = () => { c.beginPath(); c.moveTo(tx, ty); c.bezierCurveTo(r * 1.1, r * 1.3 * across, -r * 1.2, r * 1.25 * across, -r * 1.1, 0); c.bezierCurveTo(-r * 1.2, -r * 1.25 * across, r * 0.5, -r * 1.3 * across, tx, ty); c.closePath(); };
-      const ring = (front: boolean) => { c.strokeStyle = rgba(col, front ? 1 : 0.5); c.lineWidth = Math.max(1.8, r * 0.4); c.lineCap = 'round'; c.beginPath(); c.ellipse(r * 0.15, 0, r * 0.6, r * 1.95, 0, front ? -Math.PI / 2 + 0.2 : Math.PI / 2 + 0.2, front ? Math.PI / 2 - 0.2 : Math.PI * 1.5 - 0.2); c.stroke(); };
+      // Orbin in play: the figure of the story, small. He stands out from the path he rides (his head away from the
+      // world, his tail toward it), leans into the way he is going, and his plume streams behind. His light is the
+      // chosen Glow. (Helion, in a memory, is drawn the same way.)
+      const side = this.heroSide, s = r * 0.0215 * (0.94 + 0.06 * along);
+      const g = c.createRadialGradient(x, y, 0, x, y, r * 4.6); g.addColorStop(0, rgba(mix(col, [255, 200, 120], 0.5), 0.42)); g.addColorStop(1, rgba(col, 0));
+      c.fillStyle = g; c.fillRect(x - r * 4.6, y - r * 4.6, r * 9.2, r * 9.2);
       c.save();
       c.translate(x, y);
-      c.rotate(angle);
-      ring(false);
-      body(); c.strokeStyle = 'rgba(4,4,12,0.9)'; c.lineWidth = r * 0.9; c.lineJoin = 'round'; c.stroke();
-      c.shadowColor = rgba(mix(GOLD, [255, 160, 80], k), 0.95);
-      c.shadowBlur = r * (1.8 + 3 * k);
-      body(); c.fillStyle = rgba(mix([255, 232, 168], [255, 214, 136], k)); c.fill(); // warm, so he is never mistaken for the pale rings
-      c.shadowBlur = 0;
-      c.fillStyle = '#d9a93e'; c.beginPath(); c.ellipse(r * 0.05, 0, r * 0.7, r * 0.55, 0, 0, TWO_PI); c.fill();
-      c.fillStyle = '#fff3c4'; c.beginPath(); c.ellipse(r * 0.18, -r * 0.12, r * 0.26, r * 0.2, 0, 0, TWO_PI); c.fill();
-      ring(true);
+      c.rotate(angle + (side >= 0 ? Math.PI / 2 : -Math.PI / 2));
+      CANON.parts.spark(c, 0, -34 * s, s, { who: this.who, lite: true, glow: 1, lean: -0.42, crest: 1, arms: 'back', face: this.heroDir * (side >= 0 ? 1 : -1), eyes: 'set', beat: 1, t: performance.now() / 1000, tint: col });
       c.restore();
+      void across;
       return;
     }
     c.save();
@@ -859,9 +860,17 @@ export class GdRenderer {
         c.lineWidth = 8 + lit * 4;
         c.stroke();
       }
-      c.strokeStyle = rgba(FLOOR);
-      c.lineWidth = drop ? 5.2 : 4.6;
-      c.stroke();
+      // the gravity path: stone tiles. Ahead of him they sleep (blue-grey); behind him they are awake (warm gold).
+      // (the tiles are fixed to the ring: the dash is counted from the ring's own start, not from the edge of the view)
+      const tile = rb * 1.5, seam = Math.max(2, rb * 0.42), from = Math.max(pl.fs, lo), to = Math.min(fe, hi);
+      c.lineCap = 'butt';
+      c.setLineDash([tile, seam]);
+      c.lineWidth = drop ? 6.4 : 5.8;
+      const laid = (b: number) => r * Math.abs(c0.angle(b) - c0.angle(pl.fs));
+      if (beat > from) { c.beginPath(); this.arcPath(c0, r, from, Math.min(beat, to)); c.lineDashOffset = laid(from); c.strokeStyle = rgba(WOKEN); c.stroke(); }
+      if (beat < to) { const b0 = Math.max(beat, from); c.beginPath(); this.arcPath(c0, r, b0, to); c.lineDashOffset = laid(b0); c.strokeStyle = rgba(STONE); c.stroke(); }
+      c.setLineDash([]); c.lineDashOffset = 0;
+      c.lineCap = 'round';
       if (!plain && !Number.isNaN(pl.note) && pl.note > lo && pl.note < hi) {
         // the note: a bright mark across the ring. This is the moment to tap. Big hits get a bigger mark and a ring
         // that closes in on it as the ball arrives; the drop's smash is gold and bigger still.
@@ -897,28 +906,33 @@ export class GdRenderer {
           c.strokeStyle = HALO; c.lineWidth = 14; c.stroke();
           c.strokeStyle = rgba(pl.pad === 'spring' ? CYAN : VIOLET); c.lineWidth = 9; c.stroke();
         }
+        const ahead = pl.note - beat;
+        const nx = Math.cos(a) * r, ny = Math.sin(a) * r, nr = rb * 1.5 * (pl.smash ? 1.7 : pl.accent || pl.after ? 1.3 : pl.wide ? 1.15 : 1) * (1 + pulse * 0.2);
         if (pl.act === 'up') {
           // the Comet's second mark: a white ring. Let go here.
-          const x = Math.cos(a) * r;
-          const y = Math.sin(a) * r;
           c.strokeStyle = HALO; c.lineWidth = wide + 5;
-          c.beginPath(); c.arc(x, y, rb * 1.25, 0, TWO_PI); c.stroke();
+          c.beginPath(); c.arc(nx, ny, rb * 1.25, 0, TWO_PI); c.stroke();
           c.strokeStyle = gold ? rgba(GOLD) : '#ffffff'; c.lineWidth = wide * 0.8;
-          c.beginPath(); c.arc(x, y, rb * 1.25, 0, TWO_PI); c.stroke();
+          c.beginPath(); c.arc(nx, ny, rb * 1.25, 0, TWO_PI); c.stroke();
         } else {
-          c.beginPath(); c.moveTo(Math.cos(a) * (r - len), Math.sin(a) * (r - len)); c.lineTo(Math.cos(a) * (r + len), Math.sin(a) * (r + len));
-          c.strokeStyle = HALO;
-          c.lineWidth = wide + 5;
-          c.stroke();
-          c.strokeStyle = gold ? rgba(GOLD) : '#ffffff';
-          c.lineWidth = wide;
-          c.stroke();
+          // a Star-Node, set in the path: a dark stone with a star cut into it. The star is white (white is only ever
+          // "tap here"); gold where the game takes it for you, and on the drop's great node.
+          c.fillStyle = HALO; c.beginPath(); c.arc(nx, ny, nr + 2.4, 0, TWO_PI); c.fill();
+          c.fillStyle = 'rgba(16,18,40,0.96)'; c.beginPath(); c.arc(nx, ny, nr, 0, TWO_PI); c.fill();
+          c.strokeStyle = gold ? rgba(GOLD, 0.9) : 'rgba(255,255,255,0.85)'; c.lineWidth = Math.max(1.2, nr * 0.14);
+          c.beginPath(); c.arc(nx, ny, nr, 0, TWO_PI); c.stroke();
+          c.fillStyle = gold ? rgba(GOLD) : '#ffffff';
+          c.beginPath();
+          for (let i = 0; i < 10; i++) { const q = a + (i * Math.PI) / 5, rr = nr * (i % 2 ? 0.34 : 0.78); if (i) c.lineTo(nx + Math.cos(q) * rr, ny + Math.sin(q) * rr); else c.moveTo(nx + Math.cos(q) * rr, ny + Math.sin(q) * rr); }
+          c.closePath(); c.fill();
         }
-        const ahead = pl.note - beat;
-        if ((pl.accent || pl.smash || pl.after) && ahead > 0 && ahead < 2.5) {
-          c.strokeStyle = gold ? rgba(GOLD, 0.95 - ahead * 0.25) : pl.after ? rgba(CYAN, 0.95 - ahead * 0.25) : `rgba(255,255,255,${0.95 - ahead * 0.25})`;
-          c.lineWidth = pl.smash ? 3.5 : 2.5;
-          c.beginPath(); c.arc(Math.cos(a) * r, Math.sin(a) * r, rb * (1.5 * bigness + ahead * (pl.smash ? 4.5 : 3)), 0, TWO_PI); c.stroke();
+        // the cue: a golden ring closes on the node and touches its edge exactly on the beat (Orbin arrives at the
+        // same instant: two cues that agree). Only the nodes about to be met carry one, so the rings never pile up.
+        if (!pl.auto && ahead > -pl.tol && ahead < 1.6) {
+          const far = Math.max(0, ahead);
+          c.strokeStyle = rgba(pl.after ? CYAN : [255, 208, 120], clamp(1.1 - far * 0.55, 0, 1));
+          c.lineWidth = (pl.smash ? 3.2 : 2.3) - far * 0.6;
+          c.beginPath(); c.arc(nx, ny, nr + 1.5 + far * rb * (pl.smash ? 4.2 : 3), 0, TWO_PI); c.stroke();
         }
         if (pl.sling) {
           // slingshot: arrows pointing the way it throws you
@@ -1290,6 +1304,8 @@ export class GdRenderer {
     const a = ang(beat);
     c.lineCap = 'round';
     const heroForm: Form = twin ? 'orb' : course.formAt(beat);
+    this.who = twin ? this.twinIs : 'orbin';
+    this.heroSide = sim.sideAt(beat) < 0 ? -1 : 1;
     const tint = heroForm === 'orb' ? skin : mix(skin, FORM_COL[heroForm], 0.7);
     const n = this.trail.length;
     for (let i = 1; i < n; i++) {
@@ -1427,6 +1443,7 @@ export class GdRenderer {
     const course = run.course;
     const sim = run.sim;
     const t = run.viewTime;
+    this.songT = t;
     const beat = t / level.spb;
     const m = this.sizes();
     const span = Math.max(this.w, this.h) * 0.75;

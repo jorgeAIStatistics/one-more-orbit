@@ -78,10 +78,11 @@
 
   <!-- the title, the galaxy, the story and the results are painted on the canvas and tapped directly; each keeps a
        line of plain words for anyone reading the page instead of looking at it -->
-  <section id="prologue" class="screen tap"><p class="sr">The first flight: Marlow the lampmoth lights the lamp and teaches the spark Eko to fly. Tap, or press any key, each time the spark crosses the white mark.</p></section>
+  <section id="prologue" class="screen tap"><p class="sr">The opening: Orbin falls onto a sleeping planetoid, hears his brother Helion’s signal from far away, and wakes the first star. Tap, or press any key, when the word “tap” appears.</p></section>
   <section id="title" class="screen tap"><h1 class="sr">One More Orbit</h1><p class="sr">Tap, or press any key, to rise into the galaxy.</p></section>
-  <section id="levels" class="screen tap"><p class="sr">The galaxy: four planets, their moons, the Lantern and the Hollow. Arrow keys move between them; Enter flies in; P practises.</p></section>
+  <section id="levels" class="screen tap"><p class="sr">The galaxy: the Landing where Orbin fell, four sleeping worlds and their moons, and the guardian at the galaxy’s edge. Arrow keys move between them; Enter flies in; P practises.</p></section>
   <section id="story" class="screen tap"><p id="storyText" class="sr" aria-live="polite"></p></section>
+  <section id="moment" class="screen tap"><p class="sr">A short scene. Tap, or press any key, to go on.</p></section>
   <section id="results" class="screen tap"><p id="resSaid" class="sr" aria-live="polite"></p></section>
 
   <!-- pause: the scene dims and holds its breath; the choices are written over it, Resume the brightest -->
@@ -100,11 +101,11 @@
     </div>
   </section>
 
-  <!-- settings: a page of rows at Marlow's desk (the desk itself is painted on the canvas behind them) -->
+  <!-- settings: a page of rows at the crater (the crater itself is painted on the canvas behind them) -->
   <section id="settings" class="screen room">
     <div class="desk">
       <button id="settingsClose" class="way" type="button"><svg viewBox="0 0 26 20" aria-hidden="true"><use href="#way" /></svg><span id="settingsBack">out to the galaxy</span></button>
-      <h2 class="room-name">Marlow’s desk</h2>
+      <h2 class="room-name">The crater</h2>
       <div class="leaves">
         <div class="leaf">
           <h3 class="head">sound</h3>
@@ -113,8 +114,8 @@
           <label class="row"><span>Tap sounds</span><input id="setHit" class="thread" type="range" min="0" max="1" step="0.05" /><output id="setHitVal" for="setHit" class="sr"></output></label>
           <h3 class="head">keeping time</h3>
           <div class="row"><span>The sound arrives<small>later, if on-time taps read late (wireless ears add 150 to 250 ms)</small></span><span class="step"><button id="aoMinus" type="button" aria-label="The sound arrives earlier">earlier</button><b id="aoVal">0 ms</b><button id="aoPlus" type="button" aria-label="The sound arrives later">later</button></span></div>
-          <div class="row"><span>The picture arrives<small>later, if Eko looks behind the music</small></span><span class="step"><button id="voMinus" type="button" aria-label="The picture arrives earlier">earlier</button><b id="voVal">0 ms</b><button id="voPlus" type="button" aria-label="The picture arrives later">later</button></span></div>
-          <button id="syncBtn" class="row act" type="button"><span>Tap along with Marlow</span><small id="syncNote">ten seconds</small></button>
+          <div class="row"><span>The picture arrives<small>later, if Orbin looks behind the music</small></span><span class="step"><button id="voMinus" type="button" aria-label="The picture arrives earlier">earlier</button><b id="voVal">0 ms</b><button id="voPlus" type="button" aria-label="The picture arrives later">later</button></span></div>
+          <button id="syncBtn" class="row act" type="button"><span>Listen for Helion</span><small id="syncNote">ten seconds</small></button>
           <p id="setInfo" class="whisper"></p>
         </div>
         <div class="leaf">
@@ -125,10 +126,11 @@
           <button id="gcBtn" class="row act hidden" type="button"><span>Game Center</span></button>
           <button id="installBtn" class="row act hidden" type="button"><span>Keep the game on this device</span><small>install it as an app</small></button>
           <p id="installNote" class="whisper hidden">To keep it on your phone: tap Share in Safari, then Add to Home Screen. It opens full screen and plays with no connection.</p>
-          <h3 class="head">the logbook</h3>
-          <button id="storyBtn" class="row act" type="button"><span>The Keeper’s logbook</span><small id="logNote"></small></button>
-          <button id="replayTutorial" class="row act" type="button"><span>The first flight, again</span></button>
-          <button id="creditsBtn" class="row act" type="button"><span>The last page: who made the music</span></button>
+          <h3 class="head">the story</h3>
+          <button id="storyBtn" class="row act" type="button"><span>The still pool: the story so far</span><small id="logNote"></small></button>
+          <button id="replayTutorial" class="row act" type="button"><span>The opening, again</span></button>
+          <button id="replayMemory" class="row act hidden" type="button"><span>The first memory, again</span></button>
+          <button id="creditsBtn" class="row act" type="button"><span>Who made the music</span></button>
           <h3 class="head">for testing</h3>
           <button id="setUnlock" class="row light" type="button" aria-pressed="false"><span>Every planet open</span><svg class="lamp" viewBox="0 0 40 44" aria-hidden="true"><use class="lit" href="#flame" /><use class="unlit" href="#wick" /></svg></button>
           <button id="botBtn" class="row act" type="button"><span>Watch a perfect run</span></button>
@@ -139,8 +141,8 @@
     </div>
   </section>
 
-  <!-- rooms of the Lantern painted on the canvas and tapped directly: the lamp room (the sync check: Marlow taps the
-       glass and you tap along), the hearth (Eko's glows), the gallery (the star chart), the logbook's last page -->
+  <!-- the Landing's places, painted on the canvas and tapped directly: listening for Helion (the sync check), Ossa's fire
+       (Orbin's glows), the sky from the rim (the stars), the still pool (the story so far, who made the music) -->
   <section id="calib" class="screen tap"><p id="calSaid" class="sr" aria-live="polite"></p></section>
   <section id="orbs" class="screen tap"><p id="orbsSaid" class="sr" aria-live="polite"></p></section>
   <section id="stars" class="screen tap"><p id="starsSaid" class="sr" aria-live="polite"></p></section>

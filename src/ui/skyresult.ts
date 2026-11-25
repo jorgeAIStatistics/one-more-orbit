@@ -4,6 +4,7 @@
 // one quiet line leads back to the galaxy, and one opens more about the run.
 import { K } from '../art/painter.js';
 import { RESULTS } from '../art/resultpaint.js';
+import { CANON } from '../art/canonpaint.js';
 
 const Y = RESULTS.LAYERS;
 const SERIF = '"Cormorant Garamond", "Hoefler Text", Baskerville, Palatino, Georgia, serif';
@@ -213,7 +214,7 @@ export class SkyResult {
     if (fade > 0) { c.fillStyle = `rgba(8,7,28,${fade * 0.9})`; c.fillRect(0, 0, w, h); }
   }
 
-  /** Eko, painted once at the device's own grain (room for the whole of his glow: a cut-off glow shows as a box). */
+  /** Orbin, painted once at the device's own grain (room for the whole of his glow: a cut-off glow shows as a box). */
   private sprite(s: number, dpr: number): void {
     const key = `${s.toFixed(3)}@${dpr.toFixed(2)}`;
     if (key === this.ekoKey) return;
@@ -222,7 +223,7 @@ export class SkyResult {
     ek.width = Math.round(700 * s * dpr); ek.height = Math.round(760 * s * dpr);
     const ec = ek.getContext('2d')!;
     ec.scale(dpr * s, dpr * s);
-    Y.eko(ec, 350, 330, 1, 0.3);
+    CANON.parts.spark(ec, 350, 300, 1.5, { lean: -0.25, crest: 1, arms: 'up', eyes: 'wide', look: [0.2, -0.8] }); // Orbin, arms up, watching it come back
     this.eko = ek;
   }
 

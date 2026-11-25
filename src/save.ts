@@ -63,8 +63,19 @@ const defaults = (): SaveData => ({
   music: 0.8, sfx: 0.7, audioOffset: 0, visualOffset: 0, reducedMotion: false, hardcore: false, errorBar: true, level: 0, skin: 'cyan', badges: {}, practiced: {}, bests: {}, teachSeen: {}, core: 4, calibrated: false, calLatency: -1, syncOverlay: false, hitVol: 1, tutorialDone: false, unlockAll: false, rel: 1, haptics: true, stars: {}, quests: {}, at: '', story: {}, gold: {}, feats: {}
 });
 
+/**
+ * A guest flight: the address ends in ?fresh. The game starts as it does for someone who has never played (the
+ * opening, nothing woken), and nothing is written: the saved game on this device is neither read into play nor
+ * touched. Only its volumes and its sync are borrowed, so it sounds and feels the same.
+ */
+export const guest = typeof location !== 'undefined' && /[?&#]fresh\b/.test(location.search + location.hash);
+
 function load(): SaveData {
   const d = defaults();
+  if (guest) {
+    try { const p = JSON.parse(localStorage.getItem(KEY) || '{}') as Partial<SaveData>; for (const k of ['music', 'sfx', 'hitVol', 'audioOffset', 'visualOffset', 'reducedMotion', 'haptics'] as const) if (p[k] !== undefined) (d as unknown as Record<string, unknown>)[k] = p[k]; } catch { /* defaults */ }
+    return d;
+  }
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) {
@@ -93,6 +104,7 @@ function load(): SaveData {
 export const save: SaveData = load();
 
 export function persist(): void {
+  if (guest) return; // (a guest flight leaves the saved game exactly as it was)
   try { localStorage.setItem(KEY, JSON.stringify(save)); } catch { /* ignore */ }
 }
 

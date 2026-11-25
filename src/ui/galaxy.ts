@@ -10,7 +10,7 @@ export const PLANETS: Record<string, { name: string; col: string; rgb: [RGB, RGB
   skyhigh: { name: 'Cirra', col: '#ff9fe0', rgb: [[255, 214, 240], [222, 120, 204], [92, 44, 130]] },
   blank: { name: 'Glassmere', col: '#9fd0ff', rgb: [[232, 244, 255], [120, 168, 240], [34, 52, 128]] },
   invincible: { name: 'Verdance', col: '#a8ff8a', rgb: [[216, 255, 170], [78, 178, 116], [14, 70, 72]] },
-  royalty: { name: 'The Hollow', col: '#c9b8ff', rgb: [[255, 214, 160], [150, 96, 190], [40, 22, 84]] }
+  royalty: { name: 'The guardian', col: '#c9b8ff', rgb: [[255, 214, 160], [150, 96, 190], [40, 22, 84]] }
 };
 const SONGS: Record<string, string> = { heroes: 'Heroes Tonight', skyhigh: 'Sky High', blank: 'Blank', invincible: 'Invincible' };
 /** A level's planet name ("Emberwick"); for a B-side, its planet's. */
@@ -107,8 +107,8 @@ function restoredPlate(c: Ctx, w: number, h: number, id: string, n: number): voi
   sphere(c, 790, 330, 178, p.rgb, 176, r);
   flame(c, 330, 380, 0.6, r, { rays: false, warm: 1 });
   for (let i = 0; i < 4; i++) star(c, 70 + i * 26, 76, 4.4, i < n, i >= n);
-  note(c, 'its song is home, and its colour with it', 300, 150, 640, 232);
-  heading(c, p.name, `${SONGS[id]}, restored`, w, h);
+  note(c, 'its star is awake, and its colour with it', 300, 150, 640, 232);
+  heading(c, p.name, `${SONGS[id]}, awake`, w, h);
   tooth(c, w, h, 0.8);
 }
 
@@ -117,33 +117,14 @@ export interface Frame { scene: string; draw?: (c: Ctx, w: number, h: number) =>
 const ALL4 = ['heroes', 'skyhigh', 'blank', 'invincible'];
 /** The story, in chapters. Each plays once, at its moment, and can be skipped. */
 export const STORY: Record<string, Frame[]> = {
-  open: [
-    { scene: 'lantern', draw: (c, w, h) => galaxy(c, w, h, ALL4, { no: 'PLATE III.', marlow: true, eko: [690, 250] }), text: 'In the middle of a small galaxy stands the Lantern, a crooked old lighthouse. Its lamp hums, and every planet hums back in its own colour.' },
-    { scene: 'eko', draw: ekoPlate, text: 'Marlow the lampmoth keeps the lamp. Eko is its youngest spark, and likes nothing better than riding the beam.' },
-    { scene: 'hush', draw: (c, w, h) => hushPlate(c, w, h), text: 'Then the Hush came, which cannot bear a sound. It took every planet\'s song, and the colour went with it. It carried Marlow off to the Hollow.' }
-  ],
-  // Emberwick, before its song comes back (shown once, on the way in), and after: the gift, the Keeper's words, the homecoming
-  ossa: [{ scene: 'ossa-dark', text: 'Emberwick. Its hills used to ring. Ossa, who cast the Lantern\u2019s first glass, lies banked like a dead coal.' }],
-  heroes: [
-    { scene: 'ossa-gift', text: 'Emberwick rings again. \u201cTake it,\u201d says Ossa. \u201cIt does not stop for walls.\u201d' },
-    { scene: 'marlow', text: 'Far up, under glass, four taps. \u201cI heard that. All the way up here.\u201d' },
-    { scene: 'hearth-lit', text: 'Home. Ossa\u2019s coal goes on the hearth, and the hearth takes. One room of the Lantern is warm again.' }
-  ],
-  skyhigh: [{ scene: 'cirra', draw: (c, w, h) => restoredPlate(c, w, h, 'skyhigh', 2), text: 'Cirra has its tune back, and its clouds are rose again. Two songs are home.' }],
-  blank: [{ scene: 'glass', draw: (c, w, h) => restoredPlate(c, w, h, 'blank', 3), text: 'Glassmere rings like a bell, blue to its heart. Three songs are home.' }],
-  invincible: [{ scene: 'verd', draw: (c, w, h) => restoredPlate(c, w, h, 'invincible', 4), text: 'Verdance is loud with leaves, and green again. Four songs are home, and at the edge of the galaxy something has noticed.' }],
-  hollow: [
-    { scene: 'hollow', draw: (c, w, h) => galaxy(c, w, h, ALL4, { no: 'PLATE IX.', eko: [640, 170], names: false }), text: 'The Hollow hangs where no beam reaches and no colour has ever come back. The last jar is there, and in it, the keeper of the lamp.' },
-    { scene: 'marlow', draw: (c, w, h) => marlowPlate(c, w, h, true), text: 'Marlow taps on the glass: one, two, three, four. Even here, he keeps the beat. Go on, little spark.' }
-  ],
-  end: [
-    { scene: 'unstitch', draw: (c, w, h) => hushPlate(c, w, h, 1), text: 'The last stitch comes loose, and the light it was holding pours out. Without its seam the Hush is small after all, and very tired.' },
-    { scene: 'relight', draw: (c, w, h) => marlowPlate(c, w, h, false), text: 'Marlow lights the lamp. Every planet hums back, and colour runs through the whole galaxy like ink through water.' },
-    { scene: 'dawn', draw: (c, w, h) => galaxy(c, w, h, ALL4, { no: 'PLATE X.', guest: true, marlow: true, eko: [690, 250] }), text: 'The Hush is given the quietest song there is, and falls asleep beside the lamp. One more orbit, Eko?' }
-  ],
-  lens: [
-    { scene: 'lens', draw: (c, w, h) => { galaxy(c, w, h, ALL4, { no: 'PLATE XI.', guest: true, names: false }); glow(c, 588, 292, 520, [255, 226, 170], 0.5, 'screen'); }, text: 'Fifteen shards, and the lens is whole. The Lantern\'s beam reaches further than it ever has.' }
-  ]
+  // (Emberwick's own first clear is told by the gift, the road and the memory: see main.ts firstClear)
+  skyhigh: [{ scene: 'cirra', draw: (c, w, h) => restoredPlate(c, w, h, 'skyhigh', 2), text: 'Cirra turns again, and its clouds are rose. Two stars are awake.' }],
+  blank: [{ scene: 'glass', draw: (c, w, h) => restoredPlate(c, w, h, 'blank', 3), text: 'Glassmere rings like a bell, blue to its heart. Three stars are awake.' }],
+  invincible: [{ scene: 'verd', draw: (c, w, h) => restoredPlate(c, w, h, 'invincible', 4), text: 'Verdance is loud with leaves, and green again. Four stars are awake, and at the galaxy\u2019s edge the guardian has turned its head.' }],
+  // the galaxy's edge, and what happens there (the guardian's own scenes are built with its fight; these two stand in)
+  hollow: [{ scene: 'edge', text: 'The galaxy\u2019s edge. The guardian kneels there, stopped mid-watch, and something looks out through it.' }],
+  end: [{ scene: 'edge-lit', text: 'Its star catches. The guardian bows its head, this time by choice, and the way is open. \u201c\u2026Orbin?\u201d' }],
+  lens: [{ scene: 'edge-lit', text: 'Every star shard there is, home.' }]
 };
 
 /** The picture on a planet's card: its globe on a corner of the plate, engraved or in colour, darker for its moon. */

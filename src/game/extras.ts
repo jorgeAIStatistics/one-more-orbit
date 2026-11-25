@@ -1,11 +1,11 @@
-// Glows (the colour of Eko's hoop and light) and the old badges: clears, flow, the drop, and playing a level cold.
+// Glows (the colour of the light Orbin gives) and the old badges: clears, flow, the drop, and playing a level cold.
 // The badges screen is gone (stars took its place, see stars.ts); the badges themselves are still earned, because
 // Game Center's achievements and two of the glows hang on them.
 export interface Badge { id: string; name: string; desc: string }
 /** needs: a badge id, or "dare:<level>" (its Daredevil star), or "moon:<level>" (its night side cleared) */
 export interface Orb { id: string; name: string; rgb: [number, number, number]; needs: string | null; /** what it is, in the world's words */ says: string; /** what lights it */ how: string }
 
-const MASTERY: Array<[string, string, string]> = [['heroes', 'Emberwick', 'Heroes Tonight'], ['skyhigh', 'Cirra', 'Sky High'], ['blank', 'Glassmere', 'Blank'], ['invincible', 'Verdance', 'Invincible'], ['royalty', 'The Hollow', 'Royalty']];
+const MASTERY: Array<[string, string, string]> = [['heroes', 'Emberwick', 'Heroes Tonight'], ['skyhigh', 'Cirra', 'Sky High'], ['blank', 'Glassmere', 'Blank'], ['invincible', 'Verdance', 'Invincible'], ['royalty', 'The guardian', 'Royalty']];
 export const BADGES: Badge[] = [
   { id: 'clear_heroes', name: 'First Light', desc: 'Clear Heroes Tonight' },
   { id: 'clear_skyhigh', name: 'Sky High', desc: 'Clear Sky High' },
@@ -18,22 +18,22 @@ export const BADGES: Badge[] = [
   { id: 'streak', name: 'Locked In', desc: 'Reach a streak of 60 on-beat taps' },
   { id: 'few_tries', name: 'Quick Study', desc: 'Clear a level within 10 attempts' },
   { id: 'no_practice', name: 'Sight Read', desc: 'Clear a level you have never practised' },
-  // mastery, per planet: every piece of gold on a clear, and all three lens shards
+  // mastery, per world: every piece of gold on a clear, and all three star shards
   ...MASTERY.flatMap(([id, planet, song]): Badge[] => [
     { id: `tune_${id}`, name: `In Tune: ${planet}`, desc: `Clear ${song} with every piece of gold collected` },
-    { id: `mender_${id}`, name: `Lens Mender: ${planet}`, desc: `Keep all three lens shards on ${song}` }
+    { id: `mender_${id}`, name: `Shard Finder: ${planet}`, desc: `Keep all three star shards on ${song}` }
   ])
 ];
 
 export const ORBS: Orb[] = [
-  { id: 'cyan', name: 'Classic', rgb: [0, 245, 255], needs: null, says: 'the light Eko was lit with', how: 'yours from the start' },
-  { id: 'ember', name: 'Ember', rgb: [255, 150, 90], needs: 'clear_heroes', says: 'a coal from Ossa\u2019s forge', how: 'restore Emberwick' },
-  { id: 'violet', name: 'Violet', rgb: [190, 120, 255], needs: 'clear_skyhigh', says: 'a thread from Seo\u2019s kite', how: 'restore Cirra' },
-  { id: 'frost', name: 'Frost', rgb: [225, 240, 255], needs: 'clear_blank', says: 'a sliver of Vell\u2019s glass', how: 'restore Glassmere' },
-  { id: 'toxic', name: 'Toxic', rgb: [160, 255, 70], needs: 'clear_invincible', says: 'a seed light from Morrow\u2019s woods', how: 'restore Verdance' },
-  { id: 'gold', name: 'Gold', rgb: [255, 214, 90], needs: 'full_drop', says: 'a drop, caught whole', how: 'set off a drop at full charge' },
-  { id: 'rose', name: 'Rose', rgb: [255, 90, 160], needs: 'in_flow', says: 'what keeping time looks like', how: 'bring a song home with 85 taps in 100 on the beat' },
-  { id: 'singular', name: 'Singular', rgb: [255, 255, 255], needs: 'clear_royalty', says: 'the Hollow\u2019s one small light', how: 'bring the last song home' },
+  { id: 'cyan', name: 'Starlight', rgb: [255, 204, 112], needs: null, says: 'the light Orbin fell with', how: 'yours from the start' },
+  { id: 'ember', name: 'Ember', rgb: [255, 150, 90], needs: 'clear_heroes', says: 'a coal from Ossa\u2019s forge', how: 'wake Emberwick' },
+  { id: 'violet', name: 'Violet', rgb: [190, 120, 255], needs: 'clear_skyhigh', says: 'a thread from Seo\u2019s kite', how: 'wake Cirra' },
+  { id: 'frost', name: 'Frost', rgb: [225, 240, 255], needs: 'clear_blank', says: 'a sliver of Vell\u2019s glass', how: 'wake Glassmere' },
+  { id: 'toxic', name: 'Toxic', rgb: [160, 255, 70], needs: 'clear_invincible', says: 'a seed light from Morrow\u2019s woods', how: 'wake Verdance' },
+  { id: 'gold', name: 'Tide', rgb: [0, 245, 255], needs: 'full_drop', says: 'a drop, caught whole', how: 'set off a drop at full charge' },
+  { id: 'rose', name: 'Rose', rgb: [255, 90, 160], needs: 'in_flow', says: 'what keeping time looks like', how: 'wake a star with 85 taps in 100 on the beat' },
+  { id: 'singular', name: 'Singular', rgb: [255, 255, 255], needs: 'clear_royalty', says: 'the guardian\u2019s own star', how: 'reignite the guardian' },
   // a planet dared: its Daredevil star (these were the quests' glows, and whoever did both of a level's quests keeps its)
   { id: 'coral', name: 'Coral', rgb: [255, 120, 110], needs: 'dare:heroes', says: 'Emberwick, dared', how: 'the Daredevil star on Emberwick' },
   { id: 'magenta', name: 'Magenta', rgb: [255, 90, 240], needs: 'dare:skyhigh', says: 'Cirra, dared', how: 'the Daredevil star on Cirra' },

@@ -108,7 +108,7 @@ export class Sim {
   strays = 0;
 
   /** forgiving: nothing ends the run. A missed mark is taken for the player and an early tap is ignored (the tutorial). */
-  constructor(readonly c: Course, start: number, private autoUntil = -Infinity, private forgiving = false) {
+  constructor(readonly c: Course, start: number, private autoUntil = -Infinity, public forgiving = false) {
     this.beat = start;
     const ps = c.presses;
     while (this.ni < ps.length && ps[this.ni].beat + ps[this.ni].tol < start) this.ni++;

@@ -1,8 +1,12 @@
-// The galaxy map, Afterglow: one painted sky (the Ascent). The land and the Lantern are at the bottom, Eko's road
-// climbs past the worlds to the Hollow at the top. There are no cards, buttons or bars: names are written beside the
+// The galaxy map, Afterglow: one painted sky (the Ascent). The planetoid where Orbin fell (the Landing) is at the
+// bottom; the road climbs past the four sleeping worlds to the galaxy's edge at the top, where the guardian kneels
+// under the three shattered rings. There are no cards, buttons or bars: names are written beside the
 // planets, the chosen planet's few lines fade in beside it, and the other places (the Lantern, the constellations)
 // are things in the picture you tap. The sky is painted once; planets, light, words and Eko are laid over it live.
 import { DUSK, K } from '../art/painter.js';
+import { CANON } from '../art/canonpaint.js';
+import { UI } from '../art/uipaint.js';
+import { Actor } from './actor';
 
 type RGB = [number, number, number];
 export interface SkyNode {
@@ -33,7 +37,7 @@ export interface SkyStage {
   /** drawn over the worlds, in the painting's own coordinates (the camera is already applied) */
   paint: (c: CanvasRenderingContext2D) => void;
 }
-export type SkyHit = { kind: 'node'; id: string } | { kind: 'practise' | 'dare' | 'glows' | 'settings' | 'stars' | 'title' | 'sky' };
+export type SkyHit = { kind: 'node'; id: string } | { kind: 'practise' | 'dare' | 'glows' | 'settings' | 'stars' | 'pool' | 'title' | 'sky' };
 
 const T = DUSK.tools;
 const SERIF = '"Cormorant Garamond", "Hoefler Text", Baskerville, Palatino, Georgia, serif';
@@ -69,6 +73,13 @@ export class SkyMap {
   private L: Lay = LAYS.tall;
   private pos = new Map<string, { x: number; y: number; r: number; side: Side }>();
   private lamp: [number, number] = [0, 0];
+  /** where his brother's signal shows, behind the rings; where Ossa's fire is, once it burns */
+  private edge: [number, number] = [0, 0];
+  private fire: [number, number] | null = null;
+  private orbin = new Actor('orbin');
+  /** a line the hub says once, on coming home ("One star awake. He's a little clearer.") */
+  private said = { text: '', at: -1 };
+  say(text: string): void { this.said = { text, at: -1 }; }
   private z = 1; private fx = 0; private fy = 0; private ex = 0; private ey = 0;
   private shown = ''; private fade = 0; private launchAt = -1; private t = 0;
   private hits: Array<{ x: number; y: number; w: number; h: number; hit: SkyHit }> = [];
@@ -141,14 +152,26 @@ export class SkyMap {
     const stops = SKY.map(([t, col]) => [t, K.mix(col, [255, 170, 120], (t as number) > 0.6 ? warm * 0.16 : 0)]);
     T.sky(c, w, h, stops, r, 150);
     T.stars(c, w, h * L.horizon, r, Math.round((w * h) / 520), 211);
+    // the galaxy's edge: the wall of creeping shadow, the three shattered rings (the three trials), and under them
+    // the guardian, kneeling. It answers every star that is reignited: head bowed; head up, its slit lit cold; turned
+    // on you when all four are awake; gold, bowed again, when its own star is lit.
     const [hx, hy, hrx, hry] = [L.hollow[0] * sx, L.hollow[1] * sy, L.hollow[2] * u, L.hollow[3] * u];
-    c.save(); c.filter = `blur(${18 * u}px)`; c.fillStyle = 'rgba(3,3,10,0.97)'; c.beginPath(); c.ellipse(hx, hy, hrx, hry, 0, 0, Math.PI * 2); c.fill(); c.restore();
-    for (let i = 0; i < 54; i++) { const x0 = hx - hrx * 0.95 + r() * hrx * 1.9, len = hry * (0.9 + r() * 1.3); K.brush(c, [[x0, hy - hry * 0.4], [x0 + (hx - x0) * 0.08, hy + len * 0.4], [x0 + (r() - 0.5) * 40 * u, hy + len]], (14 + r() * 28) * u, K.mix([8, 7, 20], [70, 56, 120], r() * r()), r, { passes: 3, alpha: 0.2 }); }
-    const horizon = h * L.horizon;
-    c.save(); c.filter = `blur(${28 * u}px)`; c.fillStyle = 'rgba(248,178,122,0.3)'; c.fillRect(-40, horizon - 30 * u, w + 80, 70 * u); c.restore();
-    ([[0, 30, [70, 40, 84], 0.4], [44, 26, [40, 24, 62], 0.7], [96, 22, [18, 12, 36], 0.9]] as Array<[number, number, RGB, number]>).forEach(([dy, amp, col, rim], i) => T.ridge(c, w, h, horizon + dy * u * 0.5, amp * u * 0.6, 211 + i * 5, col, lx, [255, 205, 140], rim));
-    K.glow(c, this.lamp[0], this.lamp[1], 150 * ls, [255, 214, 150], 0.6);
-    T.lighthouse(c, lx, ly, ls, r);
+    c.save(); c.filter = `blur(${18 * u}px)`; c.fillStyle = 'rgba(3,3,10,0.9)'; c.beginPath(); c.ellipse(hx, hy, hrx, hry, 0, 0, Math.PI * 2); c.fill(); c.restore();
+    for (let i = 0; i < 30; i++) { const x0 = hx - hrx * 0.95 + r() * hrx * 1.9, len = hry * (0.7 + r() * 1.0); K.brush(c, [[x0, hy - hry * 0.4], [x0 + (hx - x0) * 0.08, hy + len * 0.4], [x0 + (r() - 0.5) * 40 * u, hy + len]], (14 + r() * 28) * u, K.mix([8, 7, 20], [70, 56, 120], r() * r()), r, { passes: 3, alpha: 0.18 }); }
+    const gate = this.pos.get('gate')!, gs = gate.r / (30 * u), won = this.info.nodes.some((n) => n.kind === 'hollow' && n.state === 'home');
+    this.edge = [gate.x + 6 * u * gs, gate.y - 12 * u * gs];
+    CANON.parts.trials(c, gate.x - 14 * u * gs, gate.y - 4 * u * gs, 0.5 * u * gs, K.RNG(41), won ? 0.5 : 0.95);
+    CANON.parts.guardian(c, gate.x, gate.y + 84 * u * gs, 0.15 * u * gs, K.RNG(42), won ? 3 : home >= 4 ? 2 : home >= 1 ? 1 : 0);
+    // the Landing: the planetoid he fell on. Cold stone and a crater; warmer with every star awake; Ossa's fire by the
+    // crater once Emberwick is awake. (The others bring theirs as their worlds wake.)
+    const horizon = h * L.horizon, gy = horizon - 30 * u;
+    c.save(); c.filter = `blur(${28 * u}px)`; c.fillStyle = `rgba(248,178,122,${0.06 + 0.2 * warm})`; c.fillRect(-40, gy - 30 * u, w + 80, 70 * u); c.restore();
+    CANON.parts.ground(c, w, h, gy, K.RNG(17), 0.1 + 0.6 * warm, 5);
+    const cx = lx + 34 * u, cy = gy + 44 * u;
+    c.fillStyle = 'rgba(6,7,18,0.75)'; c.beginPath(); c.ellipse(cx, cy, 44 * u, 9 * u, 0, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = 'rgba(170,186,230,0.45)'; c.lineWidth = 1.4 * u; c.beginPath(); c.ellipse(cx, cy, 44 * u, 9 * u, 0, Math.PI * 1.05, Math.PI * 1.95); c.stroke();
+    this.lamp = [lx + 6 * u, gy + 8 * u];
+    if (home >= 1) { const fx = cx + 62 * u, fy = cy - 2 * u; K.glow(c, fx, fy - 8 * u, 70 * u, [255, 150, 80], 0.6); UI.C.flame(c, fx, fy, 1.5 * u, [255, 150, 90], 1); this.fire = [fx, fy]; } else this.fire = null;
     T.finish(c, w, h, 220, 0.5);
     this.bg = bg;
     // ---- each world, painted in each of its three states, lit from the Lantern
@@ -202,7 +225,7 @@ export class SkyMap {
     const node = this.info.nodes.find((n) => n.id === this.chosen);
     const at = node && this.place(node);
     const lanternAt = { x: L.lantern[0] * (w / L.w), y: (L.lantern[1] - 60) * (h / L.h) };
-    const focus = this.chosen === 'lantern' ? lanternAt : at;
+    const focus = this.chosen === 'landing' ? lanternAt : at;
     // the camera glides toward the place chosen and leans in a little; quick, never slow
     const fly = this.launchAt >= 0 ? Math.min(1, (t - this.launchAt) / 0.42) : 0;
     const wantZ = fly > 0 ? 1.16 + fly * fly * 3.2 : focus ? 1.16 : 1;
@@ -221,57 +244,54 @@ export class SkyMap {
     if (this.bg) c.drawImage(this.bg, 0, 0, w, h);
     this.hits = [];
     const planets = this.info.nodes.filter((n) => n.kind === 'planet');
-    // the beam: a soft volume of light from the lamp to every world whose song is home, and to the one chosen
-    c.save(); c.globalCompositeOperation = 'screen';
-    for (const n of planets) {
-      const p = this.pos.get(n.id)!, on = n.id === this.chosen;
-      const a = (n.state === 'home' ? 0.2 : 0) + (on && n.state !== 'dark' ? 0.16 * this.fade : 0);
-      if (a <= 0) continue;
-      const col = PAL[n.id].lit, ang = Math.atan2(p.y - this.lamp[1], p.x - this.lamp[0]), d = Math.hypot(p.x - this.lamp[0], p.y - this.lamp[1]) + p.r;
-      for (const f of [1, 0.62, 0.3]) { // three cones, each narrower: a soft edge without a blur
-        const hw = Math.min(0.3, (p.r * 1.3) / d) * f;
-        const g = c.createLinearGradient(this.lamp[0], this.lamp[1], p.x, p.y); g.addColorStop(0, K.rgba(col, a * 0.5)); g.addColorStop(1, K.rgba(col, a * 0.14));
-        c.fillStyle = g; c.beginPath(); c.moveTo(this.lamp[0], this.lamp[1]); c.lineTo(this.lamp[0] + Math.cos(ang - hw) * d, this.lamp[1] + Math.sin(ang - hw) * d); c.lineTo(this.lamp[0] + Math.cos(ang + hw) * d, this.lamp[1] + Math.sin(ang + hw) * d); c.closePath(); c.fill();
-      }
-    }
-    c.restore();
-    // Eko's road: dabs of light from world to world, bright where it has been travelled
-    const stops = [...planets.map((n) => this.pos.get(n.id)!), this.pos.get('gate')!];
+    // his brother's signal, far behind the rings: thump-thump, a faint gold answer, a little clearer with every star
+    { const awake = planets.filter((n) => n.state === 'home').length, ph = (t * 0.55) % 1, beat = Math.max(Math.exp(-ph * 9), ph > 0.18 ? Math.exp(-(ph - 0.18) * 9) : 0), a = 0.16 + 0.11 * awake;
+      K.glow(c, this.edge[0], this.edge[1], (16 + 10 * awake + 14 * beat) * u, [255, 206, 120], a * (0.5 + 0.5 * beat)); c.fillStyle = `rgba(255,243,207,${Math.min(1, a * 1.6) * (0.5 + 0.5 * beat)})`; c.beginPath(); c.arc(this.edge[0], this.edge[1], 1.6 * u, 0, Math.PI * 2); c.fill(); }
+    if (this.fire) K.glow(c, this.fire[0], this.fire[1] - 8 * u, (46 + 10 * Math.sin(t * 7.3) * Math.sin(t * 3.1)) * u, [255, 150, 80], 0.35);
+    // the road: lights from the Landing to world after world and on to the galaxy's edge. A stretch is bright once
+    // the star at its near end is awake (the first, from where he fell, always is).
+    const stops = [{ x: this.lamp[0] + 20 * u, y: this.lamp[1] - 30 * u, r: 0 }, ...planets.map((n) => this.pos.get(n.id)!), this.pos.get('gate')!];
     for (let i = 0; i + 1 < stops.length; i++) {
-      const a = stops[i], b = stops[i + 1], n = Math.round(Math.hypot(b.x - a.x, b.y - a.y) / (15 * u)), done = planets[i]?.state === 'home';
+      const a = stops[i], b = stops[i + 1], n = Math.round(Math.hypot(b.x - a.x, b.y - a.y) / (15 * u)), done = i === 0 || planets[i - 1]?.state === 'home';
       for (let j = 1; j < n; j++) { const q = j / n, bend = Math.sin(q * Math.PI) * 34 * u * (i % 2 ? -1 : 1), tw = 0.75 + 0.25 * Math.sin(t * 2 + j * 0.7 + i); c.fillStyle = K.rgba([255, 226, 170], (done ? 0.7 : 0.22) * tw); c.beginPath(); c.ellipse(lerp(a.x, b.x, q) + bend * 0.4, lerp(a.y, b.y, q) + bend, 2.3 * u, 1.7 * u, j, 0, Math.PI * 2); c.fill(); }
     }
-    // the stars lit so far (the star chart is read from the gallery) and the Lantern's words: places in the picture
+    // the stars lit so far (the chart is read from the rim) and the Landing's words: places in the picture
     const sx = w / L.w, sy = h / L.h;
-    if (this.info.rooms.stars) { // (the constellation is seen once the gallery is open)
+    if (this.info.rooms.stars) { // (the constellation is seen once the rim is open)
       c.strokeStyle = 'rgba(255,236,206,0.35)'; c.lineWidth = 1; c.beginPath();
       L.stars.forEach(([x, y], i) => (i ? c.lineTo(x * sx, y * sy) : c.moveTo(x * sx, y * sy))); c.stroke();
       L.stars.forEach(([x, y], i) => this.dab(x * sx, y * sy, (i % 2 ? 2.2 : 3) * u + 0.6, true, 0.75 + 0.25 * Math.sin(t * 1.6 + i * 2)));
     }
-    const quiet = this.chosen && this.chosen !== 'lantern' ? 0.66 : 0.9; // (small lines have to be read on a phone: never faint)
+    const quiet = this.chosen && this.chosen !== 'landing' ? 0.66 : 0.9; // (small lines have to be read on a phone: never faint)
     // (on a tall screen the count sits low on the right: it steps aside while the lowest world's lines are written there)
     if (!(at && L === LAYS.tall && at.y > h * 0.6)) this.text(this.info.lit, L.starsAt[0] * sx, L.starsAt[1] * sy, 15.5, quiet, L.starsAt[2], SAND);
     const sxs = L.stars.map((p) => p[0] * sx), sys = L.stars.map((p) => p[1] * sy);
     if (this.info.rooms.stars) this.hits.push({ x: Math.min(...sxs) - 20, y: Math.min(...sys) - 20, w: Math.max(...sxs) - Math.min(...sxs) + 40, h: L.starsAt[1] * sy + 4 - Math.min(...sys) + 20, hit: { kind: 'stars' } });
     const [wx, wy, wa] = [L.words[0] * sx, L.words[1] * sy, L.words[2]];
     // (the Lantern itself first: its rooms' words lie over it, and a later place is the one a tap finds)
-    this.hits.push({ x: 0, y: lanternAt.y - 60 * u, w: Math.max(190, wx + 170), h: h - lanternAt.y + 60 * u, hit: { kind: 'node', id: 'lantern' } });
-    if (this.chosen === 'lantern') {
-      // at the Lantern: its three rooms, written large enough to tap
-      this.text('the Lantern', wx, wy - 58, 26, this.fade, wa, CREAM, 600);
-      const rooms: Array<['glows' | 'settings' | 'stars', string, string]> = [['glows', 'the hearth', 'Eko’s glows'], ['settings', 'the desk', 'settings'], ['stars', 'the gallery', 'the star chart']];
+    this.hits.push({ x: 0, y: lanternAt.y - 60 * u, w: Math.max(190, wx + 170), h: h - lanternAt.y + 60 * u, hit: { kind: 'node', id: 'landing' } });
+    if (this.chosen === 'landing') {
+      // at the Landing: its places, written large enough to tap
+      this.text('the Landing', wx, wy - 88, 26, this.fade, wa, CREAM, 600);
+      const rooms: Array<['pool' | 'glows' | 'settings' | 'stars', string, string]> = [['pool', 'the still pool', 'the story so far'], ['glows', 'Ossa’s fire', 'Orbin’s glows'], ['settings', 'the crater', 'settings'], ['stars', 'the rim', 'the stars']];
       rooms.forEach(([kind, room, what], i) => {
-        // a room that is still dark is named, and says what will light it
-        const open = kind === 'settings' || (kind === 'glows' ? this.info.rooms.glows : this.info.rooms.stars);
-        const y = wy - 27 + i * 30, rw = this.text(room, wx, y, 20, this.fade * (open ? 1 : 0.6), wa);
-        this.text(open ? what : kind === 'glows' ? 'cold, until a song is home' : 'dark, until two are', wx + rw + 10, y, 15, this.fade * (open ? 0.86 : 0.7), wa, SAND);
-        if (open) this.hits.push({ x: wx - 8, y: y - 21, w: 210, h: 30, hit: { kind } });
+        // a place that is not there yet is named, and says what will bring it
+        const open = kind === 'settings' || kind === 'pool' || (kind === 'glows' ? this.info.rooms.glows : this.info.rooms.stars);
+        const y = wy - 57 + i * 30, rw = this.text(open || kind !== 'glows' ? room : 'a cold hearth', wx, y, 20, this.fade * (open ? 1 : 0.6), wa);
+        this.text(open ? what : kind === 'glows' ? 'until Emberwick wakes' : 'dark, until Cirra wakes', wx + rw + 10, y, 15, this.fade * (open ? 0.86 : 0.7), wa, SAND);
+        if (open) this.hits.push({ x: wx - 8, y: y - 21, w: 230, h: 30, hit: { kind } });
       });
       this.text(this.info.lens, wx, wy + 56, 15, this.fade * 0.86, wa, SAND);
     } else {
-      this.text('the Lantern', wx, wy, 18, quiet + 0.1, wa, CREAM, 600);
-      this.text([this.info.rooms.glows ? 'the hearth' : '', 'the desk', this.info.rooms.stars ? 'the gallery' : ''].filter(Boolean).join('  ·  '), wx, wy + 19, 14.5, quiet * 0.95, wa, SAND);
+      this.text('the Landing', wx, wy, 18, quiet + 0.1, wa, CREAM, 600);
+      this.text(['the still pool', this.info.rooms.glows ? 'Ossa’s fire' : '', 'the crater', this.info.rooms.stars ? 'the rim' : ''].filter(Boolean).join('  ·  '), wx, wy + 19, 14.5, quiet * 0.95, wa, SAND);
       this.text(this.info.lens, wx, wy + 37, 14.5, quiet * 0.95, wa, SAND);
+    }
+    // what the hub says, once, on coming home
+    if (this.said.text) {
+      if (this.said.at < 0) this.said.at = t;
+      const age = t - this.said.at, a = Math.min(1, age / 1.2) * (1 - Math.max(0, Math.min(1, (age - 7) / 1.5)));
+      if (age > 8.5) this.said.text = ''; else this.text(this.said.text, L === LAYS.tall ? w / 2 : wx, wy - (L === LAYS.tall ? 52 : 44), 20, a, L === LAYS.tall ? 'center' : wa, CREAM);
     }
 
     // the worlds: far ones first, the chosen one last and larger, each with what is written beside it
@@ -297,7 +317,7 @@ export class SkyMap {
         if (n.kind === 'moon') continue;
         if (n.kind === 'hollow') { this.text(n.name, L.hollowAt[0] * sx, L.hollowAt[1] * sy, 19, n.state === 'dark' ? 0.72 : 0.9, L.hollowAt[2], CREAM, 600); continue; }
         this.text(n.name, x0, p.y + 3, 20, dim * (this.chosen ? 0.82 : 1), al, CREAM, 600);
-        if (n.state === 'dark') this.text('dark and silent', x0, p.y + 21, 14.5, 0.8, al, SAND);
+        if (n.state === 'dark') this.text('asleep', x0, p.y + 21, 14.5, 0.8, al, SAND);
         else if (n.hook) this.text(n.hook, x0, p.y + 22, 15.5, 0.7 + 0.2 * Math.sin(t * 1.7), al);
         else for (let i = 0; i < 3; i++) this.dab(x0 + dir * (6 + i * 14), p.y + 17, 3, n.shards[i], 0.9);
         continue;
@@ -307,8 +327,8 @@ export class SkyMap {
       this.text(n.name, x0, y0, 34, a, al, CREAM, 600);
       this.text(n.song, x0, y0 + 25, 18, a * 0.92, al);
       this.text(`by ${n.by}`, x0, y0 + 43, 15, a * 0.88, al, SAND);
-      if (n.state === 'dark') { this.text('dark and silent', x0, y0 + 72, 18, a * 0.8, al); this.text(n.why, x0, y0 + 94, 15.5, a * 0.86, al, SAND); continue; }
-      const bw = this.text(n.best >= 100 ? 'restored' : n.best > 0 ? `best ${n.best}%` : 'not yet played', x0, y0 + 74, 19, a * 0.95, al);
+      if (n.state === 'dark') { this.text('asleep', x0, y0 + 72, 18, a * 0.8, al); this.text(n.why, x0, y0 + 94, 15.5, a * 0.86, al, SAND); continue; }
+      const bw = this.text(n.best >= 100 ? 'awake' : n.best > 0 ? `best ${n.best}%` : 'not yet played', x0, y0 + 74, 19, a * 0.95, al);
       if (n.kind !== 'moon') for (let i = 0; i < 3; i++) this.dab(below ? p.x - 16 + i * 16 : x0 + dir * (bw + 16 + i * 16), below ? y0 + 92 : y0 + 68, 4, n.shards[i], a);
       const y1 = y0 + (below ? 118 : 104);
       this.text('tap again to fly in', x0, y1, 16.5, a * 0.9, al);
@@ -331,7 +351,8 @@ export class SkyMap {
     const wantX = fly > 0 ? base.x : base.x + (base.side === 'left' ? 1 : -1) * base.r * (at ? 1.5 : 1) * 0.9, wantY = fly > 0 ? base.y : base.y + base.r * (at ? 1.5 : 1) * (base.y > h * 0.68 ? -1.25 : 1.25); // (above a low world, so he is never over the Lantern's words)
     const ke = Math.min(1, dt * (fly > 0 ? 12 : 3.2));
     this.ex += (wantX - this.ex) * ke; this.ey += (wantY - this.ey) * ke;
-    if (this.eko) { const ew = 240 * u, eh = 320 * u, sc = (fly > 0 ? 1 - fly * 0.6 : 1) * (0.9 + 0.04 * Math.sin(t * 2.2)); c.drawImage(this.eko, this.ex - 150 * u * sc + Math.sin(t * 0.9) * 3, this.ey - 120 * u * sc + Math.sin(t * 1.5) * 4, ew * sc, eh * sc); }
+    // Orbin waits by the place chosen (at the Landing, on the stone where he fell), and looks up the road
+    { const o = this.orbin, home = this.chosen === 'landing' || !this.chosen && false; o.rate = 3; o.set({ x: home ? this.lamp[0] : this.ex + Math.sin(t * 0.9) * 3, y: home ? this.lamp[1] - 26 * u : this.ey + Math.sin(t * 1.5) * 4, s: (fly > 0 ? 1 - fly * 0.6 : 1) * 0.2 * u, lean: fly > 0 ? -0.5 : 0, crest: fly > 0 ? 1 : 0.7, arms: fly > 0 ? 'back' : 'rest', eyes: 'open', look: [0.5, -0.7], glow: 1, beat: 0.5 }, o.s === 1); o.step(dt); o.draw(c); }
     c.restore();
     // the way back down to the title: a quiet word in the corner of the screen itself, so the camera never hides it
     this.screenHits = [];

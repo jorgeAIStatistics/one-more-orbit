@@ -10,7 +10,10 @@ import { Sim, type TapResult } from './sim';
 export type RunState = 'loading' | 'playing' | 'paused' | 'resuming' | 'failed' | 'done' | 'error';
 /** partial: started part-way through from the menu ("start at the build-up"); plays like a normal run but is not saved */
 /** tutorial: the first-run lesson: nothing ends the run, missed marks are taken for the player, and it stops after a few bars */
-export interface RunOptions { bot?: boolean; practice?: boolean; partial?: boolean; tutorial?: boolean; startAt?: number; leadIn?: number; /** the ambush, from a checkpoint: how each light note before it went */ lights?: Array<boolean | null> }
+/** memory: a memory of Helion: nothing ends it, a missed mark is taken for the player, and it plays to its end */
+/** gentle: beats from the start in which nothing ends the run (the very first flight, straight out of the opening) */
+/** at: the audio-clock time the music starts at, when that has been decided already (the opening's tap); swell: the song comes up from this level over this many seconds */
+export interface RunOptions { bot?: boolean; practice?: boolean; partial?: boolean; tutorial?: boolean; memory?: boolean; gentle?: number; at?: number; swell?: [number, number]; startAt?: number; leadIn?: number; /** the ambush, from a checkpoint: how each light note before it went */ lights?: Array<boolean | null> }
 /** beats the tutorial lasts */
 export const TUTORIAL_BEATS = 24;
 export interface RunEvent { kind: 'hop' | 'flip' | 'spark' | 'skip' | 'land' | 'crash' | 'drop' | 'finale' | 'tick' | 'held' | 'release' | 'star' | 'starlost'; star?: number; flow?: boolean; charge?: boolean; accent?: boolean; smash?: boolean; sling?: boolean; full?: boolean; power?: number }
@@ -71,9 +74,9 @@ export class GdRun {
     this.leadIn = opts.leadIn ?? 1;
     this.time = this.viewTime = this.startAt - this.leadIn;
     // from a checkpoint, the game plays the notes of the run-in itself and hands over on the checkpoint
-    this.sim = new Sim(this.course, this.time / spb, this.startAt > this.t0 ? this.startAt / spb : -Infinity, !!opts.tutorial);
+    this.sim = new Sim(this.course, this.time / spb, this.startAt > this.t0 ? this.startAt / spb : -Infinity, !!opts.tutorial || !!opts.memory || !!opts.gentle);
     const lastPress = this.course.presses[this.course.presses.length - 1];
-    if (lastPress && !opts.tutorial) this.finaleAt = lastPress.land * spb;
+    if (lastPress && !opts.tutorial && !opts.memory) this.finaleAt = lastPress.land * spb; // (a memory has no finish to go off: it plays to its last note and fades)
     while (this.bi < this.course.script.length && this.course.script[this.bi][0] * spb < this.startAt) this.bi++;
     if (this.startAt / spb > this.course.dropBeat) this.dropFull = true;
     this.lights = this.course.presses.filter((p) => p.smash).map((p, i) => ({ beat: p.beat, on: p.beat * spb < this.startAt ? opts.lights?.[i] ?? true : null }));
@@ -90,27 +93,37 @@ export class GdRun {
     return { lit, lost, struck };
   }
 
+  /** Everything a start needs that takes time, done ahead of it: the song decoded, the hitsounds made. */
+  async prepare(): Promise<void> {
+    if (!audio.prime()) return;
+    audio.buildHitsounds(this.pack.level.hitsoundNote);
+    try { await audio.loadTrack(this.pack.audio); } catch { /* start() will say so */ }
+  }
+
   async start(): Promise<void> {
-    let track: LoadedTrack | null = null;
-    if (audio.ensure()) {
-      try {
-        audio.buildHitsounds(this.pack.level.hitsoundNote);
-        track = await audio.loadTrack(this.pack.audio);
-      } catch (e) {
-        this.state = 'error';
-        this.error = e instanceof Error ? e.message : String(e);
-        return;
+    let track: LoadedTrack | null = audio.ready(this.pack.audio);
+    const now = this.opts.at !== undefined && !!track && !!audio.ctx; // prepared, and the moment is already chosen: nothing below waits
+    if (!now) {
+      if (audio.ensure()) {
+        try {
+          audio.buildHitsounds(this.pack.level.hitsoundNote);
+          track = await audio.loadTrack(this.pack.audio);
+        } catch (e) {
+          this.state = 'error';
+          this.error = e instanceof Error ? e.message : String(e);
+          return;
+        }
       }
+      if (this.ended) return;
+      await audio.resume();
     }
-    if (this.ended) return;
-    await audio.resume();
     audio.setMuffle(0);
     const c = audio.ctx;
     const off = this.pack.audio.offset;
     if (c && track) {
       const pos = off + track.shift + this.startAt - this.leadIn;
-      const t0 = c.currentTime + (pos < 0 ? -pos : 0) + 0.1;
-      this.music = audio.playMusic(track.buffer, t0, Math.max(0, pos));
+      const t0 = (this.opts.at ?? c.currentTime + 0.1) + (pos < 0 ? -pos : 0);
+      this.music = audio.playMusic(track.buffer, t0, Math.max(0, pos), 1, this.opts.swell);
       this.songStart = t0 - (Math.max(0, pos) - off - track.shift);
       this.latency = audio.latency();
     } else this.songStart = performance.now() / 1000 + this.leadIn - this.startAt;
@@ -219,6 +232,7 @@ export class GdRun {
     this.viewTime = t + save.visualOffset / 1000;
     const beat = t / this.level.spb;
     if (this.opts.bot) while (this.bi < this.course.script.length && this.course.script[this.bi][0] <= beat) { const [at, down] = this.course.script[this.bi++]; this.react(down ? this.sim.press(at) : this.sim.release(at)); }
+    if (this.opts.gentle && !this.opts.memory && this.sim.forgiving && beat >= this.course.start + this.opts.gentle) this.sim.forgiving = false; // from here on it is a flight like any other
     this.sim.advance(beat);
     while (this.sim.out.length) this.react(this.sim.out.shift()!);
     // a light note whose strike never came (only the roll's last tap did): the window goes dark
@@ -246,7 +260,7 @@ export class GdRun {
         audio.hit('impact', 1);
         this.events.push({ kind: 'finale' });
       }
-      if (t >= Math.max(this.t1, this.finaleAt + 3.6)) this.finish('done', 0);
+      if (t >= (this.finaleAt === Infinity ? this.t1 : Math.max(this.t1, this.finaleAt + 3.6))) this.finish('done', 0);
     }
   }
 

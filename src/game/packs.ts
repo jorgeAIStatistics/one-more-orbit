@@ -27,6 +27,9 @@ import royAudio from '../../levels/royalty/audio.json';
 import royChart from '../../levels/royalty/chart.json';
 import royPresses from '../../levels/royalty/presses.json';
 import royAudit from '../../levels/royalty/audit.json';
+import mem1Level from '../../levels/memory1/level.json';
+import mem1Audio from '../../levels/memory1/audio.json';
+import mem1Chart from '../../levels/memory1/chart.json';
 import heroesB from '../../levels/heroes/bside.json';
 import skyB from '../../levels/skyhigh/bside.json';
 import blankB from '../../levels/blank/bside.json';
@@ -83,3 +86,9 @@ export const BSIDES: LevelPack[] = [bside(PACKS[0], heroesB), bside(PACKS[1], sk
 
 /** The level behind the gate at the end of the world. Not on the route: it opens on stars, not on a clear. */
 export const FINAL: LevelPack = pack(royLevel, royAudio, royChart, royPresses, royAudit);
+
+/**
+ * Memories of Helion: one after each world's first clear, played as a twin orbit in the Harmonic Nebula. They cannot
+ * be failed and keep no record. Keyed by the world whose star, reignited, gives the memory back. (One is built so far.)
+ */
+export const MEMORIES: Record<string, LevelPack> = { heroes: pack(mem1Level, mem1Audio, mem1Chart) };

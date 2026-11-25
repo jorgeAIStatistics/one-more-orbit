@@ -166,10 +166,49 @@ export class AudioEngine {
     let p = this.tracks.get(meta.file);
     if (!p) {
       p = this.fetchTrack(meta);
-      p.catch(() => this.tracks.delete(meta.file));
+      p.then((t) => this.loaded.set(meta.file, t), () => this.tracks.delete(meta.file));
       this.tracks.set(meta.file, p);
     }
     return p;
+  }
+  private loaded = new Map<string, LoadedTrack>();
+  /** A track that is already decoded, or nothing: for a start that cannot wait even one turn of the page (the opening's first tap). */
+  ready(meta: AudioMeta): LoadedTrack | null {
+    return this.loaded.get(meta.file) ?? null;
+  }
+  /** Makes the context (silent until a touch lets it run) so tracks can be decoded ahead of the first touch. */
+  prime(): boolean {
+    if (this.ctx) return true;
+    const ok = this.ensure();
+    return ok;
+  }
+
+  /**
+   * Plays a piece of a decoded track on the music's channel: from `from` seconds in, at audio-clock time `when`.
+   * loop: seconds; the piece goes round on itself. dur: it stops by itself after that long. Returns its volume and its stop.
+   */
+  playPart(track: LoadedTrack, meta: AudioMeta, when: number, from: number, o: { gain?: number; loop?: number; dur?: number } = {}): { gain: AudioParam; stop: (fade?: number, at?: number) => void } {
+    const c = this.ctx!;
+    const src = c.createBufferSource();
+    src.buffer = track.buffer;
+    const a = Math.max(0, meta.offset + track.shift + from);
+    if (o.loop) { src.loop = true; src.loopStart = a; src.loopEnd = a + o.loop; }
+    const g = c.createGain();
+    g.gain.setValueAtTime(o.gain ?? 1, Math.max(when, c.currentTime));
+    src.connect(g);
+    g.connect(this.pre);
+    if (o.dur && !o.loop) src.start(when, a, o.dur); else src.start(when, a);
+    let stopped = false;
+    return {
+      gain: g.gain,
+      stop: (fade = 0.15, at = 0) => {
+        if (stopped) return;
+        stopped = true;
+        const t = Math.max(c.currentTime, at);
+        try { g.gain.cancelScheduledValues(t); g.gain.setTargetAtTime(0, t, Math.max(0.008, fade / 3)); src.stop(t + fade + 0.1); } catch { /* already stopped */ }
+        setTimeout(() => { try { g.disconnect(); } catch { /* ignore */ } }, (t - c.currentTime + fade + 0.5) * 1000);
+      }
+    };
   }
 
   private async fetchTrack(meta: AudioMeta): Promise<LoadedTrack> {
@@ -208,7 +247,7 @@ export class AudioEngine {
   }
 
   /** Starts a buffer at audio-clock time `when`, from `offset` seconds in. */
-  playMusic(buffer: AudioBuffer, when: number, offset = 0, rate = 1): { stop: (fade?: number) => void } {
+  playMusic(buffer: AudioBuffer, when: number, offset = 0, rate = 1, swell?: [number, number]): { stop: (fade?: number) => void } {
     const c = this.ctx!;
     const src = c.createBufferSource();
     src.buffer = buffer;
@@ -216,7 +255,8 @@ export class AudioEngine {
     const g = c.createGain();
     src.connect(g);
     g.connect(this.pre);
-    if (offset > 0) { g.gain.setValueAtTime(0, when); g.gain.linearRampToValueAtTime(1, when + 0.05); } // starting mid-song: no click
+    if (swell) { g.gain.setValueAtTime(0, when); g.gain.linearRampToValueAtTime(swell[0], when + 0.02); g.gain.linearRampToValueAtTime(1, when + swell[1]); } // the song comes up under something (the opening's chord): [where it starts, seconds to full]
+    else if (offset > 0) { g.gain.setValueAtTime(0, when); g.gain.linearRampToValueAtTime(1, when + 0.05); } // starting mid-song: no click
     src.start(when, offset);
     let stopped = false;
     return {

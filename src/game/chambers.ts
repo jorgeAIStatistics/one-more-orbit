@@ -95,7 +95,7 @@ export const CHAMBERS: Chamber[] = [
     beats: [17, 21, 25, 29].map((bar, i) => ({ bar, label: FOUR[i] }))
   },
   {
-    id: 'ambush', name: 'The ambush', what: 'The Snuffer on the beam: 48 seconds, six light notes, four windows. Lose all four and it wins', ambush: true,
+    id: 'ambush', name: 'The ambush', what: 'The Stillness reaching for the stars you have woken: 48 seconds, six light notes, four lights. Lose all four and it wins', ambush: true,
     pack: { level: ambushLevel as unknown as LevelFile, audio: ambushAudio as AudioMeta, chart: ambushChart as unknown as ChartFile },
     beats: [{ bar: 1, label: 'IT ARRIVES' }, { bar: 8, label: 'IT REACHES THE LAMP' }, { bar: 17, label: 'DRIVE IT OFF' }, { bar: 25, label: 'EVERYTHING YOU HAVE' }]
   }
@@ -110,6 +110,6 @@ export const LISTEN: Listen[] = [
   { id: 'lullaby', name: 'The lullaby · music box', what: 'Original. The prologue, the ending, and the quietest song. One bar of four taps, then 24 bars', audio: lullabyAudio as AudioMeta, from: 0 },
   { id: 'lullabyb', name: 'The lullaby · pipe', what: 'The same tune in a warmer voice', audio: lullabyBAudio as AudioMeta, from: 0 },
   { id: 'fallback', name: 'Fallback · Heroes Tonight, its opening', what: 'If neither lullaby is right: the song’s first 67 seconds, cut off where its first drop would land', audio: fallbackAudio as AudioMeta, from: 0 },
-  { id: 'ambush', name: 'The ambush · a cut of Royalty', what: 'Second verse, build and drop: the Hush’s theme, heard again in the finale', audio: ambushAudio as AudioMeta, from: 0 },
+  { id: 'ambush', name: 'The ambush · a cut of Royalty', what: 'Second verse, build and drop: the guardian’s song, heard again in the finale', audio: ambushAudio as AudioMeta, from: 0 },
   { id: 'royalty', name: 'For comparison · the finale’s first drop', what: 'Royalty as the fight uses it, from four bars before the drop', audio: FINAL.audio, from: bar(FINAL.audio, 28) }
 ];
