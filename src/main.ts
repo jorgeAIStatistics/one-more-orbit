@@ -58,6 +58,8 @@ const owned = (o: Orb): boolean => {
 };
 
 const renderer = new Renderer($<HTMLCanvasElement>('stage'));
+// (the one-signal look is switched on by the address until it is approved: ?look=2)
+if (/[?&#]look=2\b/.test(location.search + location.hash)) renderer.look = 2;
 /** the galaxy map: one painted sky you tap things in */
 const sky = new SkyMap($<HTMLCanvasElement>('stage'));
 /** the title: the horizon under that sky */

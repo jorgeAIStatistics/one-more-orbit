@@ -1,0 +1,12 @@
+<!doctype html><meta charset="utf-8"><title>pass 2 stills</title>
+<link rel="stylesheet" href="/src/style.css">
+<body style="margin:0;background:#0b0a14;overflow:auto;position:static">
+<script type="module">
+import { COLLECT, RISE, LANDING, legend, landing } from './pass2-stills.js';
+await document.fonts.load('italic 500 20px "Cormorant Garamond"');
+const sheet = (name, list) => { for (const [title, paint] of list) { const cv = document.createElement('canvas'); cv.width = 780; cv.height = 1688; cv.dataset.set = name; cv.dataset.title = title; cv.style.cssText = 'width:390px;height:844px;margin:0 7px 0 0'; paint(cv.getContext('2d')); document.body.appendChild(cv); } };
+sheet('collect', COLLECT); sheet('rise', RISE); sheet('landing', LANDING);
+const lw = document.createElement('canvas'); lw.width = 2160; lw.height = 1350; lw.dataset.set = 'landingwide'; lw.style.cssText = 'width:1440px;height:900px;display:block'; landing(lw.getContext('2d'), 2160, 1350, 3); document.body.appendChild(lw);
+const lg = document.createElement('canvas'); lg.width = 2160; lg.height = 1350; lg.dataset.set = 'legend'; lg.style.cssText = 'width:1440px;height:900px;display:block'; legend(lg.getContext('2d'), 2160, 1350); document.body.appendChild(lg);
+window.__done = true;
+</script>

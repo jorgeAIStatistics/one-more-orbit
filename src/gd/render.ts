@@ -18,13 +18,13 @@ const EQ_BARS = 48;
 const LOOK = 2; // beats before an opening that the ring above shows as a ceiling
 const WHITE: RGB = [255, 255, 255];
 const DANGER: RGB = [232, 70, 54]; // vermilion, the atlas's one warning colour: // the edge of everything that ends the run
-const GOLD: RGB = [240, 200, 98]; // flow notes, flow, the smash
+let GOLD: RGB = [240, 200, 98]; // flow notes, flow, the smash
 const VIOLET: RGB = [178, 150, 255]; // gravity flip
 const CYAN: RGB = [112, 220, 204]; // speed portals, turns, planet hops
 const FLOOR: RGB = [247, 240, 222]; // the rings you ride: one fixed colour, whatever the world behind is doing
-const STONE: RGB = [158, 172, 214]; // the gravity path asleep: stone tiles, ahead of Orbin
-const WOKEN: RGB = [255, 224, 160]; // and awake: where he has been
-const STAR: RGB = [255, 244, 200]; // star trails: pale gold, between the white you must hit and the gold you may
+let STONE: RGB = [158, 172, 214]; // the gravity path asleep: stone tiles, ahead of Orbin
+let WOKEN: RGB = [255, 224, 160]; // and awake: where he has been
+let STAR: RGB = [255, 244, 200]; // star trails: pale gold, between the white you must hit and the gold you may
 const HALO = 'rgba(3,5,14,0.88)'; // the dark edge under everything in the foreground
 const HINT: Record<Feature, string> = {
   charge: 'tap the roll: it charges the drop', smash: 'the drop: strike the great gold node', flip: 'violet: gravity turns over', weave: 'weave: bounce between the two rings',
@@ -41,6 +41,16 @@ const HINT: Record<Feature, string> = {
 const HAND = '"Cormorant Garamond", "Hoefler Text", Baskerville, Palatino, Georgia, serif';
 const INK: RGB = [78, 42, 150]; // what the Stillness leaves in the way: dark violet with a pale rim
 const INK_RIM: RGB = [205, 178, 255];
+/**
+ * The one colour that means "tap now", and nothing else on the screen may wear it: the ring that closes on a node
+ * and the star cut into the node it closes on. (The second look: one signal for every tap.)
+ */
+const TAP: RGB = [255, 204, 72];
+/** what a hold is drawn in: a calm ribbon to follow while the finger stays down */
+const HOLD: RGB = [110, 206, 222];
+/** The second look's quiet family: everything that is not a tap or a danger steps back into cool, low-contrast tones. */
+const QUIET = { gold: [150, 158, 204] as RGB, stone: [84, 94, 140] as RGB, woken: [128, 150, 222] as RGB, star: [150, 158, 204] as RGB };
+const LOUD = { gold: [240, 200, 98] as RGB, stone: [158, 172, 214] as RGB, woken: [255, 224, 160] as RGB, star: [255, 244, 200] as RGB };
 /** Each form's own colour: its lens, and the trim of the hero while in it. */
 export const FORM_COL: Record<Form, RGB> = { orb: [255, 255, 255], meteor: [255, 150, 90], sat: [120, 220, 255], pulsar: [200, 140, 255], comet: [150, 255, 200] };
 const FORM_NAME: Record<Form, string> = { orb: 'ORB', meteor: 'METEOR', sat: 'SATELLITE', pulsar: 'PULSAR', comet: 'COMET' };
@@ -123,6 +133,20 @@ export class GdRenderer {
   private heroSide = 1;
   /** a memory of Helion: the twin orbit's second spark is him */
   twinIs: 'orbin' | 'helion' = 'orbin';
+  /**
+   * The look of the course. 2 is the one-signal language: a gold ring closing on a node is the only thing that means
+   * "tap", only the next two taps wear it, optional gold notes are not drawn, a hold is a calm ribbon, and everything
+   * else is quiet. 1 is the look before it.
+   */
+  private _look: 1 | 2 = 1;
+  get look(): 1 | 2 { return this._look; }
+  set look(v: 1 | 2) { this._look = v; const P = v === 2 ? QUIET : LOUD; GOLD = P.gold; STONE = P.stone; WOKEN = P.woken; STAR = P.star; }
+  /** the beat of the second tap still to come: nodes after it wait, unlit */
+  private cueUntil = Infinity;
+  /** the beat of the first tap still to come: a node behind it has been dealt with, and is unlit again */
+  private cueFrom = -Infinity;
+  /** where the lit nodes were drawn in the last frame, in screen points, soonest first (for the freeze-frame test's answer sheet) */
+  cues: Array<{ x: number; y: number; beat: number }> = [];
   private globeCv: HTMLCanvasElement | null = null;
   /** the menus' sky: how much of the galaxy's colour is home, 0..1 */
   idleColour = 0;
@@ -300,6 +324,7 @@ export class GdRenderer {
   }
 
   private burst(x: number, y: number, n: number, col: RGB, speed: number, size = 1, back = false): void {
+    if (this.look === 2) { col = mix(col, STONE, 0.65); n = Math.ceil(n * 0.5); back = true; } // (second look: particles are few, quiet, and behind the course)
     if (save.reducedMotion) n = Math.ceil(n / 3);
     for (let i = 0; i < n && this.particles.length < 420; i++) {
       const a = Math.random() * TWO_PI;
@@ -309,6 +334,7 @@ export class GdRenderer {
   }
 
   private wave(r: number, col: RGB, speed: number, width: number, alpha: number, life = 0.45): void {
+    if (this.look === 2) { col = mix(col, STONE, 0.8); alpha *= 0.5; }
     if (this.waves.length < 10) this.waves.push({ r, v: speed, life: 0, max: life, col, w: width, a: alpha });
   }
 
@@ -795,7 +821,7 @@ export class GdRenderer {
     // broken into turning shards, and every on-beat tap lights them up.
     // (kept very quiet, and still: only the lit stretch may draw the eye)
     c.globalAlpha = alpha * (0.07 + pulse * 0.04 + lit * 0.16);
-    c.strokeStyle = this.col(pal.ring);
+    c.strokeStyle = this.look === 2 ? rgba(STONE) : this.col(pal.ring);
     c.lineWidth = 1.2 + lit;
     c.beginPath(); c.arc(0, 0, r, 0, TWO_PI); c.stroke();
     void time;
@@ -830,9 +856,7 @@ export class GdRenderer {
         c.strokeStyle = rgba(DANGER);
         c.lineWidth = 5;
         c.stroke();
-        c.strokeStyle = '#ffffff';
-        c.lineWidth = 2;
-        c.stroke();
+        if (this.look !== 2) { c.strokeStyle = '#ffffff'; c.lineWidth = 2; c.stroke(); } // (the second look keeps white and gold off everything but the tap)
       }
       // gravity flip: the ring above takes you on its underside
       if (!Number.isNaN(pl.flipAt)) {
@@ -912,23 +936,37 @@ export class GdRenderer {
           // the Comet's second mark: a white ring. Let go here.
           c.strokeStyle = HALO; c.lineWidth = wide + 5;
           c.beginPath(); c.arc(nx, ny, rb * 1.25, 0, TWO_PI); c.stroke();
-          c.strokeStyle = gold ? rgba(GOLD) : '#ffffff'; c.lineWidth = wide * 0.8;
+          c.strokeStyle = this.look === 2 ? rgba(HOLD) : gold ? rgba(GOLD) : '#ffffff'; c.lineWidth = wide * 0.8;
           c.beginPath(); c.arc(nx, ny, rb * 1.25, 0, TWO_PI); c.stroke();
+        } else if (this.look === 2 && (pl.auto || pl.note > this.cueUntil + 1e-6 || pl.note < this.cueFrom - 1e-6)) {
+          // a node that is not yet one of the next two taps (or one the game takes itself): a small unlit stone
+          c.fillStyle = HALO; c.beginPath(); c.arc(nx, ny, rb * 0.95, 0, TWO_PI); c.fill();
+          c.fillStyle = rgba(STONE, 0.9); c.beginPath(); c.arc(nx, ny, rb * 0.62, 0, TWO_PI); c.fill();
         } else {
-          // a Star-Node, set in the path: a dark stone with a star cut into it. The star is white (white is only ever
-          // "tap here"); gold where the game takes it for you, and on the drop's great node.
+          // a Star-Node, set in the path: a dark stone with a star cut into it. In the second look the star is in the
+          // tap colour; before it, white (gold where the game takes it for you, and on the drop's great node).
+          const col = this.look === 2 ? rgba(TAP) : gold ? rgba(GOLD) : '#ffffff';
+          if (this.look === 2) { const t = c.getTransform(), k = this.canvas.width / Math.max(1, this.w); this.cues.push({ x: (t.a * nx + t.c * ny + t.e) / k, y: (t.b * nx + t.d * ny + t.f) / k, beat: pl.note }); }
           c.fillStyle = HALO; c.beginPath(); c.arc(nx, ny, nr + 2.4, 0, TWO_PI); c.fill();
           c.fillStyle = 'rgba(16,18,40,0.96)'; c.beginPath(); c.arc(nx, ny, nr, 0, TWO_PI); c.fill();
-          c.strokeStyle = gold ? rgba(GOLD, 0.9) : 'rgba(255,255,255,0.85)'; c.lineWidth = Math.max(1.2, nr * 0.14);
-          c.beginPath(); c.arc(nx, ny, nr, 0, TWO_PI); c.stroke();
-          c.fillStyle = gold ? rgba(GOLD) : '#ffffff';
+          c.strokeStyle = col; c.globalAlpha = alpha * 0.85; c.lineWidth = Math.max(1.2, nr * 0.14);
+          c.beginPath(); c.arc(nx, ny, nr, 0, TWO_PI); c.stroke(); c.globalAlpha = alpha;
+          c.fillStyle = col;
           c.beginPath();
           for (let i = 0; i < 10; i++) { const q = a + (i * Math.PI) / 5, rr = nr * (i % 2 ? 0.34 : 0.78); if (i) c.lineTo(nx + Math.cos(q) * rr, ny + Math.sin(q) * rr); else c.moveTo(nx + Math.cos(q) * rr, ny + Math.sin(q) * rr); }
           c.closePath(); c.fill();
         }
-        // the cue: a golden ring closes on the node and touches its edge exactly on the beat (Orbin arrives at the
-        // same instant: two cues that agree). Only the nodes about to be met carry one, so the rings never pile up.
-        if (!pl.auto && ahead > -pl.tol && ahead < 1.6) {
+        // the cue: a ring closes on the node and touches its edge exactly on the beat (Orbin arrives at the same
+        // instant: two cues that agree). Only the nodes about to be met carry one, so the rings never pile up.
+        if (this.look === 2) {
+          if (!pl.auto && pl.act !== 'up' && pl.note <= this.cueUntil + 1e-6 && pl.note >= this.cueFrom - 1e-6 && ahead > -pl.tol && ahead < 2.4) {
+            const far = Math.max(0, ahead), rr = nr + 1.5 + far * rb * (pl.smash ? 4.2 : 3.2), wd = (pl.smash ? 4 : 3.2) - far * 0.5;
+            c.globalAlpha = alpha * clamp(1.15 - far * 0.42, 0, 1);
+            c.strokeStyle = HALO; c.lineWidth = wd + 3; c.beginPath(); c.arc(nx, ny, rr, 0, TWO_PI); c.stroke(); // (a dark edge under it: it reads on any sky)
+            c.strokeStyle = rgba(TAP); c.lineWidth = wd; c.beginPath(); c.arc(nx, ny, rr, 0, TWO_PI); c.stroke();
+            c.globalAlpha = alpha;
+          }
+        } else if (!pl.auto && ahead > -pl.tol && ahead < 1.6) {
           const far = Math.max(0, ahead);
           c.strokeStyle = rgba(pl.after ? CYAN : [255, 208, 120], clamp(1.1 - far * 0.55, 0, 1));
           c.lineWidth = (pl.smash ? 3.2 : 2.3) - far * 0.6;
@@ -998,7 +1036,7 @@ export class GdRenderer {
       const to = Math.min(h.b, beat + this.ahead);
       const on = sim.down && beat >= h.a - 0.1;
       const show = clamp((this.ahead - (h.a - beat)) / 0.6, 0, 1);
-      const body: RGB = h.tether ? DANGER : GOLD; // a tether is in the colour of everything that ends the run
+      const body: RGB = h.tether ? DANGER : this.look === 2 ? HOLD : GOLD; // a tether is in the colour of everything that ends the run
       c.lineCap = 'round';
       c.lineJoin = 'round';
       c.globalAlpha = show;
@@ -1012,7 +1050,7 @@ export class GdRenderer {
       }
       // gold along it
       for (const tk of h.ticks) {
-        if (tk < beat - 0.02 || tk > beat + this.ahead || sim.tickGone(tk) || Math.abs(tk - h.b) < 1e-6) continue;
+        if (this.look === 2 || tk < beat - 0.02 || tk > beat + this.ahead || sim.tickGone(tk) || Math.abs(tk - h.b) < 1e-6) continue;
         const [x, y] = at(tk);
         c.fillStyle = 'rgba(3,5,14,0.5)'; c.beginPath(); c.arc(x, y, rb * 0.6, 0, TWO_PI); c.fill();
         c.fillStyle = rgba(GOLD); c.beginPath(); c.arc(x, y, rb * 0.38, 0, TWO_PI); c.fill();
@@ -1030,6 +1068,10 @@ export class GdRenderer {
       c.globalAlpha = 1;
       c.lineCap = 'butt';
     }
+    { // which nodes are lit: the next two taps the player must make
+      let n = 0; this.cueUntil = Infinity; this.cueFrom = -Infinity; if (!twin) this.cues = [];
+      if (this.look === 2) for (let k = sim.ni; k < course.presses.length; k++) { const p = course.presses[k]; if (p.auto) continue; if (++n === 1) this.cueFrom = p.beat; else { this.cueUntil = p.beat; break; } }
+    }
     for (const pl of this.plats) {
       if (twin ? pl.twin === null : false) continue;
       if (Math.min(pl.cs, pl.fs) - beat > this.ahead || beat > pl.fe + 0.5) continue;
@@ -1044,11 +1086,12 @@ export class GdRenderer {
       // the shard branch: a dotted gold path that leaves the safe line at its first note and rejoins it after the shard
       const b0 = Math.max(trail.a, beat);
       const b1 = Math.min(trail.b + 0.5, beat + this.ahead);
-      c.fillStyle = rgba(STAR, 0.9);
-      for (let b = Math.ceil(b0 * 8) / 8; b <= b1; b += 0.125) {
+      c.fillStyle = rgba(STAR, this.look === 2 ? 0.5 : 0.9);
+      for (let b = Math.ceil(b0 * 8) / 8; b <= b1; b += this.look === 2 ? 0.25 : 0.125) {
         const wpt = course.at(b);
         const [ox, oy] = origin(wpt.planet);
-        const r = this.rad(wpt.rho) + wpt.side * (rb + this.gap * LIFT * this.env(trail, b));
+        // (second look: the stretch that counts for a star is a quiet dotted line well outside the path, never on it)
+        const r = this.rad(wpt.rho) + wpt.side * (this.look === 2 ? rb * 3.4 : rb + this.gap * LIFT * this.env(trail, b));
         c.globalAlpha = clamp((this.ahead - (b - beat)) / 0.6, 0, 1);
         c.beginPath(); c.arc(ox + Math.cos(ang(b)) * r, oy + Math.sin(ang(b)) * r, rb * 0.2, 0, TWO_PI); c.fill();
       }
@@ -1102,7 +1145,7 @@ export class GdRenderer {
           continue;
         }
         const n = Math.max(3, Math.round((p.land - p.beat) * (p.sling ? 14 : 8)));
-        c.fillStyle = p.sling ? rgba(CYAN, 0.8) : rgba(WHITE, k === sim.ni ? 0.8 : 0.4);
+        c.fillStyle = p.sling ? rgba(CYAN, 0.8) : this.look === 2 ? rgba(STONE, k === sim.ni ? 0.7 : 0.35) : rgba(WHITE, k === sim.ni ? 0.8 : 0.4);
         for (let i = 1; i < n; i++) {
           const b = p.beat + ((p.land - p.beat) * i) / n;
           const r = this.rad(flightRho(p, b)) + (p.kind === 'flip' ? p.side * rb * (1 - (2 * i) / n) : p.side * rb);
@@ -1225,6 +1268,7 @@ export class GdRenderer {
       const d = f.beat - beat;
       if (d > this.ahead) break;
       if (d < -0.25 || sim.noteUsed(f.beat)) continue;
+      if (this.look === 2) break; // (the second look has no optional targets on the course: flow is earned by tapping the nodes on the beat)
       if (twin ? !(f.twin === 'b' || f.twin === 'both') : f.twin === 'b') continue;
       // on a shard branch that is still whole, the note sits out on the branch's path
       const out = f.branch >= 0 && sim.stars[f.branch] === 0 && !run.finale ? this.gap * LIFT * this.env(course.stars[f.branch], f.beat) : 0;
@@ -1316,7 +1360,7 @@ export class GdRenderer {
       const rz = this.rad(p1.rho) + p1.off + (p1.away ?? 0);
       const [x0, y0] = origin(p0.pf);
       const [x1, y1] = origin(p1.pf);
-      c.strokeStyle = rgba(tint, u * u * 0.55);
+      c.strokeStyle = rgba(tint, u * u * (this.look === 2 ? 0.28 : 0.55));
       c.lineWidth = rb * 1.7 * u;
       c.beginPath(); c.moveTo(x0 + Math.cos(ang(p0.beat)) * ra, y0 + Math.sin(ang(p0.beat)) * ra); c.lineTo(x1 + Math.cos(ang(p1.beat)) * rz, y1 + Math.sin(ang(p1.beat)) * rz); c.stroke();
     }
@@ -1712,7 +1756,7 @@ export class GdRenderer {
     this.twinV += ((twinNow ? 1 : 0) - this.twinV) * Math.min(1, dt * 5);
     if (run.state === 'playing') {
       this.trail.push({ beat, rho: this.ballRho(sim, beat), off: sim.sideAt(beat) * rb * (1 - 0.3 * 4 * this.landPulse * (1 - this.landPulse)), pf: this.pf, away: run.finale ? Math.pow(Math.min(1.4, run.finaleAge / 0.9), 2.2) * r0 * 7 : 0 });
-      if (this.trail.length > 30) this.trail.shift();
+      while (this.trail.length > (this.look === 2 ? 9 : 30)) this.trail.shift();
     }
 
     // ---- behind the course: backdrop, flashes, beams, shockwaves, shards
@@ -1747,6 +1791,10 @@ export class GdRenderer {
     c.translate(this.coreX, this.coreY);
     const chargeShown = afterDrop ? this.chargeV * clamp(1 - this.dropAge / 0.35, 0, 1) : course.charges.length && beat > course.charges[0][0] - 4 ? Math.max(this.chargeV, 0.006) : 0;
     this.core(pal, m * 0.045, m * 0.04 * (0.4 + 1.1 * inten) * (1 + wound * 0.7 + drive * 0.5), kick * (0.3 + 0.7 * inten), snare * inten, dt, this.flowV, chargeShown, this.plain ? 0 : drive, span, PLANETS[level.file.side?.of ?? level.id]?.rgb, !!level.file.side);
+    if (this.look === 2) { // (the second look: the core is scenery, and steps back; nothing bright sits in the middle of the course)
+      const veil = c.createRadialGradient(0, 0, 0, 0, 0, m * 0.2); veil.addColorStop(0, 'rgba(12,10,28,0.62)'); veil.addColorStop(0.7, 'rgba(12,10,28,0.5)'); veil.addColorStop(1, 'rgba(12,10,28,0)');
+      c.fillStyle = veil; c.beginPath(); c.arc(0, 0, m * 0.2, 0, TWO_PI); c.fill();
+    }
 
     for (let i = this.waves.length - 1; i >= 0; i--) {
       const wv = this.waves[i];
