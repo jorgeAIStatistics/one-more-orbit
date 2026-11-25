@@ -253,7 +253,7 @@ for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), FINAL, .
 
     it('holds can never end the run (tethers apart), leave time to let go, and swallow the notes they cover', () => {
       if (!level.file.holds && !NEXT) { expect(course.holds).toEqual([]); return; }
-      expect(course.holds.length).toBeGreaterThan(NEXT ? 0 : 8); // (a next-pass world holds once: the charge before its drop)
+      expect(course.holds.length).toBeGreaterThanOrEqual(NEXT ? 0 : 9); // (the owner's table leaves holds out of the first worlds)
       course.holds.forEach((h, i) => {
         expect(h.b - h.a, `hold at ${h.a}`).toBeGreaterThanOrEqual(HOLD_MIN - 1e-9);
         expect(h.b - h.a, `hold at ${h.a}`).toBeLessThanOrEqual((NEXT ? 3.5 : HOLD_MAX) + 1e-9); // (a held charge lasts its bar, up to three and a half beats)

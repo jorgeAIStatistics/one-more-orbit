@@ -9,7 +9,7 @@ import { Level } from '../src/game/level';
 import { buildCourse } from '../src/gd/course';
 import { accentBeats, layers, pitchLookup } from '../src/gd/presses';
 import { Sim } from '../src/gd/sim';
-import { audit } from '../tools/variety';
+import { audit, difficulty } from '../tools/variety';
 
 const build = (p: LevelPack) => { const level = new Level(p.level, p.audio, p.chart); return { level, course: buildCourse(level, layers(p), pitchLookup(p), p.level.lab, accentBeats(p)) }; };
 const play = (c: ReturnType<typeof build>['course'], moves: Array<[number, boolean]>) => {
@@ -48,14 +48,16 @@ describe('Emberwick on Volcano: the Meteor, and nothing the song is not playing'
   it('has no gold notes: flow is earned on the nodes themselves', () => {
     expect(course.flow.length).toBe(0);
   });
-  it('keeps everything the first stage taught in play: spikes, spin gates, holds, doubles, height changes, a planet hop and a speed gate; no pads, orbs, twins or tethers', () => {
-    expect(course.turns.length).toBeGreaterThanOrEqual(3);
-    expect(course.presses.some((p) => p.spin)).toBe(true);
+  it('asks only what the owner\'s table allows: at most two turns and none in a drop; no spin gates, weaving, gravity, world turns or tethers; jump orbs only; a planet hop and a speed portal', () => {
+    const d = difficulty(EMBER);
+    expect(d.turns.length).toBeLessThanOrEqual(2);
+    expect(d.turnsInDrop).toEqual([]);
+    expect(course.presses.some((p) => p.spin || p.weave || (p.kind === 'flip' && !p.weave) || p.twin || p.pad === 'tide')).toBe(false);
+    expect(course.inverts.length + course.mirrors.length).toBe(0);
+    expect(course.holds.some((h) => h.tether)).toBe(false);
+    expect(course.presses.every((p) => p.orb === '' || p.orb === 'jump')).toBe(true);
     expect(course.presses.some((p) => p.sling)).toBe(true);
     expect(course.portals.some((g) => g.faster)).toBe(true);
-    expect(course.holds.length).toBeGreaterThanOrEqual(2);
-    expect(course.presses.some((p) => p.pad || p.orb || p.twin)).toBe(false);
-    expect(course.holds.some((h) => h.tether)).toBe(false);
   });
   it('a clean run clears with a full drop; doing nothing, or tapping 180 ms late everywhere, does not', () => {
     const s = play(course, course.script);
@@ -68,21 +70,17 @@ describe('Emberwick on Volcano: the Meteor, and nothing the song is not playing'
 
 describe('the first stage: the Drifting Edge, on Where We Started', () => {
   const { course } = build(FIRST);
-  it('is the song from where its drums come in: no forms, no gold notes, no tethers; it teaches the tap, the double, the spike, the ribbon, the spin gate, the weave, the planet hop and the speed gate', () => {
+  it('is the song from where its drums come in, and asks only jumps, jump orbs, a jump pad, one slow and one fast portal: no turns, spins, inverts, weaving or gravity', () => {
     expect(FIRST.level.title).toMatch(/^Where We Started/);
     expect(course.lenses.length).toBe(0);
     expect(course.flow.length).toBe(0);
-    expect(course.presses.every((p) => p.form === 'orb' && !p.pad && !p.orb)).toBe(true);
+    expect(course.turns.length + course.inverts.length + course.mirrors.length).toBe(0);
+    expect(course.presses.some((p) => p.spin || p.weave || p.kind === 'flip' || p.twin)).toBe(false);
+    expect(course.presses.some((p) => p.orb === 'jump')).toBe(true);
+    expect(course.presses.some((p) => p.pad === 'spring')).toBe(true);
+    expect(course.portals.filter((g) => !g.faster).length).toBe(1);
+    expect(course.portals.filter((g) => g.faster).length).toBe(1);
     expect(course.holds.some((h) => h.tether)).toBe(false);
-    expect(course.holds.length).toBeGreaterThanOrEqual(3);
-    expect(course.turns.length).toBeGreaterThanOrEqual(3);
-    expect(course.presses.some((p) => p.spin) && course.presses.some((p) => p.weave) && course.presses.some((p) => p.sling)).toBe(true);
-    expect(course.portals.some((g) => g.faster)).toBe(true);
-  });
-  it('is gentle for its first twenty-odd seconds only (2-4 taps a bar), then a real level', () => {
-    const perBar = (n: number) => course.presses.filter((p) => bar(p.beat) === n).length;
-    for (let n = 1; n < 16; n++) { expect(perBar(n), `bar ${n}`).toBeGreaterThanOrEqual(2); expect(perBar(n), `bar ${n}`).toBeLessThanOrEqual(4); }
-    expect(16 * 4 * course.spb).toBeLessThanOrEqual(30);
   });
   it('a clean run clears, and the star rises in the song\'s own quiet after it', () => {
     expect(play(course, course.script).crashed).toBe(false);
@@ -112,12 +110,10 @@ describe('the variety audit: the owner\'s charting rules, measured on the course
       expect(a.longestRun, 'identical bars in a row').toBeLessThanOrEqual(2);
       expect(a.setpieces.length).toBeGreaterThanOrEqual(3);
       for (const sp of a.setpieces) expect(sp.found, sp.name).toBe(true);
-      for (const p of a.phrases) expect(p.actions.length, `actions in bars ${p.bars}`).toBeGreaterThanOrEqual(4);
-      for (const s of a.sections) {
-        if (/VERSE/.test(s.label)) { expect(s.mean, s.id).toBeGreaterThanOrEqual(2); expect(Math.max(...s.perBar), s.id).toBeLessThanOrEqual(4); }
-        if (/DROP/.test(s.label)) { expect(s.mean, s.id).toBeGreaterThanOrEqual(4); expect(Math.max(...s.perBar), s.id).toBeLessThanOrEqual(8); }
-      }
-      expect(a.rest.longestGapBeats, 'never long with nothing to tap').toBeLessThanOrEqual(4);
+      for (const p of a.phrases) expect(p.actions.length, `actions in bars ${p.bars}`).toBeGreaterThanOrEqual(2);
+      // the owner's difficulty table: taps a second per section, bursts, turns, what is allowed, nothing stacked
+      expect(difficulty(pack).verdict).toEqual([]);
+      expect(a.rest.longestGapBeats, 'never long with nothing to tap').toBeLessThanOrEqual(8);
     });
   }
 });

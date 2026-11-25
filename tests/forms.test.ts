@@ -313,7 +313,8 @@ describe('gates, pads, chimes and slipstreams', () => {
     const early = sky.script.filter(([t]) => t < orb.beat + 1).map(([t, d]): [number, boolean] => [Math.abs(t - orb.beat) < 1e-6 ? t - orb.tol * 0.8 : t, d]).sort((x, y) => x[0] - y[0]);
     expect(play(sky, early, orb.beat + 0.9).crashed).toBe(false);
     // the first planet has no orbs at all; the gravity orb waits for the third
-    expect(of('heroes').course.presses.some((p) => p.orb || p.slip)).toBe(false);
+    // (the owner's table, 2026-11-25: jump orbs and jump pads from the first stage on; dash and gravity orbs come later)
+    expect(of('heroes').course.presses.some((p) => p.slip || p.orb === 'dash' || p.orb === 'grav')).toBe(false);
     expect(of('skyhigh').course.presses.some((p) => p.orb === 'grav')).toBe(false);
     for (const id of ['blank', 'invincible']) expect(of(id).course.presses.filter((p) => p.orb === 'grav').length, id).toBeGreaterThanOrEqual(3);
     for (const id of ['skyhigh', 'blank', 'invincible']) for (const kind of ['jump', 'dash'] as const) expect(of(id).course.presses.filter((p) => p.orb === kind).length, `${id}: ${kind} orbs`).toBeGreaterThanOrEqual(3);
@@ -330,7 +331,7 @@ describe('gates, pads, chimes and slipstreams', () => {
       }
       return out;
     };
-    expect(combos(of('heroes').course)).toEqual([]);
+    expect(combos(of('heroes').course).every((c) => c.kinds.every((k) => k === 'jump'))).toBe(true); // (the first planet: jump orbs only)
     const longest: number[] = [];
     for (const id of ['skyhigh', 'blank', 'invincible']) {
       const { course } = of(id);
