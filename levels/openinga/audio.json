@@ -1,0 +1,15 @@
+{
+  "file": "audio/openinga.mp3",
+  "frames": 1411200,
+  "firstSig": 264631,
+  "bpm": 60,
+  "offset": 0.0,
+  "length": 32.0,
+  "dropTime": 28.0,
+  "source": [
+    [
+      0.0,
+      32.0
+    ]
+  ]
+}

@@ -12,6 +12,9 @@
     "fallback": {"source": "Janji - Heroes Tonight (feat. Johnning) [NCS Release].mp3", "title": "Heroes Tonight (opening)", "artist": "Janji", "bpm": 128, "sourceOffset": 0.001, "segments": [[0, 36]], "pickupBars": 0, "fadeOut": 0.06, "dropBar": 35},
     "ambush": {"source": "Egzod, Maestro Chives, Neoni - Royalty [NCS Release].mp3", "title": "Royalty (second verse, build and drop)", "artist": "Egzod, Maestro Chives, Neoni", "bpm": 160, "sourceOffset": 0.0195, "segments": [[96, 129]], "pickupBars": 1, "fadeOut": 1.5, "dropBar": 112},
     "hub0": {"source": "one-more-orbit/tools/cache/hub0-src.wav", "title": "The Lantern's theme", "artist": "written for the game", "bpm": 80, "sourceOffset": 0.0, "segments": [[0, 9]], "pickupBars": 0, "fadeOut": 0.3, "dropBar": 8},
-    "hub1": {"source": "one-more-orbit/tools/cache/hub1-src.wav", "title": "The Lantern's theme, with Ossa's voice", "artist": "written for the game", "bpm": 80, "sourceOffset": 0.0, "segments": [[0, 9]], "pickupBars": 0, "fadeOut": 0.3, "dropBar": 8}
+    "hub1": {"source": "one-more-orbit/tools/cache/hub1-src.wav", "title": "The Lantern's theme, with Ossa's voice", "artist": "written for the game", "bpm": 80, "sourceOffset": 0.0, "segments": [[0, 9]], "pickupBars": 0, "fadeOut": 0.3, "dropBar": 8},
+    "helion": {"source": "one-more-orbit/tools/cache/helion-src.wav", "title": "Helion's signal (sketch)", "artist": "sketch", "bpm": 60, "sourceOffset": 0.0, "segments": [[0, 4]], "pickupBars": 0, "fadeOut": 0.3, "dropBar": 3},
+    "openinga": {"source": "one-more-orbit/tools/cache/openinga-src.wav", "title": "The opening, with a synthesised chord (sketch)", "artist": "sketch", "bpm": 60, "sourceOffset": 0.0, "segments": [[0, 8]], "pickupBars": 0, "fadeOut": 0.3, "dropBar": 7},
+    "openingb": {"source": "one-more-orbit/tools/cache/openingb-src.wav", "title": "The opening, straight into the song (sketch)", "artist": "sketch", "bpm": 60, "sourceOffset": 0.0, "segments": [[0, 8]], "pickupBars": 0, "fadeOut": 0.3, "dropBar": 7}
   }
 }

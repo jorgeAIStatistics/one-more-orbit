@@ -89,12 +89,14 @@ describe('test chambers', () => {
     expect(secs).toBeLessThan(60);
   });
 
-  it('there are two voicings of the lullaby, a fallback and the ambush cut to listen to', () => {
-    expect(LISTEN.map((l) => l.id)).toEqual(['lullaby', 'lullabyb', 'fallback', 'ambush', 'royalty']);
+  it('things to listen to: three sketches for the new opening, then the lullaby in two voicings, a fallback and the ambush cut', () => {
+    expect(LISTEN.map((l) => l.id)).toEqual(['helion', 'openinga', 'openingb', 'lullaby', 'lullabyb', 'fallback', 'ambush', 'royalty']);
     for (const l of LISTEN) { expect(l.audio.file).toMatch(/^audio\/.+\.mp3$/); expect(l.from).toBeGreaterThanOrEqual(0); expect(l.from).toBeLessThan(l.audio.length); }
-    expect(LISTEN[0].audio.bpm).toBe(80);
-    expect(LISTEN[0].audio.length).toBeGreaterThan(60);
-    expect(LISTEN[0].audio.length).toBeLessThan(90);
+    const lullaby = LISTEN.find((l) => l.id === 'lullaby')!;
+    expect(lullaby.audio.bpm).toBe(80);
+    expect(lullaby.audio.length).toBeGreaterThan(60);
+    expect(lullaby.audio.length).toBeLessThan(90);
+    for (const id of ['openinga', 'openingb']) expect(LISTEN.find((l) => l.id === id)!.audio.length).toBeGreaterThan(25); // long enough to reach the first tap and the song
   });
 
   it('the Meteor room has a wall on every beat the music hits, and its climax on the hook\'s eighth notes too', () => {
