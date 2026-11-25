@@ -16,6 +16,7 @@ import { SkyTitle } from './ui/skytitle';
 import { SkyPrologue } from './ui/skyprologue';
 import { SkyStory } from './ui/skystory';
 import { SkyResult, type ResultInfo } from './ui/skyresult';
+import { PlanetScene } from './ui/skyplanet';
 import { SkyRooms, type GlowsInfo, type Room, type StarsInfo, type SyncInfo } from './ui/skyrooms';
 import { STORY, planetName, type Frame } from './ui/galaxy';
 
@@ -308,6 +309,7 @@ function startRun(from = -1, quick = false): void {
   }
   session.attempts++;
   renderer.reset();
+  renderer.backdrop = chamber ? null : sceneFor(pack);
   held = 0;
   const spb = 60 / pack.audio.bpm;
   // a fresh start plays the whole count-in bar under the title card; an instant restart cuts in for the last two counts
@@ -609,6 +611,16 @@ function showResults(r: Run, cleared: boolean, reached = r.pct): void {
 }
 /** more about the run, apart from the sync line (which can change while the results are up) */
 let resMore: string[] = [];
+/** A planet's painted sky for its level, where it has one that is built (Emberwick so far): kept, so it is painted once. */
+const scenes = new Map<string, PlanetScene>();
+const BUILT = ['heroes'];
+function sceneFor(p: LevelPack): PlanetScene | null {
+  const world = baseOf(p);
+  if (!BUILT.includes(world) || !PlanetScene.has(world)) return null;
+  let s = scenes.get(world);
+  if (!s) scenes.set(world, (s = new PlanetScene(world)));
+  return s;
+}
 /** the offset the results' one-tap fix would set, when there is one on offer */
 let resFix: number | null = null;
 /** What the taps say about sync, as the results' last soft line, and the one-tap fix if there is one. */

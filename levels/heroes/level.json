@@ -19,7 +19,7 @@
   "adds": "Spring pads and planet hops, and the Meteor: tap to dash through walls",
   "holds": true,
   "rules": {"tol": 0.14, "ahead": 3.5, "branch": 0.09},
-  "shards": [[17.5, 21.5], [97.5, 100.5], [130.5, 134]],
+  "shards": [[17.5, 21.5], [40, 42], [130.5, 134]],
   "segments": [
     {"id": "calm", "core": {"bars": ["up"], "record": true}, "bars": 4, "label": "INTRO", "lap": 16, "follow": "arp", "lead": "snare", "motif": "calm", "cycle": 4, "teach": "TAP as the ball crosses each gate", "look": {"palette": "dawn", "bg": "stars", "eq": "bars", "zoom": [0.9, 1]},
       "plan": ["L=8"] },
@@ -37,11 +37,11 @@
       "plan": ["L=16 acc", "L=16", "L=16", "L=16"] },
     {"id": "drop2", "core": {"bars": ["orb+up+sling", "up", "up+spring", "up"]}, "bars": 4, "label": "DROP", "lap": 8, "follow": "lead", "lead": "hook", "motif": "drop", "cycle": 4, "enter": "pulse", "look": {"palette": "gold", "bg": "tunnel", "eq": "burst"},
       "plan": ["L=16 acc", "L=16", "L=16", "L=16"] },
-    {"id": "drop3", "core": {"bars": ["meteor", "up", "up", "orb+up"]}, "bars": 4, "label": "DROP", "lap": 8, "follow": "lead", "lead": "hook", "motif": "drop", "cycle": 4, "enter": "pulse", "warn": "FLIP GATES", "teach": "FLIP GATE: tapping it turns the ball round", "look": {"palette": "sky", "bg": "grid", "eq": "burst", "rot": [0, 0.5]},
+    {"id": "drop3", "core": {"bars": ["meteor+beats", "beats", "beats", "orb+up"]}, "bars": 4, "label": "DROP", "lap": 8, "follow": "lead", "lead": "hook", "motif": "drop", "cycle": 4, "enter": "pulse", "warn": "FLIP GATES", "teach": "FLIP GATE: tapping it turns the ball round", "look": {"palette": "sky", "bg": "grid", "eq": "burst", "rot": [0, 0.5]},
       "plan": ["L=16 flip", "L=16", "L=16 flip", "L=16"] },
-    {"id": "drop4", "core": {"bars": ["up+sling", "up", "up+spring", "up"]}, "bars": 4, "label": "DROP", "lap": 8, "follow": "lead", "lead": "hook", "motif": "drop", "cycle": 4, "rocket": 2, "enter": "pulse", "look": {"palette": "hot", "bg": "tunnel", "eq": "burst", "zoom": [1, 1.08]},
+    {"id": "drop4", "core": {"bars": ["up+spring", "meteor", "beats", "beats"]}, "bars": 4, "label": "DROP", "lap": 8, "follow": "lead", "lead": "hook", "motif": "drop", "cycle": 4, "rocket": 2, "enter": "pulse", "look": {"palette": "hot", "bg": "tunnel", "eq": "burst", "zoom": [1, 1.08]},
       "plan": ["L=16 acc", "L=16", "L=16", "L=16"] },
-    {"id": "outro", "core": {"bars": ["up+sling", "up", "up", "up"]}, "bars": 4, "label": "END", "lap": 8, "follow": "lead", "lead": "hook", "enter": "flash", "look": {"palette": "dawn", "bg": "stars", "eq": "wave", "zoom": [1.08, 0.95]},
+    {"id": "outro", "core": {"bars": ["orb+up+sling", "up", "up", "up"]}, "bars": 4, "label": "END", "lap": 8, "follow": "lead", "lead": "hook", "enter": "flash", "look": {"palette": "dawn", "bg": "stars", "eq": "wave", "zoom": [1.08, 0.95]},
       "plan": ["L=@X...............", "L=@x...............", "L=@x...............", "-"] }
   ]
 }

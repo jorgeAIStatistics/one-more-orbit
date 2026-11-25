@@ -105,6 +105,10 @@ export class GdRenderer {
   private gatesPassed = 0;
   /** test chambers: no backdrop at all, only the course on a flat ground */
   plain = false;
+  /** a painted sky for this level (its planet's own, with its soul in it), in place of the atlas's plate */
+  backdrop: { draw: (c: CanvasRenderingContext2D, w: number, h: number, st: { time: number; colour: number; drive: number; kick: number; woke: number; strike: number; dark: number; calm: boolean }) => void } | null = null;
+  private woke = -1;
+  private strike = 0;
   /** test chambers: draw the Lantern's four windows and the cap coming down on them (the ambush) */
   windows = false;
   /** how much of the planet's colour is showing, 0..1: none in a calm engraved stretch, all of it in an earned drop */
@@ -324,6 +328,7 @@ export class GdRenderer {
     const span = Math.max(this.w, this.h) * 0.75;
     if (this.plain) { c.fillStyle = '#0d0e17'; c.fillRect(0, 0, this.w, this.h); return; }
     const calm = save.reducedMotion;
+    if (this.backdrop) { this.backdrop.draw(c, this.w, this.h, { time, colour: this.colour, drive, kick, woke: this.woke, strike: this.strike, dark, calm }); return; }
     const k = 0.4 + inten * 0.95 + groove * 0.7 + drive * kick * 0.5;
     // the bass warps the backdrop: its bright centre swells on every kick
     const g = c.createRadialGradient(cx, cy, 0, cx, cy, span * (1 + (calm ? 0 : drive * kick * 0.18)));
@@ -1502,6 +1507,7 @@ export class GdRenderer {
         if (ev.flow) this.burst(this.ball.x, this.ball.y, ev.kind === 'spark' ? 7 : 5, GOLD, r0 * 0.7, 0.8); // small sparkles: on the note
         if (ev.charge) this.punch = Math.max(this.punch, 0.2); // each roll note you catch winds the picture a little tighter
         if (ev.kind === 'flip') this.burst(this.ball.x, this.ball.y, 12, VIOLET, r0 * 0.9);
+        if (ev.kind === 'hop' && formEv === 'meteor') this.strike = 1; // (the planet's soul strikes with it)
         if (ev.kind === 'hop' && formEv === 'meteor') { this.burst(this.ball.x, this.ball.y, 16, INK_RIM, r0 * 1.4); this.burst(this.ball.x, this.ball.y, 8, FORM_COL.meteor, r0 * 0.9); } // the wall goes to pieces
         if (ev.flow && loud) {
           // in the loud parts an on-beat tap drives the picture: a shockwave off the ball's ring, the rings light up, a burst
@@ -1693,6 +1699,8 @@ export class GdRenderer {
     }
 
     // ---- behind the course: backdrop, flashes, beams, shockwaves, shards
+    this.woke = afterDrop ? (beat - course.dropBeat) * level.spb : -1;
+    this.strike = Math.max(0, this.strike - dt * 3.2);
     c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.background(pal, now / 1000, dt, inten, groove, this.dark, drive, kick);
     if (this.flash > 0 && !this.plain) { c.fillStyle = `rgba(255,255,255,${this.flash * (calm ? 0.08 : 0.26)})`; c.fillRect(0, 0, this.w, this.h); }
@@ -1735,7 +1743,7 @@ export class GdRenderer {
     }
     c.translate(-this.coreX, -this.coreY);
     this.drawParticles(dt, true);
-    if (this.glitch > 0 && !calm && !this.plain && this.canvas.width > 0 && this.canvas.height > 0) {
+    if (this.glitch > 0 && !calm && !this.plain && !this.backdrop && this.canvas.width > 0 && this.canvas.height > 0) { // (a painted sky is never torn)
       // the glitch tears only what has been drawn so far, which is all background
       c.save();
       c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);

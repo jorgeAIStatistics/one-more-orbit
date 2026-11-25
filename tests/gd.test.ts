@@ -403,7 +403,10 @@ for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), FINAL, .
     it('same music, same pattern: sections sharing a motif have the same presses and flow notes', () => {
       const shape = (s: { beat0: number; beat1: number }) => [...course.taps, ...course.rides].sort((a, b) => a - b).filter((b) => b >= s.beat0 + 1.5 && b < s.beat1 - 0.5).map((b) => `${(b - s.beat0).toFixed(2)}${allBeats.includes(b) ? 'S' : 'f'}`).join(' ');
       const groups = new Map<string, string[]>();
-      for (const s of level.segments) if (s.motif && !s.core?.charge) groups.set(s.motif, [...(groups.get(s.motif) ?? []), shape(s)]);
+      // (a phrase laid out as one of a gift's four beats, with a wall on every beat, is its own pattern on purpose: the
+      // same music is asked for more each time it comes round)
+      const own = (s: { id: string; core?: { bars?: string[] } }) => ((s.core?.bars ?? []).some((b) => /(^|\+)(beats|every|strong)(\+|$)/.test(b)) ? `:${s.id}` : '');
+      for (const s of level.segments) if (s.motif && !s.core?.charge) groups.set(s.motif + own(s), [...(groups.get(s.motif + own(s)) ?? []), shape(s)]);
       for (const [motif, shapes] of groups) {
         const most = Math.max(...[...new Set(shapes)].map((x) => shapes.filter((y) => y === x).length));
         expect(most / shapes.length, `motif ${motif}`).toBeGreaterThanOrEqual(0.5);
