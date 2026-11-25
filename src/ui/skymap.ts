@@ -12,8 +12,16 @@ export interface SkyNode {
   state: 'home' | 'open' | 'dark'; best: number; shards: boolean[]; why: string;
   /** it can be flown as a daredevil ('open'), or already has been ('done'); nothing where it cannot */
   dare?: 'open' | 'done';
+  /** a few words in place of its shards while it is not chosen: the next world, stirring ("is waking…") */
+  hook?: string;
 }
-export interface SkyInfo { nodes: SkyNode[]; lens: string; lit: string }
+export interface SkyInfo {
+  nodes: SkyNode[]; lens: string;
+  /** the stars lit so far, in words; nothing until the gallery is open */
+  lit: string;
+  /** the Lantern relights room by room: the hearth (Eko's glows) with the first song home, the gallery (the star chart) with the second */
+  rooms: { glows: boolean; stars: boolean };
+}
 /**
  * A scene played in this sky instead of the map (the prologue): it says where the camera looks and how much of its
  * colour each world has, and paints its own things over the worlds. No names are written and nothing can be tapped.
@@ -49,7 +57,7 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const cvs = (w: number, h: number): [HTMLCanvasElement, CanvasRenderingContext2D] => { const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); return [c, c.getContext('2d')!]; };
 
 export class SkyMap {
-  info: SkyInfo = { nodes: [], lens: '', lit: '' };
+  info: SkyInfo = { nodes: [], lens: '', lit: '', rooms: { glows: true, stars: true } };
   /** the place the camera has come to: a node's id, "lantern", or nothing (the whole sky) */
   chosen: string | null = null;
   private ctx: CanvasRenderingContext2D;
@@ -235,14 +243,16 @@ export class SkyMap {
     }
     // the stars lit so far (the star chart is read from the gallery) and the Lantern's words: places in the picture
     const sx = w / L.w, sy = h / L.h;
-    c.strokeStyle = 'rgba(255,236,206,0.35)'; c.lineWidth = 1; c.beginPath();
-    L.stars.forEach(([x, y], i) => (i ? c.lineTo(x * sx, y * sy) : c.moveTo(x * sx, y * sy))); c.stroke();
-    L.stars.forEach(([x, y], i) => this.dab(x * sx, y * sy, (i % 2 ? 2.2 : 3) * u + 0.6, true, 0.75 + 0.25 * Math.sin(t * 1.6 + i * 2)));
+    if (this.info.rooms.stars) { // (the constellation is seen once the gallery is open)
+      c.strokeStyle = 'rgba(255,236,206,0.35)'; c.lineWidth = 1; c.beginPath();
+      L.stars.forEach(([x, y], i) => (i ? c.lineTo(x * sx, y * sy) : c.moveTo(x * sx, y * sy))); c.stroke();
+      L.stars.forEach(([x, y], i) => this.dab(x * sx, y * sy, (i % 2 ? 2.2 : 3) * u + 0.6, true, 0.75 + 0.25 * Math.sin(t * 1.6 + i * 2)));
+    }
     const quiet = this.chosen && this.chosen !== 'lantern' ? 0.66 : 0.9; // (small lines have to be read on a phone: never faint)
     // (on a tall screen the count sits low on the right: it steps aside while the lowest world's lines are written there)
     if (!(at && L === LAYS.tall && at.y > h * 0.6)) this.text(this.info.lit, L.starsAt[0] * sx, L.starsAt[1] * sy, 15.5, quiet, L.starsAt[2], SAND);
     const sxs = L.stars.map((p) => p[0] * sx), sys = L.stars.map((p) => p[1] * sy);
-    this.hits.push({ x: Math.min(...sxs) - 20, y: Math.min(...sys) - 20, w: Math.max(...sxs) - Math.min(...sxs) + 40, h: L.starsAt[1] * sy + 4 - Math.min(...sys) + 20, hit: { kind: 'stars' } });
+    if (this.info.rooms.stars) this.hits.push({ x: Math.min(...sxs) - 20, y: Math.min(...sys) - 20, w: Math.max(...sxs) - Math.min(...sxs) + 40, h: L.starsAt[1] * sy + 4 - Math.min(...sys) + 20, hit: { kind: 'stars' } });
     const [wx, wy, wa] = [L.words[0] * sx, L.words[1] * sy, L.words[2]];
     // (the Lantern itself first: its rooms' words lie over it, and a later place is the one a tap finds)
     this.hits.push({ x: 0, y: lanternAt.y - 60 * u, w: Math.max(190, wx + 170), h: h - lanternAt.y + 60 * u, hit: { kind: 'node', id: 'lantern' } });
@@ -251,14 +261,16 @@ export class SkyMap {
       this.text('the Lantern', wx, wy - 58, 26, this.fade, wa, CREAM, 600);
       const rooms: Array<['glows' | 'settings' | 'stars', string, string]> = [['glows', 'the hearth', 'Eko’s glows'], ['settings', 'the desk', 'settings'], ['stars', 'the gallery', 'the star chart']];
       rooms.forEach(([kind, room, what], i) => {
-        const y = wy - 27 + i * 30, rw = this.text(room, wx, y, 20, this.fade, wa);
-        this.text(what, wx + rw + 10, y, 15, this.fade * 0.86, wa, SAND);
-        this.hits.push({ x: wx - 8, y: y - 21, w: 210, h: 30, hit: { kind } });
+        // a room that is still dark is named, and says what will light it
+        const open = kind === 'settings' || (kind === 'glows' ? this.info.rooms.glows : this.info.rooms.stars);
+        const y = wy - 27 + i * 30, rw = this.text(room, wx, y, 20, this.fade * (open ? 1 : 0.6), wa);
+        this.text(open ? what : kind === 'glows' ? 'cold, until a song is home' : 'dark, until two are', wx + rw + 10, y, 15, this.fade * (open ? 0.86 : 0.7), wa, SAND);
+        if (open) this.hits.push({ x: wx - 8, y: y - 21, w: 210, h: 30, hit: { kind } });
       });
       this.text(this.info.lens, wx, wy + 56, 15, this.fade * 0.86, wa, SAND);
     } else {
       this.text('the Lantern', wx, wy, 18, quiet + 0.1, wa, CREAM, 600);
-      this.text('the hearth  ·  the desk  ·  the gallery', wx, wy + 19, 14.5, quiet * 0.95, wa, SAND);
+      this.text([this.info.rooms.glows ? 'the hearth' : '', 'the desk', this.info.rooms.stars ? 'the gallery' : ''].filter(Boolean).join('  ·  '), wx, wy + 19, 14.5, quiet * 0.95, wa, SAND);
       this.text(this.info.lens, wx, wy + 37, 14.5, quiet * 0.95, wa, SAND);
     }
 
@@ -286,6 +298,7 @@ export class SkyMap {
         if (n.kind === 'hollow') { this.text(n.name, L.hollowAt[0] * sx, L.hollowAt[1] * sy, 19, n.state === 'dark' ? 0.72 : 0.9, L.hollowAt[2], CREAM, 600); continue; }
         this.text(n.name, x0, p.y + 3, 20, dim * (this.chosen ? 0.82 : 1), al, CREAM, 600);
         if (n.state === 'dark') this.text('dark and silent', x0, p.y + 21, 14.5, 0.8, al, SAND);
+        else if (n.hook) this.text(n.hook, x0, p.y + 22, 15.5, 0.7 + 0.2 * Math.sin(t * 1.7), al);
         else for (let i = 0; i < 3; i++) this.dab(x0 + dir * (6 + i * 14), p.y + 17, 3, n.shards[i], 0.9);
         continue;
       }

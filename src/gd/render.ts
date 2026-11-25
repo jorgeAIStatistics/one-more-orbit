@@ -195,7 +195,7 @@ export class GdRenderer {
     const first = c.presses[0];
     if (first) this.hints.push([c.start - 9, first.beat + 1.5, 'TAP ON EACH WHITE MARK']);
     const gold = c.flow.find((f) => !f.charge);
-    if (gold) this.hints.push([gold.beat - 3, gold.beat + 2.5, 'GOLD NOTES: BONUS TAPS']);
+    if (gold) this.hints.push([gold.beat - 3, gold.beat + 2.5, 'gold notes: bonus taps']);
     for (const f of c.firsts) this.hints.push(f.what === 'charge' ? [f.beat - 2.5, f.beat + 4, HINT.charge] : f.what === 'smash' ? [f.beat - 5, f.beat, HINT.smash] : [f.beat - 4.5, f.beat + 1.5, HINT[f.what]]);
     this.hints.sort((a, b) => a[0] - b[0]);
     this.energy = barEnergy(level);

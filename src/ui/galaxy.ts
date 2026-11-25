@@ -113,7 +113,7 @@ function restoredPlate(c: Ctx, w: number, h: number, id: string, n: number): voi
 }
 
 /** scene: the painted scene (Afterglow) this card is, by its name in src/art/storypaint.js. draw: the Star Atlas plate, kept with that look. */
-export interface Frame { scene: string; draw: (c: Ctx, w: number, h: number) => void; text: string }
+export interface Frame { scene: string; draw?: (c: Ctx, w: number, h: number) => void; text: string }
 const ALL4 = ['heroes', 'skyhigh', 'blank', 'invincible'];
 /** The story, in chapters. Each plays once, at its moment, and can be skipped. */
 export const STORY: Record<string, Frame[]> = {
@@ -122,7 +122,13 @@ export const STORY: Record<string, Frame[]> = {
     { scene: 'eko', draw: ekoPlate, text: 'Marlow the lampmoth keeps the lamp. Eko is its youngest spark, and likes nothing better than riding the beam.' },
     { scene: 'hush', draw: (c, w, h) => hushPlate(c, w, h), text: 'Then the Hush came, which cannot bear a sound. It took every planet\'s song, and the colour went with it. It carried Marlow off to the Hollow.' }
   ],
-  heroes: [{ scene: 'ember', draw: (c, w, h) => restoredPlate(c, w, h, 'heroes', 1), text: 'Emberwick sings again, and its embers are warm again. One song is home, and the Lantern\'s beam finds its way there.' }],
+  // Emberwick, before its song comes back (shown once, on the way in), and after: the gift, the Keeper's words, the homecoming
+  ossa: [{ scene: 'ossa-dark', text: 'Emberwick. Its hills used to ring. Ossa, who cast the Lantern\u2019s first glass, lies banked like a dead coal.' }],
+  heroes: [
+    { scene: 'ossa-gift', text: 'Emberwick rings again. \u201cTake it,\u201d says Ossa. \u201cIt does not stop for walls.\u201d' },
+    { scene: 'marlow', text: 'Far up, under glass, four taps. \u201cI heard that. All the way up here.\u201d' },
+    { scene: 'hearth-lit', text: 'Home. Ossa\u2019s coal goes on the hearth, and the hearth takes. One room of the Lantern is warm again.' }
+  ],
   skyhigh: [{ scene: 'cirra', draw: (c, w, h) => restoredPlate(c, w, h, 'skyhigh', 2), text: 'Cirra has its tune back, and its clouds are rose again. Two songs are home.' }],
   blank: [{ scene: 'glass', draw: (c, w, h) => restoredPlate(c, w, h, 'blank', 3), text: 'Glassmere rings like a bell, blue to its heart. Three songs are home.' }],
   invincible: [{ scene: 'verd', draw: (c, w, h) => restoredPlate(c, w, h, 'invincible', 4), text: 'Verdance is loud with leaves, and green again. Four songs are home, and at the edge of the galaxy something has noticed.' }],

@@ -378,11 +378,11 @@ export class SkyPrologue {
       say('“Go.”', x, tall ? h * 0.3 : h * 0.3, 30 * U, win(78, 83));
       if (after >= 4.5) {
         const a = smooth((after - 4.5) / 2) * (1 - smooth((after - 21) / 2));
-        say('Four songs. One keeper. A long way up.', tall ? w / 2 : w * 0.1, tall ? h * 0.2 : h * 0.26, (tall ? 22 : 30) * U, a, tall ? 'center' : 'left');
+        say('Four songs. One keeper. A long way up.', tall ? w / 2 : w * 0.1, tall ? h * 0.2 : h * 0.16, (tall ? 22 : 30) * U, a, tall ? 'center' : 'left');
       }
       if (after >= 12) { // the title writes itself
         const a = smooth((after - 12) / 3) * (1 - smooth((after - 21) / 2));
-        if (tall) this.title.wordmark(w * 0.5, h * 0.44, 104 * U, 'center', a, secs); else this.title.wordmark(w * 0.1, h * 0.52, 190 * U, 'left', a, secs);
+        if (tall) this.title.wordmark(w * 0.5, h * 0.44, 104 * U, 'center', a, secs); else this.title.wordmark(w * 0.1, h * 0.58, 170 * U, 'left', a, secs);
       }
       if (this.again) say('skip', w - 22, 40, 16, 0.8, 'right', '230,207,174');
     }

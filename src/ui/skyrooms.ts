@@ -25,6 +25,8 @@ export interface GlowView { id: string; name: string; rgb: [number, number, numb
 export interface GlowsInfo { glows: GlowView[]; worn: string }
 export interface StarGroup { id: string; name: string; rows: Array<{ name: string; what: string; lit: boolean }>; /** a quiet line under its name, e.g. that it is not in the sky yet */ note: string }
 export interface StarsInfo { groups: StarGroup[]; lit: number; total: number }
+/** A page of the Keeper's logbook: which chapter, its pages, and the one being read. */
+export interface BookInfo { chapter: string; title: string; pages: string[][]; page: number; foot: string }
 export interface CreditsInfo { tracks: Array<{ title: string; by: string }>; lines: string[]; foot: string; link: string }
 export interface SyncInfo {
   title: string; say: string; back: string;
@@ -59,6 +61,8 @@ export class SkyRooms {
   glows: GlowsInfo | null = null;
   stars: StarsInfo | null = null;
   credits: CreditsInfo | null = null;
+  /** the logbook, when it is the page being read (it takes the place of the credits on the page) */
+  book: BookInfo | null = null;
   sync: SyncInfo | null = null;
   /** the hearth: the glow being read about (the one worn, unless a dark wick was touched) */
   look = '';
@@ -231,6 +235,7 @@ export class SkyRooms {
 
   // ---------------------------------------------------------------- the last page of the logbook
   private page(G: { px: number; py: number; pw: number; ph: number; rot: number; ix: number }, w: number, _h: number, dev: Dev, u: number): void {
+    if (this.book) { this.bookPage(G, w, dev, u); return; }
     const c = this.ctx, info = this.credits;
     if (!info) return;
     const { pw, ph, ix } = G, max = pw - ix * 2, ink = `rgb(${INK.join(',')})`;
@@ -266,6 +271,35 @@ export class SkyRooms {
       y += r.after * u * f;
     });
     c.restore();
+    this.back('back to the desk', dev === 'phone' ? w * 0.09 : w * 0.07, u, dev);
+  }
+
+  /** The Keeper's logbook, a page at a time, in his hand: a tap on the page turns it. */
+  private bookPage(G: { px: number; py: number; pw: number; ph: number; rot: number; ix: number }, w: number, dev: Dev, u: number): void {
+    const c = this.ctx, b = this.book!, { pw, ph, ix } = G, max = pw - ix * 2, ink = `rgb(${INK.join(',')})`;
+    const paras = b.pages[Math.max(0, Math.min(b.pages.length - 1, b.page))] ?? [];
+    // the hand gets a little smaller if a page is long for this screen
+    let f = 1, laid: string[][] = [];
+    const top = (dev === 'phone' ? 150 : 148) * u, room = ph - top - 64 * u;
+    for (let pass = 0; pass < 6; pass++) {
+      laid = paras.map((p) => this.wrap(p, 21 * u * f, max));
+      const need = laid.reduce((n, l) => n + l.length * 29 * u * f + 16 * u * f, 0);
+      if (need <= room) break;
+      f *= Math.max(0.82, room / need);
+    }
+    c.save();
+    c.translate(G.px + pw / 2, G.py + ph / 2); c.rotate(G.rot); c.translate(-pw / 2, -ph / 2);
+    this.write(b.chapter, ix, (dev === 'phone' ? 54 : 52) * u, 15.5 * u, { color: ink, alpha: 0.9, ink: true });
+    this.write(b.title, ix, (dev === 'phone' ? 94 : 92) * u, 34 * u, { color: ink, alpha: 0.92, ink: true });
+    C.rule(c, ix, pw - ix, (dev === 'phone' ? 112 : 110) * u, 0.35, INK);
+    let y = top;
+    for (const lines of laid) { for (const l of lines) { this.write(l, ix, y, 21 * u * f, { color: ink, alpha: 0.92, ink: true }); y += 29 * u * f; } y += 16 * u * f; }
+    C.rule(c, ix, pw - ix, ph - 52 * u, 0.3, INK);
+    this.write(b.foot, ix, ph - 26 * u, 16 * u, { color: ink, alpha: 0.92, ink: true });
+    this.write(`${b.page + 1} of ${b.pages.length}`, pw - ix, ph - 26 * u, 15.5 * u, { color: ink, alpha: 0.92, ink: true, align: 'right', style: 'normal', figs: true });
+    c.restore();
+    // the left third of the page turns back, the rest turns on
+    this.hits.push({ x: G.px, y: G.py, w: pw * 0.32, h: ph, id: 'prev' }, { x: G.px + pw * 0.32, y: G.py, w: pw * 0.68, h: ph, id: 'next' });
     this.back('back to the desk', dev === 'phone' ? w * 0.09 : w * 0.07, u, dev);
   }
 

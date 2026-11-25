@@ -239,9 +239,10 @@ export class AudioEngine {
    * Plays a stretch of a level's song quietly, looping: the level select's preview. A new call fades the old one out.
    * whole: play on from there to the end, once (the listening room).
    */
-  async preview(meta: AudioMeta, from: number, gain = 0.75, whole = false): Promise<void> {
+  async preview(meta: AudioMeta, from: number, gain = 0.75, whole = false, span = 15): Promise<void> {
     const token = ++this.previewToken;
     this.stopPreview(0.4, true);
+    this.previewing = meta.file;
     if (!this.ensure()) return;
     let track: LoadedTrack;
     try { track = await this.loadTrack(meta); } catch { return; }
@@ -252,7 +253,7 @@ export class AudioEngine {
     src.buffer = track.buffer;
     src.loop = !whole;
     src.loopStart = Math.max(0, meta.offset + track.shift + from);
-    src.loopEnd = Math.min(track.buffer.duration, src.loopStart + 15);
+    src.loopEnd = Math.min(track.buffer.duration, src.loopStart + span); // (span: how long the stretch that goes round is)
     const g = c.createGain();
     const now = c.currentTime;
     g.gain.setValueAtTime(0, now);
@@ -268,8 +269,10 @@ export class AudioEngine {
   }
 
   /** Fades the preview out (the level's own music is about to take over, or the menus are closing). */
+  /** the file being previewed (or about to be), or nothing */
+  previewing = '';
   stopPreview(fade = 0.5, keepToken = false): void {
-    if (!keepToken) this.previewToken++;
+    if (!keepToken) { this.previewToken++; this.previewing = ''; }
     this.previewEnd?.(fade);
     this.previewEnd = null;
   }

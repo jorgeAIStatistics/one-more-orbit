@@ -2,6 +2,7 @@
 // buttons. A scene is painted once when it is shown; the words fade in a sentence at a time; a small spark under the
 // last line says a tap will go on. A tap before that brings all the words in at once. "skip" is one quiet word.
 import { STORIES } from '../art/storypaint.js';
+import { SCENES as WORLD } from './scenes';
 
 const SERIF = '"Cormorant Garamond", "Hoefler Text", Baskerville, Palatino, Georgia, serif';
 const smooth = (x: number) => { const t = x < 0 ? 0 : x > 1 ? 1 : x; return t * t * (3 - 2 * t); };
@@ -27,7 +28,7 @@ export class SkyStory {
   /** Shows a scene with its words. `many`: it is one of several, so the quiet "skip" is offered. */
   show(scene: string, text: string, many: boolean): void {
     this.was = this.pic;
-    this.scene = STORIES.SCENES[scene] ? scene : 'lantern';
+    this.scene = STORIES.SCENES[scene] || WORLD[scene] ? scene : 'lantern';
     this.sentences = (text.match(/[^.?!]+[.?!]+\s*/g) ?? [text]).map((s) => s.trim());
     this.many = many;
     this.all = false;
@@ -41,7 +42,8 @@ export class SkyStory {
     // painted at screen size (not at the device's finer grain): quick to make, and soft the way paint is
     const cv = document.createElement('canvas');
     cv.width = w; cv.height = h;
-    STORIES.draw(cv.getContext('2d')!, w, h, this.scene, dev, -1, dev === 'phone' ? Math.min(w / 390, h / 844) : Math.min(w / 1440, h / 900) * 1.15);
+    const u = dev === 'phone' ? Math.min(w / 390, h / 844) : Math.min(w / 1440, h / 900) * 1.15;
+    if (WORLD[this.scene]) WORLD[this.scene].paint(cv.getContext('2d')!, w, h, dev, u); else STORIES.draw(cv.getContext('2d')!, w, h, this.scene, dev, -1, u);
     this.pic = cv;
   }
   /** How many sentences are fully in, and how far the next one is. */
@@ -71,7 +73,7 @@ export class SkyStory {
     if (this.was && a < 1) c.drawImage(this.was, 0, 0, w, h); else { c.fillStyle = '#08071c'; c.fillRect(0, 0, w, h); }
     if (this.pic) { c.globalAlpha = this.was ? a : Math.max(a, 0.02); c.drawImage(this.pic, 0, 0, w, h); c.globalAlpha = 1; }
     if (a >= 1) this.was = null;
-    const dev = this.dev(), B = STORIES.SCENES[this.scene][dev].B as Block, u = dev === 'phone' ? Math.min(w / 390, h / 844) : Math.min(w / 1440, h / 900) * 1.15;
+    const dev = this.dev(), B = (WORLD[this.scene] ? WORLD[this.scene][dev] : STORIES.SCENES[this.scene][dev].B) as Block, u = dev === 'phone' ? Math.min(w / 390, h / 844) : Math.min(w / 1440, h / 900) * 1.15;
     const size = Math.max(18, B.size * u * (dev === 'phone' ? 1.04 : 1));
     // the picture darkens where the words go: low in it, toward the bottom; higher up, only the air round them. Never a panel.
     if (B.band === false) { const g = c.createRadialGradient(w * (B.x + B.w * 0.45), h * (B.y + 0.07), 0, w * (B.x + B.w * 0.45), h * (B.y + 0.07), w * B.w * 0.95); g.addColorStop(0, `rgba(8,6,22,${0.62 * a})`); g.addColorStop(1, 'rgba(8,6,22,0)'); c.fillStyle = g; c.fillRect(0, 0, w, h); }

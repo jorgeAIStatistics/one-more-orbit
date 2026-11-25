@@ -2,12 +2,16 @@ import './style.css';
 import { audio } from './audio/audio';
 import { OLD_QUESTS, ORBS, earned, type Orb } from './game/extras';
 import { BSIDES, FINAL, PACKS as ALL_PACKS, SLICE, creditLine, manifest, type LevelPack } from './game/packs';
+import { LOGBOOK } from './game/logbook';
 import { STAR_PLACES, STAR_TOTAL, starLit, starsLit, starsOf, type StarProgress } from './game/stars';
 import { FINAL_ID, NODES, maxStars, nodeOf, nodeState, playable, type MapNode, type Progress } from './game/world';
 import { refreshBars } from './gd/presses';
 import { GdRenderer as Renderer } from './gd/render';
 import { GdRun as Run, TUTORIAL_BEATS } from './gd/run';
 import { CHAMBERS, LISTEN, type Chamber } from './game/chambers';
+import type { AudioMeta } from './game/types';
+import hub0Audio from '../levels/hub0/audio.json';
+import hub1Audio from '../levels/hub1/audio.json';
 import { canHaptics, feel, fullScreen, gameCenter, isNative, watchBackground } from './native';
 import { initRecord } from './record';
 import { bestFor, persist, save, starCount, starsFor } from './save';
@@ -21,10 +25,10 @@ import { SkyRooms, type GlowsInfo, type Room, type StarsInfo, type SyncInfo } fr
 import { STORY, planetName, type Frame } from './ui/galaxy';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-type Screen = 'prologue' | 'title' | 'levels' | 'play' | 'pause' | 'results' | 'settings' | 'calib' | 'orbs' | 'stars' | 'credits' | 'record' | 'story' | 'chambers';
-const SCREENS: Screen[] = ['prologue', 'title', 'levels', 'pause', 'results', 'settings', 'calib', 'orbs', 'stars', 'credits', 'record', 'story', 'chambers'];
+type Screen = 'prologue' | 'title' | 'levels' | 'play' | 'pause' | 'results' | 'settings' | 'calib' | 'orbs' | 'stars' | 'credits' | 'logbook' | 'record' | 'story' | 'chambers';
+const SCREENS: Screen[] = ['prologue', 'title', 'levels', 'pause', 'results', 'settings', 'calib', 'orbs', 'stars', 'credits', 'logbook', 'record', 'story', 'chambers'];
 /** The screens that are a room of the Lantern, painted on the canvas. */
-const ROOM_OF: Partial<Record<Screen, Room>> = { settings: 'desk', calib: 'lamp', orbs: 'hearth', stars: 'gallery', credits: 'page' };
+const ROOM_OF: Partial<Record<Screen, Room>> = { settings: 'desk', calib: 'lamp', orbs: 'hearth', stars: 'gallery', credits: 'page', logbook: 'page' };
 
 const PACKS = ALL_PACKS.filter((p) => SLICE.includes(p.level.id));
 const shortTitle = (p: LevelPack) => p.level.title.replace(/ \(.*/, '');
@@ -174,6 +178,7 @@ function endPrologue(): void {
   select(PACKS[0].level.id, true);
   show('levels');
   sky.chosen = PACKS[0].level.id;
+  paintAhead(PACKS[0]);
 }
 prologue.onDone = endPrologue;
 // (a tap along is timed from the moment the finger lands)
@@ -202,7 +207,16 @@ function skyInfo(): SkyInfo {
       dare: n.kind !== 'moon' && st === 'cleared' ? (feat(`dare:${lid}`) ? 'done' : 'open') : undefined
     });
   }
-  return { nodes, lens: `lens: ${starCount()} of ${maxStars} shards`, lit: `${starsLit(starProgress).length} of ${STAR_TOTAL} stars lit` };
+  const rooms = hubRooms();
+  // the next world along the road stirs: the hook to go on
+  const next = nodes.find((n) => n.kind === 'planet' && n.state === 'open' && n.best === 0 && n.id !== PACKS[0].level.id);
+  if (next) next.hook = 'is waking\u2026';
+  return { nodes, lens: `lens: ${starCount()} of ${maxStars} shards`, lit: rooms.stars ? `${starsLit(starProgress).length} of ${STAR_TOTAL} stars lit` : '', rooms };
+}
+/** The Lantern relights room by room: the hearth with the first song home, the gallery with the second. (The desk and its logbook are always there.) */
+function hubRooms(): { glows: boolean; stars: boolean } {
+  const home = PACKS.filter((p) => bestFor(p.level.id).cleared).length;
+  return { glows: home >= 1 || progress.unlockAll, stars: home >= 2 || progress.unlockAll };
 }
 /** the Lantern was the place chosen when one of its rooms was entered: coming back out, it still is */
 let viaLantern = false;
@@ -219,18 +233,19 @@ $('levels').addEventListener('click', (e) => {
   if (hit.kind === 'node') {
     if (hit.id === 'lantern') {
       sky.chosen = sky.chosen === 'lantern' ? null : 'lantern';
+      queuePreview();
       if (sky.chosen) rooms.prepare(['hearth', 'desk', 'gallery'], () => screen === 'levels'); // (its rooms are painted while the galaxy is at rest)
       return;
     }
     if (hit.id === at.id && sky.chosen === hit.id) { if (canPlay()) begin(false); } // a second tap on the chosen world flies in
-    else { select(hit.id); const p = packOf(hit.id); if (p) skyResult.prepare(baseOf(p), () => screen === 'levels' && !$('levels').classList.contains('launch')); } // (its results' skies are painted while the galaxy is at rest)
+    else { select(hit.id); queuePreview(); const p = packOf(hit.id); if (p) { skyResult.prepare(baseOf(p), () => screen === 'levels' && !$('levels').classList.contains('launch')); paintAhead(p); } } // (its results' skies are painted while the galaxy is at rest)
   } else if (hit.kind === 'practise') { if (canPlay()) begin(true); }
   else if (hit.kind === 'dare') { if (canPlay()) begin(false, true); }
   else if (hit.kind === 'glows') openGlows();
   else if (hit.kind === 'settings') openSettings('levels');
   else if (hit.kind === 'stars') openStars();
   else if (hit.kind === 'title') { skyTitle.descend(); show('title'); }
-  else sky.chosen = null; // the open sky: step back and see all of it
+  else { sky.chosen = null; queuePreview(); } // the open sky: step back and see all of it
 });
 /** Moves to a place on the map. */
 function select(id: string, quiet = false): void {
@@ -253,13 +268,25 @@ let previewTimer = 0;
 function queuePreview(): void {
   clearTimeout(previewTimer);
   if (!audioReady || screen !== 'levels') return;
-  // nothing to hear at a locked gate, or at a moon nobody has found
-  if ((at.kind === 'gate' && !canPlay()) || nodeState(at, progress) === 'hidden') { audio.stopPreview(0.4); return; }
+  // With no world chosen (the whole sky, or the Lantern), or at one with nothing to hear yet (dark, a locked gate, a
+  // moon nobody has found), what plays is the Lantern's own theme. A world that can be flown plays its song.
+  const home = sky.chosen === null || sky.chosen === 'lantern' || !canPlay() || nodeState(at, progress) === 'hidden';
   previewTimer = window.setTimeout(() => {
     if (screen !== 'levels') return;
     audio.setVolumes(save.music, save.sfx);
-    void audio.preview(pack.audio, pack.audio.dropTime - pack.audio.offset - (4 * 60) / pack.audio.bpm);
+    if (home) hubTheme();
+    else if (audio.previewing !== pack.audio.file) void audio.preview(pack.audio, pack.audio.dropTime - pack.audio.offset - (4 * 60) / pack.audio.bpm);
   }, 320);
+}
+/**
+ * The Lantern's theme: original, quiet, built on the lullaby's harmony, and it gains a voice with each song that
+ * comes home (a drone and four faint taps; then Ossa's struck metal). Two voicings are written so far. It goes
+ * round every eight bars.
+ */
+const HUB = [hub0Audio, hub1Audio] as AudioMeta[];
+function hubTheme(): void {
+  const meta = HUB[Math.min(HUB.length - 1, PACKS.filter((p) => bestFor(p.level.id).cleared).length)];
+  if (audio.previewing !== meta.file) void audio.preview(meta, 0, 0.6, false, (8 * 4 * 60) / meta.bpm);
 }
 
 // ------------------------------------------------------------------ starting a level
@@ -276,11 +303,14 @@ function begin(asPractice: boolean, asDare = false): void {
   enter();
 }
 function enter(): void {
+  // the first time at Emberwick: what is wrong there, in one picture (a tap goes on)
+  if (pack.level.id === PACKS[0].level.id && !save.story.ossa && !bestFor(pack.level.id).cleared && !botMode && !practice) { playStory('ossa', () => { show('levels'); enter(); }); return; }
   // the first time at the Hollow, its two story cards come first
   if (pack === FINAL && !save.story.hollow && !botMode && !practice) { playStory('hollow', () => { show('levels'); enter(); }); return; }
   session.far = session.onBeat = session.judged = session.streak = session.attempts = 0;
   session.newBest = false;
   session.drop = -1;
+  falls.length = 0;
   if (screen === 'levels') {
     // the chosen world opens over one beat while the preview fades into the level's own music
     $('levels').classList.add('launch');
@@ -500,6 +530,7 @@ function onRunEnd(r: Run): void {
     }
     if (counted && pct > prev.pct) { save.bests[id] = { ...prev, pct }; persist(); session.newBest = true; if (PACKS.includes(r.pack)) gameCenter.best(id, pct); }
     if (dare && counted) { r.stop(); showResults(r, false, pct); return; } // a daredevil has one attempt: a fall sends him home
+    nudgeAfter(r);
     startRun(-1, true);
     return;
   }
@@ -507,6 +538,23 @@ function onRunEnd(r: Run): void {
   showResults(r, true);
 }
 
+/**
+ * Practice is offered, never pushed: after five falls in the same four bars, one quiet line under the percent,
+ * "practise this part?", that fades if it is left alone. A tap on it starts practice from that section.
+ */
+const falls: number[] = [];
+function nudgeAfter(r: Run): void {
+  const part = Math.floor(r.sim.crashBeat / 16);
+  if (falls.length && falls[0] !== part) falls.length = 0;
+  falls.push(part);
+  if (falls.length !== 5) return; // (said once for a part: a sixth fall there does not say it again)
+  const seg = r.level.segAt(Math.max(0, r.crashTime)), el = $('nudge');
+  el.onclick = () => { el.classList.remove('show'); el.classList.add('hidden'); practice = true; if (seg.t0 <= r.t0 + 0.01) startRun(); else startRun(seg.t0); };
+  el.classList.remove('hidden', 'show');
+  void el.offsetWidth;
+  el.classList.add('show');
+  window.setTimeout(() => { if (el.classList.contains('show')) { el.classList.remove('show'); el.classList.add('hidden'); } }, 5200);
+}
 /** reached: how far the run was when it was left (a stopped run no longer knows) */
 function showResults(r: Run, cleared: boolean, reached = r.pct): void {
   const id = r.pack.level.id;
@@ -532,7 +580,7 @@ function showResults(r: Run, cleared: boolean, reached = r.pct): void {
       const fresh = earned(id, { onBeatPct, dropPower: r.dropPower, bestStreak: r.sim.bestStreak, attempts: bestFor(id).attempts, practised: !!save.practiced[id] }, done).filter((b) => !save.badges[b]);
       if (first) pendingStory = r.pack === FINAL ? 'end' : id; // its story card plays on the way back to the map
       if (first) said.push(r.pack === FINAL ? 'The last song is home.' : 'Its song is home, and its colour with it.');
-      if (first && r.pack !== FINAL && levelIdx + 1 < PACKS.length && !progress.unlockAll) said.push(`The way to ${planetName(PACKS[levelIdx + 1].level.id)} is lit.`);
+      if (first && r.pack !== FINAL && levelIdx + 1 < PACKS.length && !progress.unlockAll) said.push(`${planetName(PACKS[levelIdx + 1].level.id)} is waking\u2026`); // the results end on the hook, not on numbers
       // shards are kept when the run that collected them clears the level
       const had = starsFor(id);
       const now = had.map((k, i) => k || r.sim.stars[i] === 1);
@@ -620,6 +668,10 @@ function sceneFor(p: LevelPack): PlanetScene | null {
   let s = scenes.get(world);
   if (!s) scenes.set(world, (s = new PlanetScene(world)));
   return s;
+}
+/** A chosen world's sky is painted while the galaxy is at rest, so flying in is not held up by it. */
+function paintAhead(p: LevelPack): void {
+  window.setTimeout(() => { if (screen === 'levels' && !$('levels').classList.contains('launch')) sceneFor(p)?.prepare(); }, 900);
 }
 /** the offset the results' one-tap fix would set, when there is one on offer */
 let resFix: number | null = null;
@@ -822,7 +874,7 @@ window.addEventListener('keydown', (e) => {
   }
   if (screen === 'pause') { if (back) resume(); else if (e.code === 'KeyR') startRun(-1, true); return; } // (Enter and Space press whichever line has the focus: Resume, when the pause opens)
   if (screen === 'results') { if (e.code === 'Enter' || e.code === 'Space' || e.code === 'KeyR') { e.preventDefault(); startRun(); } else if (back) toLevels(); return; }
-  if (back) { if (screen === 'settings') closeSettings(); else if (screen === 'chambers') closeChambers(); else if (screen === 'credits') { renderSettings(); show('settings'); } else leaveRoom(); }
+  if (back) { if (screen === 'settings') closeSettings(); else if (screen === 'chambers') closeChambers(); else if (screen === 'credits' || screen === 'logbook') { renderSettings(); show('settings'); } else leaveRoom(); }
 });
 
 function pause(): void {
@@ -917,6 +969,9 @@ function renderSettings(): void {
   const lat = Math.round(audio.latency() * 1000);
   $('setInfo').textContent = `${audio.ctx ? `This device says its sound takes ${lat} ms to arrive; that is already allowed for. ` : ''}New headphones or speakers? Tap along with Marlow again.`;
   $('settingsBack').textContent = settingsFrom === 'pause' ? 'back to the flight' : 'out to the galaxy';
+  const chapters = chaptersOpen().length;
+  $('storyBtn').classList.toggle('hidden', chapters === 0);
+  $('logNote').textContent = chapters === 1 ? 'one chapter' : `${chapters} chapters`;
   rooms.calm = save.reducedMotion;
 }
 /** Each thread is drawn through as far as its sound is up; drawn right down, its flame is out. (The value is also kept in words, for readers.) */
@@ -1088,6 +1143,7 @@ $('calib').addEventListener('click', (e) => { if (screen !== 'calib') return; co
 // ------------------------------------------------------------------ the hearth (Eko's glows), the gallery (the star chart), the logbook's last page
 const glowsView = (): GlowsInfo => ({ glows: ORBS.map((o) => ({ id: o.id, name: o.name, rgb: o.rgb, lit: owned(o), says: o.says, how: o.how })), worn: save.skin });
 function openGlows(): void {
+  if (!hubRooms().glows) return; // (the hearth is cold until a song is home)
   viaLantern = sky.chosen === 'lantern';
   rooms.glows = glowsView();
   rooms.look = save.skin;
@@ -1113,6 +1169,7 @@ const starsView = (): StarsInfo => ({
   lit: starsLit(starProgress).length, total: STAR_TOTAL
 });
 function openStars(): void {
+  if (!hubRooms().stars) return; // (the gallery is dark until two songs are home)
   viaLantern = sky.chosen === 'lantern';
   const v = (rooms.stars = starsView());
   rooms.place = at.kind === 'gate' ? FINAL_ID : at.planet; // the chart opens on the world you are at
@@ -1127,6 +1184,7 @@ $('stars').addEventListener('click', (e) => {
 });
 const privacyUrl = isNative ? `${import.meta.env.VITE_SITE_URL}privacy.html` : './privacy.html';
 function openCredits(): void {
+  rooms.book = null;
   rooms.credits = {
     tracks: manifest.tracks.map((t) => ({ title: t.title, by: `${t.artist}   ·   ${t.release}` })),
     lines: [`${manifest.creditSuffix}.`, manifest.licenceNote, 'The Lantern’s lullaby was written for this game.'],
@@ -1139,6 +1197,32 @@ $('credits').addEventListener('click', (e) => {
   const id = rooms.hit(e.clientX, e.clientY);
   if (id === 'back') { renderSettings(); show('settings'); }
   else if (id === 'privacy') window.open(privacyUrl, '_blank', 'noopener');
+});
+// The Keeper's logbook: a chapter for each thing done, read a page at a time on the desk.
+const chaptersOpen = () => LOGBOOK.filter((c) => (c.after === 'prologue' ? !!save.story.prologue || !!save.story.open : bestFor(c.after).cleared));
+let logAt = 0;
+function openLogbook(ch = -1): void {
+  const open = chaptersOpen();
+  if (!open.length) return;
+  logAt = ch >= 0 ? Math.min(ch, open.length - 1) : open.length - 1; // it opens at the newest chapter
+  turnLog(0, true);
+  show('logbook');
+}
+/** Turns the page (by +1 or -1); past a chapter's last page the next chapter opens, and past the last of all, the desk. */
+function turnLog(by: number, fresh = false): void {
+  const open = chaptersOpen();
+  let page = fresh ? 0 : (rooms.book?.page ?? 0) + by;
+  if (page < 0) { if (logAt > 0) { logAt--; page = open[logAt].pages.length - 1; } else page = 0; }
+  else if (page >= open[logAt].pages.length) { if (logAt + 1 < open.length) { logAt++; page = 0; } else { renderSettings(); show('settings'); return; } }
+  const c = open[logAt], last = page === c.pages.length - 1;
+  rooms.book = { chapter: `the Keeper\u2019s logbook \u00b7 chapter ${LOGBOOK.indexOf(c)}`, title: c.title, pages: c.pages, page, foot: !last ? 'tap, and the page turns' : logAt + 1 < open.length ? 'tap, for the next chapter' : 'tap, and the book is shut' };
+  $('logSaid').textContent = `${c.title}. ${c.pages[page].join(' ')}`;
+  if (!fresh && audio.ctx) audio.hit('tap', 0.4);
+}
+$('logbook').addEventListener('click', (e) => {
+  if (screen !== 'logbook') return;
+  const id = rooms.hit(e.clientX, e.clientY);
+  if (id === 'back') { renderSettings(); show('settings'); } else if (id === 'next') turnLog(1); else if (id === 'prev') turnLog(-1);
 });
 // (the same credits in plain words, each in full, for anyone reading the page instead of looking at it)
 $('creditsSaid').innerHTML = `<p>The songs, and who made them.</p>${manifest.tracks.map(() => '<p></p>').join('')}<p></p><p>No data is collected. <a href="${privacyUrl}" target="_blank" rel="noopener">Privacy policy</a></p>`;
@@ -1172,7 +1256,7 @@ $('gcBtn').addEventListener('click', () => void gameCenter.show());
 $('installBtn').addEventListener('click', () => { void installEvent?.prompt(); installEvent = null; renderSettings(); });
 $('syncBtn').addEventListener('click', () => { audio.ensure(); audio.setVolumes(save.music, save.sfx); openCalib(); });
 $('creditsBtn').addEventListener('click', openCredits);
-$('storyBtn').addEventListener('click', () => { const back: Screen = settingsFrom === 'pause' ? 'pause' : 'levels'; playStory('all', () => show(back), true); });
+$('storyBtn').addEventListener('click', () => openLogbook());
 $('chambersBtn').addEventListener('click', () => openChambers());
 $('chambersClose').addEventListener('click', () => closeChambers());
 $('botBtn').addEventListener('click', () => { botMode = true; practice = false; session.far = session.onBeat = session.judged = session.streak = session.attempts = 0; session.drop = -1; startRun(); });
@@ -1254,6 +1338,6 @@ Object.assign(window, {
     story: (k: string) => playStory(k, () => show('levels'), true),
     chambers: () => openChambers(), chamber: (id: string, bot = false) => { const c = CHAMBERS.find((x) => x.id === id); if (c) startChamber(c, bot); }, get room() { return chamber; },
     tutorial: startTutorial, results: (cleared: boolean) => { if (run) showResults(run, cleared, run.pct); }, pause,
-    prologue, startPrologue, orbs: openGlows, stars: openStars, credits: openCredits, sync10: () => openCalib(), calTap, settings: () => openSettings('levels')
+    prologue, startPrologue, logbook: openLogbook, orbs: openGlows, stars: openStars, credits: openCredits, sync10: () => openCalib(), calTap, settings: () => openSettings('levels')
   }
 });

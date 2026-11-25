@@ -63,6 +63,7 @@
     <div id="countIn" class="count-in" aria-hidden="true"></div>
     <div id="tutor" class="tutor hidden"><p id="tutorText"></p><button id="tutorSkip" class="act quiet small" type="button">skip the lesson</button></div>
     <div id="toast" class="toast" aria-live="polite"></div>
+    <button id="nudge" class="act small nudge hidden" type="button">practise this part?</button>
     <div id="finale" class="finale" aria-hidden="true"><b id="finaleTitle">all the way through</b><div class="strand"><i id="finaleFill"></i></div><span id="finaleNote"></span></div>
     <div id="syncOverlay" class="sync-overlay hidden"></div>
     <div class="song" aria-hidden="true">
@@ -125,7 +126,7 @@
           <button id="installBtn" class="row act hidden" type="button"><span>Keep the game on this device</span><small>install it as an app</small></button>
           <p id="installNote" class="whisper hidden">To keep it on your phone: tap Share in Safari, then Add to Home Screen. It opens full screen and plays with no connection.</p>
           <h3 class="head">the logbook</h3>
-          <button id="storyBtn" class="row act" type="button"><span>The story so far</span></button>
+          <button id="storyBtn" class="row act" type="button"><span>The Keeper’s logbook</span><small id="logNote"></small></button>
           <button id="replayTutorial" class="row act" type="button"><span>The first flight, again</span></button>
           <button id="creditsBtn" class="row act" type="button"><span>The last page: who made the music</span></button>
           <h3 class="head">for testing</h3>
@@ -144,6 +145,7 @@
   <section id="orbs" class="screen tap"><p id="orbsSaid" class="sr" aria-live="polite"></p></section>
   <section id="stars" class="screen tap"><p id="starsSaid" class="sr" aria-live="polite"></p></section>
   <section id="credits" class="screen tap"><div id="creditsSaid" class="sr"></div></section>
+  <section id="logbook" class="screen tap"><p id="logSaid" class="sr" aria-live="polite"></p></section>
 
   <!-- developer tools, plain on purpose: not part of the game's look -->
   <section id="chambers" class="screen dev">

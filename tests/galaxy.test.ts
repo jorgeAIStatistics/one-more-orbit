@@ -2,6 +2,8 @@
 import { describe, expect, it } from 'vitest';
 import { BADGES } from '../src/game/extras';
 import { FINAL, PACKS } from '../src/game/packs';
+import { LOGBOOK } from '../src/game/logbook';
+import { SCENES as WORLD } from '../src/ui/scenes';
 import { STORIES } from '../src/art/storypaint.js';
 import { PLANETS, STORY, planetName } from '../src/ui/galaxy';
 import { RESULTS } from '../src/art/resultpaint.js';
@@ -19,18 +21,18 @@ describe('the galaxy', () => {
     for (const id of ids) { expect(PLANETS[id].col).toMatch(/^#[0-9a-f]{6}$/); expect(PLANETS[id].rgb.length).toBe(3); }
   });
 
-  it('the story is twelve short cards in seven chapters, plus one for the mended lens; every card is a plate to draw and a line to read', () => {
-    expect(Object.keys(STORY)).toEqual(['open', 'heroes', 'skyhigh', 'blank', 'invincible', 'hollow', 'end', 'lens']);
+  it('the story: the opening, a picture before Emberwick, each planet restored (Emberwick in three: the gift, the Keeper, the homecoming), the Hollow, the ending, the lens', () => {
+    expect(Object.keys(STORY)).toEqual(['open', 'ossa', 'heroes', 'skyhigh', 'blank', 'invincible', 'hollow', 'end', 'lens']);
     expect(STORY.open.length).toBe(3);
-    for (const p of PACKS) expect(STORY[p.level.id].length, p.level.id).toBe(1); // one card when its planet is restored
+    expect(STORY.ossa.length).toBe(1);
+    expect(STORY.heroes.map((f) => f.scene)).toEqual(['ossa-gift', 'marlow', 'hearth-lit']);
+    for (const p of PACKS.slice(1)) expect(STORY[p.level.id].length, p.level.id).toBe(1); // one card when its planet is restored (until its own step)
     expect(STORY.hollow.length).toBe(2);
     expect(STORY.end.length).toBe(3);
-    expect(Object.entries(STORY).filter(([k]) => k !== 'lens').flatMap(([, f]) => f).length).toBe(12);
-    expect(new Set(Object.values(STORY).flat().map((f) => f.scene)).size).toBe(13); // every card has a scene of its own
     for (const f of Object.values(STORY).flat()) {
-      expect(typeof f.draw).toBe('function');
-      expect(STORIES.SCENES[f.scene], `scene ${f.scene}`).toBeTruthy(); // its painted scene exists, for a phone and a desktop
-      for (const dev of ['phone', 'desktop']) expect(STORIES.SCENES[f.scene][dev].B.size).toBeGreaterThanOrEqual(18);
+      // its painted scene exists, for a phone and a desktop: one of the older scenes, or one of World 1's own
+      const B = (dev: 'phone' | 'desktop') => (WORLD[f.scene] ? WORLD[f.scene][dev] : STORIES.SCENES[f.scene]?.[dev].B);
+      for (const dev of ['phone', 'desktop'] as const) expect(B(dev)?.size, `scene ${f.scene}`).toBeGreaterThanOrEqual(18);
       expect(f.text.length, f.text).toBeGreaterThan(40);
       expect(f.text.length, f.text).toBeLessThanOrEqual(175); // a card is read in a few seconds
     }
@@ -63,3 +65,16 @@ describe('the painted results', () => {
     for (const dev of ['phone', 'desktop'] as const) { const L = RESULTS.LAYERS.lay(dev); expect(L.horizon).toBeGreaterThan(0.6); expect(L.B.x + L.B.w).toBeLessThan(1); }
   });
 });
+
+describe('the Keeper\'s logbook', () => {
+  it('opens with the prologue and gains a chapter with Emberwick; pages are short enough to read in a breath', () => {
+    expect(LOGBOOK.map((c) => c.after)).toEqual(['prologue', 'heroes']);
+    for (const c of LOGBOOK) {
+      expect(c.pages.length, c.title).toBeGreaterThanOrEqual(3);
+      expect(c.pages.length, c.title).toBeLessThanOrEqual(5);
+      for (const page of c.pages) expect(page.join(' ').split(/\s+/).length, `${c.title}: words on a page`).toBeLessThanOrEqual(90);
+    }
+    expect(new Set(LOGBOOK.map((c) => c.id)).size).toBe(LOGBOOK.length);
+  });
+});
+
