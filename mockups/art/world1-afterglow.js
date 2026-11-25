@@ -381,5 +381,5 @@ const WORLD1 = (() => {
       const name = (s, x, sub) => { words(ctx, s, x, hy + 86, 22, { align: 'center' }); words(ctx, sub, x, hy + 108, 15, { align: 'center', alpha: 0.7, color: '#e6cfae' }); };
       name('Eko', 70, 'the spark'); name('Marlow', 170, 'the Keeper'); name('Ossa', 340, 'Emberwick'); name('Seo', 500, 'Cirra'); name('Vell', 640, 'Glassmere'); name('Morrow', 880, 'Verdance'); name('the Snuffer', 1012, 'the Hush’s hand'); name('the Hush', 1140, 'the Hollow'); }
   };
-  return { W, H, P, parts: { ossa, seo, vell, morrow, snuffer, tower, kite } };
+  return { W, H, P, parts: { ossa, seo, vell, morrow, snuffer, tower, kite, moth, jar } };
 })();

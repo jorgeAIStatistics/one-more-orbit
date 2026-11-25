@@ -14,6 +14,17 @@ export interface SkyNode {
   dare?: 'open' | 'done';
 }
 export interface SkyInfo { nodes: SkyNode[]; lens: string; lit: string }
+/**
+ * A scene played in this sky instead of the map (the prologue): it says where the camera looks and how much of its
+ * colour each world has, and paints its own things over the worlds. No names are written and nothing can be tapped.
+ */
+export interface SkyStage {
+  x: number; y: number; z: number;
+  /** each world's colour, 0 (dark and silent) to 1 (its song is home) */
+  planets: Record<string, number>;
+  /** drawn over the worlds, in the painting's own coordinates (the camera is already applied) */
+  paint: (c: CanvasRenderingContext2D) => void;
+}
 export type SkyHit = { kind: 'node'; id: string } | { kind: 'practise' | 'dare' | 'glows' | 'settings' | 'stars' | 'title' | 'sky' };
 
 const T = DUSK.tools;
@@ -56,6 +67,48 @@ export class SkyMap {
   private screenHits: Array<{ x: number; y: number; w: number; h: number; hit: SkyHit }> = [];
 
   constructor(private canvas: HTMLCanvasElement) { this.ctx = canvas.getContext('2d')!; }
+
+  /** a scene that has taken the sky over (the prologue), or nothing */
+  stage: SkyStage | null = null;
+  /** Where things are in the painting at this screen size: its size, its unit, the lamp, and each world. */
+  geo(): { w: number; h: number; u: number; tall: boolean; lamp: [number, number]; at: (id: string) => { x: number; y: number; r: number } } {
+    this.layout();
+    return { w: this.w, h: this.h, u: this.u, tall: this.L === LAYS.tall, lamp: this.lamp, at: (id) => this.pos.get(id) ?? { x: this.w / 2, y: this.h / 2, r: 30 * this.u } };
+  }
+  /** The sky as a stage: the painting, the worlds in as much colour as the scene gives them, and the scene's own things. */
+  private drawStage(now: number): void {
+    const S = this.stage!, c = this.ctx, { w, h } = this;
+    this.t = now / 1000;
+    this.z = Math.max(1, S.z);
+    const hw = w / (2 * this.z), hh = h / (2 * this.z);
+    this.fx = Math.max(hw, Math.min(w - hw, S.x)); this.fy = Math.max(hh, Math.min(h - hh, S.y));
+    c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.shadowBlur = 0;
+    c.fillStyle = '#0b0a22'; c.fillRect(0, 0, w, h);
+    c.save();
+    c.translate(w / 2, h / 2); c.scale(this.z, this.z); c.translate(-this.fx, -this.fy);
+    if (this.bg) c.drawImage(this.bg, 0, 0, w, h);
+    c.save(); c.globalCompositeOperation = 'screen';
+    for (const id of Object.keys(PAL)) { // the Lantern's beam to each world, as bright as its song is home
+      const p = this.pos.get(id)!, a = 0.2 * (S.planets[id] ?? 0);
+      if (a <= 0.004) continue;
+      const col = PAL[id].lit, ang = Math.atan2(p.y - this.lamp[1], p.x - this.lamp[0]), d = Math.hypot(p.x - this.lamp[0], p.y - this.lamp[1]) + p.r;
+      for (const f of [1, 0.62, 0.3]) {
+        const hwid = Math.min(0.3, (p.r * 1.3) / d) * f;
+        const g = c.createLinearGradient(this.lamp[0], this.lamp[1], p.x, p.y); g.addColorStop(0, K.rgba(col, a * 0.5)); g.addColorStop(1, K.rgba(col, a * 0.14));
+        c.fillStyle = g; c.beginPath(); c.moveTo(this.lamp[0], this.lamp[1]); c.lineTo(this.lamp[0] + Math.cos(ang - hwid) * d, this.lamp[1] + Math.sin(ang - hwid) * d); c.lineTo(this.lamp[0] + Math.cos(ang + hwid) * d, this.lamp[1] + Math.sin(ang + hwid) * d); c.closePath(); c.fill();
+      }
+    }
+    c.restore();
+    for (const id of Object.keys(PAL)) {
+      const p = this.pos.get(id)!, k = Math.max(0, Math.min(1, S.planets[id] ?? 0)), size = p.r * 3.7;
+      const dark = this.sprites.get(`${id}:dark`), home = this.sprites.get(`${id}:home`);
+      if (dark && k < 1) c.drawImage(dark, p.x - size / 2, p.y - size / 2, size, size);
+      if (home && k > 0) { c.globalAlpha = k; c.drawImage(home, p.x - size / 2, p.y - size / 2, size, size); c.globalAlpha = 1; }
+    }
+    S.paint(c);
+    c.restore();
+  }
 
   /** Eko flies into the chosen planet: the camera follows him in. */
   launch(): void { this.launchAt = this.t; }
@@ -135,6 +188,7 @@ export class SkyMap {
 
   draw(now: number, dt: number): void {
     this.layout();
+    if (this.stage) { this.drawStage(now); return; }
     const c = this.ctx, { w, h, u } = this, L = this.L;
     const t = (this.t = now / 1000);
     const node = this.info.nodes.find((n) => n.id === this.chosen);

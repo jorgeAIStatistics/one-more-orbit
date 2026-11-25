@@ -13,14 +13,15 @@ import { initRecord } from './record';
 import { bestFor, persist, save, starCount, starsFor } from './save';
 import { SkyMap, type SkyInfo, type SkyNode } from './ui/skymap';
 import { SkyTitle } from './ui/skytitle';
+import { SkyPrologue } from './ui/skyprologue';
 import { SkyStory } from './ui/skystory';
 import { SkyResult, type ResultInfo } from './ui/skyresult';
 import { SkyRooms, type GlowsInfo, type Room, type StarsInfo, type SyncInfo } from './ui/skyrooms';
 import { STORY, planetName, type Frame } from './ui/galaxy';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-type Screen = 'title' | 'levels' | 'play' | 'pause' | 'results' | 'settings' | 'calib' | 'orbs' | 'stars' | 'credits' | 'record' | 'story' | 'chambers';
-const SCREENS: Screen[] = ['title', 'levels', 'pause', 'results', 'settings', 'calib', 'orbs', 'stars', 'credits', 'record', 'story', 'chambers'];
+type Screen = 'prologue' | 'title' | 'levels' | 'play' | 'pause' | 'results' | 'settings' | 'calib' | 'orbs' | 'stars' | 'credits' | 'record' | 'story' | 'chambers';
+const SCREENS: Screen[] = ['prologue', 'title', 'levels', 'pause', 'results', 'settings', 'calib', 'orbs', 'stars', 'credits', 'record', 'story', 'chambers'];
 /** The screens that are a room of the Lantern, painted on the canvas. */
 const ROOM_OF: Partial<Record<Screen, Room>> = { settings: 'desk', calib: 'lamp', orbs: 'hearth', stars: 'gallery', credits: 'page' };
 
@@ -57,6 +58,8 @@ const sky = new SkyMap($<HTMLCanvasElement>('stage'));
 const skyTitle = new SkyTitle($<HTMLCanvasElement>('stage'));
 /** the story: painted scenes with the words written into them */
 const skyStory = new SkyStory($<HTMLCanvasElement>('stage'));
+/** the prologue: the first minute, played in the galaxy's own sky */
+const prologue = new SkyPrologue($<HTMLCanvasElement>('stage'), sky, skyTitle);
 const skyResult = new SkyResult($<HTMLCanvasElement>('stage'));
 /** the rooms of the Lantern (settings, the sync check, glows, the star chart, the credits), and the held breath of a pause */
 const rooms = new SkyRooms($<HTMLCanvasElement>('stage'));
@@ -143,6 +146,37 @@ function viaStory(then: () => void): void {
   pendingStory = '';
   if (key) playStory(key, then); else then();
 }
+
+// ------------------------------------------------------------------ the prologue
+/** The first flight. `again`: a replay from the desk, which can be skipped and changes nothing. */
+function startPrologue(again = false): void {
+  run?.stop();
+  run = null;
+  audio.stopPreview(0.3);
+  renderMap();
+  prologue.reset(again);
+  show('prologue');
+}
+/** The prologue is over (or a replay was left): the picture it ends on is the galaxy, and Emberwick is where the beam points. */
+function endPrologue(): void {
+  const first = !save.story.prologue;
+  prologue.stop();
+  save.story.prologue = save.story.open = true;
+  save.tutorialDone = true;
+  if (first && !save.calibrated) {
+    // the lesson's taps were listened to: if they sat steadily early or late, that is this device's delay, and the
+    // sync is set from them (the check with Marlow at his desk is still there, and the pause still says how taps sit)
+    const s = spread(prologue.offsets);
+    if (s.n >= 10 && s.sd <= 40) { save.audioOffset = Math.abs(s.mean) < 12 ? 0 : Math.max(-200, Math.min(400, Math.round(s.mean))); save.calibrated = true; save.calLatency = audio.latency(); }
+  }
+  persist();
+  select(PACKS[0].level.id, true);
+  show('levels');
+  sky.chosen = PACKS[0].level.id;
+}
+prologue.onDone = endPrologue;
+// (a tap along is timed from the moment the finger lands)
+$('prologue').addEventListener('pointerdown', (e) => { if (screen !== 'prologue') return; e.preventDefault(); audioReady = true; prologue.tap(stamp(e), e.clientX, e.clientY); });
 
 // ------------------------------------------------------------------ the galaxy map
 /** Hands the painted map what it shows now, and where the player is. */
@@ -761,6 +795,7 @@ window.addEventListener('keydown', (e) => {
   const back = e.code === 'Escape';
   if (screen === 'calib') { if (back) closeCalib(); else if (e.code !== 'Tab') { e.preventDefault(); calTap(stamp(e)); } return; }
   if (screen === 'record') { if (record.key(e)) e.preventDefault(); return; }
+  if (screen === 'prologue') { if (back && prologue.again) endPrologue(); else if (e.code !== 'Tab') { e.preventDefault(); prologue.tap(stamp(e)); } return; }
   if (screen === 'title') { e.preventDefault(); audio.ensure(); show('levels'); return; }
   if (screen === 'story') { if (back) endStory(); else if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); nextStory(); } return; }
   if (screen === 'levels') {
@@ -1129,7 +1164,7 @@ $('storyBtn').addEventListener('click', () => { const back: Screen = settingsFro
 $('chambersBtn').addEventListener('click', () => openChambers());
 $('chambersClose').addEventListener('click', () => closeChambers());
 $('botBtn').addEventListener('click', () => { botMode = true; practice = false; session.far = session.onBeat = session.judged = session.streak = session.attempts = 0; session.drop = -1; startRun(); });
-$('replayTutorial').addEventListener('click', () => { save.tutorialDone = false; persist(); focusLevel(0, false); practice = false; botMode = false; dare = false; audio.ensure(); startTutorial(); });
+$('replayTutorial').addEventListener('click', () => { practice = false; botMode = false; dare = false; audio.ensure(); startPrologue(true); });
 $('recordBtn').addEventListener('click', () => { run?.stop(); run = null; audio.stopPreview(0.2); record.open(); });
 
 
@@ -1164,6 +1199,7 @@ function tick(now: number): void {
     const room = ROOM_OF[screen];
     if (screen === 'calib') { calTick(); rooms.sync = calView(now); }
     if (room) rooms.draw(room, now);
+    else if (screen === 'prologue') prologue.draw(now);
     else if (screen === 'levels') sky.draw(now, dt);
     else if (screen === 'story') skyStory.draw(now);
     else if (screen === 'results') skyResult.draw(now, dt);
@@ -1191,7 +1227,8 @@ if (import.meta.env.PROD && import.meta.env.MODE !== 'single' && !isNative && 's
 
 for (const f of ['500 20px "Cormorant SC"', 'italic 500 18px "Cormorant Garamond"', '500 18px "Cormorant Lining"']) void document.fonts?.load(f); // the words are lettered on a canvas: have the type ready
 document.body.classList.add('boot');
-show('title');
+// a first launch is the prologue, not a title screen (the title writes itself when it ends)
+if (!save.story.prologue && !save.story.open || /[?&#]prologue\b/.test(location.search + location.hash)) startPrologue(/[?&#]prologue\b/.test(location.search + location.hash) && !!save.story.prologue); else show('title');
 if (/[?&#]chambers\b/.test(location.search + location.hash)) openChambers();
 window.setTimeout(() => document.body.classList.remove('boot'), 400);
 requestAnimationFrame(loop);
@@ -1205,6 +1242,6 @@ Object.assign(window, {
     story: (k: string) => playStory(k, () => show('levels'), true),
     chambers: () => openChambers(), chamber: (id: string, bot = false) => { const c = CHAMBERS.find((x) => x.id === id); if (c) startChamber(c, bot); }, get room() { return chamber; },
     tutorial: startTutorial, results: (cleared: boolean) => { if (run) showResults(run, cleared, run.pct); }, pause,
-    orbs: openGlows, stars: openStars, credits: openCredits, sync10: () => openCalib(), calTap, settings: () => openSettings('levels')
+    prologue, startPrologue, orbs: openGlows, stars: openStars, credits: openCredits, sync10: () => openCalib(), calTap, settings: () => openSettings('levels')
   }
 });

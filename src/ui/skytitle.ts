@@ -68,7 +68,7 @@ export class SkyTitle {
   }
 
   /** The name, written into the sky: soft light under it, the letters in cream, and an orbit of light with a spark going round it. */
-  private wordmark(x: number, y: number, size: number, align: CanvasTextAlign, a: number, t: number): void {
+  wordmark(x: number, y: number, size: number, align: CanvasTextAlign, a: number, t: number): void {
     const c = this.ctx;
     const big = `italic 500 ${size}px ${SERIF}`;
     c.save();
