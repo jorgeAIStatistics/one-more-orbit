@@ -87,8 +87,8 @@ beat later.
 
 ## In progress / next
 - Done: every check re-run after the Ufotable pass (18/6 the Ufotable pass, the guardian included), the final report
-  (18/0 World 1, complete (final report).html). Waiting for the owner's playtest of all of World 1 and their two
-  decisions (Darkness vs Dead of Night; the guardian's restart rule, built as the whole fight).
+  (18/0 World 1, complete (final report).html). Waiting for the owner's playtest of all of World 1 and their decision on
+  Darkness vs Dead of Night. Decided 2026-11-26: a fall restarts the whole guardian fight (as built).
 
 ## Open issues
 - Not done from the Ufotable list: true 3D per place with depth of field, one light direction per place, a colour
