@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ONE MORE ORBIT · fair, smooth, readable; the Drifting Edge as a journey</title>
+<link rel="stylesheet" href="plan.css">
+</head><body><main>
+<span class="tag">Built · waiting for your playtest</span>
+<h1>Fair, smooth and readable, and the Drifting Edge as a journey</h1>
+<p class="lede">All three sections are built and committed on the galaxy branch: 42a26e6 (fairness), 24f23b1 (smoothness), ee7850f (the Drifting Edge). Nothing is pushed. A recording of each of the five levels, with its sound, is in this folder.</p>
+
+<h2>1. Emberwick: the hard spots</h2>
+<h3>Why you couldn't get past the Twins and the Slag Bridge</h3>
+<p>The two bugs below fed each other.</p>
+<ul>
+<li><b>The anti-mash rule caught honest players.</b> "Two wasted taps in two seconds" fired in dense stretches whenever a tap bounced or strayed. A bounce just after a hit was itself counted as wasted. Once the rule fired, the buffer switched off and the next early tap killed you.</li>
+<li><b>A tap for the second of two close walls could be swallowed.</b> If you hit the first wall a little late and the second a little early, the second tap could land in the first wall's window. It was then read as re-timing the first wall and ignored, and the second wall waited for a tap that had already come. That's the "my tap wasn't read" you felt.</li>
+</ul>
+<h3>What changed</h3>
+<ul>
+<li><b>Mashing is a sustained pattern now.</b> It takes one of these:
+  <ul>
+  <li>4 or more wasted taps within 3 s;</li>
+  <li>3 s of taps running 3 or more ahead of the chart;</li>
+  <li>a full second at more than twice the chart's rate (at least 4 taps).</li>
+  </ul>
+  A second tap within 150 ms of the one that took a press is a bounce on that press: never wasted, never a crash.</li>
+<li><b>Two close presses are always two presses.</b> When the next mark is a beat or less after the one just taken, a tap nearer the next mark is held for it and played on its beat.</li>
+<li><b>Tap log</b> (Settings → "Tap log (for testing)"). It shows the last eight taps, each with its song time and how it was judged: hit (with ms), held (how early), held for the next press (close pair), second tap on the press just taken, bounce, way too early (ignored), wasted, or mashing. Wasted and ignored taps are in orange. It's in the build you play, not only the development one.</li>
+</ul>
+<h3>The tap search</h3>
+<p>For every pair of marks a beat apart or less, in all five levels, I played both taps early (up to the buffer), 60 ms early, on time, 60 ms late and late (to the edge of the window), plus a tap just past half way to the second mark. I left out pairs of taps under 80 ms apart, since no hand can do that.</p>
+<div class="scroll"><table>
+<tr><th></th><th>Drifting Edge</th><th>Emberwick</th><th>Cirra</th><th>Glassmere</th><th>Verdance</th></tr>
+<tr><td>Combinations tried (on the old charts)</td><td>946</td><td>1458</td><td>1791</td><td>2858</td><td>3757</td></tr>
+<tr><td>Taps dropped before the fix</td><td>110</td><td>155</td><td>129</td><td>260</td><td>549</td></tr>
+<tr><td>Taps dropped now (on today's charts)</td><td>0 of 406</td><td>0 of 1236</td><td>0 of 1791</td><td>0 of 2858</td><td>0 of 3757</td></tr>
+</table></div>
+<h3>Density, spacing, framing, landings</h3>
+<ul>
+<li><b>Density.</b> The audit now measures the shortest gap and the longest run of quick taps (each under 0.45 s after the one before). On the first two planets nothing is tighter than a single quick double.
+  <ul>
+  <li>Emberwick had runs of three 0.3 s taps. I took one tap out of each run (six in all), never a downbeat or a leap's tap.</li>
+  <li>The drops are now 1.25 and 1.46 taps a second.</li>
+  </ul></li>
+<li><b>Spacing.</b> The bridge was too short for its speed, so two lit marks came within 12 px. It's now a long diagonal causeway with no vent, and the lava moons are framed a little closer. Across the whole level the two lit marks are never closer than 38 px on a phone screen.
+  <ul>
+  <li><b>The gold signal:</b> only the next tap is lit, with the closing ring. The one after is a smaller stone with a faint gold outline.</li>
+  </ul></li>
+<li><b>Framing.</b> The journey camera keeps Orbin inside the picture and the path 1.5 s ahead in view, whatever it is leading toward (a landing, the eight's turns, Ossa). Measured over a whole run on a phone screen, Orbin is never closer than 59 px to an edge, and the path 1.5 s ahead is on screen in every frame.</li>
+<li><b>Landings.</b> After every leap, the first tap comes at least a beat after landing (Emberwick 0.6 s, Drifting Edge 0.4 s).</li>
+</ul>
+
+<h2>2. Smoothness and animation</h2>
+<ul>
+<li><b>Flights.</b> Each leap is one eased arc from the launch point to the landing, bowed up off the place he leaves. The embers sit on it and the camera leads it.</li>
+<li><b>Orbin:</b>
+  <ul>
+  <li>anticipation: the crouch before a hop;</li>
+  <li>squash on contact and on landing;</li>
+  <li>stretch along his flight with his speed;</li>
+  <li>a bob on the beat;</li>
+  <li>his trail and its sparks.</li>
+  </ul></li>
+<li><b>Objects</b> keep their three beats: anvils, bellows, embers in the air, the landing rings.</li>
+<li><b>The Kindling</b> now waits by the launch point on the Ash Moon, its wings breathing. It curls into a ring of sparks over the beat before, throws him on the beat, and flies on behind him to Emberwick.</li>
+<li><b>Ossa</b> looks about between blows, a living idle on top of her breathing, and her hammering and tail move on springs.</li>
+</ul>
+
+<h2>3. The Drifting Edge: Helion's signal, and a journey</h2>
+<ul>
+<li><b>The signal:</b>
+  <ul>
+  <li>At 17.6 s his music-box motif comes from the horizon, the shadow ring where he was taken, which lights up. The line "That song... Helion?" is shown every time, cleared or not.</li>
+  <li>From the drop, a beacon with rays hangs <b>one place ahead</b> of Orbin, never beside him. A thread runs back to the horizon with the song travelling down it, and motes are drawn off Orbin toward the light. It beats with the motif and flares on each good tap.</li>
+  <li>It slips into the dark at 44.8 and calls from the horizon again in the second drop.</li>
+  <li>The old light that circled on the course with Helion's small figure in it is gone.</li>
+  </ul></li>
+<li><b>The journey:</b> the planetoid, then three drifting fragments of the brothers' home nebula, each relit by your taps:
+  <ul>
+  <li><b>the Shards</b> (25.6 s, a flight with one light to tap on the way);</li>
+  <li><b>the Rocks</b> (32.0, the same), with the stone-flower pads among them;</li>
+  <li><b>the Old Hearth</b> (49.6), where the residue chases you through the second drop. To get there, the Sleeper's stone arm reaches all the way across space from the planetoid, its palm under you, and throws you a whole bar. That flight is tap-free, in the slow build.</li>
+  </ul></li>
+<li><b>Inside its table.</b> Calm 0.55 taps a second, peaks at most 1.25, a single bar at 1.88. No gap under 0.4 s (one beat) and no runs of quick taps. No turns, gravity or weaving.
+  <ul>
+  <li>A stone-flower pad and a first gentle hold come in the calm.</li>
+  <li>Unique bar patterns: 77%.</li>
+  <li>The Sleeper's hand and the residue chase are kept, placed along the journey.</li>
+  </ul></li>
+</ul>
+<div class="scroll"><img src="{{img:edgesheet}}" alt="The Drifting Edge, a frame every three seconds" style="max-width:none;height:380px"></div>
+
+<h2>4. Freeze-frames</h2>
+<h3>Emberwick: every launch (its landing shown), every landing, the crossing, every quick double</h3>
+<div class="scroll"><img src="{{img:fzember}}" alt="Emberwick freeze-frames" style="max-width:none;height:560px"></div>
+<h3>The Drifting Edge: every launch, every landing, every quick double</h3>
+<div class="scroll"><img src="{{img:fzedge}}" alt="Drifting Edge freeze-frames" style="max-width:none;height:560px"></div>
+<p>Each is labelled with its time; all are in the freeze-frames folder at full size.</p>
+
+<h2>5. The audit (all five worlds)</h2>
+<div class="scroll"><table>
+<tr><th>Measure</th><th>Drifting Edge</th><th>Emberwick</th><th>Cirra</th><th>Glassmere</th><th>Verdance</th></tr>
+<tr><td>Places / hops</td><td>4 / 3</td><td>4 places (6 bodies) / 5</td><td>1 / 0</td><td>1 / 0</td><td>1 / 0</td></tr>
+<tr><td>Objects a minute</td><td>23.9</td><td>70.7</td><td>1.0</td><td>0.8</td><td>0.8</td></tr>
+<tr><td>Phrases with ≥4 action types incl. an object</td><td>5 of 6 (the last 3 bars: 3 types)</td><td>3 of 3</td><td>1 of 5</td><td>1 of 5</td><td>1 of 4</td></tr>
+<tr><td>Longest plain-tap stretch</td><td>4 bars</td><td>0</td><td>1</td><td>1</td><td>5.1 (over)</td></tr>
+<tr><td>Shortest gap</td><td>0.40 s</td><td>0.30 s (doubles)</td><td>0.23 s</td><td>0.23 s</td><td>0.30 s</td></tr>
+<tr><td>Longest run of quick taps</td><td>2</td><td>2</td><td>5</td><td>5</td><td>7</td></tr>
+<tr><td>Landing to first tap</td><td>0.40 s (a beat)</td><td>0.60 s (a beat)</td><td>-</td><td>-</td><td>-</td></tr>
+<tr><td>Unique bar patterns</td><td>77%</td><td>100%</td><td>94%</td><td>95%</td><td>97%</td></tr>
+<tr><td>Difficulty table</td><td colspan="5">all five within their tables</td></tr>
+</table></div>
+<p class="note">Cirra, Glassmere and Verdance haven't had the journey yet. Their numbers are what they are today, and the quick-run limit only applies to the first two planets. Their runs of five to seven quick taps are inside their own tables, but they're exactly what the journey pass on them will look at.</p>
+
+<h2>6. Tests and frame times</h2>
+<ul>
+<li>The whole suite passes: 289 tests, 55 skipped, 0 failed. In every one of the five levels:
+  <ul>
+  <li>the bots clear on time and 50, 100 and 150 ms early, from the start and from every ember;</li>
+  <li>five real players clear (each tap randomly a little early or late, plus a bounce and a stray round every dense cluster);</li>
+  <li>a sloppy player who strays every three seconds clears;</li>
+  <li>the close-pair search drops nothing;</li>
+  <li>spam bots at 3 to 12 taps a second still fail, within 1 to 2 s from the start and within 4.2 s from any checkpoint (Emberwick, the longest).</li>
+  </ul></li>
+<li>Frame times on this Mac (Chrome, 120 Hz, an off-screen window), whole levels:
+  <ul>
+  <li>Drifting Edge: average 7.9 ms, worst 19.0 ms (one frame).</li>
+  <li>Emberwick: average 7.8 ms, worst 15.3 ms.</li>
+  <li>Cirra: average 8.3 ms, worst 17.4 ms (one frame as the level opens).</li>
+  <li>Glassmere: average 8.3 ms, worst 9.4 ms.</li>
+  <li>Verdance: average 8.3 ms, worst 16.2 ms.</li>
+  <li>The cold open: worst 17.5 ms. The Landing: worst 11.3 ms.</li>
+  </ul></li>
+</ul>
+<p class="note">One earlier run showed a single 242 ms frame in the Drifting Edge at 17.5 s, as Helion's motif starts, and a 125 ms frame at Emberwick's finale. Neither came back in two later runs or under the profiler. Other apps on the Mac were using a lot of CPU while I measured, and one later pass was slow across the board for that reason, so I've quoted the clean runs. These two moments are worth watching on your phone: <code>http://10.0.0.166:4173/?phonecheck</code> still has your iPhone numbers to give.</p>
+
+<h2>7. To play it</h2>
+<p>On your phone: <code>http://10.0.0.166:4173</code>. Turn on Settings → Tap log (for testing) if a tap ever seems to go missing; the log will show exactly what the game made of it.</p>
+<p>The journey treatment for Cirra, Glassmere and Verdance (places, leaps, their own objects: Cirra's kites and gust spirals, Glassmere's mirror shards and ripples, Verdance's seed pods and vines) is the next step. It wasn't in this brief's sections, so I haven't started it.</p>
+</main></body></html>
