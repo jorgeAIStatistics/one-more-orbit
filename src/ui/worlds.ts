@@ -146,6 +146,9 @@ export class EmberWorld {
     spark: (a, song) => this.spark(a, song),
     onCourse: (c, v) => this.onCourse(c, v),
     relit: 30,
+    // the camera follows the song: it pushes in through the build, holds on the riser's last beat (the tension), and
+    // pulls back hard on the drop to show the planet ablaze, settling as the drop runs; in the core it is a little close
+    cam: (s) => (s < ET.stabs ? 1 : s < ET.drop ? 1 + 0.12 * sm((s - ET.stabs) / (ET.drop - 0.3 - ET.stabs)) : s < ET.dive ? 0.8 + 0.12 * sm((s - ET.drop - 0.6) / 3) : s < ET.core ? 1.15 : 0.95),
     draw: (c, R, st) => {
       if (!this.cold || !this.hot) return;
       const t = st.song, dropK = sm((t - ET.drop) / 0.35);
@@ -167,6 +170,18 @@ export class EmberWorld {
       if (t > ET.held - 0.2 && t < ET.stabs + 0.3) {
         const q = sm((t - ET.held + 0.2) / 2.2), a = 1 - sm((t - ET.stabs) / 0.3);
         COMPANIONS.kindling(c, mouth[0] + Math.sin(st.time * 2) * 10 * k, mouth[1] - 140 * k * q, 0.5 * k * 1.6, COMPANIONS.KINDLE.heroes, { flap: 0.5 + 0.5 * Math.sin(st.time * 5), alpha: sm((t - ET.held + 0.2) / 0.5) * a });
+      }
+      // ablaze: from the drop, flame ribbons lick round the planet's rim, rising and curling with the kick
+      const blaze = sm((t - ET.drop) / 0.4) * (1 - sm((t - ET.breath) / 0.6) * 0.5);
+      if (blaze > 0.01) {
+        c.save(); c.globalCompositeOperation = 'lighter'; c.lineCap = 'round';
+        for (let i = 0; i < 22; i++) {
+          const a0 = (i / 22) * TAU + st.time * 0.35, flick = 0.6 + 0.4 * Math.sin(st.time * 7 + i * 1.7), len = R * (0.16 + 0.14 * flick + 0.12 * st.kick) * blaze;
+          const x0 = Math.cos(a0) * R * 0.98, y0 = Math.sin(a0) * R * 0.98, nx = Math.cos(a0), ny = Math.sin(a0);
+          c.strokeStyle = `rgba(255,${150 + Math.round(70 * flick)},70,${0.28 * blaze})`; c.lineWidth = R * 0.05 * (0.6 + 0.4 * flick);
+          c.beginPath(); c.moveTo(x0, y0); c.quadraticCurveTo(x0 + nx * len * 0.6 - ny * len * 0.35, y0 + ny * len * 0.6 + nx * len * 0.35, x0 + nx * len + ny * len * 0.2 * Math.sin(st.time * 3 + i), y0 + ny * len - nx * len * 0.2 * Math.sin(st.time * 3 + i)); c.stroke();
+        }
+        c.restore();
       }
       if (dive > 0) { c.restore(); K.glow(c, mx, my, R * 3 * dive, [255, 230, 170], dive * dive, 'screen'); }
     }
@@ -221,6 +236,26 @@ export class EmberWorld {
       } else { // the strike: it goes up under him
         const q = d / 1.4; c.strokeStyle = `rgba(255,210,150,${0.85 * (1 - q)})`; c.lineWidth = rb * (0.7 - 0.4 * q); c.beginPath(); c.arc(x, y, rb * (2 + 12 * q), 0, TAU); c.stroke();
         K.glow(c, x, y, rb * (4 + 6 * q), [255, 180, 100], 0.6 * (1 - q), 'screen');
+      }
+    }
+    // the vents: a glowing crack in the ring, breathing; it erupts as he is thrown, and he lands in a burst on the far side
+    for (let i = 0; i < v.presses.length; i++) {
+      const p = v.presses[i];
+      if (p.pad !== 'vent') continue;
+      const d = v.beat - p.beat;
+      if (d < -6 || d > 1.6) continue;
+      const [x, y] = v.pos(p.beat, -0.05);
+      if (d < 0) {
+        const breathe = 0.6 + 0.4 * Math.sin(v.time * 6 + i);
+        K.glow(c, x, y, rb * 3.2, [255, 120, 50], 0.35 * breathe, 'screen');
+        c.strokeStyle = `rgba(255,200,120,${0.7 * breathe})`; c.lineWidth = rb * 0.35; c.lineCap = 'round';
+        c.beginPath(); c.moveTo(x - rb * 1.4, y - rb * 0.2); c.lineTo(x - rb * 0.3, y + rb * 0.3); c.lineTo(x + rb * 0.5, y - rb * 0.25); c.lineTo(x + rb * 1.4, y + rb * 0.15); c.stroke();
+      } else {
+        const q = d / 1.6;
+        for (let k = 0; k < 14; k++) { const r = K.RNG(k * 11 + i), a = r() * TAU, dist = rb * (2 + 14 * q) * (0.4 + r()); K.glow(c, x + Math.cos(a) * dist, y + Math.sin(a) * dist - q * rb * 6, rb * (0.7 + 0.8 * r()) * (1 - q), [255, 180, 90], 0.9 * (1 - q)); }
+        K.glow(c, x, y, rb * (4 + 8 * q), [255, 150, 70], 0.7 * (1 - q), 'screen');
+        const [lx, ly] = v.pos(p.land, 0), lq = Math.max(0, (v.beat - p.land) / 1.0);
+        if (v.beat >= p.land && lq < 1) { c.strokeStyle = `rgba(255,214,150,${0.8 * (1 - lq)})`; c.lineWidth = rb * 0.5; c.beginPath(); c.arc(lx, ly, rb * (1.5 + 6 * lq), 0, TAU); c.stroke(); }
       }
     }
     // the seal: the last wall is the Stillness's seal on the star, a ring of ink; the last dash shatters it
@@ -290,6 +325,18 @@ export class EmberWorld {
       for (let i = this.embers.length - 1; i >= 0; i--) { const e = this.embers[i], a = time - e.at; if (a > 1.2) { this.embers.splice(i, 1); continue; } K.glow(c, ox + W.OSSA_HOOF[0] * s + e.vx * a * u, oy - 20 * s + (e.vy * a + 140 * a * a) * u, 2.5 * u, [255, 190, 110], 1 - a / 1.2); }
       const dive = sm((t - ET.dive) / (ET.core - ET.dive));
       if (dive > 0) { c.fillStyle = `rgba(255,190,120,${0.7 * dive * dive})`; c.fillRect(0, 0, w, h); }
+      // the drop: the last half-beat before it the world draws in and darkens (near stillness); then the release:
+      // radial speed lines and a burst of fire from the forge outward
+      const pre = t > ET.drop - 0.45 && t < ET.drop ? sm((t - ET.drop + 0.45) / 0.45) : 0;
+      if (pre > 0) { c.fillStyle = `rgba(8,4,10,${0.35 * pre})`; c.fillRect(0, 0, w, h); }
+      const rel = t >= ET.drop && t < ET.drop + 1.1 ? 1 - (t - ET.drop) / 1.1 : 0;
+      if (rel > 0) {
+        const cx = w / 2, cy = h * 0.52, R0 = Math.hypot(w, h) * 0.6, r = K.RNG(5);
+        c.save(); c.globalCompositeOperation = 'lighter'; c.lineCap = 'round';
+        for (let i = 0; i < 48; i++) { const a = r() * TAU, d0 = (0.15 + 0.5 * r() + (1 - rel) * 0.6) * R0, L = (0.08 + 0.2 * r()) * R0 * rel; c.strokeStyle = `rgba(255,${190 + Math.round(50 * r())},140,${0.5 * rel})`; c.lineWidth = 1 + 2.5 * r(); c.beginPath(); c.moveTo(cx + Math.cos(a) * d0, cy + Math.sin(a) * d0); c.lineTo(cx + Math.cos(a) * (d0 + L), cy + Math.sin(a) * (d0 + L)); c.stroke(); }
+        c.restore();
+        K.glow(c, cx, cy, R0 * (0.4 + 0.8 * (1 - rel)), [255, 160, 80], 0.5 * rel, 'screen');
+      }
       writeSays(c, w, h, u, this.sky.says, st.song);
     }
   };

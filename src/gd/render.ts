@@ -76,7 +76,7 @@ interface Platform {
   /** the planet this ring belongs to; and, if it is entered through a spin gate, when, how wide and from which side */
   planet: number; spinAt: number; spinTol: number; enterSide: number;
   /** the press that leaves this ring: its form, what the button does on it, and whether the game takes it as a pad */
-  form: Form; act: 'tap' | 'down' | 'up'; pad: '' | 'spring' | 'tide' | 'jump'; wide: boolean;
+  form: Form; act: 'tap' | 'down' | 'up'; pad: '' | 'spring' | 'tide' | 'jump' | 'vent'; wide: boolean;
   /** an orb: there is no ring here, only the mark in mid-air (and which orb). noCeil: the press before stayed on this ring */
   chime: boolean; orb: '' | 'jump' | 'dash' | 'grav'; noCeil: boolean;
 }
@@ -1042,7 +1042,7 @@ export class GdRenderer {
           // it is drawn as on any ring: a pad is tapped.
           c.beginPath(); this.arcPath(c0, r, pl.note - 0.2, pl.note + 0.2);
           c.strokeStyle = HALO; c.lineWidth = 14; c.stroke();
-          c.strokeStyle = rgba(pl.pad === 'spring' ? CYAN : pl.pad === 'jump' ? this.padCol : VIOLET); c.lineWidth = pl.pad === 'jump' ? 11 : 9; c.stroke(); // (a jump pad: the woken teal of the world's own life)
+          c.strokeStyle = rgba(pl.pad === 'spring' ? CYAN : pl.pad === 'jump' || pl.pad === 'vent' ? this.padCol : VIOLET); c.lineWidth = pl.pad === 'jump' ? 11 : 9; c.stroke(); // (a jump pad: the woken teal of the world's own life)
         }
         const ahead = pl.note - beat;
         const nx = Math.cos(a) * r, ny = Math.sin(a) * r, nr = rb * 1.5 * (pl.smash ? 1.7 : pl.accent || pl.after ? 1.3 : pl.wide ? 1.15 : 1) * (1 + pulse * 0.2);
