@@ -372,7 +372,7 @@ export class GdRenderer {
     const g = this.geo!, i = clamp(k, 0, g.defs.length - 1);
     return placePoint(g.defs[i], a, r, this.rad(this.cam), g.span[i], g.win[i], this.w >= this.h);
   }
-  private leapArcs: Array<{ p0: number; a0: number; a1: number }> = [];
+  private leapArcs: Array<{ p0: number; a0: number; a1: number; sgn?: number }> = [];
   /** Where angle a at radius r is, relative to the centre of place pf (part-way between two places in a leap). */
   private loc(pf: number, a: number, r: number): [number, number] {
     if (!this.geo) return [Math.cos(a) * r, Math.sin(a) * r];
@@ -383,7 +383,11 @@ export class GdRenderer {
     if (L) {
       const R = this.rad(this.cam), [c0x, c0y] = this.planetXY(k), [c1x, c1y] = this.planetXY(k + 1), s0 = this.locK(k, L.a0, r), s1 = this.locK(k + 1, L.a1, r);
       const x0 = c0x + s0[0], y0 = c0y + s0[1], x1 = c1x + s1[0], y1 = c1y + s1[1], dx = x1 - x0, dy = y1 - y0, d = Math.hypot(dx, dy) || 1;
-      let nx = -dy / d, ny = dx / d; if (nx * s0[2] + ny * s0[3] < 0) { nx = -nx; ny = -ny; }
+      let nx = -dy / d, ny = dx / d;
+      // (which side the flight bows to is decided once for the flight, at its own ring: decided each frame it could flip
+      // in mid-air when the flight runs nearly along the launch point's normal; 2026-11-26)
+      if (L.sgn === undefined) L.sgn = nx * s0[2] + ny * s0[3] < 0 ? -1 : 1;
+      nx *= L.sgn; ny *= L.sgn;
       const lift = Math.min(d * 0.32, R * 2.2) + (r - R) * 0.6, mx = (x0 + x1) / 2 + nx * lift, my = (y0 + y1) / 2 + ny * lift;
       const bx = (1 - f) * (1 - f) * x0 + 2 * (1 - f) * f * mx + f * f * x1, by = (1 - f) * (1 - f) * y0 + 2 * (1 - f) * f * my + f * f * y1;
       const [ox, oy] = this.planetXY(pf);
@@ -462,6 +466,7 @@ export class GdRenderer {
   /** how much faster than normal the course is going (eased), 0 at the normal pace */
   private speedK = 0;
   /** the world's own camera (eased): pulled back for a set piece that shows the planet whole (the Sleeper's throw) */
+  private sideS = 1; private sideV = 0;
   private baseRV = 0; private baseT = 1; private baseTV = 0; private camTS = 0; private camTV = 0; private camTOn = false; private speedV = 0; private miniV = 0;
   /** Orbin's plume: a rope of springs, in the world's frame */
   private plume: Array<{ x: number; y: number; px: number; py: number }> = [];
@@ -1614,7 +1619,10 @@ export class GdRenderer {
     const squash = 4 * this.landPulse * (1 - this.landPulse) + 0.35 * crouch * crouch;
     // (the journey's feel, 2026-11-26: on the ground he bobs with the beat, down on it, up between; visual only)
     const bob = this.geo && sim.mode === 'ground' && !twin ? Math.pow(Math.sin(Math.PI * (((beat % 1) + 1) % 1)), 2) * rb * 0.28 * (1 - crouch) : 0;
-    const off = sim.sideAt(beat) * (rb * (1 - 0.3 * squash) + bob);
+    // (his side of the ring is eased, never switched: a flip of side in a flight used to jump him two widths in one frame)
+    let side = sim.sideAt(beat);
+    if (!twin) { const w = 22, sdt = Math.min(dt, 0.03); if (Math.abs(side - this.sideS) > 2.5) this.sideS = side; this.sideV += (w * w * (side - this.sideS) - 2 * w * this.sideV) * sdt; this.sideS += this.sideV * sdt; side = this.sideS; }
+    const off = side * (rb * (1 - 0.3 * squash) + bob);
     // at the finish the ball launches straight out through every ring and off the screen
     const away = run.finale ? Math.pow(Math.min(1.4, run.finaleAge / 0.9), 2.2) * this.r0 * 7 : 0;
     if (away > Math.hypot(this.w, this.h)) return;
