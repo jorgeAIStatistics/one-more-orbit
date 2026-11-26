@@ -54,6 +54,9 @@ abstract class PlanetWorld {
     const sky = (hot: boolean) => { const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const c = cv.getContext('2d')!, r = K.RNG(19 + this.cfg.key.length);
       DUSK.tools.sky(c, w, h, this.cfg.sky[hot ? 1 : 0] as never, r, 70); DUSK.tools.stars(c, w, h, r, Math.round((w * h) / 1500), 3); DUSK.tools.finish(c, w, h, 43, 0.3); return cv; };
     this.skyCold = sky(false); this.skyHot = sky(true);
+    // the far Stillness is painted now too (its image, at the screen's resolution), not on the level's first frame
+    const S = this.cfg.stillness, u = Math.min(w / 390, h / 844), dpr = window.devicePixelRatio || 1;
+    if (S > 0) { const warm = document.createElement('canvas').getContext('2d')!; warm.setTransform(dpr, 0, 0, dpr, 0, 0); C.dread(warm, -1e5, -1e5, (90 + 220 * S) * u, (70 + 160 * S) * u, 61, 0.4 + 0.6 * S); }
   }
   reset(): void { this.lit.fill(-1); this.sparks = 0; this.lastT = -1; this.resetMore(); }
   rewind(to: number): void { for (let z = 0; z < ZONES; z++) if (this.lit[z] > to) this.lit[z] = -1; this.lastT = -1; }

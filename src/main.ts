@@ -782,7 +782,6 @@ function tally(r: Run): void {
 /** A crash restarts at once (practice: from the last checkpoint). Only a clear, or quitting, shows the results. */
 function onRunEnd(r: Run): void {
   if (r !== run || r === starRun) return;
-  if (phoneCheck && r.opts.bot) sendFrames(r);
   if (r.opts.memory) { endMemory(); return; }
   harvest(r);
   if (chamber) { // a room: straight back in, or back to the list
@@ -1673,39 +1672,51 @@ function tick(now: number): void {
 // shown on the screen and sent to the server this page came from (frames-phone.log), so they can be read on the Mac.
 const phoneCheck = /[?&#]phonecheck\b/.test(location.search + location.hash);
 const frameLog = { dt: [] as number[], work: [] as number[], beat: [] as number[], last: 0, sent: false };
-function startPhoneCheck(): void {
-  select(PACKS[0].level.id, true);
-  frameLog.dt = []; frameLog.work = []; frameLog.beat = []; frameLog.last = 0; frameLog.sent = false;
-  botMode = true; practice = false; dare = false;
-  startRun(Math.max(0, pack.audio.dropTime - pack.audio.offset - (2 * 4 * 60) / pack.audio.bpm));
+// Every scene in turn (the performance pass of 2026-11-25): each world's drop played by itself (from two bars before it,
+// 16 s into it), the cold open's strike and struggle, and the Landing; then one report, sent to the Mac.
+const phone = { step: -1, at: 0, scenes: [] as Array<Record<string, unknown>> };
+const PHONE_LEVELS = (): LevelPack[] => [FIRST, ...PACKS];
+function startPhoneCheck(): void { phone.step = -1; phone.scenes = []; nextPhone(); }
+function phoneStats(name: string): void {
+  const q = (a: number[], k: number) => { const s = [...a].sort((x, y) => x - y); return s.length ? +s[Math.min(s.length - 1, Math.floor(s.length * k))].toFixed(1) : 0; };
+  const d = frameLog.dt, w = frameLog.work;
+  phone.scenes.push({ name, frames: d.length, avg: d.length ? +(d.reduce((x, y) => x + y, 0) / d.length).toFixed(2) : 0, p95: q(d, 0.95), p99: q(d, 0.99), worst: q(d, 1), over17: d.filter((x) => x > 17).length, over34: d.filter((x) => x > 34).length, workP99: q(w, 0.99), workWorst: q(w, 1) });
 }
-function sendFrames(r: Run): void {
-  if (frameLog.sent || !frameLog.dt.length) return;
+function nextPhone(): void {
+  phone.step++; phone.at = performance.now(); frameLog.dt = []; frameLog.work = []; frameLog.beat = []; frameLog.last = 0;
+  const L = PHONE_LEVELS();
+  if (phone.step < L.length) { pack = L[phone.step]; botMode = true; practice = false; dare = false; startRun(Math.max(0, pack.audio.dropTime - pack.audio.offset - (2 * 4 * 60) / pack.audio.bpm)); return; }
+  run?.stop(); run = null;
+  if (phone.step === L.length) { startCold(); coldScene.press(true, 10, 400); coldScene.press(false); window.setTimeout(() => { coldScene.seek(13.5); coldScene.idleAfter = 0.6; }, 600); return; }
+  if (phone.step === L.length + 1) { coldScene.stop(); toLanding(); return; }
+  sendFrames();
+}
+function phoneTick(now: number, work: number): void {
+  if (phone.step < 0 || frameLog.sent) return;
+  const L = PHONE_LEVELS(), lvl = phone.step < L.length;
+  // (a level's frames count from its drop; the scenes', from their start)
+  const counting = lvl ? !!run && run.state === 'playing' && run.time >= run.level.dropTime : now - phone.at > 800;
+  if (counting) { if (frameLog.last) { frameLog.dt.push(now - frameLog.last); frameLog.work.push(work); } frameLog.last = now; } else frameLog.last = 0;
+  const long = lvl ? !!run && run.time >= run.level.dropTime + 16 : now - phone.at > (phone.step === L.length ? 12000 : 8000);
+  if (long) { phoneStats(lvl ? `${placeName(L[phone.step])}, the drop` : phone.step === L.length ? 'the cold open, the strike and the struggle' : 'the Landing'); nextPhone(); }
+}
+function sendFrames(): void {
+  if (frameLog.sent) return;
   frameLog.sent = true;
-  const q = (a: number[], k: number) => { const s = [...a].sort((x, y) => x - y); return +s[Math.min(s.length - 1, Math.floor(s.length * k))].toFixed(1); };
-  const drop = r.course.dropBeat, inDrop = frameLog.dt.filter((_, i) => frameLog.beat[i] >= drop), workDrop = frameLog.work.filter((_, i) => frameLog.beat[i] >= drop);
-  const worstAt = frameLog.beat[frameLog.dt.indexOf(Math.max(...frameLog.dt))];
-  const out = {
-    when: new Date().toISOString(), ua: navigator.userAgent, screen: `${window.innerWidth}x${window.innerHeight}@${window.devicePixelRatio}`, level: r.level.title,
-    frames: inDrop.length, p50: q(inDrop, 0.5), p95: q(inDrop, 0.95), p99: q(inDrop, 0.99), worst: q(inDrop, 1), worstAtBar: worstAt !== undefined ? Math.floor(worstAt / 4) : -1,
-    over20: inDrop.filter((x) => x > 20).length, over34: inDrop.filter((x) => x > 34).length,
-    workP50: q(workDrop, 0.5), workP99: q(workDrop, 0.99), workWorst: q(workDrop, 1)
-  };
-  const line = `drop: ${out.frames} frames, worst ${out.worst} ms (bar ${out.worstAtBar}), p99 ${out.p99} ms, ${out.over20} over 20 ms; the game's own work: p99 ${out.workP99} ms, worst ${out.workWorst} ms`;
+  const out = { when: new Date().toISOString(), ua: navigator.userAgent, screen: `${window.innerWidth}x${window.innerHeight}@${window.devicePixelRatio}`, scenes: phone.scenes };
+  const worst = phone.scenes.reduce((m, s) => Math.max(m, Number(s.worst) || 0), 0);
+  const line = `${phone.scenes.length} scenes; worst frame ${worst} ms; ${phone.scenes.map((s) => `${s.name}: avg ${s.avg}, worst ${s.worst}`).join(' · ')}`;
   console.log(`[one more orbit] phone check: ${line}`);
   const el = document.createElement('div');
-  el.style.cssText = 'position:fixed;left:12px;right:12px;bottom:18px;z-index:99;font:14px/1.4 system-ui;color:#fff;background:rgba(0,0,0,.72);padding:10px 12px;border-radius:8px';
-  el.textContent = `${line}. Sending\u2026`;
+  el.style.cssText = 'position:fixed;left:12px;right:12px;bottom:18px;z-index:99;font:13px/1.4 system-ui;color:#fff;background:rgba(0,0,0,.78);padding:10px 12px;border-radius:8px';
+  el.textContent = `${line}. Sending…`;
   document.body.appendChild(el);
   void fetch('./__frames', { method: 'POST', body: JSON.stringify(out) }).then((res) => { el.textContent = `${line}. ${res.ok ? 'Sent to the Mac.' : 'Could not send.'}`; }, () => { el.textContent = `${line}. Could not send.`; });
 }
 function loop(now: number): void {
   const t0 = performance.now();
   tick(now);
-  if (phoneCheck && run && run.opts.bot && screen === 'play' && run.state === 'playing') {
-    if (frameLog.last) { frameLog.dt.push(now - frameLog.last); frameLog.work.push(performance.now() - t0); frameLog.beat.push(run.time / run.level.spb); }
-    frameLog.last = now;
-  }
+  if (phoneCheck) phoneTick(now, performance.now() - t0);
   requestAnimationFrame(loop);
 }
 
