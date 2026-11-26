@@ -244,7 +244,7 @@ export class CirraWorld extends PlanetWorld {
   /** Seo in the world, beside Cirra and a little behind it: tangled, then standing at the gift, flying every kite on the drops */
   protected journeyBack(c: CanvasRenderingContext2D, st: WorldState, U: number): void {
     const t = st.song, dt = this.dt, rel = st.rel!, [ex, ey] = rel(0), wide = !!st.wide;
-    const [ox, oy] = wide ? [-SEO_AT[1], SEO_AT[0]] : SEO_AT, x = ex * 0.9 + ox * U, y = ey * 0.9 + oy * U, s = U * 0.0088;
+    const [ox, oy] = wide ? [-2.6, 1.35] : SEO_AT, x = ex * 0.9 + ox * U, y = ey * 0.9 + oy * U, s = U * 0.0088;
     const wake = t >= CT.gift ? 1 : Math.min(0.3, this.sparks * 0.03), fly = t >= CT.kites ? 1 : t >= CT.drop ? 0.8 : t >= CT.helion ? 0.25 : 0;
     const W = this.wake.step(wake, dt), F = this.fly.step(fly, dt), sway = this.sway.step(t >= CT.drop ? 0.25 * Math.sin(st.time * 1.3) : 0.04 * Math.sin(st.time * 0.6), dt), fl = this.flap.step(Math.sin(st.time * 4) * (0.3 + F), dt);
     const lit = sm((t - CT.drop) / 1.2) * 0.9 + Math.min(0.1, this.sparks * 0.01);
