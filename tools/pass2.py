@@ -325,8 +325,11 @@ def memfilms():
       22  Cirra, their bond: Orbin's voice drifts late and thins; Helion's waits for it, and they come back together
       44  Glassmere, the Stillness arriving: the theme, then one note skips like a scratched record, and it thins to one
           voice over a low tone
-      66  Verdance, the dark closing: slower, muffled, the harmony turned minor, one voice and a heartbeat"""
-    out = np.zeros((int(4 * MEMFILM * SR), 2))
+      66  Verdance, the dark closing: slower, muffled, the harmony turned minor, one voice and a heartbeat
+      88  The last memory (2026-11-26), before the guardian: the theme in both voices, slower, the dark close; a low tone
+          rises under it (8 s); at 11.4 s everything stops at once (the hands part); then far off, Helion's motif, once,
+          and Orbin's heartbeat alone, steady, to the end: the beat he was told not to let go of"""
+    out = np.zeros((int(5 * MEMFILM * SR), 2))
     def part(k):
         a = np.zeros((int((MEMFILM + 3) * SR), 2))
         return a
@@ -383,6 +386,27 @@ def memfilms():
     while t1 < 20.5: L.place(a, t1, O.thump(0.5)); L.place(a, t1 + 0.3, O.thump(0.32)); t1 += 1.05
     a = lowpass(a, 1500)
     put(3, room(a, 0.9, 0.06), -27)
+    # 4: the last beat
+    a = part(4)
+    at = 0.8
+    for b in range(3):
+        L.place(a, at, hum(L.CH[L.CHORDS[b]], BAR * 1.2) * 0.6)
+        q = 0.0
+        for name, beats in L.TUNE[b]:
+            if at + q * BEAT * 1.2 > 11.2: break
+            L.place(a, at + q * BEAT * 1.2, L.tine(L.hz(name) * UP, beats * BEAT * 1.2, 0.7), pan=0.25)
+            L.place(a, at + (q + 0.5) * BEAT * 1.2, L.tine(L.hz(name) * UP * 2, beats * BEAT * 1.2, 0.3), pan=-0.35)
+            q += beats
+        at += BAR * 1.2
+    n = int(3.6 * SR); t = np.arange(n) / SR
+    tone = (np.sin(2 * np.pi * 36.7 * t) + 0.6 * np.sin(2 * np.pi * 55.0 * t) + 0.3 * np.sin(2 * np.pi * 73.4 * t * (1 + 0.02 * t))) * (t / 3.6) ** 1.5 * 0.2
+    a[int(7.8 * SR):int(7.8 * SR) + n, 0] += tone; a[int(7.8 * SR):int(7.8 * SR) + n, 1] += tone
+    a[int(11.4 * SR):] = 0.0  # (everything stops at once)
+    far = helion_far([('A4', 1), ('C#5', 1), ('F#5', 2), ('E5', 2)], 0.6) * 0.8
+    f = far[:int(7 * SR)]; i0 = int(12.4 * SR); a[i0:i0 + len(f)] += f[:max(0, len(a) - i0)]
+    t1 = 12.0
+    while t1 < 20.2: L.place(a, t1, O.thump(0.45)); L.place(a, t1 + 0.3, O.thump(0.28)); t1 += 0.95
+    put(4, room(a, 0.7, 0.05), -27)
     pk = np.abs(out).max()
     if pk > 0.9: out *= 0.9 / pk
     return np.clip(out, -0.97, 0.97)

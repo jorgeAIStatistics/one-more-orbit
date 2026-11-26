@@ -592,6 +592,8 @@ function begin(asPractice: boolean, asDare = false): void {
 }
 function enter(): void {
   // the first time at the galaxy's edge, its card comes first
+  // the first time at the guardian: the last memory first (the brothers' last beat, 2026-11-26), then its card
+  if (pack === FINAL && !save.story.lastmemory && !botMode && !practice) { save.story.lastmemory = true; persist(); filmAgain('royalty', () => { show('levels'); enter(); }); return; }
   if (pack === FINAL && !save.story.hollow && !botMode && !practice) { playStory('hollow', () => { show('levels'); enter(); }); return; }
   session.far = session.onBeat = session.judged = session.streak = session.attempts = 0;
   session.newBest = false;

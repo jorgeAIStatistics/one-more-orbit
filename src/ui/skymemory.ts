@@ -6,6 +6,7 @@
 //   skyhigh     Cirra, their bond                 "What if I lose the beat?" / "Then listen for mine."
 //   blank       Glassmere, the Stillness arriving "Do you hear that?" / "I don't hear anything." / "…That's what I mean."
 //   invincible  Verdance, the dark closing        "Stay on my side of the beat." / "I'm here. I'm right here."
+//   royalty     the last memory, before the guardian: the last beat   "I've got you—" / "Orbin. Don't let go of the beat."
 // The sound: tools/pass2.py memfilms, one part per chapter (levels/memfilm).
 //
 // Storyboard (panel: time, camera, effects, sound), the same frame for every chapter:
@@ -16,6 +17,7 @@ import memAudio from '../../levels/memfilm/audio.json';
 import { audio, type LoadedTrack } from '../audio/audio';
 import { CANON } from '../art/canonpaint.js';
 import { COLDPAINT as C } from '../art/coldpaint.js';
+import { rings } from '../art/stillness.js';
 import { K } from '../art/painter.js';
 import type { AudioMeta } from '../game/types';
 import { save } from '../save';
@@ -44,7 +46,11 @@ export const CHAPTERS: Record<string, Chapter> = {
     { at: 16.8, to: 19.6, who: 'helion', text: '…That’s what I mean.' }] },
   invincible: { index: 3, title: 'The dark closing', lines: [
     { at: 5.2, to: 10.2, who: 'helion', text: 'Stay on my side of the beat.' },
-    { at: 11.2, to: 16.8, who: 'orbin', text: 'I’m here. I’m right here.' }] }
+    { at: 11.2, to: 16.8, who: 'orbin', text: 'I’m here. I’m right here.' }] },
+  // the last memory (2026-11-26), before the guardian: the brothers' last beat
+  royalty: { index: 4, title: 'The last beat', lines: [
+    { at: 9.4, to: 11.4, who: 'orbin', text: 'I’ve got you—' },
+    { at: 12.8, to: 17.6, who: 'helion', text: 'Orbin. Don’t let go of the beat.' }] }
 };
 
 export class SkyMemory {
@@ -104,7 +110,8 @@ export class SkyMemory {
     c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.shadowBlur = 0;
     // the camera: a slow push and drift; the far gold moves least (depth)
     const push = 1 + 0.06 * sm(T / MEMORY_LEN), dx = Math.sin(T * 0.21) * w * 0.02, dy = Math.cos(T * 0.17) * h * 0.012;
-    const dark = ch.index === 3 ? sm((T - 1) / 12) : 0; // (Verdance: half the orbit goes)
+    const dark = ch.index === 3 ? sm((T - 1) / 12) : ch.index === 4 ? sm((T - 0.5) / 9) : 0; // (Verdance: half the orbit goes; the last: it closes from both sides)
+    const taken = ch.index === 4 ? sm((T - 8) / 3.4) : 0, gone = ch.index === 4 ? sm((T - 11.4) / 0.7) : 0; // (the last: the rings take Helion; at 11.4 the hands part)
     if (this.gold) { c.save(); c.translate(cx + dx * 0.4, cy + dy * 0.4); c.scale(push * 1.02, push * 1.02); c.translate(-cx, -cy); c.drawImage(this.gold, -w * 0.1, -h * 0.1, w * 1.2, h * 1.2); c.restore(); }
     if (ch.index >= 2) { c.fillStyle = `rgba(30,24,40,${ch.index === 2 ? 0.1 + 0.18 * sm((T - 9) / 6) : 0.28})`; c.fillRect(0, 0, w, h); }
     // a constellation at the edge of the gold (Glassmere: it goes out, star by star)
@@ -114,7 +121,7 @@ export class SkyMemory {
       pts.forEach(([x, y], i) => { const gone = sm((T - 8.6 - i * 0.45) / 0.35); K.glow(c, w * x + dx, h * y + dy, 12 * u * (1 - gone * 0.8), [255, 240, 210], 0.8 * (1 - gone)); if (gone > 0) { c.strokeStyle = `rgba(30,24,40,${0.6 * gone})`; c.lineWidth = 2 * u; c.beginPath(); c.arc(w * x + dx, h * y + dy, 5 * u, 0, TAU); c.stroke(); } });
     }
     // the dark closing (Verdance): the Stillness takes the right of the frame, slowly, and keeps it
-    if (dark > 0) { c.save(); c.globalAlpha = dark; C.dread(c, w * (1.35 - 0.4 * dark), cy, 340 * u, 520 * u, 48, 0.8); c.restore(); }
+    if (dark > 0) { c.save(); c.globalAlpha = dark * (ch.index === 4 ? 0.8 : 1); C.dread(c, w * (ch.index === 4 ? 1.5 - 0.25 * dark : 1.35 - 0.4 * dark), cy, 340 * u, 520 * u, 48, 0.8); if (ch.index === 4) C.dread(c, w * (-0.5 + 0.25 * dark), cy + h * 0.1, 300 * u, 480 * u, 52, 0.8); c.restore(); }
     // the brothers' paths: each chapter its own dance
     const pos = (who: 0 | 1): [number, number] => {
       const s = T;
@@ -130,6 +137,13 @@ export class SkyMemory {
       if (ch.index === 2) { // the Stillness arriving: an easy turn round each other, slowing; at 9 s Helion stops and looks out
         const slow = 1 - 0.85 * sm((s - 8.5) / 1.5), a = (s < 8.5 ? s : 8.5 + (s - 8.5) * slow) * 0.7 + (who ? Math.PI : 0), r = 70 * u;
         return [cx + Math.cos(a) * r + dx, cy + 30 * u + Math.sin(a) * r * 0.5 + dy];
+      }
+      if (ch.index === 4) { // the last beat: a small orbit, close; the rings draw Helion up and away, Orbin reaching after him
+        const a = s * 0.7, r = 62 * u * (1 - 0.5 * taken), sg = who ? 1 : -1;
+        const hx = w * 0.72, hy = h * 0.2;
+        if (who === 1) { const x = cx + Math.cos(a) * r, y = cy + 20 * u + Math.sin(a) * r * 0.4; return [lerp(x, hx, taken * 0.55 + gone * 0.45) + dx, lerp(y, hy, taken * 0.55 + gone * 0.45) + dy]; }
+        void sg; const x = cx - Math.cos(a) * r, y = cy + 20 * u - Math.sin(a) * r * 0.4, reach = taken * (1 - gone);
+        return [lerp(x, lerp(cx, hx, 0.35), reach) + dx, lerp(y, lerp(cy, hy, 0.35), reach) + dy + gone * 30 * u];
       }
       // the dark closing: a small orbit, close together, on the side the dark has not taken
       const a = s * 0.9 + (who ? 0.42 : 0), r = Math.min(w, h) * (0.24 - 0.08 * dark);
@@ -148,7 +162,9 @@ export class SkyMemory {
     }
     c.restore();
     // their music between them: beads of light; it skips (Glassmere) and goes thin (Verdance)
-    const skip = ch.index === 2 && T > 9.6 && T < 10.3;
+    const skip = (ch.index === 2 && T > 9.6 && T < 10.3) || (ch.index === 4 && T > 11.4);
+    // (the last: the shadow rings round Helion as they take him; after, only his far light)
+    if (ch.index === 4 && taken > 0.01) rings(c, hl[0], hl[1], 70 * u * (1 - 0.4 * gone), 24 * u * (1 - 0.4 * gone), taken, T);
     if (!skip) C.music(c, o[0], o[1] - 20 * u, hl[0], hl[1] - 20 * u, u * 0.8, T, ch.index === 2 ? sm((T - 10) / 1) : 0, ch.index === 3 ? 0.6 : ch.index === 2 ? 1 - 0.5 * sm((T - 10) / 3) : 1);
     // their hearts, as rings (Cirra: Orbin's drifts off Helion's beat and comes back)
     if (ch.index === 1) {
@@ -160,9 +176,18 @@ export class SkyMemory {
     const speaking = ch.lines.find((l) => T >= l.at && T < l.to);
     const looksOut = ch.index === 2 && T > 9.2;
     const sc = (ch.index === 0 ? 0.5 : 0.56) * u;
-    P.spark(c, hl[0], hl[1], sc, { who: 'helion', eyes: looksOut ? 'wide' : ch.index === 3 ? 'set' : 'soft', arms: ch.index === 0 ? 'up' : ch.index === 3 ? 'reach' : 'rest', glow: 1, face: hl[0] < o[0] ? 1 : -1, look: looksOut ? [1, -0.8] : [o[0] > hl[0] ? 1 : -1, 0], crest: 1, ring: true, beat: 1, lean: 0 });
+    // (the last: their hands, reaching, and the moment they part; after, Orbin's heartbeat alone, on the beat)
+    if (ch.index === 4) {
+      const hold = sm((T - 5.5) / 1.5) * (1 - gone);
+      if (hold > 0.01) K.glow(c, (o[0] + hl[0]) / 2, (o[1] + hl[1]) / 2 - 10 * u, 22 * u, [255, 240, 205], 0.85 * hold);
+      if (T > 11.4 && T < 12.2) { const q = (T - 11.4) / 0.8; c.strokeStyle = `rgba(255,236,200,${0.7 * (1 - q)})`; c.lineWidth = 2 * u; c.beginPath(); c.arc((o[0] + hl[0]) / 2, (o[1] + hl[1]) / 2, (20 + 160 * q) * u, 0, TAU); c.stroke(); }
+      if (T > 12) { const ph = ((T - 12) % 0.95) / 0.95; c.strokeStyle = `rgba(230,240,255,${0.55 * (1 - ph)})`; c.lineWidth = 2 * u; c.beginPath(); c.arc(o[0], o[1], (18 + 46 * ph) * u, 0, TAU); c.stroke(); }
+    }
+    if (ch.index === 4 && gone > 0) { c.save(); c.globalAlpha = 1 - 0.75 * gone; }
+    P.spark(c, hl[0], hl[1], sc * (ch.index === 4 ? 1 - 0.6 * gone : 1), { who: 'helion', eyes: looksOut ? 'wide' : ch.index >= 3 ? 'set' : 'soft', arms: ch.index === 0 ? 'up' : ch.index >= 3 ? 'reach' : 'rest', glow: 1, face: hl[0] < o[0] ? 1 : -1, look: looksOut ? [1, -0.8] : [o[0] > hl[0] ? 1 : -1, 0], crest: 1, ring: true, beat: 1, lean: 0 });
+    if (ch.index === 4 && gone > 0) c.restore();
     const lost = ch.index === 1 && T > 4.5 && T < 11.5;
-    P.spark(c, o[0], o[1], sc, { who: 'orbin', eyes: lost ? 'worried' : ch.index === 3 ? 'set' : 'soft', arms: ch.index === 0 ? 'up' : ch.index === 3 ? 'reach' : 'rest', glow: lost ? 0.7 : 1, face: o[0] < hl[0] ? 1 : -1, look: [hl[0] > o[0] ? 1 : -1, 0], crest: 1, ring: true, beat: 1, lean: 0 });
+    P.spark(c, o[0], o[1], sc, { who: 'orbin', eyes: lost || (ch.index === 4 && T > 8) ? 'worried' : ch.index === 3 ? 'set' : 'soft', arms: ch.index === 0 ? 'up' : ch.index >= 3 ? 'reach' : 'rest', glow: lost ? 0.7 : 1, face: o[0] < hl[0] ? 1 : -1, look: [hl[0] > o[0] ? 1 : -1, 0], crest: 1, ring: true, beat: 1, lean: 0 });
     if (ch.index === 3 && T > 14) K.glow(c, (o[0] + hl[0]) / 2, (o[1] + hl[1]) / 2 - 10 * u, 22 * u, [255, 240, 205], 0.8 * sm((T - 14) / 1.5)); // their hands
     // the joy's golden pulse, and comets humming past
     if (ch.index === 0) {
@@ -175,7 +200,7 @@ export class SkyMemory {
     for (const l of ch.lines) {
       const a = sm((T - l.at) / 0.6) * (1 - sm((T - (l.to - 0.6)) / 0.6));
       const p = l.who === 'orbin' ? o : hl;
-      this.words(l.text, Math.max(110 * u, Math.min(w - 110 * u, p[0])), p[1] - 58 * u, 19 * u, a, l.who === 'helion');
+      this.words(l.text, Math.max(110 * u, Math.min(w - 110 * u, p[0])), ch.index === 4 && l.who === 'orbin' ? p[1] + 96 * u : p[1] - 58 * u, 19 * u, a, l.who === 'helion'); // (the last: Orbin's words under him, clear of Helion above)
     }
     // the fire's light: it becomes the memory, and the memory goes back into it
     const fire = Math.max(1 - sm(T / 1.4), sm((T - (MEMORY_LEN - 1.6)) / 1.5));
