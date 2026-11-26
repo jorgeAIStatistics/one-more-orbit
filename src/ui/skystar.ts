@@ -31,7 +31,16 @@ export interface StarPlay {
   /** the dark air round the course lifts as the sequence opens: the scene is told how much is left */
   veil?: (v: number) => void;
   then: (at: { orbin: [number, number, number]; star: [number, number, number] }) => void;
+  /**
+   * A first clear's flight home (the owner's brief of 2026-11-25): after the words, Orbin carries the star up and
+   * away, and the camera rises with him; the planet, relit, sinks below and grows small, and the sky deepens into the
+   * night the Landing's sky begins in. `draw` is the planet itself (drawn at its centre, radius R); `song` the song
+   * time it is drawn at (relit).
+   */
+  flight?: { draw: (c: CanvasRenderingContext2D, R: number, st: { time: number; song: number; drive: number; kick: number; strike: number; calm: boolean }) => void; song: number };
 }
+/** seconds the flight home takes */
+const FLIGHT = 3.8;
 
 /** when things happen, in seconds from the last hit (a first clear) */
 const T = { open: 0.12, rise: 0.25, up: 1.25, fly: 1.3, catch: 2.05, words: 2.9, end: 5.0 };
@@ -76,8 +85,9 @@ export class SkyStar {
     const c = this.ctx, w = window.innerWidth, h = window.innerHeight, dpr = this.canvas.width / Math.max(1, w), u = this.unit();
     const q = p.quick, k = q ? T.catch / SkyStar.CATCH_QUICK : 1; // (a replay runs the same shape, faster)
     let s = ((now - this.t0) / 1000) * k;
-    if (this.skip >= 0) s = Math.max(s, T.end - 0.5 + (now - this.skip) / 1000); // tapped on: the words go, and it ends
-    const end = q ? T.words + 1.1 : T.end;
+    const fly = !q && !p.hold && !!p.flight, end = q ? T.words + 1.1 : T.end + (fly ? FLIGHT - 0.4 : 0);
+    if (this.skip >= 0) s = Math.max(s, end - 0.5 + (now - this.skip) / 1000); // tapped on: the words go, and it ends
+    const f = fly ? smooth((s - (T.end - 0.4)) / FLIGHT) : 0, fRaw = fly ? Math.max(0, (s - (T.end - 0.4)) / FLIGHT) : 0;
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
     c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.shadowBlur = 0;
     const o = this.orbin, cx = w * 0.5, cy = h * (q ? 0.4 : 0.33), after = s - T.catch;
@@ -85,9 +95,10 @@ export class SkyStar {
     if (s >= T.open) {
       p.veil?.(1 - smooth((s - T.open) / 0.9));
       const turn = after > 0 && !q && !p.hold ? smooth(after / 2.6) : 0, z = 1 + 0.07 * Math.sin(turn * Math.PI) + 0.02 * turn, rot = 0.035 * Math.sin(turn * Math.PI);
-      c.save(); c.translate(cx, cy); c.rotate(rot); c.scale(z, z); c.translate(-cx - Math.sin(turn * Math.PI) * w * 0.02, -cy); // the camera's one slow turn round him
+      if (fRaw > 0) { c.fillStyle = 'rgb(5,8,22)'; c.fillRect(0, 0, w, h); c.globalAlpha = 1 - smooth(fRaw * 1.6); } // (the flight home: night above, the world's sky falling away below)
+      c.save(); c.translate(cx, cy + f * h * 0.7); c.rotate(rot); c.scale(z, z); c.translate(-cx - Math.sin(turn * Math.PI) * w * 0.02, -cy); // the camera's one slow turn round him (and in the flight home, up and away)
       p.scene.draw(c, w, h, { time: now / 1000, song: undefined, colour: 1, drive: after > 0 ? 1 : 0.6, kick: after > 0 ? Math.exp(-after * 1.4) : 0, woke: 30 + s, strike: after > 0 ? Math.exp(-after * 3) : 0, dark: 0, calm: false });
-      c.restore();
+      c.restore(); c.globalAlpha = 1;
     }
     // the star: up out of the land, on a beam of its own light
     const [fx, fy] = p.from, upK = out((s - T.rise) / (T.up - T.rise)), sxA = lerp(fx, cx, upK), syA = lerp(fy, cy, upK);
@@ -113,18 +124,35 @@ export class SkyStar {
       for (const d of this.dust) { const r = (40 + d.v * after * 420) * u * (q ? 0.6 : 1), a = Math.max(0, 1 - after / (0.9 + d.r)) * 0.9; if (a > 0.01) { c.fillStyle = `rgba(255,${226 + Math.round(d.r * 24)},${170 + Math.round(d.r * 60)},${a})`; c.beginPath(); c.arc(cx + Math.cos(d.a) * r, cy + Math.sin(d.a) * r * 0.7 + after * after * 30 * u, d.s * u, 0, Math.PI * 2); c.fill(); } }
       if (after > 0.9) o.set({ eyes: 'soft', look: [0, -0.3] });
       const hold = smooth(after / 0.7);
-      LANDING.star(c, cx, lerp(cy, cy + 18 * u, hold), lerp(0.8, 0.34, hold) * size, p.col, 1, now / 300);
+      if (!(fRaw > 0 && p.flight)) LANDING.star(c, cx, lerp(cy, cy + 18 * u, hold), lerp(0.8, 0.34, hold) * size, p.col, 1, now / 300);
+    }
+    // the flight home: the sky deepens to night, the stars stream past, the planet (relit) sinks below and grows small,
+    // and Orbin carries the star up and away (toward where the Landing is: he comes down into it from this side)
+    if (fRaw > 0 && p.flight) {
+      for (let i = 0; i < 60; i++) { const r = K.RNG(i * 7 + 2), x = r() * w, y0 = r() * h, y = ((y0 + fRaw * h * (0.6 + r() * 1.4)) % h), L = (6 + 40 * r()) * u * smooth(fRaw * 2); c.strokeStyle = `rgba(220,232,255,${0.3 + 0.4 * r()})`; c.lineWidth = 1 + r(); c.beginPath(); c.moveTo(x, y); c.lineTo(x, y - L); c.stroke(); }
+      const R = Math.min(w, h) * lerp(0.36, 0.13, f), py = lerp(h * 0.8, h * 0.92, f);
+      c.save(); c.globalAlpha = smooth(fRaw / 0.15) * (1 - smooth((fRaw - 0.85) / 0.15)); c.translate(cx, py);
+      K.glow(c, 0, 0, R * 1.7, [255, 214, 150], 0.35, 'screen');
+      p.flight.draw(c, R, { time: now / 1000, song: p.flight.song, drive: 1, kick: 0, strike: 0, calm: false });
+      c.restore();
+      const ox2 = lerp(cx, w * 0.7, f), oy2 = lerp(cy + 26 * u, h * 0.1, f), os = lerp(q ? 0.5 : 0.62, 0.26, f) * u;
+      o.set({ x: ox2, y: oy2, s: os, arms: 'chest', eyes: 'soft', lean: 0.35 * f, look: [0.4, -0.8], crest: 1 }, true);
+      // his trail, behind him, down toward the world he left
+      c.save(); c.globalCompositeOperation = 'lighter'; c.lineCap = 'round';
+      for (let i = 0; i < 20; i++) { const k2 = i / 20, x = lerp(ox2, cx, k2 * k2 * 0.8), y = lerp(oy2, py - R, k2 * 0.9); c.strokeStyle = `rgba(255,226,170,${0.35 * (1 - k2) * smooth(fRaw * 3)})`; c.lineWidth = (6 - 5 * k2) * u; c.beginPath(); c.arc(x, y, 0.5, 0, Math.PI * 2); c.stroke(); }
+      c.restore();
     }
     o.step(dt); o.draw(c);
+    if (fRaw > 0 && p.flight) LANDING.star(c, o.x + 8 * u * (o.s / u), o.y - 4 * u, 0.34 * size * lerp(1, 0.45, f), p.col, 1, now / 300);
     // the flash on the last hit: it is what the course goes out behind
     if (s < 0.7) { c.fillStyle = `rgba(255,240,210,${(s < T.open ? s / T.open : 1 - smooth((s - T.open) / 0.58)) * 0.85})`; c.fillRect(0, 0, w, h); }
     // its name, written softly in the sky
-    const wa = smooth((s - T.words) / 0.7) * (1 - smooth((s - (end - 0.6)) / 0.5)), wy = h * (q ? 0.2 : 0.17);
+    const wEnd = q ? T.words + 1.1 : T.end, wa = smooth((s - T.words) / 0.7) * (1 - smooth((s - (wEnd - 0.6)) / 0.5)), wy = h * (q ? 0.2 : 0.17);
     this.write(c, p.name, cx, wy, Math.min(w * 0.13, 56 * u), wa);
     this.write(c, p.word, cx, wy + Math.min(w * 0.075, 30 * u), Math.min(w * 0.07, 27 * u), wa, '#ffe6b8');
     if (p.note) this.write(c, p.note, cx, wy + Math.min(w * 0.075, 30 * u) + 30, 16, wa * 0.9, '#e6cfae');
     // a flight home leaves in light; a picture that is handed on is left exactly as it is
-    if (!p.hold && s > end - 0.45) { c.fillStyle = `rgba(255,236,196,${smooth((s - (end - 0.45)) / 0.4)})`; c.fillRect(0, 0, w, h); }
+    if (!p.hold && !fly && s > end - 0.45) { c.fillStyle = `rgba(255,236,196,${smooth((s - (end - 0.45)) / 0.4)})`; c.fillRect(0, 0, w, h); }
     if (s >= end) { this.ended = true; const f = p.then; f({ orbin: [o.x, o.y, o.s], star: [cx, cy + 18 * u, 0.34 * size] }); }
   }
 }

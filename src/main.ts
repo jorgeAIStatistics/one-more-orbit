@@ -27,6 +27,7 @@ import { SkyOpening } from './ui/skyopening';
 import { SkyLanding } from './ui/skylanding';
 import { SkyStar } from './ui/skystar';
 import { SkyCold } from './ui/skycold';
+import { SkyMemory } from './ui/skymemory';
 import { EdgeWorld, EmberWorld, type World, type WorldSky } from './ui/worlds';
 import { LANDING } from './art/landingpaint.js';
 import { K as PK } from './art/painter.js';
@@ -98,6 +99,7 @@ landing.wordmark = (x, y, size, align, a, t) => skyTitle.wordmark(x, y, size, al
 const skyStar = new SkyStar($<HTMLCanvasElement>('stage'));
 /** the cold open: a scene (calm, wrongness, the taking, black), its one interaction a press-and-hold */
 const coldScene = new SkyCold($<HTMLCanvasElement>('stage'));
+const memoryFilm = new SkyMemory($<HTMLCanvasElement>('stage'));
 /** the worlds you play on: Emberwick and the Drifting Edge, each a planet in the ring and its inhabitant beside it */
 const emberWorld = new EmberWorld();
 const edgeWorld = new EdgeWorld();
@@ -108,6 +110,7 @@ let settingsFrom: Screen = 'levels';
 let run: Run | null = null;
 let botMode = /[?&]bot=1/.test(location.search);
 /** tests: autoplay plays on through the star, the flight home and the memory, and its clear counts (as a player's would) */
+type RGB3 = [number, number, number];
 const botStar = /[?&#]botstar\b/.test(location.search + location.hash);
 let practice = false;
 /** a daredevil flight: one attempt, and a fall sends you home */
@@ -254,11 +257,19 @@ function endMemory(): void {
  * road lighting toward the guardian; a memory of Helion, played; and then home. After the first world of all the
  * title comes too: it has not been seen yet.
  */
+/** A memory again (from the still pool or the settings): by the fire, into the flames, the film, and back. */
+function filmAgain(world: string, then: () => void): void {
+  if (!SkyMemory.has(world)) { then(); return; }
+  landing.rest(starsHome(), false, false); show('title');
+  landing.dive(() => memoryFilm.play(world, () => landing.emerge(then)), 1.8);
+}
 function firstClear(world: string, then: () => void): void {
-  const stars = PACKS.filter((p) => bestFor(p.level.id).cleared).length;
-  const play = (kind: 'gift' | 'road', next: () => void) => { moment.play(kind, world, stars, next); show('moment'); };
+  // (the gift and road moments and the playable memory are gone: by the fire, into the flames, the memory as a film,
+  // back out of the fire; the owner's brief of 2026-11-25)
   const home = () => { arrived = world; then(); };
-  play('gift', () => play('road', () => startMemory(world, home)));
+  if (!SkyMemory.has(world)) { home(); return; }
+  landing.rest(starsHome(), false, false); show('title');
+  landing.dive(() => memoryFilm.play(world, () => landing.emerge(home)));
 }
 // ------------------------------------------------------------------ the cold open
 /** The cold open: a scene, not a level. It ends in black, and the storyboard begins in that black. */
@@ -309,6 +320,7 @@ function beginStar(r: Run): void {
     name: isFirst ? 'The first star' : placeName(r.pack), word: isFirst ? 'the Drifting Edge wakes' : first ? 'restored' : 'once more', note,
     quick: !first, hold: isFirst && first,
     onCatch: () => { feel('win'); if (sting && audio.ctx) audio.playPart(sting, meta, audio.ctx.currentTime + 0.01, 0, { gain: 0.95 }); },
+    flight: first && !isFirst && worldFor(r.pack) ? { draw: worldFor(r.pack)!.draw, song: worldFor(r.pack)!.relit ?? 999 } : undefined,
     veil: (v) => { if (isFirst) landing.veil = v; },
     then: (at) => afterStar(r, first, homeWas, at)
   });
@@ -324,6 +336,8 @@ function afterStar(r: Run, first: boolean, homeWas: number, at: { orbin: [number
   run = null;
   $('hud').classList.remove('veiled');
   const rise = (secs: number, then: () => void) => { renderMap(); landing.ascend(() => { show('levels'); then(); }, secs); };
+  // the next stretch of road lights as the camera arrives over the map (the old "road" moment, folded in here)
+  const opened = () => { const i = PACKS.findIndex((p) => p.level.id === world); if (i >= 0) sky.reveal(i + 1); };
   if (!first) { landing.rest(n, false, false); show('title'); rise(2.2, () => undefined); return; }
   landing.tilt = isFirst ? 0.26 : 0;
   window.setTimeout(() => { warmMap = true; }, 3600);
@@ -332,12 +346,20 @@ function afterStar(r: Run, first: boolean, homeWas: number, at: { orbin: [number
     said: isFirst ? 'The first star, home.' : `${placeName(r.pack)}’s star, home.`,
     onHome: () => feel('pick'),
     then: () => {
-      if (isFirst) { rise(6, () => undefined); return; } // one move, from the fire up into the galaxy
-      // then a memory of Helion, given back by this world's star; and up from the fire to the map
-      if (MEMORIES[world] && (!r.opts.bot || botStar)) {
+      if (isFirst) { rise(6, opened); return; } // one move, from the fire up into the galaxy
+      // he rests by the fire; the camera drifts into the flames, and their light becomes a memory of Helion (a short
+      // film, the chapter this world's star gives back); it goes back into the fire, the camera pulls back, and rises
+      arrived = world;
+      if (SkyMemory.has(world) && (!r.opts.bot || botStar)) {
         save.story[world] = true; persist();
-        startMemory(world, () => { landing.rest(starsHome(), false, false); show('title'); arrived = world; rise(3.2, () => undefined); });
-      } else rise(3.2, () => undefined);
+        window.setTimeout(() => {
+          if (screen !== 'title') return;
+          audio.stopPreview(2.4);
+          landing.dive(() => {
+            memoryFilm.play(world, () => landing.emerge(() => { fireTheme(); rise(3.2, opened); }));
+          });
+        }, 1400);
+      } else rise(3.2, opened);
     }
   });
   show('title');
@@ -567,6 +589,8 @@ function startRun(from = -1, quick = false, made: Run | null = null, ember = fal
   helionCue = null;
   if (hm && audio.ctx) { const cue = (helionCue = { run: null as unknown as Run, track: null as Awaited<ReturnType<typeof audio.loadTrack>> | null, at: hm.at, meta: hm.meta, played: false }); void audio.loadTrack(hm.meta).then((t) => { cue.track = t; }, () => undefined); }
   renderer.twinIs = 'orbin';
+  // the way in: out of the planet's own light (from the map), back to an ember (a fall), or a quick cool dissolve (a restart)
+  if (!made && !chamber) { if (ember) renderer.beginIntro([255, 178, 110], 0.45, 0.12); else if (quick) renderer.beginIntro([12, 14, 30], 0.3, 0.06); else if (from < 0) renderer.beginIntro((COMPANIONS.KINDLE as Record<string, RGB3>)[baseOf(pack)] ?? [255, 226, 170], 1.1, 0.9); }
   const sc = chamber ? null : sceneFor(pack);
   if (sc && 'says' in sc) sc.says = bestFor(baseOf(pack)).cleared ? [] : WRITTEN[baseOf(pack)] ?? [];
   held = 0;
@@ -1129,6 +1153,8 @@ $('title').addEventListener('click', () => { if (screen === 'title') landingTap(
 /** A tap at the Landing: it wakes him (or ends the quiet beat after a star comes home), and the camera rises to the map. */
 function landingTap(): void {
   if (landing.rising) return;
+  if (memoryFilm.on) { memoryFilm.tap(); return; } // (a memory lets go early, into the fire)
+  if (landing.inFire) return;
   audioReady = true;
   audio.ensure(); audio.setVolumes(save.music, save.sfx);
   if (phoneCheck) { startPhoneCheck(); return; }
@@ -1565,7 +1591,7 @@ $('storyBtn').addEventListener('click', () => openLogbook());
 $('chambersBtn').addEventListener('click', () => openChambers());
 $('chambersClose').addEventListener('click', () => closeChambers());
 $('botBtn').addEventListener('click', () => { botMode = true; practice = false; session.far = session.onBeat = session.judged = session.streak = session.attempts = 0; session.drop = -1; startRun(); });
-$('replayMemory').addEventListener('click', () => startMemory(PACKS[0].level.id, () => { renderSettings(); show('settings'); }));
+$('replayMemory').addEventListener('click', () => filmAgain(PACKS[0].level.id, () => { renderSettings(); show('settings'); }));
 $('replayTutorial').addEventListener('click', () => { practice = false; botMode = false; dare = false; audio.ensure(); startOpening(true); });
 $('recordBtn').addEventListener('click', () => { run?.stop(); run = null; audio.stopPreview(0.2); record.open(); });
 
@@ -1602,6 +1628,7 @@ function tick(now: number): void {
     // an ember catches as he passes: a soft chime, two notes
     if (run.state === 'playing' && emberLit + 1 < emberBeats.length && run.time >= emberBeats[emberLit + 1] * run.level.spb) { emberLit++; audio.pluck(76, 0.32); window.setTimeout(() => audio.pluck(83, 0.22), 90); }
     renderer.draw(run, now, dt);
+    renderer.drawIntro(now);
     if (renderer.meet && run.time < 0.4) renderer.drawMeet(run.time, now);
     if (skyStar.on) { skyStar.draw(now, dt); if (!run || screen !== 'play') return; } // (its end hands the picture on to the Landing, this frame)
     if (opening.state === 'bloom') opening.drawOver(now); // the first tap's bloom, lifting off the game
@@ -1625,6 +1652,7 @@ function tick(now: number): void {
     else if (screen === 'story') skyStory.draw(now);
     else if (screen === 'moment') moment.draw(now);
     else if (screen === 'results') skyResult.draw(now, dt);
+    else if (screen === 'title' && memoryFilm.on) memoryFilm.draw(now);
     else if (screen === 'title') { if (warmMap && !landing.between) { warmMap = false; renderMap(); sky.draw(now, 0); } if (landing.between) sky.draw(now, dt); landing.draw(now, dt); } // rising, the galaxy shows through
     else renderer.drawIdle(now, dt);
     if (screen === 'record') record.tick(now);
@@ -1705,6 +1733,6 @@ Object.assign(window, {
     story: (k: string) => playStory(k, () => show('levels'), true),
     chambers: () => openChambers(), chamber: (id: string, bot = false) => { const c = CHAMBERS.find((x) => x.id === id); if (c) startChamber(c, bot); }, get room() { return chamber; },
     tutorial: startTutorial, results: (cleared: boolean) => { if (run) showResults(run, cleared, run.pct); }, pause,
-    opening, startOpening, startCold, coldScene, landing, skyStar, toTitle, toLanding, first: (bot = false, from = -1) => { botMode = bot; practice = false; pack = FIRST; startRun(from); }, moment: (k: 'gift' | 'road', stars = 1) => { moment.play(k, 'heroes', stars, () => show('levels')); show('moment'); }, memory: (w = 'heroes') => startMemory(w, () => show('levels')), firstClear: (w = 'heroes') => firstClear(w, () => show('levels')), logbook: openLogbook, orbs: openGlows, stars: openStars, credits: openCredits, sync10: () => openCalib(), calTap, settings: () => openSettings('levels')
+    opening, startOpening, startCold, coldScene, landing, skyStar, toTitle, toLanding, first: (bot = false, from = -1) => { botMode = bot; practice = false; pack = FIRST; startRun(from); }, moment: (k: 'gift' | 'road', stars = 1) => { moment.play(k, 'heroes', stars, () => show('levels')); show('moment'); }, memory: (w = 'heroes') => filmAgain(w, () => show('levels')), memoryFilm, firstClear: (w = 'heroes') => firstClear(w, () => show('levels')), logbook: openLogbook, orbs: openGlows, stars: openStars, credits: openCredits, sync10: () => openCalib(), calTap, settings: () => openSettings('levels')
   }
 });

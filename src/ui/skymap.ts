@@ -128,6 +128,9 @@ export class SkyMap {
     c.restore();
   }
 
+  /** The next stretch of road lights, light running along it from the world just woken (the end of a first clear). */
+  reveal(stretch: number): void { this.revealI = stretch; this.revealAt = this.t + 0.6; }
+  private revealI = -1; private revealAt = 0;
   /** Eko flies into the chosen planet: the camera follows him in. */
   launch(): void { this.launchAt = this.t; }
 
@@ -248,7 +251,8 @@ export class SkyMap {
     const stops = [{ x: this.lamp[0] + 20 * u, y: this.lamp[1] - 30 * u, r: 0 }, ...planets.map((n) => this.pos.get(n.id)!), this.pos.get('gate')!];
     for (let i = 0; i + 1 < stops.length; i++) {
       const a = stops[i], b = stops[i + 1], n = Math.round(Math.hypot(b.x - a.x, b.y - a.y) / (15 * u)), done = i === 0 || planets[i - 1]?.state === 'home';
-      for (let j = 1; j < n; j++) { const q = j / n, bend = Math.sin(q * Math.PI) * 34 * u * (i % 2 ? -1 : 1), tw = 0.75 + 0.25 * Math.sin(t * 2 + j * 0.7 + i); c.fillStyle = K.rgba([255, 226, 170], (done ? 0.7 : 0.22) * tw); c.beginPath(); c.ellipse(lerp(a.x, b.x, q) + bend * 0.4, lerp(a.y, b.y, q) + bend, 2.3 * u, 1.7 * u, j, 0, Math.PI * 2); c.fill(); }
+      const prog = i === this.revealI ? Math.max(0, Math.min(1, (t - this.revealAt) / 2.4)) : 1; // (a stretch just opened lights from its near end)
+      for (let j = 1; j < n; j++) { const q = j / n, bend = Math.sin(q * Math.PI) * 34 * u * (i % 2 ? -1 : 1), tw = 0.75 + 0.25 * Math.sin(t * 2 + j * 0.7 + i), lit = done && q <= prog, x = lerp(a.x, b.x, q) + bend * 0.4, y = lerp(a.y, b.y, q) + bend; c.fillStyle = K.rgba([255, 226, 170], (lit ? 0.7 : 0.22) * tw); c.beginPath(); c.ellipse(x, y, 2.3 * u, 1.7 * u, j, 0, Math.PI * 2); c.fill(); if (done && prog < 1 && Math.abs(q - prog) < 0.5 / n) K.glow(c, x, y, 26 * u, [255, 226, 170], 0.8); }
     }
     // the stars lit so far (the chart is read from the rim) and the Landing's words: places in the picture
     const sx = w / L.w, sy = h / L.h;

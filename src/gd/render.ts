@@ -362,7 +362,7 @@ export class GdRenderer {
 
   /** Screen radius of a ring level. The camera bumps on big hits and pulls right back as the drop goes off. */
   private rad(lv: number): number {
-    return (this.r0 * this.baseR + (lv - this.cam) * this.gap) * (1 + this.punchS * 0.05) * (1 - this.zoomS * 0.2) * (1 - 0.12 * clamp(this.speedK, 0, 1)) * this.camScale;
+    return (this.r0 * this.baseR + (lv - this.cam) * this.gap) * (1 + this.punchS * 0.05) * (1 - this.zoomS * 0.2) * (1 - 0.12 * clamp(this.speedK, 0, 1)) * this.camScale * (1 + this.introZ * this.introK * this.introK);
   }
 
   private burst(x: number, y: number, n: number, col: RGB, speed: number, size = 1, back = false): void {
@@ -385,6 +385,21 @@ export class GdRenderer {
   private speedK = 0;
   /** the world's own camera (eased): pulled back for a set piece that shows the planet whole (the Sleeper's throw) */
   private camScale = 1;
+  /**
+   * One continuous journey (the owner's brief of 2026-11-25): a level opens out of the light of the planet the map
+   * dived into (a match cut: the camera settles back from close in, through the planet's colour), and a fall goes
+   * back to its ember through a warm dissolve. introK: how much of that is left, 1..0.
+   */
+  private introK = 0; private introAt = 0; private introDur = 0.9; private introZ = 0.9; private introCol: RGB = [255, 220, 170];
+  beginIntro(col: RGB, dur = 0.9, zoom = 0.9): void { this.introCol = col; this.introDur = dur; this.introZ = zoom; this.introAt = performance.now(); this.introK = 1; }
+  /** Over everything, after the course: the light the level opens out of. */
+  drawIntro(now: number): void {
+    if (this.introK <= 0) return;
+    this.introK = Math.max(0, 1 - (now - this.introAt) / 1000 / this.introDur);
+    const k = this.introK * this.introK * (3 - 2 * this.introK), c = this.ctx;
+    c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
+    c.fillStyle = rgba(this.introCol, k); c.fillRect(0, 0, this.w, this.h);
+  }
   /** a jump pad's colour: the world's own life (the Edge's teal, Emberwick's fire) */
   private padCol: RGB = [150, 235, 220];
   /** stars stretched into streaks, behind the course, when the pace goes up */

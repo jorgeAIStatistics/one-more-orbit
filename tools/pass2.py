@@ -317,6 +317,77 @@ def coldfilm():
     return np.clip(out, -0.97, 0.97)
 
 
+MEMFILM = 22.0  # seconds a memory film's part takes in its file (each chapter starts at k * MEMFILM)
+def memfilms():
+    """The four memories of Helion as short films (the owner's brief of 2026-11-25: no tapping; a chapter of the
+    brothers' story for each world restored), each about 20 s of Helion's theme on the music box, arranged for its chapter:
+       0  Emberwick, the joy of it: the theme whole and warm, two voices answering each other, the hum, chimes
+      22  Cirra, their bond: Orbin's voice drifts late and thins; Helion's waits for it, and they come back together
+      44  Glassmere, the Stillness arriving: the theme, then one note skips like a scratched record, and it thins to one
+          voice over a low tone
+      66  Verdance, the dark closing: slower, muffled, the harmony turned minor, one voice and a heartbeat"""
+    out = np.zeros((int(4 * MEMFILM * SR), 2))
+    def part(k):
+        a = np.zeros((int((MEMFILM + 3) * SR), 2))
+        return a
+    def put(k, a, gain_db):
+        a = a[:int(MEMFILM * SR)]
+        a *= 10 ** ((gain_db - level(a[:int(16 * SR)])) / 20)
+        n = int(1.5 * SR); a[-n:] *= np.linspace(1, 0, n)[:, None]
+        out[int(k * MEMFILM * SR):int(k * MEMFILM * SR) + len(a)] += a
+    # 0: joy
+    a = part(0)
+    for b in range(6):
+        theme_bar(a, 0.6 + b * BAR, b, vel=0.95)
+        at = 0.0
+        for name, beats in L.TUNE[b]:
+            L.place(a, 0.6 + b * BAR + (at + 0.5) * BEAT, L.tine(L.hz(name) * UP * 2, beats * BEAT, 0.36), pan=-0.45); at += beats
+    for k2 in range(10): L.place(a, 1.2 + k2 * 1.8, L.tine(L.hz('E6') * UP * (1.26 if k2 % 2 else 1.0), 0.4, 0.18), pan=0.5 if k2 % 2 else -0.5)
+    put(0, room(a, 0.5, 0.03), -24)
+    # 1: bond. Orbin's voice (the lower) drifts later each phrase and thins; Helion's (above) holds back to wait; together again
+    a = part(1)
+    late = [0, 0.06, 0.16, 0.3, 0.12, 0.0]; Ov = [0.9, 0.8, 0.55, 0.35, 0.7, 0.95]
+    for b in range(6):
+        t0 = 0.6 + b * BAR; L.place(a, t0, hum(L.CH[L.CHORDS[b]], BAR) * 0.8)
+        at = 0.0
+        for name, beats in L.TUNE[b]:
+            L.place(a, t0 + (at + late[b] * 4) * BEAT, L.tine(L.hz(name) * UP, beats * BEAT, Ov[b]), pan=0.3)
+            L.place(a, t0 + (at + 0.5 + late[b] * 2) * BEAT, L.tine(L.hz(name) * UP * 2, beats * BEAT, 0.34), pan=-0.4)
+            at += beats
+    put(1, room(a, 0.6, 0.04), -25)
+    # 2: the Stillness arriving: the theme; at 9 s a note skips three times; after it one voice, flatter, over a low tone
+    a = part(2)
+    for b in range(3):
+        theme_bar(a, 0.6 + b * BAR, b, vel=0.85, humming=True)
+    frag = L.tine(L.hz('B4') * UP, 0.22, 0.8)[:int(0.2 * SR)]
+    for k2 in range(3): L.place(a, 9.6 + k2 * 0.24, frag * np.linspace(1, 0.25, len(frag)), pan=0.2)
+    at = 10.6
+    for name, beats in L.TUNE[3] + L.TUNE[4] + L.TUNE[5]:
+        if at > 19.5: break
+        L.place(a, at, L.tine(L.hz(name) * UP * 2 ** (-40 / 1200), beats * BEAT * 1.2, 0.5), pan=0.15); at += beats * BEAT * 1.2
+    n = int(11 * SR); t = np.arange(n) / SR
+    tone = (np.sin(2 * np.pi * 41.2 * t) + 0.5 * np.sin(2 * np.pi * 82.4 * t)) * np.clip(t / 4, 0, 1) * 0.12
+    a[int(10 * SR):int(10 * SR) + n, 0] += tone; a[int(10 * SR):int(10 * SR) + n, 1] += tone
+    put(2, room(a, 0.6, 0.04), -26)
+    # 3: the dark closing: slower, minor, muffled, one voice; a heartbeat under it
+    a = part(3)
+    MIN = {'D': ('D3', 'F3', 'A3'), 'Bm': ('B2', 'D3', 'F#3'), 'G': ('G2', 'A#2', 'D3'), 'A': ('A2', 'C3', 'E3')}
+    at = 0.8
+    for b in range(4):
+        ch = MIN.get(L.CHORDS[b], L.CH[L.CHORDS[b]]); L.place(a, at, hum(ch, BAR * 1.35) * 0.7)
+        q = 0.0
+        for name, beats in L.TUNE[b]:
+            L.place(a, at + q * BEAT * 1.35, L.tine(L.hz(name) * UP * 2 ** (-30 / 1200), beats * BEAT * 1.35, 0.62), pan=0.1); q += beats
+        at += BAR * 1.35
+    t1 = 1.0
+    while t1 < 20.5: L.place(a, t1, O.thump(0.5)); L.place(a, t1 + 0.3, O.thump(0.32)); t1 += 1.05
+    a = lowpass(a, 1500)
+    put(3, room(a, 0.9, 0.06), -27)
+    pk = np.abs(out).max()
+    if pk > 0.9: out *= 0.9 / pk
+    return np.clip(out, -0.97, 0.97)
+
+
 def helion_far(notes, beat=0.6):
     """Helion's moment in a level: his music-box motif from far away (low-passed, in a large room), in the song's key."""
     buf = np.zeros((int((sum(b for _, b in notes) * beat + 5) * SR), 2)); at = 0.0
@@ -440,7 +511,7 @@ if __name__ == '__main__':
     (ROOT / 'tools/cache').mkdir(exist_ok=True)
     import sys
     want = set(sys.argv[1:])
-    made = {'helion1': helion_far([('A#4', 1), ('C#5', 1), ('F#5', 2), ('D#5', 2)], 0.4), 'helion2': helion_far([('A4', 1), ('C#5', 1), ('F#5', 2), ('E5', 2)], 0.6), 'coldopen': coldfilm(), 'nebula': nebula(), 'opening': opening_parts(), 'startedbed': started_bed(),
+    made = {'helion1': helion_far([('A#4', 1), ('C#5', 1), ('F#5', 2), ('D#5', 2)], 0.4), 'helion2': helion_far([('A4', 1), ('C#5', 1), ('F#5', 2), ('E5', 2)], 0.6), 'coldopen': coldfilm(), 'memfilm': memfilms(), 'nebula': nebula(), 'opening': opening_parts(), 'startedbed': started_bed(),
             'sting1': sting(['F#3', 'A#3', 'C#4', 'F#4'], ['A#5', 'C#6', 'F#6'], 'A#6', 'B1'),
             'sting2': sting(['A2', 'E3', 'A3', 'C#4', 'E4'], ['C#6', 'E6', 'A6'], 'C#7', 'A1'),
             'fire0': fire(False), 'fire1': fire(True)}

@@ -65,6 +65,16 @@ export class SkyLanding {
 
   /** The camera goes up into the galaxy (the map is drawn under this while it does). secs: how long the move takes. */
   ascend(then: () => void, secs = 1.3): void { if (this.dir > 0) return; this.dir = 1; this.secs = secs; this.then = then; }
+  /**
+   * Into the fire: the camera drifts into the flames until their light fills the screen (a memory begins in it), and
+   * back out of it (the memory over). The first clear's journey (the owner's brief of 2026-11-25).
+   */
+  dive(then: () => void, secs = 2.6): void { this.fireDir = 1; this.fireSecs = secs; this.fireThen = then; }
+  emerge(then: () => void, secs = 2.2): void { this.fireK = 1; this.fireDir = -1; this.fireSecs = secs; this.fireThen = then; }
+  get inFire(): boolean { return this.fireK > 0.001; }
+  private fireK = 0; private fireDir = 0; private fireSecs = 2.6; private fireThen: (() => void) | null = null;
+  /** the newest Kindling, flying in from Orbin to its place by the fire (when, on this picture's clock) */
+  private newAt = -9;
   /** ...and comes back down to the fire. */
   descend(): void { this.rise = 1; this.dir = -1; this.secs = 0.9; this.then = null; this.arr = null; }
   get rising(): boolean { return this.dir > 0; }
@@ -143,7 +153,14 @@ export class SkyLanding {
       const worlds = ['heroes', 'skyhigh', 'blank', 'invincible', 'royalty'];
       for (let i = 0; i < Math.min(worlds.length, stars - 1); i++) {
         const a = t * (0.35 + 0.05 * i) + i * 2.3, R = (60 + 22 * i) * g.u;
-        COMPANIONS.kindling(c, g.fx + Math.cos(a) * R, g.fy - 70 * g.u + Math.sin(a) * R * 0.35 - 20 * g.u * Math.sin(t * 0.7 + i), 0.32 * g.u, COMPANIONS.KINDLE[worlds[i]], { flap: 0.5 + 0.5 * Math.sin(t * 3.2 + i), alpha: Math.sin(a) > -0.2 ? 1 : 0.7 });
+        let x = g.fx + Math.cos(a) * R, y = g.fy - 70 * g.u + Math.sin(a) * R * 0.35 - 20 * g.u * Math.sin(t * 0.7 + i), s = 0.32 * g.u;
+        // the newest: it comes in with him and flies down to its place by the fire (an arc, slowing as it settles)
+        if (i === stars - 2 && t - this.newAt < 2.4) {
+          const age = t - this.newAt; if (age < 0) continue;
+          const k = smooth(age / 2.4), ox = this.orbin.x + 30 * g.u, oy = this.orbin.y - 60 * g.u;
+          x = lerp(ox, x, k); y = lerp(oy, y, k) - Math.sin(k * Math.PI) * 90 * g.u; s *= 0.6 + 0.4 * k;
+        }
+        COMPANIONS.kindling(c, x, y, s, COMPANIONS.KINDLE[worlds[i]], { flap: 0.5 + 0.5 * Math.sin(t * 3.2 + i), alpha: Math.sin(a) > -0.2 ? 1 : 0.7 });
       }
       if (who) this.orbin.draw(c);
     });
@@ -217,17 +234,23 @@ export class SkyLanding {
       const k = smooth((s - 1.3) / 0.8), hx = sock[0], hy = sock[1] + tilt * h * (PAR.sleeper - 1);
       const fx0 = arr.star && s < 1.3 ? lerp(sx0, o.x + 40 * u, smooth(s / 1.3)) : o.x + 40 * u, fy0 = arr.star && s < 1.3 ? lerp(sy0, o.y - 34 * u, smooth(s / 1.3)) : o.y - 34 * u;
       if (s < 2.1) starAt = [lerp(fx0, hx, k), lerp(fy0, hy, k) - Math.sin(k * Math.PI) * 60 * u, lerp(ss0, 0.22 * u, k)];
-      if (s >= 2.1 && !arr.home) { arr.home = true; arr.onHome?.(); this.said = { text: arr.said, at: t + 0.5 }; }
+      if (s >= 2.1 && !arr.home) { arr.home = true; arr.onHome?.(); this.said = { text: arr.said, at: t + 0.5 }; if (arr.to >= 2 && arr.flight) this.newAt = t + 0.9; }
       // the fire answers: the picture of one star fewer gives way to this one
       a = this.set(arr.from); b = this.set(arr.to); mix = smooth((s - 2.1) / 1.4);
       const f0 = LANDING.geo(w, h, arr.from).fire, f1 = g.fire;
       lift = f1 > 0 ? lerp(f0 / f1, 1, mix) : 1; grow = s > 3.0 ? Math.exp(-(s - 3.0) * 1.6) : 0; // (the fire answers when the light has run down to it)
       if (s > 5.4) this.finish();
     }
+    if (this.fireDir) {
+      this.fireK = Math.max(0, Math.min(1, this.fireK + (this.fireDir * dt) / this.fireSecs));
+      if ((this.fireDir > 0 && this.fireK >= 1) || (this.fireDir < 0 && this.fireK <= 0)) { this.fireDir = 0; const f = this.fireThen; this.fireThen = null; f?.(); }
+    }
+    const fk = smooth(this.fireK);
+    if (fk > 0.001) { const z = 1 + 7 * fk * fk, fy = g.fy - g.F * 0.25 + tilt * h; c.save(); c.translate(g.fx, fy); c.scale(z, z); c.translate(-g.fx, -fy); }
     if (e < 1 || this.dir <= 0) {
       this.orbin.step(dt);
       const breath = 0.5 + 0.5 * Math.sin(t * 0.8);
-      this.scene(c, a, b, mix, this.stars, e, tilt, { lift, grow, breath }, true);
+      this.scene(c, a, b, mix, this.stars, e, tilt, { lift, grow: Math.max(grow, 0.6 * fk), breath }, true);
       if (starAt) { const y = starAt[1] + tilt * h; LANDING.star(c, starAt[0], y, starAt[2], LANDING.STAR_COLS[(this.stars - 1 + 6) % 6], 1, t * 2); }
       // the power-up: once the star is in its socket, light runs down the old channel in the stone to the fire
       if (arr && !arr.done && arr.t0 >= 0) {
@@ -240,9 +263,10 @@ export class SkyLanding {
         }
       }
     }
+    if (fk > 0.001) { c.restore(); c.fillStyle = `rgba(255,210,130,${Math.pow(fk, 1.6)})`; c.fillRect(0, 0, w, h); K.glow(c, w / 2, h * 0.62, Math.max(w, h) * 0.6, [255, 236, 190], 0.6 * Math.pow(fk, 2), 'screen'); }
     // rising: the land falls away through mist, and the galaxy is above it
     if (e > 0.003) { c.fillStyle = `rgba(20,44,60,${Math.sin(Math.PI * e) * 0.5})`; c.fillRect(0, 0, w, h); }
-    const still = 1 - Math.min(1, this.rise * 3);
+    const still = (1 - Math.min(1, this.rise * 3)) * (1 - Math.min(1, this.fireK * 4)); // (and nothing is written while the camera is in the fire)
     if (this.titled && still > 0 && this.wordmark) { const size = Math.min(w * 0.3, 150 * u * (g.tall ? 1.5 : 1.9)); this.wordmark(g.tall ? w * 0.5 : w * 0.2, h * (g.tall ? 0.27 : 0.34), size, g.tall ? 'center' : 'left', still, t); }
     if (still > 0 && !this.arriving && this.dir === 0 && this.wakeAt < 0) this.write(c, this.asleep ? 'tap to wake him' : 'tap to rise', w / 2, h - Math.max(26, 34 * u), 19, still * (0.62 + 0.3 * Math.sin(t * 2.2)));
     if (this.said.text && t >= this.said.at) { const age = t - this.said.at; this.write(c, this.said.text, g.tall ? w / 2 : g.fx, g.fy - g.F - 150 * u, g.tall ? 22 : 26, smooth(age / 0.9) * still); }

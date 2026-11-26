@@ -38,6 +38,8 @@ export interface World {
   rewind(to: number): void;
   /** the level's set pieces that live on the course itself (drawn over the course, in its own frame) */
   onCourse?(c: CanvasRenderingContext2D, v: CourseView): void;
+  /** a song time at which the planet is drawn whole and relit (the flight home looks down on it) */
+  relit?: number;
   /** the camera's scale at a song time (1: as the course sets it; less: pulled back to show the world whole) */
   cam?(song: number): number;
 }
@@ -143,6 +145,7 @@ export class EmberWorld {
     rewind: (to) => this.rewind(to),
     spark: (a, song) => this.spark(a, song),
     onCourse: (c, v) => this.onCourse(c, v),
+    relit: 30,
     draw: (c, R, st) => {
       if (!this.cold || !this.hot) return;
       const t = st.song, dropK = sm((t - ET.drop) / 0.35);
