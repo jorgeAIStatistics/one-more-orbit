@@ -108,6 +108,47 @@ for (const [name, pack] of W1) {
       console.log(`SPAMBOT ${name}: from the first tap ${out.join('; ')}; from a checkpoint, the longest any spam bot lasted: ${longest.toFixed(1)} s`);
       expect(longest, 'a spam bot lasts only a few seconds from any checkpoint (2026-11-26: Emberwick had a 16.3 s stretch)').toBeLessThanOrEqual(5);
     });
+    it('a real player clears: every tap a little early or late, and two stray taps round each dense cluster (five players)', () => {
+      for (const seed of [1, 2, 3, 4, 5]) {
+        let x = seed * 9301 + 49297;
+        const rnd = () => { x = (x * 9301 + 49297) % 233280; return x / 233280; };
+        const gauss = () => (rnd() + rnd() + rnd() - 1.5) * 2; // about -3..3, mostly within 1
+        const late = Math.min(c.presses[0] ? 90 : 90, 0.7 * (TABLE[pack.level.id][0] * 1000)), early = Math.min(140, c.buffer * 1000 * 0.9);
+        const played = taps.map((b) => { const e = gauss() * 35; return b + ms(Math.max(-early, Math.min(late, e))); });
+        const strays: number[] = [];
+        for (let i = 0; i < taps.length; i++) {
+          // a dense cluster: presses less than three quarters of a beat apart. A bounce just after its first tap, and a stray just after its last.
+          if (!(i + 1 < taps.length && taps[i + 1] - taps[i] < 0.75) || (i > 0 && taps[i] - taps[i - 1] < 0.75)) continue;
+          let j = i; while (j + 1 < taps.length && taps[j + 1] - taps[j] < 0.75) j++;
+          strays.push(played[i] + ms(80), played[j] + ms(110));
+        }
+        const s = tapRun(c, [...played, ...strays].sort((p, q) => p - q));
+        expect(s.crashed, `player ${seed}, ${strays.length} strays: ${s.crashKind} at beat ${s.crashBeat.toFixed(2)}`).toBe(false);
+      }
+    });
+    it('two close presses are always two presses: every pair a beat apart or less, each tap early, on time or late', () => {
+      const ps = c.presses.filter((q) => !q.auto && q.act !== 'up');
+      const offs = (q: (typeof ps)[number]) => [-Math.min(c.buffer * 1000, 150) * 0.95, -60, 0, 60, q.tol * c.spb * 1000 * 0.9];
+      const fails: string[] = [];
+      let pairs = 0, combos = 0;
+      for (let i = 0; i + 1 < ps.length; i++) {
+        const A = ps[i], B = ps[i + 1];
+        if (B.beat - A.beat > 1 + 1e-6 || A.beat < c.start + 2) continue;
+        pairs++;
+        const rest = ps.slice(i + 2).filter((q) => q.beat < B.beat + 3).map((q) => q.beat);
+        // (and for the second, just past half way from the first: earlier than the buffer, but nearer its own wall)
+        const half = -((B.beat - A.beat) / 2) * c.spb * 1000 + 15;
+        for (const ea of offs(A)) for (const eb of [...offs(B), ...(half < -Math.min(c.buffer * 1000, 150) ? [half] : [])]) {
+          if ((B.beat + ms(eb) - (A.beat + ms(ea))) * c.spb < 0.08) continue; // (no hand taps twice in under 80 ms)
+          combos++;
+          const s = tapRun(c, [A.beat + ms(ea), B.beat + ms(eb), ...rest].sort((x, y) => x - y), A.beat - 4, A.beat - 1e-3);
+          const ok = !(s.crashed && s.crashBeat < B.beat + B.tol + 0.05);
+          if (!ok) fails.push(`${A.beat}/${B.beat} at ${Math.round(ea)}/${Math.round(eb)} ms: ${(s.log ?? []).slice(-2).map((l) => l.what).join(' | ')}`);
+        }
+      }
+      console.log(`PAIRS ${name}: ${pairs} close pairs, ${combos} combinations, ${fails.length} dropped`);
+      expect(fails, fails.slice(0, 4).join('\n')).toEqual([]);
+    });
     it('a sloppy player is not a masher: one stray tap every three seconds, between presses, still clears', () => {
       const strays: number[] = [];
       for (let t = c.start + 2; t < taps[taps.length - 1]; t += 3 / c.spb) {

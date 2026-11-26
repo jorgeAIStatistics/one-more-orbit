@@ -19,8 +19,8 @@
     {"bar": 8, "kind": "drop", "time": 19.2, "name": "The forge relights", "what": "a speed portal on the drop (1.5x); a beat of stillness, then the impact and the forge bursting"},
     {"bar": 8, "kind": "leap", "time": 20.4, "name": "Ossa's strike", "what": "her blow throws a ring of fire out from her hearth-stone; it reaches him on the beat and flings him out to the lava moons"},
     {"bar": 10, "kind": "leap", "time": 24.0, "name": "To the Twins", "what": "her next strike: a two-beat flight with an ember to tap, onto a figure-eight round two moonlets, crossing between them on the bar line"},
-    {"bar": 12, "kind": "leap", "time": 28.8, "name": "The Slag Bridge", "what": "her strike throws him onto a straight causeway of crust over the dark, running back toward Emberwick; a vent half way"},
-    {"bar": 14, "kind": "leap", "time": 33.6, "name": "The dive", "what": "her last strike throws him back to Emberwick; the path winds inward round the forge, the camera pulls back to show the whole system relit, then tips into the forge's mouth"},
+    {"bar": 12, "kind": "leap", "time": 28.8, "name": "The Slag Bridge", "what": "her strike throws him onto a straight causeway of crust over the dark, running back toward Emberwick"},
+    {"bar": 14, "kind": "leap", "time": 33.6, "name": "The dive", "what": "her last strike throws him back to Emberwick; the camera pulls back to show the whole system relit, comes in for the forge's bellows on the breath (36.0), and tips into the forge's mouth as the path winds inward"},
     {"bar": 16, "kind": "story", "time": 38.4, "name": "Inside the heart", "what": "the last stretch runs inside the planet's glowing heart: the forge's bellows (43.2), vents (40.8, 48.0)"},
     {"bar": 19, "kind": "speed", "time": 45.6, "name": "The forge sprint", "what": "a fast portal (2x) at the peak of the second half, three bars, then back to 1.5x"},
     {"bar": 23, "kind": "story", "time": 56.7, "name": "The seal", "what": "the last wall is the Stillness's seal on the star; one dash on the song's last stab breaks it and the star bursts free"}
@@ -29,8 +29,8 @@
     {"id": "verse", "core": {"bars": ["up", "up+pad", "turn+up", "chime", "leap4"]}, "bars": 5, "label": "VERSE", "lap": 16, "follow": "kick", "lead": "snare", "look": {"palette": "dusk", "bg": "stars", "eq": "bars", "zoom": [0.92, 1]}, "plan": ["L=@................", "L=@x...x...........", "L=@x...x.......x...", "L=@x...........x...", "L=@x...x.....x....."]},
     {"id": "stabs", "core": {"bars": ["meteor", "vent"]}, "bars": 2, "label": "BUILD", "lap": 8, "follow": "kick", "lead": "snare", "look": {"palette": "dusk", "bg": "stars", "eq": "bars", "zoom": [1, 1.1], "drain": [0, 0.6], "vignette": [0, 0.5]}, "plan": ["L=@..........x.....", "L=@x.......x.....x."]},
     {"id": "lift", "core": {"bars": ["x1.25+up"]}, "bars": 1, "label": "READY", "lap": 8, "follow": "kick", "lead": "snare", "look": {"palette": "dusk", "bg": "stars", "eq": "bars", "zoom": [1.1, 1.16], "drain": [0.6, 1], "vignette": [0.5, 0.9]}, "plan": ["L=@x.....x...x.x..."]},
-    {"id": "drop1", "core": {"bars": ["x1.5+up+leap2@2", "up", "leap2", "up", "leap2", "vent", "leap2", "up"], "smash": true, "record": true}, "bars": 8, "label": "DROP", "lap": 8, "follow": "kick", "lead": "snare", "enter": "drop", "look": {"palette": "dawn", "bg": "stars", "eq": "burst", "zoom": [0.92, 0.98]}, "plan": ["L=@x.....x.x.....x.", "L=@....x...x.x.x...", "L=@x...x.......x...", "L=@x...x...x...x.x.", "L=@x...x...........", "L=@x...x.x.x...x...", "L=@x...x.x.........", "L=@x..............."]},
-    {"id": "drop2", "core": {"bars": ["up", "vent", "hold+up+pad", "x2+up", "vent", "up", "x1.5+up", "up"]}, "bars": 8, "label": "DROP", "lap": 8, "follow": "kick", "lead": "snare", "enter": "pulse", "look": {"palette": "gold", "bg": "stars", "eq": "burst", "zoom": [0.94, 1]}, "plan": ["L=@....x...x...x.x.", "L=@x...x.x.x.....x.", "L=@x...x.x.....x...", "L=@....x...x.x.x...", "L=@x...x.x.....x.x.", "L=@..x.x...x...x...", "L=@x...x.x.......x.", "L=@..........x....."]},
+    {"id": "drop1", "core": {"bars": ["x1.5+up+leap2@2", "up", "leap2", "up", "leap2", "up", "leap2", "up+pad"], "smash": true, "record": true}, "bars": 8, "label": "DROP", "lap": 8, "follow": "kick", "lead": "snare", "enter": "drop", "look": {"palette": "dawn", "bg": "stars", "eq": "burst", "zoom": [0.92, 0.98]}, "plan": ["L=@x.....x.x.....x.", "L=@....x...x.x.....", "L=@x...x.......x...", "L=@x...x...x...x...", "L=@x...x...........", "L=@x...x.x.....x...", "L=@x...x.x.........", "L=@x..............."]},
+    {"id": "drop2", "core": {"bars": ["up", "vent", "hold+up+pad", "x2+up", "vent", "up", "x1.5+up", "up"]}, "bars": 8, "label": "DROP", "lap": 8, "follow": "kick", "lead": "snare", "enter": "pulse", "look": {"palette": "gold", "bg": "stars", "eq": "burst", "zoom": [0.94, 1]}, "plan": ["L=@....x...x...x...", "L=@x...x.x.......x.", "L=@x...x.x.....x...", "L=@....x...x.x.....", "L=@x...x.x.....x.x.", "L=@..x.x...x...x...", "L=@x...x.x.......x.", "L=@..........x....."]},
     {"id": "end", "core": {"bars": ["up"]}, "bars": 1, "label": "END", "lap": 8, "follow": "kick", "lead": "snare", "look": {"palette": "dawn", "bg": "stars", "eq": "wave", "zoom": [1, 0.95]}, "plan": ["L=@................"]}
   ],
   "places": [
@@ -38,7 +38,7 @@
     {"id": "forge", "at": [0, 0], "shape": "circle"},
     {"id": "crucible", "at": [1.0, -2.7], "shape": "ellipse", "rot": 0.4},
     {"id": "twins", "at": [-0.4, -6.9], "shape": "eight", "size": 1.7, "cross": 44},
-    {"id": "bridge", "at": [-1.3, -2.95], "shape": "line", "dir": 1.62, "len": 0.33},
+    {"id": "bridge", "at": [0.1, -3.6], "shape": "line", "dir": 2.38, "len": 0.82},
     {"id": "heart", "at": [0, 0], "shape": "circle", "spiral": [58, 64]}
   ]
 }

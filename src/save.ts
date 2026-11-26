@@ -37,6 +37,8 @@ export interface SaveData {
   calLatency: number;
   /** show the live sync overlay while playing */
   syncOverlay: boolean;
+  /** for testing: show each tap and how it was judged (the owner's request of 2026-11-26) */
+  tapLog?: boolean;
   /** volume of the tap sounds, apart from the other effects */
   hitVol: number;
   /** the first-run tutorial on level 1 has been played or skipped */

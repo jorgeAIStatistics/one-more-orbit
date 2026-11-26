@@ -148,7 +148,7 @@ function horizon(c: CanvasRenderingContext2D, w: number, h: number, helion: numb
 
 // ================================================================ Emberwick
 /** Emberwick's timeline, in song seconds (the re-cut of 2026-11-25) */
-const ET = { held: 9.6, stabs: 12, riser: 16.8, drop: 19.2, lava: 20.4, back: 34.8, tip: 36.4, breath: 36, breathEnd: 38.4, dive: 37.6, core: 38.4, end: 57.6, spb: 0.6 };
+const ET = { held: 9.6, stabs: 12, riser: 16.8, drop: 19.2, lava: 20.4, bridge: 29.4, back: 34.8, tip: 35.5, breath: 36, breathEnd: 38.4, dive: 37.6, core: 38.4, end: 57.6, spb: 0.6 };
 
 export class EmberWorld {
   private cold: Pic | null = null; private hot: Pic | null = null;
@@ -188,10 +188,10 @@ export class EmberWorld {
     relit: 30,
     // the journey's camera: on the lava moons it is pulled back toward Emberwick, so Ossa and her strikes stay in view;
     // as the dive begins it pulls right back to show the whole system relit, then tips into the forge
-    pull: (s) => (s >= ET.lava && s < ET.back ? { x: 0, y: 0.2, k: 0.34 * sm((s - ET.lava) / 1.2) } : s >= ET.back && s < ET.dive ? { x: -0.1, y: -1.25, k: sm((s - ET.back) / 0.7) * (1 - sm((s - ET.tip) / (ET.dive - ET.tip))) } : null),
+    pull: (s) => (s >= ET.lava && s < ET.back ? { x: 0, y: 0.2, k: 0.34 * sm((s - ET.lava) / 1.2) } : s >= ET.back && s < ET.dive ? { x: 0.1, y: -2.6, k: sm((s - ET.back) / 0.5) * (1 - sm((s - ET.tip) / 0.45)) } : null),
     // the camera follows the song: it pushes in through the build, holds on the riser's last beat (the tension), and
     // pulls back hard on the drop to show the planet ablaze, settling as the drop runs; in the core it is a little close
-    cam: (s) => (s < ET.held ? 0.9 : s < ET.stabs ? 0.9 - 0.18 * sm((s - ET.held) / 0.8) + 0.28 * sm((s - ET.stabs + 0.9) / 0.9) : s < ET.drop ? 1 + 0.12 * sm((s - ET.stabs) / (ET.drop - 0.3 - ET.stabs)) : s < ET.lava ? 0.8 : s < ET.back ? 0.8 - 0.16 * sm((s - ET.lava) / 1.2) : s < ET.tip ? 0.64 - 0.3 * sm((s - ET.back) / 0.7) : s < ET.core ? 0.34 + 0.81 * sm((s - ET.tip) / (ET.dive - ET.tip)) : 0.95),
+    cam: (s) => (s < ET.held ? 0.9 : s < ET.stabs ? 0.9 - 0.18 * sm((s - ET.held) / 0.8) + 0.28 * sm((s - ET.stabs + 0.9) / 0.9) : s < ET.drop ? 1 + 0.12 * sm((s - ET.stabs) / (ET.drop - 0.3 - ET.stabs)) : s < ET.lava ? 0.8 : s < ET.bridge ? 0.8 - 0.14 * sm((s - ET.lava) / 1.2) : s < ET.back ? 0.66 + 0.16 * sm((s - ET.bridge) / 0.8) : s < ET.tip ? 0.82 - 0.5 * sm((s - ET.back) / 0.5) : s < ET.core ? 0.32 + 0.58 * sm((s - ET.tip) / 0.45) + 0.25 * sm((s - ET.dive + 0.4) / 0.4) : 0.95),
     draw: (c, R, st) => {
       if (!this.cold || !this.hot) return;
       if (st.rel && st.at && st.song < ET.core) { this.journey(c, R, st); return; }

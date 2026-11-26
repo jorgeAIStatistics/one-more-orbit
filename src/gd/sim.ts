@@ -21,6 +21,8 @@ interface Flight { t0: number; t1: number; from: number; to: number; bulge: numb
 
 const SKIP = 0.3; // beats a free hop lasts
 const DEBOUNCE_S = 0.03;
+/** a second tap this soon after a press was taken is a bounce on it: never wasted, never a crash (2026-11-26) */
+const BOUNCE_S = 0.15;
 const GRACE_S = 0.25; // a tap this soon after a flow note is never punished (nor is one before a flow note still to come)
 const GAIN = 1 / 10; // flow per on-beat tap
 const MASH_TAPS = 9; // this many taps inside a second is mashing: it keeps you alive where the level allows, but earns nothing
@@ -48,6 +50,12 @@ export class Sim {
   private pendingBuf = false;
   /** the taps of the last second, for the anti-mash rule */
   private lately: number[] = [];
+  /** the tap log (the owner's debug view, 2026-11-26): every tap, and how it was judged */
+  log: Array<{ beat: number; what: string; press: number }> = [];
+  private why = '';
+  private indep: number[] = [];
+  private lastAny = -Infinity;
+  private mashState = false;
   /** the last few wasted taps (beats) */
   private wasted: number[] = [];
   private lastTap = -99;
@@ -221,24 +229,27 @@ export class Sim {
   }
 
   /**
-   * The anti-mash rule (the owner's, 2026-11-25): tapping much faster than the chart asks round a press (more than twice
-   * its rate: more taps in the last second than marks within a second either side, and at least three) gets no
-   * forgiveness. The buffer does not apply and a tap too early hits the ring, as before.
+   * The anti-mash rule (the owner's, revised 2026-11-26: the earlier "two wasted taps in two seconds" caught honest
+   * players in dense stretches). Mashing is a sustained pattern: four or more wasted taps within three seconds, or a
+   * full second of tapping well over twice the chart's rate (at least four taps, and more than twice the marks in that
+   * second plus one). While it holds, the buffer does not apply and a stray tap near an opening hits the ring.
    */
   private mashed(t: number): boolean {
     const w = 1 / this.c.spb;
+    if ((t - this.lastAny) * this.c.spb > BOUNCE_S) this.indep.push(t);
+    this.lastAny = t;
     this.lately.push(t);
     while (this.lately.length && this.lately[0] < t - w) this.lately.shift();
-    const n = this.lately.length;
-    const ws = this.wasted, w2 = 2 / this.c.spb;
-    if (ws.length >= 2 && t - ws[ws.length - 2] <= w2) return true;
-    if (n < 3) return false;
+    const ws = this.wasted;
+    if (ws.length >= 4 && t - ws[ws.length - 4] <= 3 * w) return true;
     const m = this.c.marks;
-    let lo = 0, hi = m.length;
-    while (lo < hi) { const mid = (lo + hi) >> 1; if (m[mid] < t - w) lo = mid + 1; else hi = mid; }
-    let k = 0;
-    for (let i = lo; i < m.length && m[i] <= t + w; i++) k++;
-    return n > k;
+    const marks = (from: number, to: number): number => { let lo = 0, hi = m.length; while (lo < hi) { const mid = (lo + hi) >> 1; if (m[mid] < from) lo = mid + 1; else hi = mid; } let k = 0; for (let i = lo; i < m.length && m[i] <= to; i++) k++; return k; };
+    // three seconds of taps (bounces apart) running three or more ahead of the chart: a steady spammer, whatever its rate
+    while (this.indep.length && this.indep[0] < t - 3 * w) this.indep.shift();
+    if (this.indep.length >= marks(t - 3 * w, t + 0.25 * w) + 3) return true;
+    const n = this.lately.length;
+    if (n < 4) return false;
+    return n > 2 * marks(t - w, t + 0.25 * w) + 1;
   }
 
   /** A held (buffered) press: on the note builds flow; early, it is counted as early, and costs nothing else. */
@@ -307,25 +318,27 @@ export class Sim {
   /** A tap at beat-time t. */
   press(t: number): TapResult {
     const pend = this.pending, ni = this.ni, last = this.lastTap;
+    this.why = '';
     const r = this.pressAt(t);
     // a wasted tap: taken (not the run-in, not a bounce), but it opened nothing, was not held for an opening, touched
-    // no note and picked up no hold. Two of them within two seconds is mashing too (the second half of the anti-mash
-    // rule, 2026-11-26: a steady 3 a second through a stretch charted at 2 a second hid under the first half)
+    // no note and picked up no hold (four of them within three seconds is mashing: see mashed())
     const taken = this.lastTap !== last;
-    const used = (r.kind !== 'none' && r.kind !== 'skip') || r.err !== undefined || this.ni !== ni || !Object.is(this.pending, pend) || this.holdAt(t) || this.c.inCharge(t);
-    if (taken && !used && t >= this.c.start) { this.wasted.push(t); if (this.wasted.length > 4) this.wasted.shift(); }
+    const used = (r.kind !== 'none' && r.kind !== 'skip') || r.err !== undefined || this.ni !== ni || !Object.is(this.pending, pend) || this.holdAt(t) || this.c.inCharge(t) || this.why.startsWith('second tap');
+    if (taken && !used && t >= this.c.start) { this.wasted.push(t); if (this.wasted.length > 6) this.wasted.shift(); }
+    this.log.push({ beat: t, what: this.why + (this.mashState ? ' [mashing]' : ''), press: this.c.presses[ni]?.beat ?? NaN });
+    if (this.log.length > 400) this.log.shift();
     return r;
   }
   private pressAt(t: number): TapResult {
     this.advance(t);
     const spb = this.c.spb;
     if (!this.down) { this.down = true; this.downAt = t; }
-    if (this.crashed || (t - this.lastTap) * spb < DEBOUNCE_S) return { kind: 'none' };
+    if (this.crashed || (t - this.lastTap) * spb < DEBOUNCE_S) { this.why = this.crashed ? 'after the fall' : 'bounce (under 30 ms)'; return { kind: 'none' }; }
     // the game is still playing the run-in: taps do nothing until it hands over (a tap held early for the first press
     // after the handover is the player's own)
     const nx = this.c.presses[this.ni];
     const handing = !!nx && nx.beat >= this.autoUntil && t >= nx.beat - Math.max(nx.tol, this.c.buffer / spb) - 1e-6;
-    if (t < this.autoUntil && !handing) return { kind: 'none' };
+    if (t < this.autoUntil && !handing) { this.why = 'run-in (the game plays it)'; return { kind: 'none' }; }
     this.lastTap = t;
     // mashing (outside a charge) is read as off-beat tapping: flow drains and the music muffles, whatever it happens to hit
     this.recent.push(t);
@@ -333,6 +346,7 @@ export class Sim {
     this.mashing = this.recent.length === MASH_TAPS && (t - this.recent[0]) * spb < 1 && !this.c.inCharge(t);
     if (this.mashing) { this.off(); this.slip(t); }
     const mash = this.mashed(t);
+    this.mashState = mash;
     const p = this.c.presses[this.ni];
     const up = !!p && p.act === 'up'; // a Comet's second mark is taken by letting go, never by a tap
     const d = p ? t - p.beat : -Infinity;
@@ -340,7 +354,8 @@ export class Sim {
     const win = p ? Math.max(p.tol, mash ? 0 : this.c.buffer / spb) + 1e-6 : 0;
     const nf = this.nearFlow(t);
     const hit = nf && Math.abs(nf.d) <= nf.f.tol * spb && !this.used.has(nf.f.beat) ? nf.f : null;
-    const free = (): TapResult => {
+    const free = (why = 'wasted'): TapResult => {
+      this.why = why;
       this.slip(t); // a tap that met nothing: in a star trail that is a slip
       this.strays++;
       if (this.mode !== 'ground') return { kind: 'none' };
@@ -348,14 +363,20 @@ export class Sim {
       return { kind: 'skip' };
     };
 
+    // Two close presses are always two presses (2026-11-26): where the next opening is at most a beat after the one
+    // just taken, a tap nearer the next one than the last is for the next one, held and performed on its beat (it used to
+    // be read as re-timing the last press, and the next press then waited for a tap that had already come)
+    const A = this.doneBeat;
+    const close = !!p && !up && !mash && t > A && p.beat - A <= 1 + 1e-6 && p.beat - t < t - A && d < -win;
     // Survival first: a tap inside the next opening's window always opens it...
-    if (p && !up && d >= -win) {
+    if (p && !up && (d >= -win || close)) {
       // ...but if it was really aimed at a flow note just before the press, the flow note gets the credit,
       // and the press is judged by the next tap inside its window (or not at all)
       const spark = hit && Math.abs(nf!.d) < Math.abs(d * spb) ? this.touch(hit, t) : null;
       // an early tap is held and performed exactly on the beat (forgiving taps); never while mashing
       const held = !mash && !spark && d < 0;
       if (this.mode === 'ground' && held) {
+        this.why = close ? `held for the next press (close pair), ${Math.round(-d * spb * 1000)} ms early` : `held, ${Math.round(-d * spb * 1000)} ms early`;
         if (Number.isNaN(this.pending)) { this.pending = t; this.pendingQuiet = false; this.pendingBuf = true; }
         return { kind: 'none' };
       }
@@ -363,42 +384,48 @@ export class Sim {
         this.openErr = spark ? NaN : d * spb;
         this.takeoff(p, t);
         this.needJudge = !!spark;
+        this.why = spark ? 'hit (a gold note first)' : `hit, ${d >= 0 ? '+' : ''}${Math.round(d * spb * 1000)} ms`;
         if (spark) return { ...spark, kind: p.kind };
         return { kind: p.kind, err: d * spb, flow: this.judge(d * spb), pitch: p.pitch };
       }
+      this.why = held ? `held in the air for the next press, ${Math.round(-d * spb * 1000)} ms early` : 'in the air: taken on landing';
       this.pending = t; // in the air: it goes the moment the ball touches down (held for the beat, if it was early)
       this.pendingQuiet = !!spark;
       this.pendingBuf = held;
       return spark ?? { kind: 'none' };
     }
     if (hit) {
+      this.why = 'a gold note';
       const r = this.touch(hit, t);
       if (this.mode === 'ground') this.skip(t, p ? p.beat - p.tol : Infinity); // a little bounce on the note
       return r;
     }
-    if (t <= this.doneUntil) {
-      // a second tap inside the opening the ball has just used: it can settle that press's timing, nothing more
+    if (t <= this.doneUntil || (t - this.tookAt) * spb <= BOUNCE_S) {
+      // a second tap inside the opening the ball has just used (or a bounce just after the tap that took it): it can
+      // settle that press's timing, nothing more
+      this.why = 'second tap on the press just taken';
       if (this.needJudge) { this.needJudge = false; const err = (t - this.doneBeat) * spb; this.openErr = err; return { kind: 'none', err, flow: this.judge(err) }; }
       return { kind: 'none' };
     }
-    if (up) return { kind: 'none' };
-    if (this.holdAt(t)) return free(); // picking a hold up part-way along: never punished
+    if (up) { this.why = 'a tap on a let-go mark'; return { kind: 'none' }; }
+    if (this.holdAt(t)) return free('a hold picked up'); // picking a hold up part-way along: never punished
     if (this.c.inCharge(t)) {
       // charging the drop: tap away, nothing here can end the run; taps that miss the roll just leak a little charge
       this.charge = Math.max(0, this.charge - 0.4 / Math.max(1, 0.75 * this.c.chargeNotes));
-      return free();
+      return free('in the charge');
     }
     if (!p || p.auto || p.after || p.wide) return free(); // nothing left to miss, or the first press after a planet hop: tapping early there is never punished
     // near a flow note, or with one still to come before the opening: the tap was for the flow note, never punished
     if (this.c.flow.some((f) => f.ride === 0 && f.beat < p.beat && (f.beat - t) * spb > -GRACE_S)) return free();
     // mashing: a stray tap in the two beats before an opening hits the ring (never in the count-in) (a steady spammer would otherwise always have a tap
     // inside every window)
-    if (mash && !this.forgiving && t >= this.c.start && d >= -2) return this.crash('early', t);
+    if (mash && !this.forgiving && t >= this.c.start && d >= -2) { this.why = 'MASHING: a stray tap hit the ring'; return this.crash('early', t); }
     if (d < -NEAR) { this.off(); return free(); } // far from any opening: free, though it is not on the beat
     if (this.forgiving) return free();
     // way too early, but not mashing: ignored (the opening still waits for its tap), except in the level's last stretch
     // before the buffer, where it still hits the ring (none in the first two levels)
-    if (!mash && (this.c.early <= 0 || d < -(win + this.c.early))) return { kind: 'none' };
+    if (!mash && (this.c.early <= 0 || d < -(win + this.c.early))) { this.why = `way too early, ignored (${Math.round(-d * spb * 1000)} ms)`; return { kind: 'none' }; }
+    this.why = `too early: hit the ring (${Math.round(-d * spb * 1000)} ms)`;
     return this.crash('early', t); // went for the opening too soon and hit the ring
   }
 

@@ -171,7 +171,15 @@ export interface Journey {
   id: string; places: number; hops: number; objectsPerMin: number; objects: number; minutes: number;
   phrases: Array<{ bars: string; types: string[]; objects: string[]; ok: boolean }>;
   plain: { bars: number; from: number; to: number; ok: boolean };
+  /** local density (2026-11-26): the shortest gap between taps (s), and the longest run of quick taps (each under 0.45 s
+   * after the one before; a quick double is a run of 2). The first planets allow nothing tighter than one double. */
+  shortestGap: number; quickRun: { taps: number; at: number; ok: boolean };
+  /** after every leap: the time from landing to the first tap (s) */
+  landing: { shortest: number; ok: boolean };
 }
+/** the first planets: a single quick double at most, nothing closer than 0.45 s otherwise */
+export const EARLY = new Set(['started', 'heroes']);
+export const QUICK_S = 0.45;
 const OBJECT = new Set(['anvil (Meteor wall)', 'bellows (pad)', 'lava vent', 'ember in the air', 'launch (a strike, a fling)', 'great node', 'jump pad', 'spring']);
 export function journey(pack: LevelPack): Journey {
   const level = new Level(pack.level, pack.audio, pack.chart);
@@ -226,7 +234,17 @@ export function journey(pack: LevelPack): Journey {
   });
   const places = pack.level.places?.length ?? new Set(c.presses.map((p) => p.planetTo)).size;
   const hops = c.presses.filter((p) => (p.leap && !p.leap.ember) || p.sling).length;
-  return { id: pack.level.id, places, hops, objects, objectsPerMin: +(objects / Math.max(0.1, minutes)).toFixed(1), minutes: +minutes.toFixed(2), phrases, plain: { ...best, ok: best.bars <= 4 } };
+  let shortest = Infinity, run = 1, worst = { taps: 1, at: 0 };
+  for (let i = 1; i < ps.length; i++) {
+    const g = (ps[i].beat - ps[i - 1].beat) * c.spb;
+    shortest = Math.min(shortest, g);
+    run = g < QUICK_S - 1e-6 ? run + 1 : 1;
+    if (run > worst.taps) worst = { taps: run, at: +(ps[i - run + 1].beat * c.spb).toFixed(2) };
+  }
+  const lands = c.presses.filter((p) => p.leap && !p.leap.ember).map((p) => { const b1 = p.leap!.b1, nx = ps.find((q) => q.beat > b1 - 1e-6); return nx ? (nx.beat - b1) * c.spb : 99; });
+  return { id: pack.level.id, places, hops, objects, objectsPerMin: +(objects / Math.max(0.1, minutes)).toFixed(1), minutes: +minutes.toFixed(2), phrases, plain: { ...best, ok: best.bars <= 4 },
+    shortestGap: +shortest.toFixed(3), quickRun: { ...worst, ok: !EARLY.has(pack.level.id) || worst.taps <= 2 },
+    landing: { shortest: +(lands.length ? Math.min(...lands) : 99).toFixed(2), ok: lands.every((x) => x >= c.spb - 1e-6) } };
 }
 
 const isMain = typeof process !== 'undefined' && !process.env.VITEST;
@@ -256,7 +274,8 @@ if (isMain) {
   console.log('\nTHE JOURNEY (places, hops, objects, actions per phrase, plain taps)');
   const js = packs.map(journey);
   for (const j of js) {
-    console.log(`\n${j.id}: ${j.places} places, ${j.hops} hops; ${j.objects} object interactions, ${j.objectsPerMin} a minute; longest plain-tap stretch ${j.plain.bars} bars (bars ${j.plain.from}-${j.plain.to}) ${j.plain.ok ? 'ok' : 'OVER 4'}`);
+    console.log(`\n${j.id}: shortest gap ${j.shortestGap} s; longest run of quick taps ${j.quickRun.taps} (at ${j.quickRun.at} s) ${j.quickRun.ok ? 'ok' : 'OVER (a double at most here)'}; landing to first tap ${j.landing.shortest === 99 ? '-' : `${j.landing.shortest} s`} ${j.landing.ok ? 'ok' : 'UNDER A BEAT'}`);
+    console.log(`${j.id}: ${j.places} places, ${j.hops} hops; ${j.objects} object interactions, ${j.objectsPerMin} a minute; longest plain-tap stretch ${j.plain.bars} bars (bars ${j.plain.from}-${j.plain.to}) ${j.plain.ok ? 'ok' : 'OVER 4'}`);
     for (const p of j.phrases) console.log(`  phrase ${p.bars.padEnd(6)} ${p.types.length} action types (${p.types.join(', ')}); objects: ${p.objects.join(', ') || 'none'}  ${p.ok ? 'ok' : 'UNDER'}`);
   }
   writeFileSync(new URL('./cache/journey.json', import.meta.url), JSON.stringify(js, null, 1));

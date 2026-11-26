@@ -959,9 +959,10 @@ export class GdRenderer {
       if (this.look === 2) {
         // the one signal: an orb is a tap, so it is an unlit stone until it is one of the next two taps; then the gold
         // ring closes on it like on any node. Its four ticks say what it is: a mark in mid-air.
-        const cue = pl.note <= this.cueUntil + 1e-6 && pl.note >= this.cueFrom - 1e-6, ahead = pl.note - beat;
+        // (the next tap is lit; the one after it only a faint outline, smaller: clearly second; 2026-11-26)
+        const second = pl.note > this.cueFrom + 1e-6, cue = pl.note <= this.cueUntil + 1e-6 && pl.note >= this.cueFrom - 1e-6 && !second, ahead = pl.note - beat;
         c.fillStyle = HALO; c.beginPath(); c.arc(x, y, rb * 1.9, 0, TWO_PI); c.fill();
-        c.strokeStyle = cue ? rgba(TAP, 0.9) : rgba(STONE, 0.9); c.lineWidth = Math.max(1.5, rb * 0.3); c.lineCap = 'round';
+        c.strokeStyle = cue ? rgba(TAP, 0.9) : second && pl.note <= this.cueUntil + 1e-6 ? rgba(TAP, 0.4) : rgba(STONE, 0.9); c.lineWidth = Math.max(1.5, rb * 0.3); c.lineCap = 'round';
         for (let k = 0; k < 4; k++) { const q = a + Math.PI / 4 + (k * Math.PI) / 2; c.beginPath(); c.moveTo(x + Math.cos(q) * rb * 1.5, y + Math.sin(q) * rb * 1.5); c.lineTo(x + Math.cos(q) * rb * 2.05, y + Math.sin(q) * rb * 2.05); c.stroke(); }
         c.fillStyle = cue ? rgba(TAP) : rgba(STONE, 0.9); c.beginPath(); c.arc(x, y, rb * (cue ? 0.8 : 0.6), 0, TWO_PI); c.fill();
         if (cue) {
@@ -1117,6 +1118,12 @@ export class GdRenderer {
           // a node that is not yet one of the next two taps (or one the game takes itself): a small unlit stone
           c.fillStyle = HALO; c.beginPath(); c.arc(nx, ny, rb * 0.95, 0, TWO_PI); c.fill();
           c.fillStyle = rgba(STONE, 0.9); c.beginPath(); c.arc(nx, ny, rb * 0.62, 0, TWO_PI); c.fill();
+        } else if (this.look === 2 && pl.note > this.cueFrom + 1e-6) {
+          // the tap after next: a stone with a faint gold outline, smaller than the lit one (clearly second)
+          { const t = c.getTransform(), k = this.canvas.width / Math.max(1, this.w); this.cues.push({ x: (t.a * nx + t.c * ny + t.e) / k, y: (t.b * nx + t.d * ny + t.f) / k, beat: pl.note }); }
+          c.fillStyle = HALO; c.beginPath(); c.arc(nx, ny, rb * 1.05, 0, TWO_PI); c.fill();
+          c.fillStyle = rgba(STONE, 0.9); c.beginPath(); c.arc(nx, ny, rb * 0.62, 0, TWO_PI); c.fill();
+          c.strokeStyle = rgba(TAP, 0.42); c.lineWidth = 1.6; c.beginPath(); c.arc(nx, ny, rb * 1.05, 0, TWO_PI); c.stroke();
         } else {
           // a Star-Node, set in the path: a dark stone with a star cut into it. In the second look the star is in the
           // tap colour; before it, white (gold where the game takes it for you, and on the drop's great node).
@@ -1134,7 +1141,7 @@ export class GdRenderer {
         // the cue: a ring closes on the node and touches its edge exactly on the beat (Orbin arrives at the same
         // instant: two cues that agree). Only the nodes about to be met carry one, so the rings never pile up.
         if (this.look === 2) {
-          if (!pl.auto && pl.act !== 'up' && pl.note <= this.cueUntil + 1e-6 && pl.note >= this.cueFrom - 1e-6 && ahead > -pl.tol && ahead < 2.4) {
+          if (!pl.auto && pl.act !== 'up' && pl.note <= this.cueFrom + 1e-6 && pl.note >= this.cueFrom - 1e-6 && ahead > -pl.tol && ahead < 2.4) {
             const far = Math.max(0, ahead), rr = nr + 1.5 + far * rb * (pl.smash ? 4.2 : 3.2), wd = (pl.smash ? 4 : 3.2) - far * 0.5;
             c.globalAlpha = alpha * clamp(1.15 - far * 0.42, 0, 1);
             c.strokeStyle = HALO; c.lineWidth = wd + 3; c.beginPath(); c.arc(nx, ny, rr, 0, TWO_PI); c.stroke(); // (a dark edge under it: it reads on any sky)
@@ -1971,6 +1978,18 @@ export class GdRenderer {
       }
       const pull = this.planet?.pull?.(t);
       if (pull && pull.k > 0) { const U = this.rad(this.cam), wide = this.w >= this.h, px = wide ? -pull.y : pull.x, py = wide ? pull.x : pull.y; tx = lerp(tx, px * U, pull.k); ty = lerp(ty, py * U, pull.k); }
+      // framing (2026-11-26): wherever it aims, the camera keeps Orbin well inside the picture, and the path 1.5 s ahead
+      // in it too (Orbin first: he is never pushed to the edge)
+      const at = (b: number): [number, number] => { const h = course.at(b), [ox, oy] = this.planetXY(h.planet), [x, y] = this.loc(h.planet, -Math.PI / 2 + course.angle(b), this.rad(h.rho)); return [ox + x, oy + y]; };
+      const keep = (p: [number, number], mx: number, my: number): void => {
+        const left = -this.w / 2 + mx, right = this.w / 2 - mx, top = -this.h * 0.52 + my, bottom = this.h * 0.48 - my;
+        const dx = p[0] - tx, dy = p[1] - ty;
+        if (dx < left) tx = p[0] - left; else if (dx > right) tx = p[0] - right;
+        if (dy < top) ty = p[1] - top; else if (dy > bottom) ty = p[1] - bottom;
+      };
+      keep(at(beat + 1.5 / course.spb), 40, 70);
+      const [bx, by] = this.planetXY(this.pf), [lx, ly] = this.loc(this.pf, -Math.PI / 2 + course.angle(beat), this.rad(this.ballRho(sim, beat)));
+      keep([bx + lx, by + ly], this.w * 0.2, this.h * 0.16);
     }
     // a spring, like the zoom: the camera picks up speed and settles, it never changes pace in a single frame
     const ok = 11;
@@ -2169,6 +2188,18 @@ export class GdRenderer {
     }
     if (run.state === 'resuming') this.text(String(Math.max(1, Math.ceil((run.resumeAt - now) / 400))), this.coreX, this.coreY + m * 0.16, m * 0.06, WHITE, 1);
     if (run.state === 'loading') this.text('loading', this.coreX, this.coreY + m * 0.16, clamp(m * 0.024, 11, 17), WHITE, 0.8);
+    c.restore();
+    if (save.tapLog) this.drawTapLog(run);
+  }
+
+  /** The tap log (for testing; settings): the last taps, when each came (song time) and how it was judged. */
+  private drawTapLog(run: GdRun): void {
+    const c = this.ctx, L = run.sim.log.slice(-8), spb = run.course.spb, x = 10, y0 = this.h - 30 - L.length * 15;
+    c.save(); c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    c.fillStyle = 'rgba(4,4,12,0.72)'; c.fillRect(x - 6, y0 - 16, Math.min(this.w - 8, 370), L.length * 15 + 22);
+    c.font = '11px ui-monospace, Menlo, monospace'; c.textAlign = 'left'; c.textBaseline = 'alphabetic';
+    c.fillStyle = 'rgba(255,240,210,0.7)'; c.fillText(`tap log, now ${(run.time).toFixed(2)} s`, x, y0 - 3);
+    L.forEach((l, i) => { const bad = /wasted|ignored|MASH|hit the ring/.test(l.what); c.fillStyle = bad ? 'rgba(255,160,120,0.95)' : 'rgba(220,235,255,0.92)'; c.fillText(`${(l.beat * spb).toFixed(2)} s  ${l.what}${Number.isFinite(l.press) ? ` (next mark ${(l.press * spb).toFixed(2)})` : ''}`, x, y0 + 12 + i * 15); });
     c.restore();
   }
 
