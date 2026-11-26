@@ -18,7 +18,9 @@ const SIZES = [
 ];
 const save = { story: { cold: true, prologue: true, open: true, started: true, heroes: true }, tutorialDone: true, calibrated: true, music: 0, sfx: 0, hitVol: 0, core: 4, bests: { started: { pct: 100, cleared: true, attempts: 1 }, heroes: { pct: 100, cleared: true, attempts: 1 } } };
 const rows = [];
+const PICK = (process.env.ENGINES || 'chrome,webkit,firefox').split(',');
 for (const [engine, [bt, opts]] of Object.entries(ENGINES)) {
+  if (!PICK.includes(engine)) continue;
   let b;
   try { b = await bt.launch({ ...opts, headless: true, args: engine === 'chrome' ? ['--autoplay-policy=no-user-gesture-required'] : [] }); } catch (e) { rows.push({ engine, size: '-', ok: false, note: `could not launch: ${String(e).split('\n')[0]}` }); continue; }
   for (const [size, dev, engines] of SIZES) {
@@ -55,4 +57,4 @@ for (const [engine, [bt, opts]] of Object.entries(ENGINES)) {
   }
   await b.close();
 }
-fs.writeFileSync(`${out}/browsers.json`, JSON.stringify(rows, null, 1));
+fs.writeFileSync(`${out}/browsers-${PICK.join('-')}.json`, JSON.stringify(rows, null, 1));
