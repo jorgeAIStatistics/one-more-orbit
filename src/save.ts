@@ -107,6 +107,16 @@ function load(): SaveData {
 
 export const save: SaveData = load();
 
+/**
+ * Can this browser keep the save? (the release pass, 2026-11-26) false when storage is refused (some private modes, or
+ * storage turned off); the game then says so once, gently. It also asks the browser to keep the save for good.
+ */
+export function storageWorks(): boolean {
+  try { const k = `${KEY}__probe`; localStorage.setItem(k, '1'); const ok = localStorage.getItem(k) === '1'; localStorage.removeItem(k); return ok; } catch { return false; }
+}
+export function askToKeep(): void {
+  try { void (navigator as Navigator & { storage?: { persist?: () => Promise<boolean> } }).storage?.persist?.().catch(() => undefined); } catch { /* older browsers */ }
+}
 export function persist(): void {
   if (guest) return; // (a guest flight leaves the saved game exactly as it was)
   try { localStorage.setItem(KEY, JSON.stringify(save)); } catch { /* ignore */ }

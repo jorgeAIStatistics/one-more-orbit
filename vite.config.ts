@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { appendFileSync, existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
@@ -65,7 +65,12 @@ const SPLASH: [number, number, number][] = [[440, 956, 3], [430, 932, 3], [420, 
  * file (the name of its cache changes whenever a file does, so an update replaces the old copy), and adds the
  * launch images iOS shows for a home-screen web app.
  */
-function offline(): Plugin {
+/** the sounds a player of the public build can hear; the rest (old songs, sketches) are for the test chambers only */
+const HEARD_AUDIO = ['started', 'startedbed', 'opening', 'coldopen', 'nebula', 'volcano', 'flutter', 'luna', 'willow', 'darkness', 'throne', 'longroad', 'memfilm', 'hub0', 'hub1', 'fire0', 'fire1', 'sting1', 'sting2', 'helion1', 'helion2', 'helion3', 'helion4', 'helion5'];
+/** saved on the first visit (the first ten minutes: the cold open, the opening, the first stage, the Landing); every other
+ * song is saved the first time it is played, so a world played once plays again with no connection */
+const FIRST_AUDIO = ['coldopen', 'nebula', 'opening', 'startedbed', 'started', 'sting1', 'fire0', 'fire1', 'hub0', 'hub1', 'helion1'];
+function offline(mode: string): Plugin {
   return {
     name: 'omo-offline',
     apply: 'build',
@@ -87,8 +92,10 @@ function offline(): Plugin {
         }
       };
       walk(dist);
+      // the public build leaves out what no player hears (the checks' build keeps it all, for the test chambers)
+      if (mode !== 'checks') for (const f of files.splice(0)) { const m = /^audio\/([a-z0-9]+)\.mp3$/.exec(f); if (m && !HEARD_AUDIO.includes(m[1])) unlinkSync(resolve(dist, f)); else files.push(f); }
       // launch images are only read by iOS when the app is added to the home screen: no need to keep them offline
-      const keep = files.filter((f) => f !== 'sw.js' && !f.startsWith('splash/') && !f.endsWith('.DS_Store')).sort();
+      const keep = files.filter((f) => f !== 'sw.js' && !f.startsWith('splash/') && !f.endsWith('.DS_Store') && !(f.startsWith('audio/') && !FIRST_AUDIO.includes(f.slice(6, -4)))).sort();
       const hash = createHash('sha1');
       for (const f of keep) { hash.update(f); hash.update(readFileSync(resolve(dist, f))); }
       const sw = readFileSync(resolve(root, 'tools/sw.template.js'), 'utf8')
@@ -101,9 +108,11 @@ function offline(): Plugin {
 
 // `vite build`               -> dist/         static site (GitHub Pages, PWA, Capacitor webDir)
 // `vite build --mode single` -> dist-single/  one HTML file; tools/build-single.mjs then embeds the audio
+const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as { version: string };
 export default defineConfig(({ mode }) => ({
   base: './',
-  plugins: mode === 'single' ? [viteSingleFile()] : [pressesApi(), framesApi(), offline()],
+  define: { __APP_VERSION__: JSON.stringify(pkg.version), __BUILD_DATE__: JSON.stringify(new Date().toISOString().slice(0, 10)) },
+  plugins: mode === 'single' ? [viteSingleFile()] : [pressesApi(), framesApi(), offline(mode)],
   build: {
     outDir: mode === 'single' ? 'dist-single' : 'dist',
     target: 'es2020',

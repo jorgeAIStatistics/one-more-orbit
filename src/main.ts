@@ -1,7 +1,7 @@
 import './style.css';
 import { audio } from './audio/audio';
 import { OLD_QUESTS, ORBS, earned, type Orb } from './game/extras';
-import { AMBUSH, BSIDES, FINAL, FIRST, FIRST_ID, MEMORIES, PACKS as ALL_PACKS, SLICE, creditLine, manifest, type LevelPack } from './game/packs';
+import { AMBUSH, BSIDES, CREDITS_MORE, FINAL, FIRST, FIRST_ID, HEARD_TRACKS, MEMORIES, PACKS as ALL_PACKS, SLICE, creditLine, manifest, type LevelPack } from './game/packs';
 import { LOGBOOK } from './game/logbook';
 import { STAR_PLACES, STAR_TOTAL, starLit, starsLit, starsOf, type StarProgress } from './game/stars';
 import { FINAL_ID, NODES, maxStars, nodeOf, nodeState, playable, type MapNode, type Progress } from './game/world';
@@ -24,7 +24,7 @@ import helion5Audio from '../levels/helion5/audio.json';
 import { BEFORE2, CirraWorld, GlassWorld, VerdWorld, WRITTEN2 } from './ui/worlds2';
 import { canHaptics, feel, fullScreen, gameCenter, isNative, watchBackground } from './native';
 import { initRecord } from './record';
-import { bestFor, persist, save, starCount, starsFor } from './save';
+import { askToKeep, bestFor, persist, save, starCount, starsFor, storageWorks } from './save';
 import { SkyMap, type SkyInfo, type SkyNode } from './ui/skymap';
 import { SkyTitle } from './ui/skytitle';
 import { SkyOpening } from './ui/skyopening';
@@ -36,6 +36,7 @@ import { askEmber, EdgeWorld, EmberWorld, type World, type WorldSky } from './ui
 import { AmbushWorld, AMBUSH_SAYS } from './ui/worldamb';
 import { GuardianWorld, GUARDIAN_SAYS } from './ui/worldguard';
 import { SkyEnding } from './ui/skyending';
+import { FEEDBACK, TOOLS, VERSION } from './release';
 import { LANDING } from './art/landingpaint.js';
 import { K as PK } from './art/painter.js';
 import { CANON as PCANON } from './art/canonpaint.js';
@@ -63,7 +64,7 @@ const packOf = (id: string) => (id === 'gate' ? FINAL : ALL.find((p) => p.level.
 /** The level a pack is a version of: itself, or for a B-side its planet's. */
 const baseOf = (p: LevelPack) => p.level.side?.of ?? p.level.id;
 /** What the map's rules read: clears, stars, and the playtest switch that opens every planet and shows every moon. */
-const progress: Progress = { cleared: (id) => bestFor(id).cleared, stars: starsFor, get unlockAll() { return save.unlockAll || /[?&]unlock=1/.test(location.search); } };
+const progress: Progress = { cleared: (id) => bestFor(id).cleared, stars: starsFor, get unlockAll() { return TOOLS && (save.unlockAll || /[?&]unlock=1/.test(location.search)); } };
 /** What the stars read: clears, the gold collected, and the two feats that are done once (a shard run, a daredevil clear). */
 const feat = (key: string) => !!save.feats[key];
 const starProgress: StarProgress = { cleared: (id) => bestFor(id).cleared, gold: (id) => save.gold[id] ?? 0, feat };
@@ -83,7 +84,7 @@ const owned = (o: Orb): boolean => {
 
 const renderer = new Renderer($<HTMLCanvasElement>('stage'));
 // (the one-signal look is the game's look now; the one before it is kept behind ?look=1, to compare)
-renderer.look = /[?&#]look=1\b/.test(location.search + location.hash) ? 1 : 2;
+renderer.look = TOOLS && /[?&#]look=1\b/.test(location.search + location.hash) ? 1 : 2;
 /** the galaxy map: one painted sky you tap things in */
 const sky = new SkyMap($<HTMLCanvasElement>('stage'));
 /** the title: the horizon under that sky */
@@ -125,10 +126,10 @@ const starsHome = () => (bestFor(FIRST_ID).cleared ? 1 : 0) + PACKS.filter((p) =
 let screen: Screen = 'title';
 let settingsFrom: Screen = 'levels';
 let run: Run | null = null;
-let botMode = /[?&]bot=1/.test(location.search);
+let botMode = TOOLS && /[?&]bot=1/.test(location.search);
 /** tests: autoplay plays on through the star, the flight home and the memory, and its clear counts (as a player's would) */
 type RGB3 = [number, number, number];
-const botStar = /[?&#]botstar\b/.test(location.search + location.hash);
+const botStar = TOOLS && /[?&#]botstar\b/.test(location.search + location.hash);
 let practice = false;
 /** a daredevil flight: one attempt, and a fall sends you home */
 let dare = false;
@@ -431,6 +432,13 @@ function playEnding(r: Run | null): void {
   ending.play(() => { renderMap(); show('levels'); });
 }
 
+/** A friendly word when something fails (the release pass): never a blank page or a browser alert. */
+function oops(text: string, back: () => void): void {
+  const el = $('oops'); $('oopsText').textContent = text; el.classList.add('on');
+  $('oopsBack').onclick = () => { el.classList.remove('on'); back(); };
+  $('oopsReload').onclick = () => location.reload();
+}
+
 /** the world just woken, on the way home: the hub says so once */
 let arrived = '';
 $('moment').addEventListener('click', () => { if (screen === 'moment') moment.tap(); });
@@ -727,7 +735,7 @@ function startRun(from = -1, quick = false, made: Run | null = null, ember = fal
   hud.crashShown = false;
   hud.count = '';
   show('play');
-  void r.start().then(() => { if (run === r && r.state === 'error') { alert(`Could not start the level: ${r.error}`); show('levels'); } });
+  void r.start().then(() => { if (run === r && r.state === 'error') { console.warn('could not start the level:', r.error); oops('Its song could not be loaded. Check the connection, and try again.', () => { renderMap(); show('levels'); }); } });
 }
 
 // ------------------------------------------------------------------ first run: the tutorial
@@ -827,7 +835,7 @@ function showPauseSync(): void {
 }
 function drawSyncOverlay(): void {
   const el = $('syncOverlay');
-  const on = save.syncOverlay || /[?&]sync=1/.test(location.search);
+  const on = save.syncOverlay || (TOOLS && /[?&]sync=1/.test(location.search));
   el.classList.toggle('hidden', !on);
   if (!on) return;
   const row = (x: { n: number; mean: number; sd: number }) => (x.n < 3 ? `      -      (${x.n})` : `${(x.mean >= 0 ? '+' : '') + x.mean.toFixed(0)} ms ±${x.sd.toFixed(0)} (${x.n})`);
@@ -1073,6 +1081,7 @@ const BEFORE: Record<string, Said[]> = { heroes: [
 ], ...BEFORE2 };
 /** A chosen world's sky is painted while the galaxy is at rest, so flying in is not held up by it. */
 function paintAhead(p: LevelPack): void {
+  audio.warm(p.audio); // (its song starts downloading while the galaxy is at rest)
   if (p === FIRST) edgeWorld.askAhead(); else if (p === AMBUSH) ambushWorld.askAhead(); else if (p === FINAL) guardianWorld.askAhead(); else if (p.level.id === 'heroes') askEmber(); else WORLDS2[p.level.id]?.askAhead();
   window.setTimeout(() => { if (screen === 'levels' && !$('levels').classList.contains('launch')) sceneFor(p)?.prepare(); }, 900);
   // and the Landing as it will be when this world's star comes home (painted a layer at a time while the galaxy is still)
@@ -1385,6 +1394,11 @@ function renderSettings(): void {
   $('installBtn').classList.toggle('hidden', !installEvent);
   $('syncNote').textContent = !save.calibrated ? 'not done yet' : deviceChanged ? 'your sound has changed' : 'ten seconds';
   $('recordBtn').classList.toggle('hidden', !import.meta.env.DEV);
+  // the public build: no testing rows; its version, and a way to send feedback
+  for (const id of ['testingHead', 'setUnlock', 'botBtn', 'chambersBtn', 'setTapLog']) $(id).classList.toggle('hidden', !TOOLS);
+  if (!TOOLS) save.tapLog = false;
+  $('versionNote').textContent = `ONE MORE ORBIT ${VERSION}${TOOLS ? '  ·  developer build' : ''}`;
+  $('feedbackBtn').classList.toggle('hidden', !FEEDBACK);
   const lat = Math.round(audio.latency() * 1000);
   $('setInfo').textContent = `${audio.ctx ? `This device says its sound takes ${lat} ms to arrive; that is already allowed for. ` : ''}New headphones or speakers? Listen for Helion again.`;
   $('settingsBack').textContent = settingsFrom === 'pause' ? 'back to the flight' : 'out to the galaxy';
@@ -1608,8 +1622,8 @@ const privacyUrl = isNative ? `${import.meta.env.VITE_SITE_URL}privacy.html` : '
 function openCredits(): void {
   rooms.book = null;
   rooms.credits = {
-    tracks: manifest.tracks.map((t) => ({ title: t.title, by: `${t.artist}   ·   ${t.release}` })),
-    lines: [manifest.licenceNote, 'Helion’s theme, the cold open, the star’s sting and the Landing’s fire were written for this game.'],
+    tracks: HEARD_TRACKS.map((t) => ({ title: t.title, by: `${t.artist}   ·   ${t.release}` })),
+    lines: [manifest.licenceNote, ...CREDITS_MORE],
     foot: 'ONE MORE ORBIT keeps no record of you.', link: 'the privacy note'
   };
   show('credits');
@@ -1652,9 +1666,9 @@ $('logbook').addEventListener('click', (e) => {
   if (id === 'back') leavePool(); else if (id === 'next') turnLog(1); else if (id === 'prev') turnLog(-1);
 });
 // (the same credits in plain words, each in full, for anyone reading the page instead of looking at it)
-$('creditsSaid').innerHTML = `<p>The songs, and who made them.</p>${manifest.tracks.map(() => '<p></p>').join('')}<p></p><p>No data is collected. <a href="${privacyUrl}" target="_blank" rel="noopener">Privacy policy</a></p>`;
-manifest.tracks.forEach((t, i) => { $('creditsSaid').children[i + 1].textContent = creditLine(t); });
-$('creditsSaid').children[manifest.tracks.length + 1].textContent = manifest.licenceNote;
+$('creditsSaid').innerHTML = `<p>The songs, and who made them.</p>${HEARD_TRACKS.map(() => '<p></p>').join('')}<p></p><p>No data is collected. <a href="${privacyUrl}" target="_blank" rel="noopener">Privacy policy</a></p>`;
+HEARD_TRACKS.forEach((t, i) => { $('creditsSaid').children[i + 1].textContent = creditLine(t); });
+$('creditsSaid').children[HEARD_TRACKS.length + 1].textContent = [manifest.licenceNote, ...CREDITS_MORE].join(' ');
 
 // ------------------------------------------------------------------ wiring
 $('pauseBtn').addEventListener('click', pause);
@@ -1690,6 +1704,7 @@ $('chambersBtn').addEventListener('click', () => openChambers());
 $('chambersClose').addEventListener('click', () => closeChambers());
 $('botBtn').addEventListener('click', () => { botMode = true; practice = false; session.far = session.onBeat = session.judged = session.streak = session.attempts = 0; session.drop = -1; startRun(); });
 $('replayAmbush').addEventListener('click', () => startAmbush());
+$('feedbackBtn').addEventListener('click', () => { if (FEEDBACK) window.open(FEEDBACK, '_blank', 'noopener'); });
 $('replayEnding').addEventListener('click', () => { audio.ensure(); playEnding(null); });
 $('replayMemory').addEventListener('click', () => filmAgain(PACKS[0].level.id, () => { renderSettings(); show('settings'); }));
 $('replayTutorial').addEventListener('click', () => { practice = false; botMode = false; dare = false; audio.ensure(); startOpening(true); });
@@ -1773,7 +1788,7 @@ function tick(now: number): void {
 // A tap at the title autoplays Emberwick from two bars before its drop to its end (the busiest stretch of the first ten
 // minutes), recording every frame: the time between frames, and the time the game's own work took. The numbers are
 // shown on the screen and sent to the server this page came from (frames-phone.log), so they can be read on the Mac.
-const phoneCheck = /[?&#]phonecheck\b/.test(location.search + location.hash);
+const phoneCheck = TOOLS && /[?&#]phonecheck\b/.test(location.search + location.hash);
 const frameLog = { dt: [] as number[], work: [] as number[], beat: [] as number[], last: 0, sent: false };
 // Every scene in turn (the performance pass of 2026-11-25): each world's drop played by itself (from two bars before it,
 // 16 s into it), the cold open's strike and struggle, and the Landing; then one report, sent to the Mac.
@@ -1838,16 +1853,28 @@ if (import.meta.env.PROD && import.meta.env.MODE !== 'single' && !isNative && 's
 for (const f of ['500 20px "Cormorant SC"', 'italic 500 18px "Cormorant Garamond"', '500 18px "Cormorant Lining"']) void document.fonts?.load(f); // the words are lettered on a canvas: have the type ready
 document.body.classList.add('boot');
 // a first launch is the opening, not a title screen (the title comes after the first star is awake, and on later launches)
-const asked = (k: string) => new RegExp(`[?&#]${k}\\b`).test(location.search + location.hash);
+const asked = (k: string) => TOOLS && new RegExp(`[?&#]${k}\\b`).test(location.search + location.hash); // (the URL options are for testing only)
 if (phoneCheck) toTitle();
 else if (asked('cold') || ((asked('fresh') || (!save.story.prologue && !save.story.open)) && !asked('opening'))) startCold();
 else if (!save.story.prologue && !save.story.open || asked('opening')) startOpening(asked('opening') && !!save.story.prologue); else toTitle();
-if (/[?&#]chambers\b/.test(location.search + location.hash)) openChambers();
+if (TOOLS && /[?&#]chambers\b/.test(location.search + location.hash)) openChambers();
 window.setTimeout(() => document.body.classList.remove('boot'), 400);
+// the game is up: the page's own first moment fades away under the first frames (the release pass)
+(window as Window & { __omoReady?: boolean }).__omoReady = true;
+// saving (the release pass): ask the browser to keep the save for good; if it will not keep it at all (some private
+// modes), say so once, gently
+if (!/firefox/i.test(navigator.userAgent)) askToKeep(); // (Firefox would ask the player with a bar: it keeps local storage anyway)
+// an iPhone that cannot be told the sound matters (before iOS 17): on the first touch, once, a word about the switch
+if (audio.iosNoSession) window.addEventListener('pointerdown', () => { if (!save.story.soundHint) { save.story.soundHint = true; persist(); window.setTimeout(() => toast('No sound? Check the silent switch on the side of your iPhone.'), 1500); } }, { once: true });
+// Android and other touch browsers that allow it: the game takes the whole screen on the first touch (not on iPhone,
+// where adding it to the home screen does that; not on a desktop, where it would surprise)
+if (!isNative && matchMedia('(pointer: coarse)').matches && !/iphone|ipad|ipod/i.test(navigator.userAgent) && document.documentElement.requestFullscreen) window.addEventListener('pointerup', () => { if (!document.fullscreenElement) void document.documentElement.requestFullscreen({ navigationUI: 'hide' } as FullscreenOptions).catch(() => undefined); }, { once: true });
+if (!storageWorks()) window.setTimeout(() => toast('This browser won’t keep your progress (private browsing?). Play on: it just won’t be saved.'), 3500);
+requestAnimationFrame(() => requestAnimationFrame(() => { const b = document.getElementById('boot'); if (b) { b.classList.add('gone'); window.setTimeout(() => b.remove(), 1000); } }));
 requestAnimationFrame(loop);
 
 // Hooks for tests and debugging; the game itself never reads these.
-Object.assign(window, {
+if (TOOLS) Object.assign(window, {
   __omo: {
     audio, save, renderer, sky, skyResult, rooms, session, sync, cal, get run() { return run; }, get screen() { return screen; }, tick, show,
     art: { K: PK, parts: PCANON.parts, cold: PCOLD, landing: LANDING, worlds: PWORLDS }, // (for the frame profiler: tools/frameprof)

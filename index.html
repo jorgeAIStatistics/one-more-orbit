@@ -17,7 +17,7 @@
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="ONE MORE ORBIT" />
   <meta property="og:title" content="ONE MORE ORBIT" />
-  <meta property="og:description" content="A one-button rhythm game. Tap on the beat, charge the drop. Can you clear all four levels?" />
+  <meta property="og:description" content="A one-button rhythm game. Tap on the beat, wake four worlds, and bring Orbin’s brother’s light home." />
   <meta property="og:url" content="%VITE_SITE_URL%" />
   <meta property="og:image" content="%VITE_SITE_URL%icons/share.png" />
   <meta property="og:image:type" content="image/png" />
@@ -26,8 +26,51 @@
   <meta property="og:image:alt" content="ONE MORE ORBIT: a one-button rhythm game" />
   <meta name="twitter:card" content="summary_large_image" />
   <title>ONE MORE ORBIT</title>
+  <!-- the first moment (the release pass): drawn by the page itself before any code arrives, so there is never a blank
+       screen; and a friendly word if loading fails -->
+  <style>
+    #boot { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+      background: radial-gradient(ellipse at 50% 115%, #5b2c3c 0%, #2a1a40 38%, #0c0b22 70%, #05060f 100%); color: #fff1d8;
+      font: italic 500 18px/1.3 'Cormorant Garamond', 'Hoefler Text', Baskerville, Palatino, Georgia, serif; transition: opacity 0.9s ease; }
+    #boot.gone { opacity: 0; pointer-events: none; }
+    #boot::before { content: ''; position: absolute; inset: 0; opacity: 0.8;
+      background-image: radial-gradient(1.5px 1.5px at 12% 18%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 72% 12%, #fff 50%, transparent 51%), radial-gradient(1.5px 1.5px at 84% 38%, #ffe6c0 50%, transparent 51%), radial-gradient(1px 1px at 28% 44%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 52% 28%, #fff 50%, transparent 51%), radial-gradient(1.5px 1.5px at 8% 62%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 64% 58%, #ffe6c0 50%, transparent 51%), radial-gradient(1px 1px at 92% 70%, #fff 50%, transparent 51%), radial-gradient(1.5px 1.5px at 40% 8%, #fff 50%, transparent 51%);
+      animation: bootTwinkle 3.2s ease-in-out infinite alternate; }
+    #boot .ember { width: 14px; height: 14px; border-radius: 50%; background: #ffd9a0; box-shadow: 0 0 18px 8px rgba(255, 170, 90, 0.55), 0 0 60px 26px rgba(255, 140, 70, 0.22); animation: bootBeat 0.8s ease-in-out infinite; }
+    #boot .word { letter-spacing: 0.32em; font-style: normal; font-size: 20px; margin-top: 18px; opacity: 0.92; }
+    #boot .sub { font-size: 16px; opacity: 0.7; }
+    @keyframes bootBeat { 0%, 100% { transform: scale(0.85); opacity: 0.75; } 18% { transform: scale(1.15); opacity: 1; } }
+    @keyframes bootTwinkle { from { opacity: 0.55; } to { opacity: 0.9; } }
+    #oops { position: fixed; inset: 0; z-index: 60; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 32px; text-align: center;
+      background: rgba(5, 6, 15, 0.94); color: #fff1d8; font: italic 500 19px/1.4 'Cormorant Garamond', Georgia, serif; }
+    #oops.on { display: flex; }
+    #oops button { font: 600 16px/1 'Source Sans 3', system-ui, -apple-system, sans-serif; font-style: normal; color: #ffe2a0; background: rgba(255, 208, 106, 0.14); border: 1.4px solid rgba(255, 208, 106, 0.9); border-radius: 22px; min-height: 44px; padding: 0 22px; cursor: pointer; }
+    #oops .row2 { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+    @media (prefers-reduced-motion: reduce) { #boot .ember, #boot::before { animation: none; } }
+  </style>
+  <script>
+    // if the game has not started after a while (a failed or very slow load), say so kindly; errors before it starts, too
+    (function () {
+      var shown = false;
+      function oops(slow) {
+        if (window.__omoReady || shown) return; shown = true;
+        var o = document.getElementById('oops'); if (!o) return;
+        document.getElementById('oopsText').textContent = slow ? 'This is taking longer than it should. The connection may be slow: it will keep trying.' : 'Something stopped the game from loading. A reload usually fixes it.';
+        document.getElementById('oopsBack').style.display = slow ? '' : 'none';
+        document.getElementById('oopsBack').onclick = function () { o.classList.remove('on'); shown = false; };
+        document.getElementById('oopsReload').onclick = function () { location.reload(); };
+        o.classList.add('on');
+      }
+      window.addEventListener('error', function (e) { if (e && e.target && e.target.tagName === 'SCRIPT') oops(false); else if (!window.__omoReady) oops(false); }, true);
+      window.addEventListener('unhandledrejection', function () { if (!window.__omoReady) oops(false); });
+      setTimeout(function () { oops(true); }, 25000);
+    })();
+  </script>
 </head>
 <body>
+  <div id="boot" aria-label="Loading"><div class="ember"></div><p class="word">ONE MORE ORBIT</p><p class="sub">waking the stars…</p></div>
+  <div id="oops" role="alert"><p id="oopsText"></p><div class="row2"><button id="oopsBack" type="button">Carry on</button><button id="oopsReload" type="button">Reload</button></div></div>
+  <noscript><p style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;color:#fff1d8;background:#05060f;font:18px Georgia,serif;padding:32px;text-align:center">ONE MORE ORBIT needs JavaScript to play.</p></noscript>
   <canvas id="stage" aria-label="One More Orbit"></canvas>
 
   <!-- The Afterglow interface is drawn from a few shapes, defined once here: a flame (a slider's handle, a light that
@@ -134,8 +177,10 @@
           <button id="replayMemory" class="row act hidden" type="button"><span>The first memory, again</span></button>
           <button id="replayAmbush" class="row act hidden" type="button"><span>The ambush, again</span></button>
           <button id="replayEnding" class="row act hidden" type="button"><span>The ending, again</span></button>
-          <button id="creditsBtn" class="row act" type="button"><span>Who made the music</span></button>
-          <h3 class="head">for testing</h3>
+          <button id="creditsBtn" class="row act" type="button"><span>Credits</span><small>who made the music, and the game</small></button>
+          <button id="feedbackBtn" class="row act hidden" type="button"><span>Send feedback</span><small>what worked, what didn’t</small></button>
+          <p id="versionNote" class="whisper"></p>
+          <h3 id="testingHead" class="head">for testing</h3>
           <button id="setUnlock" class="row light" type="button" aria-pressed="false"><span>Every planet open</span><svg class="lamp" viewBox="0 0 40 44" aria-hidden="true"><use class="lit" href="#flame" /><use class="unlit" href="#wick" /></svg></button>
           <button id="botBtn" class="row act" type="button"><span>Watch a perfect run</span></button>
           <button id="chambersBtn" class="row act" type="button"><span>Test chambers</span><small>plain rooms, for trying things</small></button>

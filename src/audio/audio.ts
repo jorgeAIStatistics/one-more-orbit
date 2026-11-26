@@ -85,7 +85,25 @@ export class AudioEngine {
     return true;
   }
 
+  /** iPhone without the audioSession API (before iOS 17): the ring/silent switch would silence the game. A silent
+   * HTML sound, kept playing, moves the page into "playback", which the switch does not mute (the release pass). */
+  private silentEl: HTMLAudioElement | null = null;
+  /** an iPhone where neither way is sure to work: the game says once, gently, to check the switch */
+  readonly iosNoSession: boolean = typeof navigator !== 'undefined' && /iphone|ipad|ipod/i.test(navigator.userAgent) && !(navigator as Navigator & { audioSession?: unknown }).audioSession;
+  private silentPlay(): void {
+    if (!this.iosNoSession || this.silentEl) return;
+    try {
+      const n = 4000, b = new Uint8Array(44 + n), v = new DataView(b.buffer), w = (o: number, t: string) => { for (let i = 0; i < t.length; i++) b[o + i] = t.charCodeAt(i); };
+      w(0, 'RIFF'); v.setUint32(4, 36 + n, true); w(8, 'WAVE'); w(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, 8000, true); v.setUint32(28, 8000, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true); w(36, 'data'); v.setUint32(40, n, true); b.fill(128, 44);
+      const el = new Audio(URL.createObjectURL(new Blob([b], { type: 'audio/wav' })));
+      el.loop = true; el.setAttribute('playsinline', ''); el.volume = 0.01;
+      this.silentEl = el;
+      void el.play().catch(() => { this.silentEl = null; }); // (not inside a touch yet: tried again on the next)
+    } catch { this.silentEl = null; }
+  }
+
   resume(): Promise<void> {
+    this.silentPlay();
     const c = this.ctx;
     if (!c || c.state === 'running' || c.state === 'closed') return Promise.resolve();
     this.w0 = this.w1 = -Infinity;
@@ -176,9 +194,16 @@ export class AudioEngine {
       p.then((t) => this.loaded.set(meta.file, t), () => this.tracks.delete(meta.file));
       this.tracks.set(meta.file, p);
     }
+    // (the release pass: a decoded song is about 28 MB; only the last few used are kept, so a long session never fills an
+    // iPhone's memory. Short sounds are small and stay. Anything still playing keeps its own buffer alive.)
+    this.tracks.delete(meta.file); this.tracks.set(meta.file, p);
+    const big = [...this.loaded.entries()].filter(([, t]) => t.buffer.duration > 30);
+    if (big.length > 4) for (const [file] of big.slice(0, big.length - 4)) if (file !== meta.file) { this.loaded.delete(file); this.tracks.delete(file); }
     return p;
   }
   private loaded = new Map<string, LoadedTrack>();
+  /** start downloading a song (not decoding it) so it is near when it is chosen */
+  warm(meta: AudioMeta): void { if (!this.tracks.has(meta.file)) void fetch(meta.file).catch(() => undefined); }
   /** A track that is already decoded, or nothing: for a start that cannot wait even one turn of the page (the opening's first tap). */
   ready(meta: AudioMeta): LoadedTrack | null {
     return this.loaded.get(meta.file) ?? null;

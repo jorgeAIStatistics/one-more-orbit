@@ -19,7 +19,7 @@ import { rings } from '../art/stillness.js';
 import { planetLayer, type LayerName } from '../art/paintcache';
 import { WORLDS as W } from '../art/worldpaint.js';
 import { WORLDS2 as W2 } from '../art/world2paint.js';
-import { creditLine, manifest } from '../game/packs';
+import { CREDITS_MORE, creditLine, HEARD_TRACKS, manifest } from '../game/packs';
 import type { AudioMeta } from '../game/types';
 import { save } from '../save';
 
@@ -160,7 +160,7 @@ export class SkyEnding {
   /** 5: the credits, over the stars */
   private credits(c: CanvasRenderingContext2D, w: number, h: number, u: number, t: number): void {
     const q = t - T.credits, a = sm((q + 1) / 1.2) * (1 - sm((q - (T.end - T.credits - 1.4)) / 1.2));
-    const lines: Array<[string, number, boolean]> = [['ONE MORE ORBIT', 30, false], ['World 1', 20, true], ['', 14, false], ['The music', 20, true], ...manifest.tracks.flatMap((tr): Array<[string, number, boolean]> => { const [a1, ...b1] = creditLine(tr).split(' · '); return [[a1, 14, false], [b1.join(' · '), 11, false]]; }), ['', 14, false], [manifest.licenceNote, 11, false], ['', 14, false], ['Thank you for playing.', 22, true]];
+    const lines: Array<[string, number, boolean]> = [['ONE MORE ORBIT', 30, false], ['World 1', 20, true], ['', 14, false], ['The music', 20, true], ...HEARD_TRACKS.flatMap((tr): Array<[string, number, boolean]> => { const [a1, ...b1] = creditLine(tr).split(' · '); return [[a1, 14, false], [b1.join(' · '), 11, false]]; }), ['', 14, false], [manifest.licenceNote, 11, false], ...CREDITS_MORE.map((l): [string, number, boolean] => [l, 11, false]), ['', 14, false], ['Thank you for playing.', 22, true]];
     const total = lines.reduce((s, [, px]) => s + px * 2.1 * u, 0), y0 = h * 0.92 - (total + h * 0.5) * sm(q / (T.end - T.credits - 2));
     let y = y0;
     for (const [s, px, it] of lines) { if (s) this.words(s.length > 70 ? s.slice(0, 68) + '…' : s, w / 2, y, px * u, a * (y > h * 0.08 && y < h * 0.96 ? 1 : 0.2), it, it ? '#ffe2b0' : '#f2ecff'); y += px * 2.1 * u; }

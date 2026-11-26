@@ -61,6 +61,10 @@ export const SLICE = ['heroes', 'skyhigh', 'blank', 'invincible'];
 export interface TrackCredit { id: string; title: string; artist: string; release: string; playable: boolean }
 export const manifest = manifestJson as { licenceNote: string; creditSuffix: string; tracks: TrackCredit[] };
 
+/** the songs a player hears in this build (the others stay for the test chambers and the engine's tests) */
+export const HEARD_TRACKS: TrackCredit[] = manifest.tracks.filter((t) => ['started', 'heroes', 'flutter', 'luna', 'willow', 'darkness', 'throne', 'longroad'].includes(t.id));
+/** the rest of the credits: what was made for the game, and the type */
+export const CREDITS_MORE: string[] = ['Story, art, code, Helion’s theme, the films’ music and the Landing’s sounds were made for this game.', 'Type: Cormorant Garamond and Source Sans 3 (SIL Open Font License).'];
 export const creditLine = (t: TrackCredit) => `${t.title} – ${t.artist} [${t.release}] · ${manifest.creditSuffix}`;
 
 const pack = (level: unknown, audio: unknown, chart: unknown, presses?: unknown, audit?: unknown): LevelPack => ({ level: level as LevelFile, audio: audio as AudioMeta, chart: chart as ChartFile, presses: presses as LevelPack['presses'], audit: audit as LevelPack['audit'] });
