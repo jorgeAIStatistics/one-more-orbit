@@ -16,6 +16,8 @@ import fire0Audio from '../levels/fire0/audio.json';
 import fire1Audio from '../levels/fire1/audio.json';
 import sting1Audio from '../levels/sting1/audio.json';
 import sting2Audio from '../levels/sting2/audio.json';
+import helion1Audio from '../levels/helion1/audio.json';
+import helion2Audio from '../levels/helion2/audio.json';
 import { canHaptics, feel, fullScreen, gameCenter, isNative, watchBackground } from './native';
 import { initRecord } from './record';
 import { bestFor, persist, save, starCount, starsFor } from './save';
@@ -25,6 +27,7 @@ import { SkyOpening } from './ui/skyopening';
 import { SkyLanding } from './ui/skylanding';
 import { SkyStar } from './ui/skystar';
 import { SkyCold } from './ui/skycold';
+import { EdgeWorld, EmberWorld, type World, type WorldSky } from './ui/worlds';
 import { LANDING } from './art/landingpaint.js';
 import { COMPANIONS } from './art/companions.js';
 import { SkyStory } from './ui/skystory';
@@ -91,6 +94,9 @@ landing.wordmark = (x, y, size, align, a, t) => skyTitle.wordmark(x, y, size, al
 const skyStar = new SkyStar($<HTMLCanvasElement>('stage'));
 /** the cold open: a scene (calm, wrongness, the taking, black), its one interaction a press-and-hold */
 const coldScene = new SkyCold($<HTMLCanvasElement>('stage'));
+/** the worlds you play on: Emberwick and the Drifting Edge, each a planet in the ring and its inhabitant beside it */
+const emberWorld = new EmberWorld();
+const edgeWorld = new EdgeWorld();
 /** stars home in the Landing's fire: the planetoid's own, and one for every world woken */
 const starsHome = () => (bestFor(FIRST_ID).cleared ? 1 : 0) + PACKS.filter((p) => bestFor(p.level.id).cleared).length;
 let screen: Screen = 'title';
@@ -210,6 +216,7 @@ function startMemory(world: string, then: () => void): void {
   renderer.reset();
   nebula.says = MEMORY_SAYS[world] ?? [];
   renderer.backdrop = nebula;
+  renderer.planet = null;
   renderer.twinIs = 'helion';
   held = 0;
   const r = (run = new Run(mp, { memory: true, leadIn: mp.audio.offset }, onRunEnd)); // (the bar before it is his heartbeat, close now)
@@ -286,7 +293,7 @@ function beginStar(r: Run): void {
   if (isFirst) landing.prepare([0, 1]);
   else landing.prepare([homeWas, n]);
   skyStar.play({
-    scene, from: isFirst ? [fire[0], fire[1]] : [w * 0.5, h * 0.84], orbin: renderer.heroAt[0] ? renderer.heroAt : [w * 0.5, h * 0.4],
+    scene, from: renderer.coreAt[0] ? [renderer.coreAt[0], renderer.coreAt[1] - Math.min(w, h) * 0.12] : isFirst ? [fire[0], fire[1]] : [w * 0.5, h * 0.84], orbin: renderer.heroAt[0] ? renderer.heroAt : [w * 0.5, h * 0.4],
     col: LANDING.STAR_COLS[(Math.max(1, n) - 1) % LANDING.STAR_COLS.length],
     name: isFirst ? 'The first star' : placeName(r.pack), word: isFirst ? 'the Drifting Edge wakes' : first ? 'restored' : 'once more', note,
     quick: !first, hold: isFirst && first,
@@ -539,6 +546,11 @@ function startRun(from = -1, quick = false, made: Run | null = null): void {
   session.attempts++;
   renderer.reset();
   renderer.backdrop = chamber ? null : sceneFor(pack);
+  renderer.planet = chamber ? null : worldFor(pack);
+  renderer.planet?.reset(); // (every attempt starts from how the Stillness left it)
+  const hm = chamber || practice ? null : HELION[pack.level.id];
+  helionCue = null;
+  if (hm && audio.ctx) { const cue = (helionCue = { run: null as unknown as Run, track: null as Awaited<ReturnType<typeof audio.loadTrack>> | null, at: hm.at, meta: hm.meta, played: false }); void audio.loadTrack(hm.meta).then((t) => { cue.track = t; }, () => undefined); }
   renderer.twinIs = 'orbin';
   const sc = chamber ? null : sceneFor(pack);
   if (sc && 'says' in sc) sc.says = bestFor(baseOf(pack)).cleared ? [] : WRITTEN[baseOf(pack)] ?? [];
@@ -613,6 +625,7 @@ const FIRST_LESSONS: Array<[number, string]> = [
 function startTutorial(): void {
   run?.stop();
   renderer.reset();
+  renderer.planet = null;
   held = 0;
   audio.stopPreview(0.6);
   run = new Run(pack, { tutorial: true, leadIn: 1.8 }, endTutorial);
@@ -887,16 +900,32 @@ let resMore: string[] = [];
 /** A planet's painted sky for its level, where it has one that is built (Emberwick so far): kept, so it is painted once. */
 const scenes = new Map<string, PlanetScene>();
 const BUILT = ['heroes'];
-function sceneFor(p: LevelPack): PlanetScene | typeof landing.backdrop | null {
-  if (p === FIRST) { landing.veil = 1; return landing.backdrop; }
+function sceneFor(p: LevelPack): PlanetScene | WorldSky | null {
+  // the worlds you play on: the level is the place (the planet in the middle of the ring, its inhabitant beside it)
+  if (p === FIRST) return edgeWorld.sky;
+  if (p.level.id === 'heroes') return emberWorld.sky;
   const world = baseOf(p);
   if (!BUILT.includes(world) || !PlanetScene.has(world)) return null;
   let s = scenes.get(world);
   if (!s) scenes.set(world, (s = new PlanetScene(world)));
   return s;
 }
+/**
+ * Helion's moment in each level (the owner's brief, 2026-11-25): a calm bar near the end of the build where the music
+ * thins and his music-box motif sounds from far away (his silhouette flickers in the shadow ring: worlds.ts).
+ */
+const HELION: Record<string, { meta: AudioMeta; at: number }> = { started: { meta: helion1Audio as AudioMeta, at: 17.6 }, heroes: { meta: helion2Audio as AudioMeta, at: 16.8 } };
+let helionCue: { run: Run; track: Awaited<ReturnType<typeof audio.loadTrack>> | null; at: number; meta: AudioMeta; played: boolean } | null = null;
+/** The planet in the middle of the ring, for the worlds that are built as places. */
+function worldFor(p: LevelPack): World | null { return p === FIRST ? edgeWorld.world : p.level.id === 'heroes' ? emberWorld.world : null; }
 /** What is written into a sleeping world's sky, once, on the way to its drop. */
-const WRITTEN: Record<string, Said[]> = { heroes: [{ from: 18.4, to: 24.6, text: 'It does not stop for walls.', x: 0.94, y: 0.775, size: 21, align: 'right' }] };
+// (the inhabitant speaks at most three times, in calm moments, low on the screen, never over the course)
+// (in the clear band between the top of the screen and the ring: never over the course, Ossa or the thread)
+const LOW = (from: number, to: number, text: string): Said => ({ from, to, text, x: 0.5, y: 0.2, size: 19, align: 'center' });
+const WRITTEN: Record<string, Said[]> = {
+  heroes: [LOW(0.3, 4.6, 'Cold. Since the music stopped.'), LOW(9.6, 12.2, 'There. A spark.'), LOW(36.0, 38.6, 'Strike with me.')],
+  started: [LOW(1.6, 6.4, 'Something here is listening.')]
+};
 /** the scene before a world's first attempt: written into its sky during the long lead-in (song seconds, below zero) */
 const BEFORE: Record<string, Said[]> = { heroes: [
   { from: -8.4, to: -2.6, text: 'Emberwick, the forge-world.', x: 0.5, y: 0.2, size: 24, align: 'center' },
@@ -960,6 +989,7 @@ function startChamber(c: Chamber, bot = false): void {
   practice = false;
   botMode = bot;
   renderer.plain = true;
+  renderer.planet = null;
   renderer.windows = !!c.ambush;
   Object.assign(session, { far: 0, newBest: false, onBeat: 0, judged: 0, streak: 0, drop: -1, attempts: 0 });
   startRun();
@@ -1539,6 +1569,13 @@ function tick(now: number): void {
     }
     for (const ev of run.events) if (ev.kind === 'star') toast('a shard, in hand', true);
     if (run.finale && !starRun && wantsStar(run)) beginStar(run);
+    // Helion's moment: his motif, from far away, on the riser bar (once per attempt, scheduled on the audio clock)
+    if (helionCue && !helionCue.played && helionCue.track && audio.ctx && run.state === 'playing' && run.time >= helionCue.at - 0.3 && run.time < helionCue.at + 0.4) {
+      if (helionCue.run !== run) { helionCue.run = run; }
+      helionCue.played = true;
+      audio.playPart(helionCue.track, helionCue.meta, audio.ctx.currentTime + Math.max(0, helionCue.at - run.time), 0, { gain: 0.9 });
+    }
+    if (helionCue && run.time < helionCue.at - 1 && helionCue.played) helionCue.played = false; // (an instant restart begins before it again)
     renderer.draw(run, now, dt);
     if (renderer.meet && run.time < 0.4) renderer.drawMeet(run.time, now);
     if (skyStar.on) { skyStar.draw(now, dt); if (!run || screen !== 'play') return; } // (its end hands the picture on to the Landing, this frame)
@@ -1555,7 +1592,7 @@ function tick(now: number): void {
     if (room) rooms.draw(room, now);
     else if (screen === 'prologue') {
       // (the level behind the first tap is drawn once, under the scene, at a moment the picture is dark: whatever its first frame costs is spent here, not on the tap)
-      if (armedRun && opening.armed && !warmed && opening.dark) { warmed = true; renderer.reset(); renderer.backdrop = sceneFor(pack); renderer.draw(armedRun, now, 0.016); }
+      if (armedRun && opening.armed && !warmed && opening.dark) { warmed = true; renderer.reset(); renderer.backdrop = sceneFor(pack); renderer.planet = worldFor(pack); renderer.draw(armedRun, now, 0.016); }
       if (opening.state === 'bloom') { sky.draw(now, dt); opening.drawOver(now); } else opening.draw(now);
     }
     else if (screen === 'cold') coldScene.draw(now);

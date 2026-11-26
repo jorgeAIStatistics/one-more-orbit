@@ -177,3 +177,4 @@ export class NebulaScene {
     write(c, w, h, u, this.says, st.song);
   }
 }
+export { write as writeSays };

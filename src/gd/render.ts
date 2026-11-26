@@ -9,6 +9,7 @@ import { PLANETS } from '../ui/galaxy';
 import { INK as ATLAS_INK, globe, rng, stamp, tooth } from '../art/atlas';
 import { CANON } from '../art/canonpaint.js';
 import { COMPANIONS } from '../art/companions.js';
+import type { World } from '../ui/worlds';
 import { bestFor, save, starsFor } from '../save';
 import { LIFT, flightRho, smoothstep, type Course, type Feature, type Form, type Star } from './course';
 import type { GdRun } from './run';
@@ -153,6 +154,11 @@ export class GdRenderer {
   private cueFrom = -Infinity;
   /** where the lit nodes were drawn in the last frame, in screen points, soonest first (for the freeze-frame test's answer sheet) */
   cues: Array<{ x: number; y: number; beat: number }> = [];
+  /** the world in the middle of the ring (the level is the place): drawn in place of the core, under the course */
+  planet: World | null = null;
+  private worldR = 0;
+  /** where the middle of the ring is on the screen (css px): the star rises from there */
+  coreAt: [number, number] = [0, 0];
   /** a companion met in the scene before a world's first attempt: its colour, or null */
   meet: number[] | null = null;
   /**
@@ -1671,6 +1677,7 @@ export class GdRenderer {
         if (ev.charge) this.punch = Math.max(this.punch, 0.2); // each roll note you catch winds the picture a little tighter
         if (ev.kind === 'flip') this.burst(this.ball.x, this.ball.y, 12, VIOLET, r0 * 0.9);
         if (ev.kind === 'hop' && (formEv === 'meteor' || this.look === 2)) this.strike = 1; // (the planet's soul strikes with it; in the new look every good tap touches the world)
+        if (ev.kind === 'hop' && ev.flow !== false) this.planet?.spark(-Math.PI / 2 + course.angle(beat), t); // (a good tap relights the zone under him)
         if (ev.kind === 'hop' && formEv === 'meteor') { this.burst(this.ball.x, this.ball.y, 16, INK_RIM, r0 * 1.4); this.burst(this.ball.x, this.ball.y, 8, FORM_COL.meteor, r0 * 0.9); } // the wall goes to pieces
         if (ev.flow && loud) {
           // in the loud parts an on-beat tap drives the picture: a shockwave off the ball's ring, the rings light up, a burst
@@ -1896,8 +1903,15 @@ export class GdRenderer {
     }
     c.translate(this.coreX, this.coreY);
     const chargeShown = afterDrop ? this.chargeV * clamp(1 - this.dropAge / 0.35, 0, 1) : course.charges.length && beat > course.charges[0][0] - 4 ? Math.max(this.chargeV, 0.006) : 0;
-    this.core(pal, m * 0.045, m * 0.04 * (0.4 + 1.1 * inten) * (1 + wound * 0.7 + drive * 0.5), kick * (0.3 + 0.7 * inten), snare * inten, dt, this.flowV, chargeShown, this.plain ? 0 : drive, span, PLANETS[level.file.side?.of ?? level.id]?.rgb, !!level.file.side);
-    if (this.look === 2) { // (the second look: the core is scenery, and steps back; nothing bright sits in the middle of the course)
+    { const t2 = c.getTransform(), k2 = this.canvas.width / Math.max(1, this.w); this.coreAt = [t2.e / k2, t2.f / k2]; }
+    if (this.look === 2 && this.planet) {
+      // the planet itself, just under the innermost ring the course uses nearby (eased, so a hop never jolts it)
+      // (one size, just under the base ring: the course climbs away from it and comes back, the world stays put)
+      const Rt = Math.max(m * 0.16, this.r0 * 0.84);
+      this.worldR = this.worldR > 0 ? this.worldR + (Rt - this.worldR) * Math.min(1, dt * 3) : Rt;
+      this.planet.draw(c, this.worldR, { time: now / 1000, song: t, drive: this.plain ? 0 : drive, kick, strike: this.strike, calm });
+    } else this.core(pal, m * 0.045, m * 0.04 * (0.4 + 1.1 * inten) * (1 + wound * 0.7 + drive * 0.5), kick * (0.3 + 0.7 * inten), snare * inten, dt, this.flowV, chargeShown, this.plain ? 0 : drive, span, PLANETS[level.file.side?.of ?? level.id]?.rgb, !!level.file.side);
+    if (this.look === 2 && !this.planet) { // (the second look: the core is scenery, and steps back; nothing bright sits in the middle of the course)
       const va = 0.6 * (1 - 0.85 * this.coreFlare), vr = m * 0.12;
       const veil = c.createRadialGradient(0, 0, 0, 0, 0, vr); veil.addColorStop(0, `rgba(12,10,28,${va})`); veil.addColorStop(0.45, `rgba(12,10,28,${va * 0.8})`); veil.addColorStop(1, 'rgba(12,10,28,0)');
       c.fillStyle = veil; c.beginPath(); c.arc(0, 0, vr, 0, TWO_PI); c.fill();

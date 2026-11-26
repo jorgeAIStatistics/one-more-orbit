@@ -193,6 +193,14 @@ def coldopen():
     return np.clip(out, -0.97, 0.97)
 
 
+def helion_far(notes, beat=0.6):
+    """Helion's moment in a level: his music-box motif from far away (low-passed, in a large room), in the song's key."""
+    buf = np.zeros((int((sum(b for _, b in notes) * beat + 5) * SR), 2)); at = 0.0
+    for name, b in notes: L.place(buf, at, L.tine(hz(name), b * beat * 1.6, 0.9), pan=-0.25); at += b * beat
+    out = O.room(lowpass(buf, 1500), 2.2, 0.22) * 0.55
+    return np.clip(out / max(1e-9, np.abs(out).max()) * 0.5, -0.97, 0.97)
+
+
 def opening_parts():
     """See the top of the file. The same shapes as before; only the notes and the pulse's pace are the new song's."""
     out = np.zeros((int(44 * SR), 2))
@@ -306,7 +314,7 @@ def fire(big):
 
 if __name__ == '__main__':
     (ROOT / 'tools/cache').mkdir(exist_ok=True)
-    made = {'coldopen': coldopen(), 'nebula': nebula(), 'opening': opening_parts(), 'startedbed': started_bed(),
+    made = {'helion1': helion_far([('A#4', 1), ('C#5', 1), ('F#5', 2), ('D#5', 2)], 0.4), 'helion2': helion_far([('A4', 1), ('C#5', 1), ('F#5', 2), ('E5', 2)], 0.6), 'coldopen': coldopen(), 'nebula': nebula(), 'opening': opening_parts(), 'startedbed': started_bed(),
             'sting1': sting(['F#3', 'A#3', 'C#4', 'F#4'], ['A#5', 'C#6', 'F#6'], 'A#6', 'B1'),
             'sting2': sting(['A2', 'E3', 'A3', 'C#4', 'E4'], ['C#6', 'E6', 'A6'], 'C#7', 'A1'),
             'fire0': fire(False), 'fire1': fire(True)}
