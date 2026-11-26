@@ -131,6 +131,9 @@ export class SkyCold {
   onSlip: (() => void) | null = null;
   /** each heave (for the haptic) */
   onHeave: (() => void) | null = null;
+  /** once, in the black after the three lines are up (nothing moves): the game paints what comes next there */
+  onQuiet: (() => void) | null = null;
+  private quiet = false; private warm = false;
   /** for tests and recordings: Orbin goes on by himself after this long left alone (seconds) */
   idleAfter = COLD_T.idle;
 
@@ -138,7 +141,7 @@ export class SkyCold {
 
   start(canSkip: boolean): void {
     this.stopSound(0.05);
-    Object.assign(this, { state: 'wait', touched: false, touchAt: 0, waitFrom: 0, own: false, down: false, last: 0, canSkip, phase: 'film', gap: 1, idleFrom: 0, touchT: -99, heaves: [], slipT: -99, cutT: -99, everHeld: false, embers: [], idleAfter: COLD_T.idle });
+    Object.assign(this, { quiet: false, state: 'wait', touched: false, touchAt: 0, waitFrom: 0, own: false, down: false, last: 0, canSkip, phase: 'film', gap: 1, idleFrom: 0, touchT: -99, heaves: [], slipT: -99, cutT: -99, everHeld: false, embers: [], idleAfter: COLD_T.idle });
     if (audio.prime()) void audio.loadTrack(META).then((t) => { this.track = t; }, () => undefined);
     this.layout();
   }
@@ -245,6 +248,9 @@ export class SkyCold {
       c.fillStyle = 'rgb(6,5,12)'; c.fillRect(0, 0, w, h);
       if (!this.waitFrom) this.waitFrom = now;
       if (this.touched && !this.touchAt) this.touchAt = now;
+      // while it waits (a dark screen), the Stillness is painted at every size the film will ask for, so its first
+      // appearance and its surge never stop the picture (the performance pass of 2026-11-25)
+      if (!this.warm) { this.warm = true; for (const s of [0, 0.5, 1]) { C.dread(c, -1e5, -1e5, (300 + 60 * s) * u, (460 + 80 * s) * u, 48, 1); } C.dread(c, -1e5, -1e5, 190 * u, 170 * u, 78, 0.9); }
       const sound = !!audio.ctx && audio.running && !!this.track;
       if (sound || !audio.ctx || (this.touched && now - this.touchAt > 2000)) { this.begin(now); return; }
       if (!this.touched && now - this.waitFrom > 500) this.write('touch to begin', cx, h * 0.56, 20 * u, 0.45 + 0.25 * Math.sin(now / 520));
@@ -460,6 +466,7 @@ export class SkyCold {
       if (!nH) this.write('tap', qx, qy + 100 * u, 15 * u, a * 0.7);
     }
     if (this.canSkip && !(tau >= L.black)) this.write('skip', w - 44, 64, 16, 0.55);
+    if (tau >= 8.8 && !this.quiet) { this.quiet = true; this.onQuiet?.(); }
     if (tau >= L.end) this.finish();
   }
 }

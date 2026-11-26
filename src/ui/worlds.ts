@@ -64,10 +64,22 @@ const ZONES = 12;
 const zoneOf = (a: number) => ((Math.floor((((a % TAU) + TAU) % TAU) / (TAU / ZONES)) % ZONES) + ZONES) % ZONES;
 /** draw the hot layer over the cold one where the zones are lit: soft overlapping patches, never hard wedges */
 let mask: HTMLCanvasElement | null = null;
+// (the composite is kept: it is only made again while a zone is still fading in, or the whole planet's light changes;
+// the performance pass of 2026-11-25)
+let lastKey = '', lastCold: HTMLCanvasElement | null = null, comp: HTMLCanvasElement | null = null, compAny = false;
 function zones(c: CanvasRenderingContext2D, cold: HTMLCanvasElement, hot: HTMLCanvasElement, R: number, lit: number[], time: number, all: number): void {
   const S = cold.width, k = R / W.R0, half = (S * k) / 2;
-  c.drawImage(cold, -half, -half, S * k, S * k);
   if (all >= 0.995) { c.drawImage(hot, -half, -half, S * k, S * k); return; }
+  const key = `${Math.round(all * 200)}|${lit.map((t0) => (t0 < 0 ? -1 : Math.round(sm((time - t0) / 0.5) * 100))).join(',')}`;
+  if (key === lastKey && cold === lastCold && comp) { c.drawImage(compAny ? comp : cold, -half, -half, S * k, S * k); return; }
+  lastKey = key; lastCold = cold;
+  if (!comp || comp.width !== S) { comp = document.createElement('canvas'); comp.width = comp.height = S; }
+  const cc = comp.getContext('2d')!;
+  cc.globalCompositeOperation = 'source-over'; cc.clearRect(0, 0, S, S); cc.drawImage(cold, 0, 0);
+  compAny = zonesInto(cc, hot, S, lit, time, all);
+  c.drawImage(compAny ? comp : cold, -half, -half, S * k, S * k);
+}
+function zonesInto(cc: CanvasRenderingContext2D, hot: HTMLCanvasElement, S: number, lit: number[], time: number, all: number): boolean {
   if (!mask || mask.width !== S) { mask = document.createElement('canvas'); mask.width = mask.height = S; }
   const m = mask.getContext('2d')!;
   m.globalCompositeOperation = 'source-over'; m.clearRect(0, 0, S, S);
@@ -81,9 +93,10 @@ function zones(c: CanvasRenderingContext2D, cold: HTMLCanvasElement, hot: HTMLCa
     const g = m.createRadialGradient(x, y, 0, x, y, rr); g.addColorStop(0, `rgba(255,255,255,${a})`); g.addColorStop(0.55, `rgba(255,255,255,${0.8 * a})`); g.addColorStop(1, 'rgba(255,255,255,0)');
     m.fillStyle = g; m.fillRect(x - rr, y - rr, rr * 2, rr * 2);
   }
-  if (!any) return;
+  if (!any) return false;
   m.globalCompositeOperation = 'source-in'; m.drawImage(hot, 0, 0);
-  c.drawImage(mask, -half, -half, S * k, S * k);
+  cc.drawImage(mask, 0, 0);
+  return true;
 }
 /** the far shadow rings on the horizon, with Helion's signal behind them; at his moment his silhouette flickers there */
 function horizon(c: CanvasRenderingContext2D, w: number, h: number, helion: number, time: number): void {

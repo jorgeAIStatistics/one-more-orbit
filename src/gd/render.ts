@@ -90,6 +90,8 @@ export class GdRenderer {
   private h = 0;
   private dpr = 1;
   private particles: Particle[] = [];
+  /** spent particles, kept to be used again (no allocation while playing) */
+  private spent: Particle[] = [];
   private ripples: Ripple[] = [];
   private waves: Wave[] = [];
   private trail: Array<{ beat: number; rho: number; off: number; pf: number; away?: number }> = [];
@@ -369,10 +371,16 @@ export class GdRenderer {
     for (let i = 0; i < n && this.particles.length < 420; i++) {
       const a = Math.random() * TWO_PI;
       const v = speed * (0.3 + Math.random() * 0.7);
-      this.particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0, max: 0.3 + Math.random() * 0.35, col, size: (1.2 + Math.random() * 2.2) * size, back });
+      this.spawn(x, y, Math.cos(a) * v, Math.sin(a) * v, 0.3 + Math.random() * 0.35, col, (1.2 + Math.random() * 2.2) * size, back);
     }
   }
 
+  private spawn(x: number, y: number, vx: number, vy: number, max: number, col: RGB, size: number, back: boolean): void {
+    if (this.particles.length >= 420) return;
+    const p = this.spent.pop() ?? ({} as Particle);
+    p.x = x; p.y = y; p.vx = vx; p.vy = vy; p.life = 0; p.max = max; p.col = col; p.size = size; p.back = back;
+    this.particles.push(p);
+  }
   /** how much faster than normal the course is going (eased), 0 at the normal pace */
   private speedK = 0;
   /** the world's own camera (eased): pulled back for a set piece that shows the planet whole (the Sleeper's throw) */
@@ -404,7 +412,7 @@ export class GdRenderer {
       const p = this.particles[i];
       if (!!p.back !== back) continue;
       p.life += dt;
-      if (p.life >= p.max) { this.particles.splice(i, 1); continue; }
+      if (p.life >= p.max) { const last = this.particles.pop()!; if (i < this.particles.length) this.particles[i] = last; this.spent.push(p); continue; }
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       p.vx *= 1 - dt * 2.5;
@@ -1765,7 +1773,7 @@ export class GdRenderer {
             const a = (i / n) * TWO_PI + Math.random() * 0.1;
             const from = rr * (0.7 + (i % 3) * 0.28);
             const sp = r0 * (1.5 + Math.random() * 4) * (0.5 + pw);
-            this.particles.push({ x: this.coreX + Math.cos(a) * from, y: this.coreY + Math.sin(a) * from, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0, max: 0.5 + Math.random() * 0.6, col: i % 3 === 0 ? WHITE : i % 3 === 1 ? pal.acc : pal.ring, size: 2 + Math.random() * 3.5, back: i % 2 === 0 });
+            this.spawn(this.coreX + Math.cos(a) * from, this.coreY + Math.sin(a) * from, Math.cos(a) * sp, Math.sin(a) * sp, 0.5 + Math.random() * 0.6, i % 3 === 0 ? WHITE : i % 3 === 1 ? pal.acc : pal.ring, 2 + Math.random() * 3.5, i % 2 === 0);
           }
         }
       } else if (ev.kind === 'finale') {
@@ -1781,7 +1789,7 @@ export class GdRenderer {
         for (let i = 0; i < n; i++) {
           const a = Math.random() * TWO_PI;
           const sp = r0 * (1 + Math.random() * 5);
-          this.particles.push({ x: this.coreX + Math.cos(a) * r0 * 0.3, y: this.coreY + Math.sin(a) * r0 * 0.3, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0, max: 0.7 + Math.random() * 0.9, col: [pal.ring, pal.acc, WHITE, GOLD][i % 4], size: 2 + Math.random() * 4, back: i % 3 === 0 });
+          this.spawn(this.coreX + Math.cos(a) * r0 * 0.3, this.coreY + Math.sin(a) * r0 * 0.3, Math.cos(a) * sp, Math.sin(a) * sp, 0.7 + Math.random() * 0.9, [pal.ring, pal.acc, WHITE, GOLD][i % 4], 2 + Math.random() * 4, i % 3 === 0);
         }
       } else if (ev.kind === 'crash') {
         this.burst(this.ball.x, this.ball.y, 34, WHITE, r0 * 1.5);
@@ -1799,7 +1807,7 @@ export class GdRenderer {
         for (let i = 0; i < n && this.particles.length < 420; i++) {
           const a = Math.random() * TWO_PI;
           const sp = r0 * (1.2 + Math.random() * 2.2) * (0.6 + drive);
-          this.particles.push({ x: this.coreX + Math.cos(a) * m * 0.06, y: this.coreY + Math.sin(a) * m * 0.06, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0, max: 0.35 + Math.random() * 0.4, col: pal.acc, size: 1.5 + Math.random() * 2.5, back: true });
+          this.spawn(this.coreX + Math.cos(a) * m * 0.06, this.coreY + Math.sin(a) * m * 0.06, Math.cos(a) * sp, Math.sin(a) * sp, 0.35 + Math.random() * 0.4, pal.acc, 1.5 + Math.random() * 2.5, true);
         }
         this.punch = Math.max(this.punch, 0.3 * drive);
         this.burstK = 1; // the equalizer bursts to the edges

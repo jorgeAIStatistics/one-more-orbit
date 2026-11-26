@@ -29,6 +29,10 @@ import { SkyStar } from './ui/skystar';
 import { SkyCold } from './ui/skycold';
 import { EdgeWorld, EmberWorld, type World, type WorldSky } from './ui/worlds';
 import { LANDING } from './art/landingpaint.js';
+import { K as PK } from './art/painter.js';
+import { CANON as PCANON } from './art/canonpaint.js';
+import { COLDPAINT as PCOLD } from './art/coldpaint.js';
+import { WORLDS as PWORLDS } from './art/worldpaint.js';
 import { COMPANIONS } from './art/companions.js';
 import { SkyStory } from './ui/skystory';
 import { SkyResult, type ResultInfo } from './ui/skyresult';
@@ -265,6 +269,7 @@ function startCold(): void {
   coldScene.onDone = () => { save.story.cold = true; persist(); startOpening(); };
   coldScene.onSlip = () => feel('crash');
   coldScene.onHeave = () => feel('big');
+  coldScene.onQuiet = () => { if (!openingPainted) { opening.reset(false); openingPainted = true; } }; // (painted in the black, while the three lines stand still)
   coldScene.start(!!save.story.cold);
   show('cold');
 }
@@ -347,13 +352,15 @@ $('moment').addEventListener('click', () => { if (screen === 'moment') moment.ta
 let armedRun: Run | null = null;
 let warmed = false;
 /** The opening. `again`: a replay from the still pool, which can be skipped, starts no level and changes nothing. */
+let openingPainted = false;
 function startOpening(again = false): void {
   run?.stop();
   run = null;
   armedRun = null;
   warmed = false;
   audio.stopPreview(0.3);
-  opening.reset(again);
+  if (!openingPainted || again) opening.reset(again);
+  openingPainted = false;
   show('prologue');
   if (again) { opening.armed = true; return; }
   // the first stage, ready: its course built, its song decoded, the Landing painted under it. The prompt does not
@@ -1692,6 +1699,7 @@ requestAnimationFrame(loop);
 Object.assign(window, {
   __omo: {
     audio, save, renderer, sky, skyResult, rooms, session, sync, cal, get run() { return run; }, get screen() { return screen; }, tick, show,
+    art: { K: PK, parts: PCANON.parts, cold: PCOLD, landing: LANDING, worlds: PWORLDS }, // (for the frame profiler: tools/frameprof)
     level: (i: number) => focusLevel(i), select: (id: string) => select(id, true),
     start: (bot: boolean, prac = false, from = -1, daring = false) => { botMode = bot; practice = prac; dare = daring; startRun(from); },
     story: (k: string) => playStory(k, () => show('levels'), true),

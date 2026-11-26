@@ -84,9 +84,29 @@ const K = (() => {
     }
     return out;
   }
+  // A glow is the same radial gradient every time (full, 45% at a third of the way out, nothing at the edge) in one
+  // colour: it is painted once per colour into a small image and drawn at the glow's size, its alpha as the canvas's
+  // (the performance pass of 2026-11-25: building a gradient per glow, a hundred times a frame, was a real cost)
+  const GLOWS = new Map(), GLOW_PX = 256;
+  function glowImage(c) {
+    const key = ((c[0] >> 1) << 16) | ((c[1] >> 1) << 8) | (c[2] >> 1); // (to within one level of 255: no visible difference)
+    let img = GLOWS.get(key);
+    if (img) return img;
+    if (typeof document === 'undefined') return null;
+    img = document.createElement('canvas'); img.width = img.height = GLOW_PX;
+    const g2 = img.getContext('2d'), h = GLOW_PX / 2, g = g2.createRadialGradient(h, h, 0, h, h, h);
+    g.addColorStop(0, rgba(c, 1)); g.addColorStop(0.35, rgba(c, 0.45)); g.addColorStop(1, rgba(c, 0));
+    g2.fillStyle = g; g2.fillRect(0, 0, GLOW_PX, GLOW_PX);
+    if (GLOWS.size > 600) GLOWS.delete(GLOWS.keys().next().value);
+    GLOWS.set(key, img);
+    return img;
+  }
   function glow(ctx, x, y, r, c, a = 1, mode = 'lighter') {
+    if (!(r > 0) || !(a > 0)) return;
+    const img = a <= 1 ? glowImage(c) : null;
     ctx.save();
     ctx.globalCompositeOperation = mode;
+    if (img) { ctx.globalAlpha *= a; ctx.drawImage(img, x - r, y - r, r * 2, r * 2); ctx.restore(); return; }
     const g = ctx.createRadialGradient(x, y, 0, x, y, r);
     g.addColorStop(0, rgba(c, a)); g.addColorStop(0.35, rgba(c, a * 0.45)); g.addColorStop(1, rgba(c, 0));
     ctx.fillStyle = g;
