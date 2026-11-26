@@ -1,0 +1,15 @@
+{
+  "file": "audio/helion5.mp3",
+  "frames": 352800,
+  "firstSig": 1231,
+  "bpm": 60,
+  "offset": 0.0,
+  "length": 8.0,
+  "dropTime": 4.0,
+  "source": [
+    [
+      0.0,
+      8.0
+    ]
+  ]
+}

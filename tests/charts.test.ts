@@ -25,7 +25,7 @@ for (const pack of PACKS) {
   const level = new Level(pack.level, pack.audio, pack.chart);
   const notes = level.notes;
   /** charted under the next pass's rules: one idea, nothing that the song is not playing (tests/nextpass.test.ts) */
-  const NEXT = pack.level.id === 'heroes';
+  const NEXT = ['heroes', 'skyhigh', 'blank', 'invincible'].includes(pack.level.side?.of ?? pack.level.id); // (charted under the next pass's rules, 2026-11-25)
   describe(`${pack.level.id}: one-button chart`, () => {
     it('is at most 2:00 and the layout covers the excerpt', () => {
       expect(pack.audio.length).toBeLessThanOrEqual(120);

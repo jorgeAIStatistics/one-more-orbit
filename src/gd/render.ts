@@ -271,7 +271,10 @@ export class GdRenderer {
     if (firstPress && !quiet) this.hints.push([c.start - 9, firstPress.beat + 1.5, 'tap as he reaches each Star-Node']);
     const gold = c.flow.find((f) => !f.charge);
     if (gold && !quiet) this.hints.push([gold.beat - 3, gold.beat + 2.5, 'gold lights: bonus taps']);
-    for (const f of c.firsts) if (!taught(f.what)) this.hints.push(f.what === 'charge' ? [f.beat - 2.5, f.beat + 4, HINT.charge] : f.what === 'smash' ? [f.beat - 5, f.beat, HINT.smash] : [f.beat - 4.5, f.beat + 1.5, said(f.what)]);
+    // (each world names its own gift once: Cirra's Satellite is the wave, Glassmere's Pulsar the ball, Verdance's the snap)
+    const GIFT: Record<string, Partial<Record<Feature, string>>> = { skyhigh: { sat: 'the wave: each tap turns the zig-zag' }, blank: { pulsar: 'the ball: each tap turns gravity over' }, invincible: { pulsar: 'the snap: each tap jumps you across the branch at once' } };
+    const named = (w: Feature) => GIFT[level.file.side?.of ?? level.id]?.[w] ?? said(w);
+    for (const f of c.firsts) if (!taught(f.what)) this.hints.push(f.what === 'charge' ? [f.beat - 2.5, f.beat + 4, HINT.charge] : f.what === 'smash' ? [f.beat - 5, f.beat, HINT.smash] : [f.beat - 4.5, f.beat + 1.5, named(f.what)]);
     this.hints.sort((a, b) => a[0] - b[0]);
     this.energy = barEnergy(level);
     this.particles = [];
@@ -385,6 +388,8 @@ export class GdRenderer {
   private speedK = 0;
   /** the world's own camera (eased): pulled back for a set piece that shows the planet whole (the Sleeper's throw) */
   private camScale = 1;
+  /** mini (Cirra's tight gusts): how small Orbin is drawn, eased */
+  private miniK = 0;
   /**
    * One continuous journey (the owner's brief of 2026-11-25): a level opens out of the light of the planet the map
    * dived into (a match cut: the camera settles back from close in, through the planet's colour), and a fall goes
@@ -792,7 +797,7 @@ export class GdRenderer {
     this.heroDir = dir;
     { const t = this.ctx.getTransform(), k = this.canvas.width / Math.max(1, this.w); this.heroAt = [(t.a * x + t.c * y + t.e) / k, (t.b * x + t.d * y + t.f) / k]; }
     const tint = form === 'orb' ? col : mix(col, FORM_COL[form], 0.45 * mk);
-    this.drawBall(x, y, r, tint, angle, along, across, true);
+    this.drawBall(x, y, r * (1 - 0.4 * this.miniK), tint, angle, along, across, true);
   }
   /** What a form adds round him: the Meteor's flame, the Satellite's panels, the Pulsar's beams. */
   private formDeco(x: number, y: number, r: number, angle: number, dir: number, form: Form, lit: number): void {
@@ -1658,6 +1663,8 @@ export class GdRenderer {
       const ahead = course.portals.find((g) => g.beat > beat - 0.01 && g.beat - beat <= 4);
       const want = Math.max(0, Math.max(barNow?.speed ?? 1, ahead && ahead.faster ? 1 + (ahead.speed - 1) * clamp(1 - (ahead.beat - beat) / 4, 0, 1) : 0) - 1);
       this.speedK += (want - this.speedK) * Math.min(1, dt * 2.5);
+      const mini = course.bars[Math.max(0, Math.min(course.bars.length - 1, Math.floor(beat / 4)))]?.mini ? 1 : 0;
+      this.miniK += (mini - this.miniK) * Math.min(1, dt * 8);
       const cs = this.planet?.cam?.(t) ?? 1;
       this.camScale += (cs - this.camScale) * Math.min(1, dt * 2.2);
     }

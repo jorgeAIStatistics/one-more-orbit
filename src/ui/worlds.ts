@@ -468,3 +468,5 @@ export class EdgeWorld {
   };
 }
 export const _lerp = lerp;
+// (shared with the worlds after Emberwick: src/ui/worlds2.ts)
+export { zones, zoneOf, horizon, ZONES };

@@ -26,33 +26,38 @@ export function tapRun(c: Course, taps: number[], start = c.start - 3, from = -I
 /** A spam bot: taps at a steady rate (taps a second) from `a` to `b`, whatever the chart asks. */
 const spam = (c: Course, rate: number, phase: number, a: number, b: number) => { const out: number[] = []; for (let t = a + phase / rate / c.spb; t < b; t += 1 / rate / c.spb) out.push(t); return out; };
 
-for (const [name, pack] of [['the Drifting Edge', FIRST], ['Emberwick', EMBER]] as const) {
+const W1: Array<[string, LevelPack]> = [['the Drifting Edge', FIRST], ['Emberwick', EMBER], ...(['skyhigh', 'blank', 'invincible'] as const).map((id, i): [string, LevelPack] => [['Cirra', 'Glassmere', 'Verdance'][i], PACKS.find((p) => p.level.id === id)!])];
+/** the owner's table: the buffer, and the stretch before it where a tap way too early still hits the ring (beats) */
+const TABLE: Record<string, [number, number]> = { started: [0.15, 0], heroes: [0.15, 0], skyhigh: [0.13, 0.25], blank: [0.12, 0.35], invincible: [0.1, 0.45] };
+for (const [name, pack] of W1) {
   describe(`forgiving taps: ${name}`, () => {
     const c = build(pack);
     const ms = (x: number) => x / 1000 / c.spb;
     const taps = c.presses.filter((p) => !p.auto && p.act !== 'up').map((p) => p.beat);
     const kinds = { orbs: c.presses.filter((p) => p.orb).length, pads: c.presses.filter((p) => p.pad || p.sling).length, walls: c.presses.filter((p) => p.form === 'meteor' && !p.auto).length };
 
-    it('has the first-levels rules: a 150 ms buffer, and taps way too early ignored', () => {
-      expect(c.buffer).toBe(0.15);
-      expect(c.early).toBe(0);
+    it('has its rules from the table: the buffer, and how far before it a tap way too early still hits the ring', () => {
+      expect([c.buffer, c.early]).toEqual(TABLE[pack.level.id]);
     });
     it('the bot clears tapping every press on time, and 50, 100 and 150 ms early: every orb, pad and Meteor wall', () => {
       expect(tapRun(c, taps).crashed).toBe(false);
-      for (const off of [50, 100, 150]) {
+      // (150 ms where the buffer is 150 ms; elsewhere the buffer itself: the owner's table narrows it from Cirra on)
+      for (const off of [50, 100, Math.min(150, c.buffer * 1000)]) {
         const s = tapRun(c, taps.map((b) => b - ms(off)));
         expect(s.crashed, `${off} ms early: ${s.crashKind} at beat ${s.crashBeat.toFixed(2)}`).toBe(false);
       }
-      console.log(`FORGIVE ${name}: ${taps.length} presses (${kinds.orbs} orbs, ${kinds.pads} pads, ${kinds.walls} Meteor walls) clear on time and 50/100/150 ms early`);
+      console.log(`FORGIVE ${name}: ${taps.length} presses (${kinds.orbs} orbs, ${kinds.pads} pads, ${kinds.walls} Meteor walls) clear on time and 50/100/${Math.min(150, c.buffer * 1000)} ms early`);
     });
     it('...and from every checkpoint, after the run-in', () => {
-      for (const cp of [...new Set([...c.checkpoints, ...(pack.level.embers ?? [])])].filter((b) => b > c.start + 1)) for (const off of [50, 100, 150]) {
+      for (const cp of [...new Set([...c.checkpoints, ...(pack.level.embers ?? [])])].filter((b) => b > c.start + 1)) for (const off of [50, 100, Math.min(150, c.buffer * 1000)]) {
         const s = tapRun(c, taps.filter((b) => b >= cp).map((b) => b - ms(off)), cp - 4, cp);
         expect(s.crashed, `from beat ${cp}, ${off} ms early: ${s.crashKind} at beat ${s.crashBeat.toFixed(2)}`).toBe(false);
       }
     });
-    it('has an ember every section, never more than 13 s apart, the first at the build', () => {
+    it('has its embers as the table says: every section in the first two worlds, one at the drop in Cirra and Glassmere, none after', () => {
       const e = pack.level.embers ?? [];
+      if (pack.level.id === 'invincible') { expect(e).toEqual([]); return; }
+      if (pack.level.id === 'skyhigh' || pack.level.id === 'blank') { expect(e).toEqual([c.dropBeat]); return; }
       expect(e.length).toBe(5);
       const last = taps[taps.length - 1];
       const gaps = [e[0], ...e.slice(1).map((b, i) => b - e[i]), last - e[e.length - 1]].map((g) => g * c.spb);
@@ -64,18 +69,19 @@ for (const [name, pack] of [['the Drifting Edge', FIRST], ['Emberwick', EMBER]] 
       const before = taps.filter((b) => b < p.beat);
       let k = 0;
       for (let b = c.start - 3; b < p.beat - ms(150); b += 1 / 60 / c.spb) { while (k < before.length && before[k] <= b) { sim.press(before[k]); sim.release(before[k] + 0.1); k++; } sim.advance(b); }
-      sim.advance(p.beat - ms(150));
+      const early = Math.min(150, c.buffer * 1000) - 1;
+      sim.advance(p.beat - ms(early));
       sim.out.length = 0;
-      sim.press(p.beat - ms(150));
+      sim.press(p.beat - ms(early));
       expect(sim.ni).toBe(p.i); // not gone yet: held
       sim.advance(p.beat + 0.02);
       expect(sim.ni).toBe(p.i + 1);
       const r = sim.out.find((x) => x.kind === p.kind)!;
-      expect(r.err).toBeCloseTo(-0.15, 2);
+      expect(r.err).toBeCloseTo(-early / 1000, 2);
       expect(r.flow).toBe(false);
       expect(sim.crashed).toBe(false);
     });
-    it('a tap way too early (200 or 300 ms) is ignored: the opening still waits for its tap', () => {
+    it.skipIf(TABLE[pack.level.id][1] > 0)('a tap way too early (200 or 300 ms) is ignored: the opening still waits for its tap', () => {
       const sample = taps.filter((_, i) => i % 3 === 1);
       for (const off of [200, 300]) for (const b of sample) {
         const s = tapRun(c, [...taps, b - ms(off)].sort((x, y) => x - y));

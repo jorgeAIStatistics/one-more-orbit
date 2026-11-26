@@ -129,7 +129,9 @@ export function difficulty(pack: LevelPack): Difficulty {
   for (const g of c.portals) demands.push({ beat: g.beat, what: 'speed change' });
   for (const l of c.lenses) demands.push({ beat: l.beat, what: 'mode change' });
   for (const b of [...c.inverts, ...c.mirrors]) demands.push({ beat: b, what: 'gravity / world turns over' });
-  for (const p of c.presses) if (p.kind === 'flip' && !p.weave) demands.push({ beat: p.beat, what: 'gravity / world turns over' });
+  // (in ball and snap mode, the Pulsar, every tap turns him to the other side: that is the mode itself, its own action,
+  // not a change stacked on others; a gravity change is one outside it: a gravity orb, a tide pad, a side swapped)
+  for (const p of c.presses) if (p.kind === 'flip' && !p.weave && p.form !== 'pulsar') demands.push({ beat: p.beat, what: 'gravity / world turns over' });
   const stacked: Difficulty['stacked'] = [];
   demands.sort((a, b) => a.beat - b.beat).forEach((d, i) => {
     const near = demands.filter((e, j) => j !== i && Math.abs(e.beat - d.beat) < 2 && e.what !== d.what);

@@ -5,6 +5,14 @@ import { SmoothClock } from '../src/gd/clock';
 import { autoLayers, buildCourse, HOLD_MAX, HOLD_MIN, landingGrace, LINE_TIGHT, SLING_FLIGHT, TETHER_LET_S, TOL_S } from '../src/gd/course';
 import { accentBeats, layerTicks, layers, pitchLookup } from '../src/gd/presses';
 import { Sim } from '../src/gd/sim';
+import skyOldLevel from '../levels/skyhigh/level.json';
+import skyOldAudio from '../levels/skyhigh/audio.json';
+import skyOldChart from '../levels/skyhigh/chart.json';
+import skyOldPresses from '../levels/skyhigh/presses.json';
+import skyOldAudit from '../levels/skyhigh/audit.json';
+import type { LevelPack } from '../src/game/packs';
+/** Sky High as it was charted (Cirra flies to Flutter since 2026-11-25): the muffle and the note layers are checked on it */
+const SKY_OLD = { level: { ...skyOldLevel, id: 'skyhigh-old' }, audio: skyOldAudio, chart: skyOldChart, presses: skyOldPresses, audit: skyOldAudit } as unknown as LevelPack;
 
 const rng = (seed: number) => { let s = seed; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296 - 0.5; }; };
 
@@ -17,7 +25,7 @@ for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), FINAL, .
   /** presses a second at most: 2.5, and one a beat (2.7) in the final level */
   const RATE = id === FINAL.level.id ? 2.7 : 2.5;
   /** charted under the next pass's rules (one idea per world, no gold notes, no roll: tests/nextpass.test.ts); the dosage-era rules marked below are not theirs */
-  const NEXT = base === 'heroes';
+  const NEXT = ['heroes', 'skyhigh', 'blank', 'invincible'].includes(base); // (the next pass's charts: World 1's worlds as rebuilt 2026-11-25)
   const level = new Level(pack.level, pack.audio, pack.chart);
   const course = buildCourse(level, layers(pack), pitchLookup(pack), pack.level.lab, accentBeats(pack));
   const ms = (x: number) => x / 1000 / course.spb; // milliseconds as beats
@@ -419,7 +427,7 @@ for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), FINAL, .
 }
 
 describe('sky high: the muffle', () => {
-  const pack = PACKS.find((p) => p.level.id === 'skyhigh')!;
+  const pack = SKY_OLD;
   const level = new Level(pack.level, pack.audio, pack.chart);
   const course = buildCourse(level, layers(pack), pitchLookup(pack), pack.level.lab, accentBeats(pack));
   it('starts on the third off-beat press in a row, deepens a step at a time, and two on-beat taps clear it', () => {
@@ -445,7 +453,7 @@ describe('note layers', () => {
   });
 
   it('hand-recorded bars replace the chart for those bars only, keeping each note in the layer it was recorded in', () => {
-    const pack = PACKS.find((p) => p.level.id === 'skyhigh')!;
+    const pack = SKY_OLD;
     const base = layerTicks(pack);
     const fake = { ...pack, level: { ...pack.level, id: 'skyhigh-test' }, presses: { bars: { '16': { by: 'hand' as const, t: [0, 24], f: [12, 18] } } } };
     const got = layerTicks(fake);

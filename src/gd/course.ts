@@ -116,7 +116,7 @@ export interface Layers { survival: number[]; flow: number[] }
 /** Things a level can ask of the player; the first time each appears it gets a hint. */
 export type Feature = 'smash' | 'charge' | 'flip' | 'weave' | 'spin' | 'sling' | 'reverse' | 'faster' | 'slower' | 'twin' | 'rail' | 'line' | 'tether' | 'meteor' | 'sat' | 'pulsar' | 'comet' | 'spring' | 'tide' | 'chime' | 'slip' | 'grav' | 'combo' | 'mirror' | 'invert' | 'dual';
 /** How one bar plays. */
-export interface BarCfg { token: string; mode: 'up' | 'down' | 'weave'; pad: boolean; throw: boolean; vent: boolean; spin: boolean; twin: boolean; dual: boolean; echo: Form; sling: boolean; spring: boolean; tide: boolean; turn: boolean; mirror: boolean; invert: boolean; long: boolean; tether: boolean; chime: boolean; slip: boolean; grav: boolean; combo: string; sparse: boolean; strong: boolean; beats: boolean; every: boolean; hold: boolean; sync: boolean; speed: number; form: Form }
+export interface BarCfg { token: string; mode: 'up' | 'down' | 'weave'; pad: boolean; throw: boolean; vent: boolean; mini: boolean; snap: boolean; spin: boolean; twin: boolean; dual: boolean; echo: Form; sling: boolean; spring: boolean; tide: boolean; turn: boolean; mirror: boolean; invert: boolean; long: boolean; tether: boolean; chime: boolean; slip: boolean; grav: boolean; combo: string; sparse: boolean; strong: boolean; beats: boolean; every: boolean; hold: boolean; sync: boolean; speed: number; form: Form }
 
 export interface Course {
   spb: number;
@@ -285,7 +285,7 @@ export function barPlan(level: Level): BarCfg[] {
       const twin = w.includes('twin') || dual;
       const combo = (w.find((s) => s.startsWith('c=')) ?? '').slice(2);
       // a planet hop only ever starts a phrase or its second half (every other bar), and never in a twin orbit
-      out.push({ token, mode: w.includes('weave') ? 'weave' : w.includes('down') ? 'down' : 'up', pad: w.includes('pad'), throw: w.includes('throw'), vent: w.includes('vent'), spin: w.includes('spin'), twin, dual, echo, sling: w.includes('sling') && !twin && k % 2 === 0, spring: w.includes('spring') && !twin && k % 2 === 0, tide: w.includes('tide') && !twin, turn: w.includes('turn'), mirror: w.includes('mirror'), invert: w.includes('invert'), long: w.includes('long'), tether: w.includes('tether'), chime: w.includes('chime'), slip: w.includes('slip'), grav: w.includes('grav'), combo, sparse: w.includes('sparse'), strong: w.includes('strong'), beats: w.includes('beats') || w.includes('every'), every: w.includes('every'), hold: w.includes('hold'), sync: w.includes('sync'), speed, form });
+      out.push({ token, mode: w.includes('weave') ? 'weave' : w.includes('down') ? 'down' : 'up', pad: w.includes('pad'), throw: w.includes('throw'), vent: w.includes('vent'), mini: w.includes('mini'), snap: w.includes('snap'), spin: w.includes('spin'), twin, dual, echo, sling: w.includes('sling') && !twin && k % 2 === 0, spring: w.includes('spring') && !twin && k % 2 === 0, tide: w.includes('tide') && !twin, turn: w.includes('turn'), mirror: w.includes('mirror'), invert: w.includes('invert'), long: w.includes('long'), tether: w.includes('tether'), chime: w.includes('chime'), slip: w.includes('slip'), grav: w.includes('grav'), combo, sparse: w.includes('sparse'), strong: w.includes('strong'), beats: w.includes('beats') || w.includes('every'), every: w.includes('every'), hold: w.includes('hold'), sync: w.includes('sync'), speed, form });
     }
   }
   return out;
@@ -516,7 +516,8 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
     const padK = !plain && !sling && !cfg.twin && (cfg.pad || cfg.throw || cfg.vent) && nth === 0 && Math.abs(beat - barOf(beat) * 4) < 0.01;
     // a teleport vent (Emberwick's second idea, 2026-11-25): the same, but it throws him across the orbit in one beat
     const padTo = padK ? Math.min(i + 1 < ground.length ? ground[i + 1] : end, beat + (cfg.throw ? 4 : cfg.vent ? 1 : 2)) : 0;
-    const quick = form === 'meteor' || form === 'pulsar' || (form === 'comet' && act === 'tap') ? Math.min(QUICK, next) : form === 'comet' ? Math.min(QUICK, next * 0.5) : 0;
+    // (a snap, Verdance's: the Pulsar's flip made instant, a spider's jump from branch to branch)
+    const quick = form === 'pulsar' && cfg.snap ? Math.min(0.12, next) : form === 'meteor' || form === 'pulsar' || (form === 'comet' && act === 'tap') ? Math.min(QUICK, next) : form === 'comet' ? Math.min(QUICK, next * 0.5) : 0;
     const land = padK ? padTo : sling ? beat + SLING_FLIGHT : quick ? beat + quick : slip ? beat + SLIP_FLIGHT : i + 1 < ground.length ? Math.min(ground[i + 1], beat + CAP) : Math.min(beat + 1, end);
     const dur = land - beat;
     // gravity: a weave flips on every press (so do the Satellite and the Comet, which travel between two rings);
@@ -555,7 +556,8 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
       i, beat, tol, kind: flip ? 'flip' : 'hop', auto: auto.has(beat) || given === 'intro', smash: isSmash, accent, sling, after, weave, spin, twin,
       from: lv, to, side, planet, planetTo: sling ? planet + 1 : planet, camLv: weave ? lv + side * 0.5 : to,
       land, bounce: i + 1 < ground.length && ground[i + 1] === land,
-      bulge: padK ? (cfg.throw ? 1.0 : cfg.vent ? 0.55 : 0.75) : form === 'meteor' ? 0.28 : form === 'comet' && act === 'tap' ? 0.45 : flip || slip ? 0 : sling ? 0.5 : clamp(0.35 * dur - 0.1, 0.06, 0.7), pitch: pitchAt(beat), seg: seg.index,
+      // (mini, Cirra's tight gusts: Orbin small, his hops half as high)
+      bulge: (cfg.mini ? 0.45 : 1) * (padK ? (cfg.throw ? 1.0 : cfg.vent ? 0.55 : 0.75) : form === 'meteor' ? 0.28 : form === 'comet' && act === 'tap' ? 0.45 : flip || slip ? 0 : sling ? 0.5 : clamp(0.35 * dur - 0.1, 0.06, 0.7)), pitch: pitchAt(beat), seg: seg.index,
       form, act, line: form === 'sat' || slip, chime, slip, orb: kindOf, pad: padK ? (cfg.vent ? 'vent' : 'jump') : given === 'spring' || given === 'tide' ? given : '', intro: given === 'intro', wide: isWide || easy.has(beat)
     });
     lv = to;

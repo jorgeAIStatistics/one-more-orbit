@@ -1,0 +1,19 @@
+{
+  "file": "audio/luna.mp3",
+  "frames": 3390186,
+  "firstSig": 0,
+  "bpm": 128,
+  "offset": 0.0,
+  "length": 76.875,
+  "dropTime": 15.0,
+  "source": [
+    [
+      29.256,
+      66.749
+    ],
+    [
+      111.749,
+      151.131
+    ]
+  ]
+}

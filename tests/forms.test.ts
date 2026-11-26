@@ -7,7 +7,26 @@ import { buildCourse, SLIP_FLIGHT, type Form } from '../src/gd/course';
 import { accentBeats, layers, pitchLookup } from '../src/gd/presses';
 import { Sim } from '../src/gd/sim';
 
-const ALL = [...PACKS, FINAL];
+import skyOldLevel from '../levels/skyhigh/level.json';
+import skyOldAudio from '../levels/skyhigh/audio.json';
+import skyOldChart from '../levels/skyhigh/chart.json';
+import skyOldPresses from '../levels/skyhigh/presses.json';
+import skyOldAudit from '../levels/skyhigh/audit.json';
+import blankOldLevel from '../levels/blank/level.json';
+import blankOldAudio from '../levels/blank/audio.json';
+import blankOldChart from '../levels/blank/chart.json';
+import blankOldPresses from '../levels/blank/presses.json';
+import blankOldAudit from '../levels/blank/audit.json';
+import invOldLevel from '../levels/invincible/level.json';
+import invOldAudio from '../levels/invincible/audio.json';
+import invOldChart from '../levels/invincible/chart.json';
+import invOldPresses from '../levels/invincible/presses.json';
+import invOldAudit from '../levels/invincible/audit.json';
+// (the engine's mechanics are checked on the charts that were built to show them: Cirra, Glassmere and Verdance's
+// old songs, kept in the repo since those worlds moved to new ones on 2026-11-25; the new worlds: tests/world1.test.ts)
+const old = (level: unknown, audio: unknown, chart: unknown, presses: unknown, audit: unknown): LevelPack => ({ level: level as LevelPack['level'], audio: audio as LevelPack['audio'], chart: chart as LevelPack['chart'], presses: presses as LevelPack['presses'], audit: audit as LevelPack['audit'] });
+const OLD: Record<string, LevelPack> = { skyhigh: old(skyOldLevel, skyOldAudio, skyOldChart, skyOldPresses, skyOldAudit), blank: old(blankOldLevel, blankOldAudio, blankOldChart, blankOldPresses, blankOldAudit), invincible: old(invOldLevel, invOldAudio, invOldChart, invOldPresses, invOldAudit) };
+const ALL = [...PACKS.map((p) => OLD[p.level.id] ?? p), FINAL];
 const built = ALL.map((pack: LevelPack) => {
   const level = new Level(pack.level, pack.audio, pack.chart);
   return { pack, level, course: buildCourse(level, layers(pack), pitchLookup(pack), pack.level.lab, accentBeats(pack)) };

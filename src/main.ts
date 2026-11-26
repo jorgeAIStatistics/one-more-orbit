@@ -18,6 +18,10 @@ import sting1Audio from '../levels/sting1/audio.json';
 import sting2Audio from '../levels/sting2/audio.json';
 import helion1Audio from '../levels/helion1/audio.json';
 import helion2Audio from '../levels/helion2/audio.json';
+import helion3Audio from '../levels/helion3/audio.json';
+import helion4Audio from '../levels/helion4/audio.json';
+import helion5Audio from '../levels/helion5/audio.json';
+import { BEFORE2, CirraWorld, GlassWorld, VerdWorld, WRITTEN2 } from './ui/worlds2';
 import { canHaptics, feel, fullScreen, gameCenter, isNative, watchBackground } from './native';
 import { initRecord } from './record';
 import { bestFor, persist, save, starCount, starsFor } from './save';
@@ -103,6 +107,8 @@ const memoryFilm = new SkyMemory($<HTMLCanvasElement>('stage'));
 /** the worlds you play on: Emberwick and the Drifting Edge, each a planet in the ring and its inhabitant beside it */
 const emberWorld = new EmberWorld();
 const edgeWorld = new EdgeWorld();
+/** the worlds after Emberwick, built as places (2026-11-25) */
+const WORLDS2: Record<string, CirraWorld | GlassWorld | VerdWorld> = { skyhigh: new CirraWorld(), blank: new GlassWorld(), invincible: new VerdWorld() };
 /** stars home in the Landing's fire: the planetoid's own, and one for every world woken */
 const starsHome = () => (bestFor(FIRST_ID).cleared ? 1 : 0) + PACKS.filter((p) => bestFor(p.level.id).cleared).length;
 let screen: Screen = 'title';
@@ -294,7 +300,7 @@ let starRun: Run | null = null;
 function wantsStar(r: Run): boolean {
   return (!r.opts.bot || botStar) && !r.opts.practice && !r.opts.memory && !r.opts.tutorial && !chamber && !r.pack.level.side && (r.pack === FIRST || (BUILT.includes(baseOf(r.pack)) && !!sceneFor(r.pack)));
 }
-const STINGS: Record<string, AudioMeta> = { [FIRST_ID]: sting1Audio as AudioMeta, heroes: sting2Audio as AudioMeta };
+const STINGS: Record<string, AudioMeta> = { [FIRST_ID]: sting1Audio as AudioMeta, heroes: sting2Audio as AudioMeta, skyhigh: sting2Audio as AudioMeta, blank: sting1Audio as AudioMeta, invincible: sting1Audio as AudioMeta };
 function beginStar(r: Run): void {
   starRun = r;
   const id = r.pack.level.id, isFirst = r.pack === FIRST, first = !bestFor(id).cleared, homeWas = starsHome();
@@ -946,11 +952,12 @@ function showResults(r: Run, cleared: boolean, reached = r.pct, silent = false):
 let resMore: string[] = [];
 /** A planet's painted sky for its level, where it has one that is built (Emberwick so far): kept, so it is painted once. */
 const scenes = new Map<string, PlanetScene>();
-const BUILT = ['heroes'];
+const BUILT = ['heroes', 'skyhigh', 'blank', 'invincible'];
 function sceneFor(p: LevelPack): PlanetScene | WorldSky | null {
   // the worlds you play on: the level is the place (the planet in the middle of the ring, its inhabitant beside it)
   if (p === FIRST) return edgeWorld.sky;
   if (p.level.id === 'heroes') return emberWorld.sky;
+  if (WORLDS2[p.level.id]) return WORLDS2[p.level.id].sky;
   const world = baseOf(p);
   if (!BUILT.includes(world) || !PlanetScene.has(world)) return null;
   let s = scenes.get(world);
@@ -961,24 +968,25 @@ function sceneFor(p: LevelPack): PlanetScene | WorldSky | null {
  * Helion's moment in each level (the owner's brief, 2026-11-25): a calm bar near the end of the build where the music
  * thins and his music-box motif sounds from far away (his silhouette flickers in the shadow ring: worlds.ts).
  */
-const HELION: Record<string, { meta: AudioMeta; at: number }> = { started: { meta: helion1Audio as AudioMeta, at: 17.6 }, heroes: { meta: helion2Audio as AudioMeta, at: 16.8 } };
+const HELION: Record<string, { meta: AudioMeta; at: number }> = { started: { meta: helion1Audio as AudioMeta, at: 17.6 }, heroes: { meta: helion2Audio as AudioMeta, at: 16.8 }, skyhigh: { meta: helion3Audio as AudioMeta, at: 13.125 }, blank: { meta: helion4Audio as AudioMeta, at: 13.125 }, invincible: { meta: helion5Audio as AudioMeta, at: 14.4 } };
 let helionCue: { run: Run; track: Awaited<ReturnType<typeof audio.loadTrack>> | null; at: number; meta: AudioMeta; played: boolean } | null = null;
 /** The planet in the middle of the ring, for the worlds that are built as places. */
-function worldFor(p: LevelPack): World | null { return p === FIRST ? edgeWorld.world : p.level.id === 'heroes' ? emberWorld.world : null; }
+function worldFor(p: LevelPack): World | null { return p === FIRST ? edgeWorld.world : p.level.id === 'heroes' ? emberWorld.world : WORLDS2[p.level.id]?.world ?? null; }
 /** What is written into a sleeping world's sky, once, on the way to its drop. */
 // (the inhabitant speaks at most three times, in calm moments, low on the screen, never over the course)
 // (in the clear band between the top of the screen and the ring: never over the course, Ossa or the thread)
 const LOW = (from: number, to: number, text: string): Said => ({ from, to, text, x: 0.5, y: 0.2, size: 19, align: 'center' });
 const WRITTEN: Record<string, Said[]> = {
   heroes: [LOW(0.3, 4.6, 'Cold. Since the music stopped.'), LOW(9.6, 12.2, 'There. A spark.'), LOW(36.0, 38.6, 'Strike with me.')],
-  started: [LOW(1.6, 6.4, 'Something here is listening.')]
+  started: [LOW(1.6, 6.4, 'Something here is listening.')],
+  ...WRITTEN2
 };
 /** the scene before a world's first attempt: written into its sky during the long lead-in (song seconds, below zero) */
 const BEFORE: Record<string, Said[]> = { heroes: [
   { from: -8.4, to: -2.6, text: 'Emberwick, the forge-world.', x: 0.5, y: 0.2, size: 24, align: 'center' },
   { from: -6.8, to: -2.6, text: 'Ossa, stopped mid-strike.', x: 0.5, y: 0.245, size: 21, align: 'center' },
   { from: -5.0, to: -2.0, text: 'One spark of its fire is left, and it comes to you.', x: 0.5, y: 0.29, size: 18, align: 'center' }
-] };
+], ...BEFORE2 };
 /** A chosen world's sky is painted while the galaxy is at rest, so flying in is not held up by it. */
 function paintAhead(p: LevelPack): void {
   window.setTimeout(() => { if (screen === 'levels' && !$('levels').classList.contains('launch')) sceneFor(p)?.prepare(); }, 900);

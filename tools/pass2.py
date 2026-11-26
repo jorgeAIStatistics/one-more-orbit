@@ -511,7 +511,7 @@ if __name__ == '__main__':
     (ROOT / 'tools/cache').mkdir(exist_ok=True)
     import sys
     want = set(sys.argv[1:])
-    made = {'helion1': helion_far([('A#4', 1), ('C#5', 1), ('F#5', 2), ('D#5', 2)], 0.4), 'helion2': helion_far([('A4', 1), ('C#5', 1), ('F#5', 2), ('E5', 2)], 0.6), 'coldopen': coldfilm(), 'memfilm': memfilms(), 'nebula': nebula(), 'opening': opening_parts(), 'startedbed': started_bed(),
+    made = {'helion1': helion_far([('A#4', 1), ('C#5', 1), ('F#5', 2), ('D#5', 2)], 0.4), 'helion2': helion_far([('A4', 1), ('C#5', 1), ('F#5', 2), ('E5', 2)], 0.6), 'helion3': helion_far([('A4', 1), ('C#5', 1), ('F#5', 2), ('E5', 2)], 60 / 128), 'helion4': helion_far([('D5', 1), ('F#5', 1), ('B5', 2), ('A5', 2)], 60 / 128), 'helion5': helion_far([('D#5', 1), ('F#5', 1), ('B5', 2), ('A#5', 2)], 0.6), 'coldopen': coldfilm(), 'memfilm': memfilms(), 'nebula': nebula(), 'opening': opening_parts(), 'startedbed': started_bed(),
             'sting1': sting(['F#3', 'A#3', 'C#4', 'F#4'], ['A#5', 'C#6', 'F#6'], 'A#6', 'B1'),
             'sting2': sting(['A2', 'E3', 'A3', 'C#4', 'E4'], ['C#6', 'E6', 'A6'], 'C#7', 'A1'),
             'fire0': fire(False), 'fire1': fire(True)}

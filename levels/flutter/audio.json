@@ -1,0 +1,19 @@
+{
+  "file": "audio/flutter.mp3",
+  "frames": 2811374,
+  "firstSig": 0,
+  "bpm": 128,
+  "offset": 0.0,
+  "length": 63.75,
+  "dropTime": 15.0,
+  "source": [
+    [
+      56.724,
+      94.216
+    ],
+    [
+      118.591,
+      144.849
+    ]
+  ]
+}

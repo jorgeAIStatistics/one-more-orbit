@@ -2,11 +2,10 @@
 // (see README) and one entry here. The order here is the setlist: clearing a level unlocks the next.
 import type { AudioMeta, ChartFile, LevelFile } from './types';
 import manifestJson from '../../levels/manifest.json';
-import skyLevel from '../../levels/skyhigh/level.json';
-import skyAudio from '../../levels/skyhigh/audio.json';
-import skyChart from '../../levels/skyhigh/chart.json';
-import skyPresses from '../../levels/skyhigh/presses.json';
-import skyAudit from '../../levels/skyhigh/audit.json';
+import skyLevel from '../../levels/flutter/level.json';
+import skyAudio from '../../levels/flutter/audio.json';
+import skyChart from '../../levels/flutter/chart.json';
+import skyPresses from '../../levels/flutter/presses.json';
 // (Emberwick's song is Volcano now; the level keeps the world's id, "heroes", so saves, scenes and stars still find it)
 import heroesLevel from '../../levels/volcano/level.json';
 import heroesAudio from '../../levels/volcano/audio.json';
@@ -24,25 +23,23 @@ import mboxLevel from '../../levels/mbox1/level.json';
 import mboxAudio from '../../levels/mbox1/audio.json';
 import mboxChart from '../../levels/mbox1/chart.json';
 import mboxPresses from '../../levels/mbox1/presses.json';
-import blankLevel from '../../levels/blank/level.json';
-import blankAudio from '../../levels/blank/audio.json';
-import blankChart from '../../levels/blank/chart.json';
-import blankPresses from '../../levels/blank/presses.json';
-import blankAudit from '../../levels/blank/audit.json';
-import invLevel from '../../levels/invincible/level.json';
-import invAudio from '../../levels/invincible/audio.json';
-import invChart from '../../levels/invincible/chart.json';
-import invPresses from '../../levels/invincible/presses.json';
-import invAudit from '../../levels/invincible/audit.json';
+import blankLevel from '../../levels/luna/level.json';
+import blankAudio from '../../levels/luna/audio.json';
+import blankChart from '../../levels/luna/chart.json';
+import blankPresses from '../../levels/luna/presses.json';
+import invLevel from '../../levels/willow/level.json';
+import invAudio from '../../levels/willow/audio.json';
+import invChart from '../../levels/willow/chart.json';
+import invPresses from '../../levels/willow/presses.json';
 import royLevel from '../../levels/royalty/level.json';
 import royAudio from '../../levels/royalty/audio.json';
 import royChart from '../../levels/royalty/chart.json';
 import royPresses from '../../levels/royalty/presses.json';
 import royAudit from '../../levels/royalty/audit.json';
 import heroesB from '../../levels/heroes/bside.json';
-import skyB from '../../levels/skyhigh/bside.json';
-import blankB from '../../levels/blank/bside.json';
-import invB from '../../levels/invincible/bside.json';
+import skyB from '../../levels/flutter/bside.json';
+import blankB from '../../levels/luna/bside.json';
+import invB from '../../levels/willow/bside.json';
 
 export interface LevelPack {
   level: LevelFile;
@@ -66,9 +63,9 @@ const pack = (level: unknown, audio: unknown, chart: unknown, presses?: unknown,
 
 export const PACKS: LevelPack[] = [
   pack(heroesLevel, heroesAudio, heroesChart, heroesPresses),
-  pack(skyLevel, skyAudio, skyChart, skyPresses, skyAudit),
-  pack(blankLevel, blankAudio, blankChart, blankPresses, blankAudit),
-  pack(invLevel, invAudio, invChart, invPresses, invAudit)
+  pack(skyLevel, skyAudio, skyChart, skyPresses),
+  pack(blankLevel, blankAudio, blankChart, blankPresses),
+  pack(invLevel, invAudio, invChart, invPresses)
 ];
 
 /** What a level's bside.json holds: the harder rules, and how each section's bars play on the night side. */

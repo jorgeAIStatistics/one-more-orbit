@@ -1,0 +1,64 @@
+{
+ "_doc": "The B-side of this level: the same song and notes, played on the night side. 'side' sets the harder rules (tol = half-width of the openings in seconds, ahead = beats of course shown, mirror, speed); 'bars' replaces core.bars section by section.",
+ "difficulty": "B-side",
+ "adds": "Night side: mirrored and faster, tighter openings, less warning, turning round and flying the inside of the ring",
+ "side": {
+  "tol": 0.08,
+  "ahead": 2,
+  "mirror": true,
+  "speed": 1.2
+ },
+ "bars": {
+  "still": [
+   "up",
+   "up+down",
+   "up+turn",
+   "up"
+  ],
+  "gift": [
+   "pulsar",
+   "up+down",
+   "up+turn",
+   "up"
+  ],
+  "surface": [
+   "x1.25+up",
+   "up+down",
+   "up+turn",
+   "up",
+   "up",
+   "up+down",
+   "hold+up+turn",
+   "up",
+   "up",
+   "up+down",
+   "up+turn",
+   "up"
+  ],
+  "riser": [
+   "x1.5+up",
+   "up+down",
+   "up+turn",
+   "up"
+  ],
+  "mirror": [
+   "mirror",
+   "up+down",
+   "up+turn",
+   "up",
+   "up",
+   "hold+up+down",
+   "x2+up+turn",
+   "up",
+   "up",
+   "up+down",
+   "x1.5+up+turn",
+   "up",
+   "up",
+   "mirror+down",
+   "up+turn",
+   "up",
+   "up"
+  ]
+ }
+}

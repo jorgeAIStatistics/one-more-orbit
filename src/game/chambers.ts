@@ -8,6 +8,21 @@ import heroesAudio from '../../levels/heroes/audio.json';
 import heroesChart from '../../levels/heroes/chart.json';
 import heroesPresses from '../../levels/heroes/presses.json';
 import heroesAudit from '../../levels/heroes/audit.json';
+import skyOldLevel from '../../levels/skyhigh/level.json';
+import skyOldAudio from '../../levels/skyhigh/audio.json';
+import skyOldChart from '../../levels/skyhigh/chart.json';
+import skyOldPresses from '../../levels/skyhigh/presses.json';
+import skyOldAudit from '../../levels/skyhigh/audit.json';
+import blankOldLevel from '../../levels/blank/level.json';
+import blankOldAudio from '../../levels/blank/audio.json';
+import blankOldChart from '../../levels/blank/chart.json';
+import blankOldPresses from '../../levels/blank/presses.json';
+import blankOldAudit from '../../levels/blank/audit.json';
+import invOldLevel from '../../levels/invincible/level.json';
+import invOldAudio from '../../levels/invincible/audio.json';
+import invOldChart from '../../levels/invincible/chart.json';
+import invOldPresses from '../../levels/invincible/presses.json';
+import invOldAudit from '../../levels/invincible/audit.json';
 import ambushLevel from '../../levels/ambush/level.json';
 import ambushAudio from '../../levels/ambush/audio.json';
 import ambushChart from '../../levels/ambush/chart.json';
@@ -52,7 +67,12 @@ function room(base: LevelPack, id: string, from: number, to: number, bars: strin
   return { ...base, level };
 }
 
-const [, SKY, BLANK, INV] = PACKS;
+// (the gift rooms keep the songs they were built on, now that Cirra, Glassmere and Verdance fly to new ones, 2026-11-25)
+const old = (level: unknown, audio: unknown, chart: unknown, presses: unknown, audit: unknown): LevelPack => ({ level: level as LevelFile, audio: audio as AudioMeta, chart: chart as ChartFile, presses: presses as LevelPack['presses'], audit: audit as LevelPack['audit'] });
+const SKY = old(skyOldLevel, skyOldAudio, skyOldChart, skyOldPresses, skyOldAudit);
+const BLANK = old(blankOldLevel, blankOldAudio, blankOldChart, blankOldPresses, blankOldAudit);
+const INV = old(invOldLevel, invOldAudio, invOldChart, invOldPresses, invOldAudit);
+void PACKS;
 /** the Meteor's room keeps the song it was built on (Heroes Tonight), now that Emberwick itself is flown to Volcano */
 const HEROES: LevelPack = { level: heroesLevel as unknown as LevelFile, audio: heroesAudio as AudioMeta, chart: heroesChart as unknown as ChartFile, presses: heroesPresses as LevelPack['presses'], audit: heroesAudit as LevelPack['audit'] };
 
