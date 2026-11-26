@@ -26,6 +26,8 @@ export interface PlaceDef {
   /** a circle that winds inward between these beats (to the point `to`, in base-ring radii from the centre) */
   spiral?: [number, number];
   to?: [number, number];
+  /** the spiral's ring at its end, as a share of the base ring (0.18: down into a point; above 1: winding outward) */
+  grow?: number;
 }
 
 const TAU = Math.PI * 2;
@@ -87,10 +89,11 @@ export function placePoint(d: PlaceDef, a: number, r: number, R: number, span: [
     const cx = Math.cos(ap), cy = Math.sin(ap);
     const raw = win && d.spiral ? (a - win[0]) / (win[1] - win[0] || 1) : -1;
     if (raw > 0 && raw <= 1) { // (before its window and after it, the ring is round again: after it, he is inside)
-      const q = sm(raw), m = 1 - 0.82 * q, to = d.to ?? [0, -0.92];
+      const q = sm(raw), m = 1 + ((d.grow ?? 0.18) - 1) * q, to = d.to ?? [0, -0.92];
       return [to[0] * R * q + cx * r * m, to[1] * R * q + cy * r * m, cx, cy];
     }
-    return [cx * r, cy * r, cx, cy];
+    const k = d.size ?? 1;
+    return [cx * (r + R * (k - 1)), cy * (r + R * (k - 1)), cx, cy];
   }
   const k = d.size ?? 1, [x0, y0, nx, ny] = closed(d.shape, ap / k), x = x0 * k, y = y0 * k;
   const [X, Y] = turn(x, y, rot), [NX, NY] = turn(nx, ny, rot), off = r - R;

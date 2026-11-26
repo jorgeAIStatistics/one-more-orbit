@@ -9,13 +9,14 @@
 import { COMPANIONS } from '../art/companions.js';
 import { K } from '../art/painter.js';
 import { LANDING } from '../art/landingpaint.js';
-import { askLandingSky, askLevelSky, askPlanet, landingSky, levelSky, planetLayer, type SkySpec } from '../art/paintcache';
+import { askLandingSky, askLevelSky, askPlanet, landingSky, levelSky, pairNow, planetLayer, type SkySpec } from '../art/paintcache';
 import { WORLDS as W } from '../art/worldpaint.js';
 import { CANON } from '../art/canonpaint.js';
 import { DUSK } from '../art/painter.js';
 import { writeSays, type Said, type SceneState } from './skyplanet';
 import { save } from '../save';
 import { EIGHT_LOBES } from '../gd/shapes';
+import { rings } from '../art/stillness.js';
 
 const TAU = Math.PI * 2;
 const sm = (x: number) => { const t = x < 0 ? 0 : x > 1 ? 1 : x; return t * t * (3 - 2 * t); };
@@ -36,7 +37,7 @@ export interface WorldState {
    * place k is from the one being drawn at, a point on place k's path (angle, radius), its stretch of orbit */
   pf?: number; unit?: number; rel?: (k: number) => [number, number]; along?: (k: number, a: number, r: number) => [number, number]; span?: (k: number) => [number, number]; wide?: boolean;
   /** the course as a perfect run plays it: where he is at a beat (in this frame), which way is up there, its presses, and how many are done */
-  at?: (beat: number) => [number, number]; up?: (beat: number) => number; presses?: ReadonlyArray<{ beat: number; tol: number; form: string; auto: boolean; pad: string; land: number; leap?: { b0: number; b1: number; p0: number; ember: boolean } }>; done?: number; rb?: number;
+  at?: (beat: number) => [number, number]; up?: (beat: number) => number; presses?: ReadonlyArray<{ beat: number; tol: number; form: string; auto: boolean; smash?: boolean; pad: string; land: number; leap?: { b0: number; b1: number; p0: number; ember: boolean } }>; done?: number; rb?: number;
   /** where this frame's origin is on the screen (so a world can reach the horizon, which is fixed on the screen); the beat */
   origin?: [number, number]; beat?: number;
 }
@@ -139,7 +140,7 @@ function zonesInto(cc: CanvasRenderingContext2D, hot: Pic, S: number, lit: numbe
 /** the far shadow rings on the horizon, with Helion's signal behind them; at his moment his silhouette flickers there */
 function horizon(c: CanvasRenderingContext2D, w: number, h: number, helion: number, time: number): void {
   const gx = w * 0.2, gy = h * 0.12, u = Math.min(w / 390, h / 844);
-  c.save(); c.strokeStyle = 'rgba(10,8,20,0.85)'; c.lineWidth = 3 * u; for (let i = 0; i < 3; i++) { c.beginPath(); c.ellipse(gx, gy, (26 + i * 9) * u, (8 + i * 3) * u, -0.2 + i * 0.25, 0, TAU); c.stroke(); } c.restore();
+  rings(c, gx, gy, 26 * u, 8 * u, 0.8, time); // (the shadow rings: the Stillness, as everywhere; 2026-11-26)
   K.glow(c, gx, gy, 14 * u * (1 + helion), [255, 214, 140], 0.5 + 0.4 * helion);
   if (helion > 0.01) {
     const flick = helion * (0.55 + 0.45 * Math.sin(time * 23) * Math.sin(time * 7.1));
@@ -170,9 +171,13 @@ export class EmberWorld {
 
   private paint(w: number, h: number): void {
     const key = `${w}x${h}`; if (key === this.key) return; this.key = key;
-    if (!this.cold) { this.cold = planetLayer('emberLayer', false) ?? W.emberLayer(false); this.hot = planetLayer('emberLayer', true) ?? W.emberLayer(true); }
-    for (const n of BODIES) if (!this.bodies[n]) this.bodies[n] = [planetLayer(n, false) ?? W[n](false), planetLayer(n, true) ?? W[n](true)];
+    this.ensure();
     this.skyCold = skyOf(w, h, EMBER_SKY[0]); this.skyHot = skyOf(w, h, EMBER_SKY[1]);
+  }
+  /** its pictures, as soon as the worker has them (never painted on the page as the level opens; 2026-11-26) */
+  private ensure(): void {
+    if (!this.cold) { const p = pairNow('emberLayer', W.emberLayer); if (p) [this.cold, this.hot] = p; }
+    for (const n of BODIES) if (!this.bodies[n]) { const p = pairNow(n, W[n]); if (p) this.bodies[n] = p; }
   }
   reset(): void { this.lit.fill(-1); this.sparks = 0; this.lastT = -1; this.impact = -9; this.embers = []; this.rise.x = 0; this.head.x = 0.62; this.litS.x = 0.05; this.taps = []; this.heat.fill(0); }
   rewind(to: number): void { for (let z = 0; z < ZONES; z++) if (this.lit[z] > to) this.lit[z] = -1; this.embers = []; this.lastT = -1; this.taps = this.taps.filter((x) => x.at <= to); }
@@ -197,6 +202,7 @@ export class EmberWorld {
     // pulls back hard on the drop to show the planet ablaze, settling as the drop runs; in the core it is a little close
     cam: (s) => (s < ET.held ? 0.9 : s < ET.stabs ? 0.9 - 0.18 * sm((s - ET.held) / 0.8) + 0.28 * sm((s - ET.stabs + 0.9) / 0.9) : s < ET.drop ? 1 + 0.12 * sm((s - ET.stabs) / (ET.drop - 0.3 - ET.stabs)) : s < ET.lava ? 0.8 : s < ET.bridge ? 0.8 - 0.14 * sm((s - ET.lava) / 1.2) : s < ET.back ? 0.66 + 0.16 * sm((s - ET.bridge) / 0.8) : s < ET.tip ? 0.82 - 0.5 * sm((s - ET.back) / 0.5) : s < ET.core ? 0.32 + 0.58 * sm((s - ET.tip) / 0.45) + 0.25 * sm((s - ET.dive + 0.4) / 0.4) : 0.95),
     draw: (c, R, st) => {
+      this.ensure();
       if (!this.cold || !this.hot) return;
       if (st.rel && st.at && st.song < ET.core) { this.journey(c, R, st); return; }
       this.planet(c, R, st);
@@ -602,9 +608,13 @@ export class EdgeWorld {
   private jT = -1; private moteK = new Spring(1, 2.2);
   private paint(w: number, h: number): void {
     const key = `${w}x${h}`; if (key === this.key) return; this.key = key;
-    if (!this.cold) { this.cold = planetLayer('edgeLayer', false) ?? W.edgeLayer(false); this.hot = planetLayer('edgeLayer', true) ?? W.edgeLayer(true); }
-    for (const n of FRAGS) if (!this.bodies[n]) this.bodies[n] = [planetLayer(n, false) ?? W[n](false), planetLayer(n, true) ?? W[n](true)];
+    this.ensure();
     const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const pre = landingSky(w, h, 1, 0); if (pre) cv.getContext('2d')!.drawImage(pre, 0, 0, w, h); else LANDING.sky(cv.getContext('2d')!, w, h, 0); this.skyLayer = cv; // (from the paint worker when it is ready)
+  }
+  /** its pictures, as soon as the worker has them */
+  private ensure(): void {
+    if (!this.cold) { const p = pairNow('edgeLayer', W.edgeLayer); if (p) [this.cold, this.hot] = p; }
+    for (const n of FRAGS) if (!this.bodies[n]) { const p = pairNow(n, W[n]); if (p) this.bodies[n] = p; }
   }
   reset(): void { this.lit.fill(-1); this.sparks = 0; this.blooms = []; this.lastT = -1; this.wake.x = 0; this.curl.x = 0.7; this.taps = []; this.heat.fill(0); }
   rewind(to: number): void { for (let z = 0; z < ZONES; z++) if (this.lit[z] > to) this.lit[z] = -1; this.blooms = this.blooms.filter((b) => b.at <= to); this.lastT = -1; this.taps = this.taps.filter((x) => x.at <= to); }
@@ -626,6 +636,7 @@ export class EdgeWorld {
     cam: (song) => (song > DT.rise && song < DT.drop2 + 0.4 ? 0.92 - 0.36 * sm((song - DT.rise) / 1.6) + 0.36 * sm((song - DT.drop2 + 0.2) / 0.6) : 0.92),
     pull: (song) => (song > DT.rise && song < DT.drop2 + 0.4 ? { x: 0.35, y: -3.4, k: 0.55 * sm((song - DT.rise) / 1.6) * (1 - sm((song - DT.drop2 + 0.2) / 0.6)) } : null),
     draw: (c, R, st) => {
+      this.ensure();
       if (!this.cold || !this.hot) return;
       if (st.rel && st.at) { this.journey(c, R, st); return; }
       this.planetoid(c, R, st);

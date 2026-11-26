@@ -7,8 +7,13 @@
 //   The Drifting Edge: a small grey planetoid, the Sleeper curled round it, its stone hand cupped round an empty pit.
 import { CANON } from './canonpaint.js';
 import { DUSK, K } from './painter.js';
+import { mass } from './stillness.js';
 
 const T = DUSK.tools, TAU = Math.PI * 2;
+/** the Stillness's residue on a cold world: small masses of the ink (src/art/stillness.js), still (painted once) */
+function stains(c, r, n, spread, size = 1) {
+  for (let k = 0; k < n; k++) { const a = r() * TAU, d = spread * (0.15 + 0.85 * r()), rr = (16 + r() * 24) * size; mass(c, Math.cos(a) * d, Math.sin(a) * d, rr, rr * (0.45 + 0.2 * r()), { near: 0.45, seed: 1 + k * 3.7 + r(), t: k * 2.3, stutter: false }); }
+}
 const R0 = 200; // the planets are painted at this radius and scaled
 const lerp = (a, b, t) => a + (b - a) * t;
 
@@ -65,10 +70,8 @@ function emberLayer(hot) {
     c.beginPath(); pts.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y))); c.stroke(); c.shadowBlur = 0;
     if (hot) { c.strokeStyle = 'rgba(255,150,100,0.3)'; c.lineWidth = 2; c.stroke(); }
   }
-  if (!hot) { // the Stillness's residue: dark violet stains, smudged
-    c.filter = 'blur(5px)';
-    for (let k = 0; k < 22; k++) { const a = r() * TAU, d = R0 * (0.2 + 0.72 * r()); c.fillStyle = 'rgba(34,20,52,0.62)'; c.beginPath(); c.ellipse(Math.cos(a) * d, Math.sin(a) * d, 20 + r() * 34, 10 + r() * 16, a, 0, TAU); c.fill(); }
-    c.filter = 'none';
+  if (!hot) { // the Stillness's residue: small masses of it lying on the ground
+    stains(c, r, 11, R0 * 0.9);
   } else K.glow(c, 0, -R0 * 0.5, R0 * 1.1, [255, 120, 60], 0.22, 'screen');
   c.restore();
   // the rim: cool asleep, ember when relit
@@ -89,7 +92,7 @@ function ashLayer(hot) {
   c.save(); c.beginPath(); c.arc(0, 0, R0, 0, TAU); c.clip();
   for (let i = 0; i < 70; i++) { const a = r() * TAU, d = r() * R0; c.fillStyle = hot ? `rgba(255,200,160,${0.04 + 0.08 * r()})` : `rgba(205,214,238,${0.06 + 0.12 * r()})`; c.beginPath(); c.ellipse(Math.cos(a) * d, Math.sin(a) * d, 10 + r() * 30, 5 + r() * 12, a, 0, TAU); c.fill(); }
   for (let i = 0; i < 16; i++) { const a = r() * TAU, d = r() * R0 * 0.85, rr = 8 + r() * 22; c.fillStyle = 'rgba(14,12,22,0.35)'; c.beginPath(); c.arc(Math.cos(a) * d + 2, Math.sin(a) * d + 3, rr, 0, TAU); c.fill(); c.strokeStyle = hot ? 'rgba(255,190,150,0.35)' : 'rgba(200,210,240,0.3)'; c.lineWidth = 2; c.beginPath(); c.arc(Math.cos(a) * d, Math.sin(a) * d, rr, Math.PI * 1.1, Math.PI * 1.9); c.stroke(); }
-  if (!hot) { c.filter = 'blur(5px)'; for (let k = 0; k < 10; k++) { const a = r() * TAU, d = R0 * (0.2 + 0.7 * r()); c.fillStyle = 'rgba(34,20,52,0.55)'; c.beginPath(); c.ellipse(Math.cos(a) * d, Math.sin(a) * d, 18 + r() * 30, 9 + r() * 14, a, 0, TAU); c.fill(); } c.filter = 'none'; }
+  if (!hot) { stains(c, r, 6, R0 * 0.85); }
   else { K.glow(c, -R0 * 0.3, -R0 * 0.4, R0 * 1.2, [255, 160, 100], 0.32, 'screen'); for (let i = 0; i < 9; i++) { const a = r() * TAU, d = r() * R0 * 0.8; K.glow(c, Math.cos(a) * d, Math.sin(a) * d, 26 + r() * 30, [255, 150, 80], 0.35, 'screen'); } }
   c.restore();
   c.strokeStyle = hot ? 'rgba(255,190,150,0.6)' : 'rgba(170,180,220,0.3)'; c.lineWidth = 3; c.beginPath(); c.arc(0, 0, R0, 0, TAU); c.stroke();
@@ -139,7 +142,7 @@ function shardsLayer(hot) {
     if (hot) K.glow(c, 0, 0, L * 0.6, [170, 245, 230], 0.35, 'screen');
     c.restore();
   }
-  if (!hot) { c.filter = 'blur(5px)'; for (let k = 0; k < 6; k++) { const a = r() * TAU, d = R0 * 0.4 * r(); c.fillStyle = 'rgba(34,20,52,0.6)'; c.beginPath(); c.ellipse(Math.cos(a) * d, Math.sin(a) * d, 26, 12, a, 0, TAU); c.fill(); } c.filter = 'none'; }
+  if (!hot) { stains(c, r, 3, R0 * 0.4, 0.8); }
   return cv;
 }
 function rocksLayer(hot) {
@@ -149,7 +152,7 @@ function rocksLayer(hot) {
     c.save(); c.beginPath(); c.arc(x, y, rr, 0, TAU); c.clip();
     for (let i = 0; i < 6; i++) { const a = r() * TAU, d = r() * rr * 0.8; c.strokeStyle = 'rgba(14,12,22,0.5)'; c.lineWidth = 2; c.beginPath(); c.arc(x + Math.cos(a) * d, y + Math.sin(a) * d, rr * (0.08 + 0.12 * r()), 0, TAU); c.stroke(); }
     if (hot) for (let i = 0; i < 8; i++) { const a = r() * TAU, d = r() * rr * 0.8; K.glow(c, x + Math.cos(a) * d, y + Math.sin(a) * d, rr * 0.18, [150, 235, 220], 0.5, 'screen'); }
-    else { c.filter = 'blur(4px)'; c.fillStyle = 'rgba(34,20,52,0.55)'; c.beginPath(); c.ellipse(x + rr * 0.2, y, rr * 0.4, rr * 0.2, 0.4, 0, TAU); c.fill(); c.filter = 'none'; }
+    else stains(c, r, 1, rr * 0.4, 0.6);
     c.restore();
   }
   return cv;
@@ -167,7 +170,7 @@ function hearthLayer(hot) {
   c.beginPath(); c.moveTo(-R0 * 0.55, R0 * 0.45); c.lineTo(-R0 * 0.55, -R0 * 0.15); c.quadraticCurveTo(-R0 * 0.55, -R0 * 0.6, -R0 * 0.2, -R0 * 0.62); c.stroke();
   for (let i = 0; i < 9; i++) { const a = (i / 9) * TAU; c.fillStyle = hot ? 'rgb(140,120,118)' : 'rgb(80,76,90)'; c.beginPath(); c.arc(R0 * 0.2 + Math.cos(a) * R0 * 0.2, R0 * 0.15 + Math.sin(a) * R0 * 0.2, R0 * 0.06, 0, TAU); c.fill(); }
   if (hot) { K.glow(c, R0 * 0.2, R0 * 0.15, R0 * 0.35, [255, 180, 100], 0.85, 'screen'); K.glow(c, R0 * 0.2, R0 * 0.15, R0 * 0.12, [255, 240, 200], 0.9); }
-  else { c.filter = 'blur(5px)'; for (let k = 0; k < 8; k++) { const a = r() * TAU, d = R0 * 0.7 * r(); c.fillStyle = 'rgba(34,20,52,0.6)'; c.beginPath(); c.ellipse(Math.cos(a) * d, Math.sin(a) * d, 26, 12, a, 0, TAU); c.fill(); } c.filter = 'none'; }
+  else stains(c, r, 5, R0 * 0.7);
   return cv;
 }
 

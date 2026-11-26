@@ -112,7 +112,7 @@ for (const pack of [...PACKS.filter((p) => SLICE.includes(p.level.id)), FINAL, .
       expect(new Set(course.taps).size).toBe(course.taps.length);
       course.presses.forEach((p, i) => {
         const next = course.presses[i + 1];
-        expect(p.land - p.beat).toBeLessThanOrEqual(2 + 1e-9);
+        if (!p.leap) expect(p.land - p.beat).toBeLessThanOrEqual(2 + 1e-9); // (a leap's flight to its first ember can be longer)
         // a hop (and the Satellite's zig-zag) lasts until the next press; a dash, a flip on the spot, a climb and a slipstream are over sooner
         if (next && next.beat - p.beat <= 2 && (p.form === 'orb' || p.form === 'sat') && !p.slip && !p.leap) expect(p.land).toBe(next.beat); // (a leap lands at its end, then a beat of grace)
         else if (next) expect(p.land).toBeLessThanOrEqual(next.beat + 1e-9);

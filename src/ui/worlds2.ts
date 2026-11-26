@@ -13,7 +13,7 @@ import { WORLDS2 as W2 } from '../art/world2paint.js';
 import { writeSays, type Said, type SceneState } from './skyplanet';
 import { save } from '../save';
 import { horizon, skyOf, zoneOf, zones, ZONES, type CourseView, type Pic, type World, type WorldSky, type WorldState } from './worlds';
-import { askLevelSky, askPlanet, planetLayer, type LayerName, type SkySpec } from '../art/paintcache';
+import { askLevelSky, askPlanet, pairNow, planetLayer, type LayerName, type SkySpec } from '../art/paintcache';
 
 const TAU = Math.PI * 2;
 const sm = (x: number) => { const t = x < 0 ? 0 : x > 1 ? 1 : x; return t * t * (3 - 2 * t); };
@@ -56,15 +56,43 @@ abstract class PlanetWorld {
   constructor(protected cfg: Cfg) {}
   private paint(w: number, h: number): void {
     const key = `${w}x${h}`; if (key === this.key) return; this.key = key;
-    if (!this.cold) { const n = this.cfg.layerName; this.cold = planetLayer(n, false) ?? this.cfg.layer(false); this.hot = planetLayer(n, true) ?? this.cfg.layer(true); }
+    this.ensurePlanet();
     this.skyCold = skyOf(w, h, this.skySpec(false)); this.skyHot = skyOf(w, h, this.skySpec(true));
     // the far Stillness is painted now too (its image, at the screen's resolution), not on the level's first frame
     const S = this.cfg.stillness, u = Math.min(w / 390, h / 844), dpr = window.devicePixelRatio || 1;
     if (S > 0) { const warm = document.createElement('canvas').getContext('2d')!; warm.setTransform(dpr, 0, 0, dpr, 0, 0); C.dread(warm, -1e5, -1e5, (90 + 220 * S) * u, (70 + 160 * S) * u, 61, 0.4 + 0.6 * S); }
   }
-  reset(): void { this.lit.fill(-1); this.sparks = 0; this.lastT = -1; this.resetMore(); }
-  rewind(to: number): void { for (let z = 0; z < ZONES; z++) if (this.lit[z] > to) this.lit[z] = -1; this.lastT = -1; }
-  spark(a: number, song: number): void { const z = zoneOf(a); if (this.lit[z] < 0) this.lit[z] = song; this.sparks++; }
+  /** the planet's pictures, as soon as the worker has them (2026-11-26: never painted on the page as a level opens) */
+  protected ensurePlanet(): void { if (!this.cold) { const p = pairNow(this.cfg.layerName, this.cfg.layer); if (p) [this.cold, this.hot] = p; } }
+  reset(): void { this.lit.fill(-1); this.sparks = 0; this.lastT = -1; this.taps = []; this.heat.fill(0); this.resetMore(); }
+  rewind(to: number): void { for (let z = 0; z < ZONES; z++) if (this.lit[z] > to) this.lit[z] = -1; this.lastT = -1; this.taps = this.taps.filter((x) => x.at <= to); }
+  spark(a: number, song: number, pf = 0): void {
+    const k = Math.round(pf);
+    this.taps.push({ k, at: song });
+    if (this.journeyOn && !this.planetAt.includes(k)) return; // (another place lights from its own taps)
+    const z = zoneOf(a); if (this.lit[z] < 0) this.lit[z] = song; this.sparks++;
+  }
+  // ---- the journey (2026-11-26): the world's places, each relit by the taps played on it; the planet at its places
+  protected journeyOn = false;
+  protected taps: Array<{ k: number; at: number }> = [];
+  protected heat = [0, 0, 0, 0, 0, 0];
+  /** which of the level's places are the planet itself (drawn once, at the first) */
+  protected planetAt: number[] = [0];
+  private jT = -1;
+  /** behind the planet: the inhabitant, the world's far pieces (world frame) */
+  protected journeyBack(_c: CanvasRenderingContext2D, _st: WorldState, _U: number): void { /* (per world) */ }
+  /** over the planet, under the course: the other places' bodies and the world's objects */
+  protected journeyMore(_c: CanvasRenderingContext2D, _st: WorldState, _U: number): void { /* (per world) */ }
+  private journey(c: CanvasRenderingContext2D, st: WorldState): void {
+    this.journeyOn = true;
+    const t = st.song, U = st.unit ?? 100, time = st.time, dt = this.jT < 0 ? 0 : Math.min(0.05, Math.max(0, time - this.jT)); this.jT = time;
+    const n = [0, 0, 0, 0, 0, 0]; for (const x of this.taps) if (x.at <= t && x.k >= 0 && x.k < 6) n[x.k]++;
+    for (let k = 0; k < 6; k++) { const want = Math.min(1, n[k] / 5) * 0.8 + (t >= this.cfg.T.drop ? 0.2 : 0); this.heat[k] += (want - this.heat[k]) * Math.min(1, dt * 2.5); }
+    this.journeyBack(c, st, U);
+    const [px, py] = st.rel!(this.planetAt[0]);
+    c.save(); c.translate(px, py); this.planetFace(c, U * 0.84, st); c.restore();
+    this.journeyMore(c, st, U);
+  }
   protected resetMore(): void { /* (a world's own state) */ }
   /** the planet's own landmarks and set pieces, over its painted face (canvas at its centre, radius R) */
   protected abstract planetMore(c: CanvasRenderingContext2D, R: number, st: WorldState): void;
@@ -73,16 +101,27 @@ abstract class PlanetWorld {
   /** the world's set pieces on the course */
   protected courseMore(_c: CanvasRenderingContext2D, _v: CourseView): void { /* (none by default) */ }
   /** the camera through the song (build pushes in; the drop pulls back to show the world, then settles) */
+  protected pullAt(_s: number): { x: number; y: number; k: number } | null { return null; }
   protected camAt(s: number): number { const T = this.cfg.T; return s < T.gift ? 1 : s < T.drop ? 1 + 0.12 * sm((s - T.gift) / (T.drop - 0.3 - T.gift)) : 0.8 + 0.12 * sm((s - T.drop - 0.6) / 3); }
 
   readonly world: World = {
     reset: () => this.reset(),
     rewind: (to) => this.rewind(to),
-    spark: (a, song) => this.spark(a, song),
+    spark: (a, song, pf) => this.spark(a, song, pf),
     onCourse: (c, v) => this.onCourse(c, v),
     cam: (s) => this.camAt(s),
+    pull: (s) => this.pullAt(s),
     relit: 0,
     draw: (c, R, st) => {
+      this.ensurePlanet();
+      if (!this.cold || !this.hot) return;
+      if (st.rel && st.at) { this.journey(c, st); return; }
+      this.planetFace(c, R, st);
+    }
+  };
+  /** the planet itself at the frame's origin: its zones relit, its landmarks, the Kindling rising off it with the gift */
+  private planetFace(c: CanvasRenderingContext2D, R: number, st: WorldState): void {
+    {
       if (!this.cold || !this.hot) return;
       const T = this.cfg.T, t = st.song, dropK = sm((t - T.drop) / 0.4);
       zones(c, this.cold, this.hot, R, this.lit, t, dropK);
@@ -93,7 +132,7 @@ abstract class PlanetWorld {
         COMPANIONS.kindling(c, Math.sin(st.time * 2) * 10 * k, -R * 0.95 - 140 * k * q, 0.8 * k, (COMPANIONS.KINDLE as Record<string, number[]>)[this.cfg.key], { flap: 0.5 + 0.5 * Math.sin(st.time * 5), alpha: sm((t - T.gift + 2.2) / 0.5) * a });
       }
     }
-  };
+  }
   readonly sky: WorldSky = {
     says: [],
     prepare: () => this.paint(window.innerWidth, window.innerHeight),
@@ -159,15 +198,106 @@ abstract class PlanetWorld {
 }
 
 // ================================================================ Cirra, on Flutter (128 BPM, a bar 1.875 s)
-const CT = { gift: 7.5, helion: 13.125, drop: 15.0, mini: 24.375, strings: 28.125, lift: 37.5, kites: 39.375, mini2: 48.75, end: 63.75, spb: 60 / 128 };
+const CT = { gift: 7.5, gust: 11.25, helion: 13.125, drop: 15.0, spiral: 15.94, shelves: 22.5, mini: 26.25, strings: 99, lift: 37.5, kites: 39.375, mini2: 48.75, end: 63.75, spb: 60 / 128 };
+/** where Seo stands, from Cirra's centre (base-ring radii, portrait); it stands a little behind (it drifts less) */
+const SEO_AT: [number, number] = [-1.9, 2.05];
 export class CirraWorld extends PlanetWorld {
   private wake = new Spring(0, 3); private fly = new Spring(0, 2.5); private sway = new Spring(0, 2); private flap = new Spring(0, 1.8);
   constructor() {
     super({ key: 'skyhigh', T: CT, layer: W2.cirraLayer, layerName: 'cirraLayer', col: [255, 200, 240], stillness: 0.3, signal: 0.45,
       sky: [[[0, [14, 12, 26]], [0.55, [34, 28, 48]], [1, [50, 40, 60]]], [[0, [36, 24, 70]], [0.5, [150, 90, 170]], [1, [255, 190, 210]]]] });
     this.world.relit = 20;
+    this.planetAt = [0, 2, 4];
   }
   protected resetMore(): void { this.wake.x = 0; this.fly.x = 0; }
+  private bodies: Partial<Record<'shelvesLayer' | 'kitemoonLayer', [Pic, Pic]>> = {};
+  askAhead(): void { super.askAhead(); askPlanet('shelvesLayer'); askPlanet('kitemoonLayer'); }
+  private body(n: 'shelvesLayer' | 'kitemoonLayer'): [Pic, Pic] | null { if (!this.bodies[n]) { const p = pairNow(n, W2[n]); if (p) this.bodies[n] = p; } return this.bodies[n] ?? null; }
+  private pic(c: CanvasRenderingContext2D, n: 'shelvesLayer' | 'kitemoonLayer', x: number, y: number, r: number, heat: number): void {
+    const bp = this.body(n); if (!bp) return;
+    const [a, b] = bp, S = (a.width * r) / W2.R0;
+    c.drawImage(a, x - S / 2, y - S / 2, S, S); if (heat > 0.01) { c.globalAlpha = heat; c.drawImage(b, x - S / 2, y - S / 2, S, S); c.globalAlpha = 1; }
+  }
+  /** Seo in the world, beside Cirra and a little behind it: tangled, then standing at the gift, flying every kite on the drops */
+  protected journeyBack(c: CanvasRenderingContext2D, st: WorldState, U: number): void {
+    const t = st.song, dt = this.dt, rel = st.rel!, [ex, ey] = rel(0), wide = !!st.wide;
+    const [ox, oy] = wide ? [-SEO_AT[1], SEO_AT[0]] : SEO_AT, x = ex * 0.9 + ox * U, y = ey * 0.9 + oy * U, s = U * 0.0088;
+    const wake = t >= CT.gift ? 1 : Math.min(0.3, this.sparks * 0.03), fly = t >= CT.kites ? 1 : t >= CT.drop ? 0.8 : t >= CT.helion ? 0.25 : 0;
+    const W = this.wake.step(wake, dt), F = this.fly.step(fly, dt), sway = this.sway.step(t >= CT.drop ? 0.25 * Math.sin(st.time * 1.3) : 0.04 * Math.sin(st.time * 0.6), dt), fl = this.flap.step(Math.sin(st.time * 4) * (0.3 + F), dt);
+    const lit = sm((t - CT.drop) / 1.2) * 0.9 + Math.min(0.1, this.sparks * 0.01);
+    W2.seo(c, x, y, s, { wake: W, fly: F, sway, flap: fl, lit, t: st.time, face: 1 });
+    this.seoHand = [x + 30 * s, y - 190 * s];
+    // Seo's sky (the second drop): every kite of Cirra flying round it, on long lines back to Seo's hands
+    const all = sm((t - CT.kites) / 1.2) * (1 - sm((t - CT.end + 1) / 1.5));
+    if (all > 0.01) {
+      for (let i = 0; i < 9; i++) {
+        const a = (i / 9) * TAU + st.time * 0.18, rr = U * (2.0 + 0.35 * Math.sin(st.time * 0.7 + i)), kx = ex + Math.cos(a) * rr, ky = ey + Math.sin(a) * rr * 0.8 - U * 0.4;
+        c.strokeStyle = `rgba(255,235,250,${0.18 * all})`; c.lineWidth = 1; c.beginPath(); c.moveTo(this.seoHand[0], this.seoHand[1]); c.quadraticCurveTo((this.seoHand[0] + kx) / 2, Math.min(this.seoHand[1], ky) - U * 0.6, kx, ky); c.stroke();
+        c.globalAlpha = all; W2.kite(c, kx, ky, U * 0.006, 0.4 * Math.sin(st.time * 1.6 + i), true, i % 2 ? [255, 170, 220] : [220, 180, 255]); c.globalAlpha = 1;
+      }
+    }
+  }
+  private seoHand: [number, number] = [0, 0];
+  /** the other places (the kite-moons along the strings, the Cloud Shelves) and Cirra's objects, in their three beats */
+  protected journeyMore(c: CanvasRenderingContext2D, st: WorldState, U: number): void {
+    const rel = st.rel!, t = st.song;
+    if (st.along && st.span) {
+      // the kite strings: kite-moons hanging under the line, the line itself a string of light between them
+      const [o0, o1] = st.span(1), [bx, by] = rel(1);
+      for (const q of [-0.12, 0.5, 1.12]) { const [x, y] = st.along(1, o0 + (o1 - o0) * q, U * 0.35); this.pic(c, 'kitemoonLayer', bx + x, by + y, U * 0.42, this.heat[1]); }
+      c.save(); c.globalCompositeOperation = 'lighter'; c.strokeStyle = `rgba(255,230,250,${0.15 + 0.3 * this.heat[1]})`; c.lineWidth = 1.5;
+      for (const off of [0.85, 1.15]) { c.beginPath(); for (let i = 0; i <= 20; i++) { const [x, y] = st.along(1, o0 + (o1 - o0) * (-0.15 + 1.3 * i / 20), U * off); if (i) c.lineTo(bx + x, by + y); else c.moveTo(bx + x, by + y); } c.stroke(); }
+      c.restore();
+    }
+    { const [x, y] = rel(3); this.pic(c, 'shelvesLayer', x, y, U * 0.95, this.heat[3]); }
+    this.objects(c, st, U, t);
+  }
+  private objects(c: CanvasRenderingContext2D, st: WorldState, U: number, t: number): void {
+    const beat = st.beat ?? t / CT.spb, at = st.at!, up = st.up!, rb = st.rb ?? U * 0.066;
+    for (const p of st.presses ?? []) {
+      const d = p.beat - beat;
+      if (d > 3 || d < -1.6) continue;
+      if (p.pad === 'jump') {
+        // a kite: it fills with wind as he comes (rising, its cloth swelling on the beat), snaps up under him, soars off
+        const [x, y] = at(p.beat), a = up(p.beat), pre = Math.max(0, Math.min(1, 1 - d / 2)), after = beat < p.beat ? 0 : (beat - p.beat) / 1.6;
+        const beatPulse = Math.exp(-(((beat % 1) + 1) % 1) * 5), ux = Math.cos(a), uy = Math.sin(a);
+        const lift = after > 0 ? after * after * U * 2.2 : -rb * 1.6 + pre * rb * 0.6, sw = after > 0 ? 1 + 0.4 * Math.exp(-after * 6) : 0.75 + 0.25 * pre + 0.08 * beatPulse * pre;
+        c.globalAlpha = 1 - sm((after - 0.6) / 0.4);
+        W2.kite(c, x + ux * lift + Math.sin(st.time * 3) * rb * 0.3 * (1 - pre), y + uy * lift, (rb / 12) * sw, a + Math.PI / 2 + (after > 0 ? 0.3 * Math.sin(after * 9) : 0.15 * Math.sin(st.time * 2.4)), pre > 0.2 || after > 0);
+        c.globalAlpha = 1;
+        if (after > 0 && after < 0.4) for (let i = 0; i < 10; i++) { const aa = (i / 10) * TAU, dd = rb * (1.5 + 8 * after); K.glow(c, x + Math.cos(aa) * dd, y + Math.sin(aa) * dd, rb * 0.25, [255, 200, 240], 0.9 * (1 - after / 0.4)); }
+      } else if (p.leap && !p.leap.ember) {
+        // a gust: a spiral of wind gathers under him over the beats before, bursts as it throws him, streams after him
+        const [x, y] = at(p.beat), pre = Math.max(0, Math.min(1, 1 - d / 1.6)), after = beat < p.beat ? 0 : (beat - p.beat) / 1.4;
+        if (pre > 0 && after === 0) { c.save(); c.globalCompositeOperation = 'lighter'; c.lineCap = 'round'; for (let i = 0; i < 4; i++) { const a0 = st.time * (3 + i) + i * 1.6, rr = rb * (5 - 3 * pre) * (1 + 0.25 * i); c.strokeStyle = `rgba(255,225,250,${0.5 * pre})`; c.lineWidth = rb * 0.22; c.beginPath(); c.arc(x, y, rr, a0, a0 + 2.2); c.stroke(); } c.restore(); }
+        if (after > 0 && after < 1) { c.save(); c.globalCompositeOperation = 'lighter'; for (let i = 0; i < 16; i++) { const aa = (i / 16) * TAU + after * 2, dd = rb * (2 + 12 * after); K.glow(c, x + Math.cos(aa) * dd, y + Math.sin(aa) * dd, rb * 0.3 * (1 - after), [255, 220, 245], 0.9 * (1 - after)); } c.restore(); }
+        if (after > 0 && beat < p.leap.b1 + 0.3) for (let i = 1; i <= 6; i++) { const b2 = Math.max(p.beat, beat - i * 0.12), [sx, sy] = at(b2); K.glow(c, sx, sy, rb * (1.2 - i * 0.15), [255, 225, 250], 0.4 * (1 - i / 7)); }
+      } else if (p.leap?.ember) {
+        // a wind chime in the air: its tubes sway and brighten as its beat comes; struck, it rings (light rings out)
+        const [x, y] = at(p.beat), pre = Math.max(0, Math.min(1, 1 - d / 1.5)), after = beat < p.beat ? 0 : (beat - p.beat) / 1.2;
+        c.save(); c.lineCap = 'round';
+        for (let i = 0; i < 4; i++) { const sw = Math.sin(st.time * 2 + i) * 0.2 * (1 + 3 * Math.exp(-after * 4) * (after > 0 ? 1 : 0)), tx = x + (i - 1.5) * rb * 0.6, ty = y - rb * 1.4; c.strokeStyle = `rgba(${200 + 55 * pre},${190 + 50 * pre},235,${0.85 * (1 - sm((after - 0.6) / 0.4))})`; c.lineWidth = rb * 0.22; c.beginPath(); c.moveTo(tx, ty); c.lineTo(tx + Math.sin(sw) * rb * (1.4 + 0.3 * i), ty + Math.cos(sw) * rb * (1.4 + 0.3 * i)); c.stroke(); }
+        c.restore();
+        if (pre > 0 && after === 0) K.glow(c, x, y, rb * (1.5 + 1.5 * pre), [255, 230, 250], 0.35 * pre, 'screen');
+        if (after > 0 && after < 1) { c.strokeStyle = `rgba(255,236,250,${0.7 * (1 - after)})`; c.lineWidth = rb * 0.25; for (const k of [1, 1.6]) { c.beginPath(); c.arc(x, y, rb * (1.5 + 7 * after * k), 0, TAU); c.stroke(); } }
+      } else if (p.form === 'sat' && !p.auto && !p.smash) {
+        // a knot of residue tangled in the wind where the wave would run on: tightening on the beat as he comes; he turns
+        // off it, and it unravels behind him
+        const kb = p.beat + 0.35, [x, y] = at(kb), pre = Math.max(0, Math.min(1, 1 - d / 2)), after = beat < kb ? 0 : (beat - kb) / 1.2, beatPulse = Math.exp(-(((beat % 1) + 1) % 1) * 5);
+        if (after >= 1) continue;
+        c.save(); c.translate(x, y); c.strokeStyle = 'rgba(20,14,30,0.85)'; c.lineCap = 'round';
+        for (let i = 0; i < 5; i++) { const a0 = i * 1.3 + st.time * 0.6, rr = rb * (0.9 + 0.15 * i) * (1 - 0.15 * beatPulse * pre) * (1 + 2.5 * after); c.globalAlpha = 0.85 * (1 - after); c.lineWidth = rb * (0.28 - 0.1 * after); c.beginPath(); c.ellipse(0, 0, rr, rr * 0.55, a0, 0, after > 0 ? TAU * (1 - after) : TAU); c.stroke(); }
+        c.strokeStyle = 'rgba(176,166,198,0.35)'; c.lineWidth = 1; c.beginPath(); c.arc(0, 0, rb * 1.2, 0, TAU); c.stroke();
+        c.restore();
+      }
+      // landing: a ring of light where he comes down from a gust
+      if (p.leap && !p.leap.ember && beat >= p.leap.b1 && beat < p.leap.b1 + 1) {
+        const [x, y] = at(p.leap.b1), q = beat - p.leap.b1;
+        for (let i = 0; i < 16; i++) { const aa = (i / 16) * TAU, dd = rb * (1 + 6 * q); K.glow(c, x + Math.cos(aa) * dd, y + Math.sin(aa) * dd * 0.6, rb * 0.25 * (1 - q), [255, 220, 245], 0.85 * (1 - q)); }
+      }
+    }
+  }
+  protected pullAt(s: number): { x: number; y: number; k: number } | null { return s > CT.lift - 0.1 && s < CT.kites + 0.4 ? { x: 0.3, y: 0, k: sm((s - CT.lift) / 0.5) * (1 - sm((s - CT.kites + 0.7) / 0.5)) } : null; }
   protected planetMore(c: CanvasRenderingContext2D, R: number, st: WorldState): void {
     const t = st.song;
     // the gust (the drop): wind spirals streaming round the planet; again on the second high
@@ -175,6 +305,7 @@ export class CirraWorld extends PlanetWorld {
     W2.windSpirals(c, 0, 0, R, st.time * (1 + gust), Math.min(1, gust + 0.25 * sm((t - CT.drop) / 1)));
   }
   protected skyMore(c: CanvasRenderingContext2D, w: number, h: number, u: number, st: SceneState, t: number, dt: number): void {
+    if (this.journeyOn) { this.windSky(c, w, h, u, st, t); return; } // (on the journey, Seo stands in the world beside Cirra)
     // Seo: tangled and slumped; it stirs at the gift and stands; on the drop its kites go up and it flies them, swaying
     const wake = t >= CT.gift ? 1 : Math.min(0.3, this.sparks * 0.03), fly = t >= CT.drop ? 1 : t >= CT.helion ? 0.25 : 0;
     const W = this.wake.step(wake, dt), F = this.fly.step(fly, dt), sway = this.sway.step(t >= CT.drop ? 0.25 * Math.sin(st.time * 1.3) : 0, dt), fl = this.flap.step(Math.sin(st.time * 4) * (0.3 + F), dt);
@@ -187,7 +318,20 @@ export class CirraWorld extends PlanetWorld {
     const gust = (t > CT.drop && t < CT.mini) || (t > CT.kites && t < CT.mini2) ? 1 : 0;
     if (gust) { c.save(); c.globalCompositeOperation = 'lighter'; c.lineCap = 'round'; for (let i = 0; i < 22; i++) { const r = K.RNG(i * 5 + 1), y = h * r(), x = ((r() * w * 2 + st.time * (300 + 300 * r()) * u) % (w * 1.6)) - w * 0.3; c.strokeStyle = `rgba(255,225,245,${0.18 + 0.2 * r()})`; c.lineWidth = 1 + 2 * r(); c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + 60 * u, y - 14 * u, x + 140 * u, y); c.stroke(); } c.restore(); }
   }
-  protected camAt(s: number): number { return s >= CT.lift && s < CT.kites ? 1.1 : s >= CT.kites ? 0.82 + 0.1 * sm((s - CT.kites - 0.5) / 3) : super.camAt(s); }
+  /** the wind in the sky: streams of light on the gusts and through the drops */
+  private windSky(c: CanvasRenderingContext2D, w: number, h: number, u: number, st: SceneState, t: number): void {
+    const gust = (t > CT.drop && t < CT.mini) || t > CT.kites ? 1 : t > CT.gust && t < CT.gust + 1.6 ? 0.6 : 0;
+    if (!gust) return;
+    c.save(); c.globalCompositeOperation = 'lighter'; c.lineCap = 'round';
+    for (let i = 0; i < 22; i++) { const r = K.RNG(i * 5 + 1), y = h * r(), x = ((r() * w * 2 + st.time * (300 + 300 * r()) * u) % (w * 1.6)) - w * 0.3, L = (40 + 80 * r()) * u; c.strokeStyle = `rgba(255,230,250,${0.12 * gust})`; c.lineWidth = 1 + 1.5 * r(); c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + L * 0.5, y - 6 * u, x + L, y); c.stroke(); }
+    c.restore();
+  }
+  protected camAt(s: number): number {
+    if (!this.journeyOn) return s >= CT.lift && s < CT.kites ? 1.1 : s >= CT.kites ? 0.82 + 0.1 * sm((s - CT.kites - 0.5) / 3) : super.camAt(s);
+    // the journey: the rim calm; the build pushes in; the drop pulls back; the spiral wide (it winds outward); the shelves
+    // closer; the whole sky (the pull-back) far; the second drop wide
+    return s < CT.gift ? 0.95 : s < CT.gust - 0.3 ? 0.95 + 0.05 * sm((s - CT.gift) / 3) : s < CT.helion + 0.4 ? 0.84 : s < CT.drop ? 0.84 + 0.2 * sm((s - CT.helion - 0.4) / 1.2) : s < CT.spiral + 0.8 ? 0.82 : s < CT.shelves + 0.6 ? 0.82 - 0.12 * sm((s - CT.spiral - 0.8) / 1.5) : s < CT.lift ? 0.86 : s < CT.kites ? 0.86 - 0.44 * sm((s - CT.lift) / 0.5) + 0.4 * sm((s - CT.kites + 0.7) / 0.5) : 0.82;
+  }
 }
 
 // ================================================================ Glassmere, on Luna (128 BPM)

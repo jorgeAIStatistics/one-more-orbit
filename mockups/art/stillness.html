@@ -1,0 +1,29 @@
+<!doctype html><meta charset="utf-8"><title>the Stillness: three concepts</title>
+<style>body{margin:0;background:#07060f;display:flex;gap:10px;padding:10px}canvas{display:block}</style>
+<script type="module">
+import { mass, erasure, crust } from '../../src/art/stillness.js';
+import { COLDPAINT as C } from '../../src/art/coldpaint.js';
+import { CANON } from '../../src/art/canonpaint.js';
+import { K } from '../../src/art/painter.js';
+const W = 390, H = 520, cvs = [], bgs = [];
+for (let i = 0; i < 3; i++) { const cv = document.createElement('canvas'); cv.width = W * 2; cv.height = H * 2; cv.style.width = W + 'px'; document.body.append(cv); cvs.push(cv);
+  const b = document.createElement('canvas'); b.width = W; b.height = H; C.nebula(b.getContext('2d'), W, H, false); bgs.push(b); }
+const names = ['A  the erasure', 'B  the ink tide (recommended)', 'C  the crust'];
+window.T0 = performance.now();
+window.draw = (tt) => {
+  const t = tt ?? (performance.now() - window.T0) / 1000;
+  cvs.forEach((cv, i) => {
+    const c = cv.getContext('2d'); c.setTransform(2, 0, 0, 2, 0, 0); c.drawImage(bgs[i], 0, 0, W, H);
+    // Helion, being reached for: a warm spark that the dark closes on (held mid-motion and doubled once it touches)
+    const hx = W * 0.3 + Math.sin(t * 1.3) * 12, hy = H * 0.62 + Math.cos(t * 1.7) * 8, reach = Math.min(1, Math.max(0, (t % 6) / 4));
+    CANON.parts.spark(c, hx, hy, 0.32, { who: 'helion', glow: 1, arms: 'reach', face: 1, eyes: 'soft', crest: 1, lite: true, t });
+    const R = 150, cx = W * 0.82, cy = H * 0.34;
+    if (i === 0) erasure(c, cx, cy, R, R * 1.1, { t, seed: 2 });
+    if (i === 1) mass(c, cx, cy, R, R * 1.15, { t, seed: 2, toward: [hx, hy], reach, n: 5, near: 0.9 });
+    if (i === 2) crust(c, cx - 40, cy + 40, R * (0.8 + 0.25 * Math.sin(t * 0.3)), R * 0.9, { t, seed: 2 });
+    c.font = 'italic 17px Georgia, serif'; c.fillStyle = '#fff1d8'; c.fillText(names[i], 14, H - 16);
+  });
+};
+const loop = () => { window.draw(); requestAnimationFrame(loop); }; if (!location.search.includes('still')) requestAnimationFrame(loop);
+document.title = 'ready';
+</script>

@@ -7,6 +7,7 @@
 //   mossed back where the seed-lights live.
 // No faces on the inhabitants (as Ossa): what they feel is in how they move.
 import { DUSK, K } from './painter.js';
+import { mass } from './stillness.js';
 
 const T = DUSK.tools, TAU = Math.PI * 2;
 const R0 = 200; // (as worldpaint: planets painted at this radius, in a square of side 2.7 R0, and scaled)
@@ -14,10 +15,9 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const sheet = () => { const S = Math.round(R0 * 2.7), cv = document.createElement('canvas'); cv.width = cv.height = S; const c = cv.getContext('2d'); c.translate(S / 2, S / 2); return [cv, c]; };
 function onSurface(c, a, r, draw) { c.save(); c.translate(Math.cos(a) * r, Math.sin(a) * r); c.rotate(a + Math.PI / 2); draw(); c.restore(); }
 /** the Stillness's residue on a cold planet: dark violet stains, smudged */
-function residue(c, r, n, col = 'rgba(34,20,52,0.62)') {
-  c.filter = 'blur(5px)';
-  for (let k = 0; k < n; k++) { const a = r() * TAU, d = R0 * (0.15 + 0.78 * r()); c.fillStyle = col; c.beginPath(); c.ellipse(Math.cos(a) * d, Math.sin(a) * d, 18 + r() * 36, 9 + r() * 16, a, 0, TAU); c.fill(); }
-  c.filter = 'none';
+function residue(c, r, n) {
+  // (small masses of the ink, still: src/art/stillness.js; 2026-11-26)
+  for (let k = 0; k < Math.ceil(n * 0.55); k++) { const a = r() * TAU, d = R0 * (0.15 + 0.78 * r()), rr = 16 + r() * 26; mass(c, Math.cos(a) * d, Math.sin(a) * d, rr, rr * (0.45 + 0.2 * r()), { near: 0.45, seed: 2 + k * 3.1 + r(), t: k * 1.9, stutter: false }); }
 }
 
 // ---------------------------------------------------------------- Cirra
@@ -98,6 +98,41 @@ function seo(c, x, y, s, p) {
   // tangled: its own lines wound round it, while it sleeps
   if (slump > 0.05) { c.strokeStyle = `rgba(150,150,170,${0.5 * slump})`; c.lineWidth = 1.2; for (let i = 0; i < 6; i++) { c.beginPath(); c.ellipse(0, -110 + i * 14, 34 - i * 2, 8, 0.4 * (i % 2 ? 1 : -1), 0, TAU); c.stroke(); } }
   if (lit > 0.2) K.glow(c, 0, -150, 160, [255, 200, 240], 0.18 * lit, 'screen');
+  c.restore();
+}
+
+// ---------------------------------------------------------------- Cirra's journey (2026-11-26)
+/** The Cloud Shelves: drifting cloud-rocks, stone cores wrapped in banks of cloud (grey and still; relit, pink and lifting). */
+function shelvesLayer(hot) {
+  const [cv, c] = sheet(), r = K.RNG(57);
+  for (const [x, y, rr] of [[-R0 * 0.45, R0 * 0.15, R0 * 0.42], [R0 * 0.4, -R0 * 0.3, R0 * 0.34], [R0 * 0.25, R0 * 0.5, R0 * 0.26], [-R0 * 0.2, -R0 * 0.55, R0 * 0.22]]) {
+    T.sphere(c, x, y, rr, hot ? [110, 80, 112] : [56, 54, 68], hot ? [230, 180, 220] : [118, 116, 132], [14, 12, 24], -0.8, r, { haze: 0 });
+    for (let i = 0; i < 9; i++) { const a = r() * TAU, d = rr * (0.7 + 0.5 * r()); c.fillStyle = hot ? K.rgba(K.mix([255, 225, 245], [220, 170, 230], r()), 0.5 + 0.3 * r()) : `rgba(150,148,170,${0.25 + 0.2 * r()})`; c.beginPath(); c.ellipse(x + Math.cos(a) * d, y + Math.sin(a) * d * 0.7, rr * (0.35 + 0.3 * r()), rr * (0.16 + 0.12 * r()), (r() - 0.5) * 0.5, 0, TAU); c.fill(); }
+    if (!hot) residue(c, r, 3);
+  }
+  if (hot) K.glow(c, 0, 0, R0 * 1.1, [255, 200, 240], 0.22, 'screen');
+  return cv;
+}
+/** A kite-moon: a little moon with a mast on its crown and its kite (hanging dead; relit, flying). */
+function kitemoonLayer(hot) {
+  const [cv, c] = sheet(), r = K.RNG(63);
+  T.sphere(c, 0, 0, R0 * 0.6, hot ? [118, 84, 120] : [58, 56, 72], hot ? [240, 196, 232] : [122, 120, 138], [14, 12, 24], -0.8, r, { haze: 0 });
+  c.save(); c.beginPath(); c.arc(0, 0, R0 * 0.6, 0, TAU); c.clip(); if (!hot) residue(c, r, 6); c.restore();
+  c.strokeStyle = hot ? 'rgb(120,80,110)' : 'rgb(40,38,52)'; c.lineWidth = 6; c.lineCap = 'round';
+  c.beginPath(); c.moveTo(0, -R0 * 0.58); c.lineTo(0, -R0 * 0.95); c.moveTo(-16, -R0 * 0.86); c.lineTo(16, -R0 * 0.86); c.stroke();
+  kite(c, hot ? R0 * 0.55 : R0 * 0.22, hot ? -R0 * 1.25 : -R0 * 0.5, hot ? 1.3 : 1.0, hot ? 0.3 : 1.5, hot);
+  c.strokeStyle = hot ? 'rgba(255,230,250,0.75)' : 'rgba(140,140,160,0.45)'; c.lineWidth = 2;
+  c.beginPath(); c.moveTo(0, -R0 * 0.95); c.quadraticCurveTo(hot ? R0 * 0.2 : R0 * 0.08, hot ? -R0 * 1.2 : -R0 * 0.7, hot ? R0 * 0.55 : R0 * 0.22, hot ? -R0 * 1.25 : -R0 * 0.5); c.stroke();
+  return cv;
+}
+/** A kite: a diamond of sailcloth with a ribbon tail. lift: 0 hanging .. 1 full of wind. */
+function kite(c, x, y, s, rot, hot, col = [255, 170, 220]) {
+  c.save(); c.translate(x, y); c.rotate(rot); c.scale(s, s);
+  c.fillStyle = hot ? K.rgba(col) : 'rgb(64,58,78)';
+  c.beginPath(); c.moveTo(0, -30); c.lineTo(20, 0); c.lineTo(0, 34); c.lineTo(-20, 0); c.closePath(); c.fill();
+  c.strokeStyle = hot ? 'rgba(255,240,250,0.85)' : 'rgba(150,150,180,0.4)'; c.lineWidth = 2; c.stroke();
+  c.beginPath(); c.moveTo(0, -30); c.lineTo(0, 34); c.moveTo(-20, 0); c.lineTo(20, 0); c.lineWidth = 1; c.stroke();
+  c.beginPath(); c.moveTo(0, 34); c.quadraticCurveTo(12, 56, 0, 80); c.quadraticCurveTo(-10, 96, 4, 112); c.lineWidth = 2; c.stroke();
   c.restore();
 }
 
@@ -251,4 +286,4 @@ function leaves(c, w, h, t, k, col = [150, 230, 150], n = 26) {
   }
 }
 
-export const WORLDS2 = { R0, CIRRA, cirraLayer, seo, glassLayer, vell, verdLayer, morrow, greatTree, windSpirals, ripples, leaves };
+export const WORLDS2 = { R0, CIRRA, cirraLayer, shelvesLayer, kitemoonLayer, kite, seo, glassLayer, vell, verdLayer, morrow, greatTree, windSpirals, ripples, leaves };

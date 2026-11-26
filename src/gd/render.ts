@@ -1844,7 +1844,7 @@ export class GdRenderer {
         if (ev.charge) this.punch = Math.max(this.punch, 0.2); // each roll note you catch winds the picture a little tighter
         if (ev.kind === 'flip') this.burst(this.ball.x, this.ball.y, 12, VIOLET, r0 * 0.9);
         if (ev.kind === 'hop' && (formEv === 'meteor' || this.look === 2)) this.strike = 1; // (the planet's soul strikes with it; in the new look every good tap touches the world)
-        if (ev.kind === 'hop' && ev.flow !== false) this.planet?.spark(-Math.PI / 2 + course.angle(beat), t, this.pf); // (a good tap relights the zone under him)
+        if ((ev.kind === 'hop' || ev.kind === 'flip') && ev.flow !== false) this.planet?.spark(-Math.PI / 2 + course.angle(beat), t, this.pf); // (a good tap relights the zone under him)
         if (ev.kind === 'hop' && formEv === 'meteor') { this.burst(this.ball.x, this.ball.y, 16, INK_RIM, r0 * 1.4); this.burst(this.ball.x, this.ball.y, 8, FORM_COL.meteor, r0 * 0.9); } // the wall goes to pieces
         if (ev.flow && loud) {
           // in the loud parts an on-beat tap drives the picture: a shockwave off the ball's ring, the rings light up, a burst
@@ -2014,6 +2014,20 @@ export class GdRenderer {
     this.camVY += (ok * ok * (ty - this.camY) - 2 * ok * this.camVY) * dt;
     this.camX += this.camVX * dt;
     this.camY += this.camVY * dt;
+    if (this.geo) {
+      // (after the spring: if a fast flight has carried Orbin, or the path 1.5 s ahead, toward the edge, the camera catches
+      // up at once, so he is never pushed off the picture; 2026-11-26)
+      const pt = (b: number): [number, number] => { const h = course.at(b), [ox, oy] = this.planetXY(h.planet), [x, y] = this.loc(h.planet, -Math.PI / 2 + course.angle(b), this.rad(h.rho)); return [ox + x, oy + y]; };
+      const [qx, qy] = this.planetXY(this.pf), [lx, ly] = this.loc(this.pf, -Math.PI / 2 + course.angle(beat), this.rad(this.ballRho(sim, beat)));
+      const fix = (p: [number, number], mx: number, my: number, k: number): void => {
+        const dx = p[0] - this.camX, dy = p[1] - this.camY, L = -this.w / 2 + mx, Rr = this.w / 2 - mx, T = -this.h * 0.52 + my, B = this.h * 0.48 - my;
+        const ex = dx < L ? dx - L : dx > Rr ? dx - Rr : 0, ey = dy < T ? dy - T : dy > B ? dy - B : 0;
+        this.camX += ex * k; this.camY += ey * k; if (ex) this.camVX *= 0.5; if (ey) this.camVY *= 0.5;
+      };
+      fix(pt(beat + 1.5 / course.spb), 24, 50, Math.min(1, dt * 14));
+      fix([qx + lx, qy + ly], this.w * 0.13, this.h * 0.1, Math.min(1, dt * 18));
+      fix([qx + lx, qy + ly], this.w * 0.06, this.h * 0.05, 1);
+    }
     const [wx, wy] = this.planetXY(this.pf);
     this.coreX = wx - this.camX;
     this.coreY = wy - this.camY;

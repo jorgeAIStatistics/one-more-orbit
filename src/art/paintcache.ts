@@ -5,6 +5,7 @@
 let worker: Worker | null | undefined;
 const done = new Map<string, ImageBitmap>();
 const asked = new Set<string>();
+const askedAt = new Map<string, number>();
 /** One paint worker for the page, or none. */
 export function paintWorker(): Worker | null {
   if (worker !== undefined) return worker;
@@ -15,7 +16,7 @@ export function paintWorker(): Worker | null {
 function ask(key: string, job: Record<string, unknown>): void {
   const wk = paintWorker();
   if (!wk || done.has(key) || asked.has(key)) return;
-  asked.add(key); wk.postMessage({ ...job, key });
+  asked.add(key); askedAt.set(key, performance.now()); wk.postMessage({ ...job, key });
 }
 
 const skyKey = (w: number, h: number, q: number, stars: number) => `landing:${w}x${h}@${q.toFixed(3)}:${stars}`;
@@ -25,7 +26,7 @@ export function landingSky(w: number, h: number, q: number, stars: number): Imag
 export function askLandingSky(w: number, h: number, q: number, stars: number): void { ask(skyKey(w, h, q, stars), { kind: 'landingSky', w, h, q, stars }); }
 
 /** the planets the worker can paint (worldpaint's and world2paint's layers) */
-export type LayerName = 'emberLayer' | 'edgeLayer' | 'cirraLayer' | 'glassLayer' | 'verdLayer' | 'ashLayer' | 'crucibleLayer' | 'twinaLayer' | 'twinbLayer' | 'shardsLayer' | 'rocksLayer' | 'hearthLayer';
+export type LayerName = 'emberLayer' | 'edgeLayer' | 'cirraLayer' | 'glassLayer' | 'verdLayer' | 'ashLayer' | 'crucibleLayer' | 'twinaLayer' | 'twinbLayer' | 'shardsLayer' | 'rocksLayer' | 'hearthLayer' | 'shelvesLayer' | 'kitemoonLayer';
 /** A planet's picture, cold or relit, if the worker has painted it. */
 export function planetLayer(name: LayerName, hot: boolean): ImageBitmap | null { return done.get(`${name}:${hot}`) ?? null; }
 /** Ask for a planet's two pictures. */
@@ -38,3 +39,20 @@ const levelKey = (w: number, h: number, s: SkySpec) => `sky:${w}x${h}:${s.seed}:
 export function levelSky(w: number, h: number, s: SkySpec): ImageBitmap | null { return done.get(levelKey(w, h, s)) ?? null; }
 /** Ask for a level's sky at this size. */
 export function askLevelSky(w: number, h: number, s: SkySpec): void { ask(levelKey(w, h, s), { kind: 'sky', w, h, ...s }); }
+
+/**
+ * A planet's pictures (cold, relit) now, if they are ready: from the worker; or, while the worker is still painting them
+ * (up to 2.5 s), nothing yet (the world fades them in when they come); or, with no worker or after that, painted here.
+ * (Painting them on the page as a level opened was a 100-200 ms frame; 2026-11-26.)
+ */
+export function pairNow(name: LayerName, make: (hot: boolean) => HTMLCanvasElement): [ImageBitmap | HTMLCanvasElement, ImageBitmap | HTMLCanvasElement] | null {
+  const a = planetLayer(name, false), b = planetLayer(name, true);
+  if (a && b) return [a, b];
+  const wk = paintWorker();
+  if (wk) {
+    if (!asked.has(`${name}:false`)) askPlanet(name);
+    const t = askedAt.get(`${name}:false`) ?? performance.now();
+    if (performance.now() - t < 2500) return null;
+  }
+  return [a ?? make(false), b ?? make(true)];
+}

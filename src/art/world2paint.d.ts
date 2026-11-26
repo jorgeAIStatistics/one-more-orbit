@@ -5,6 +5,9 @@ export const WORLDS2: {
   R0: number;
   CIRRA: { masts: number[] };
   cirraLayer: (hot: boolean) => HTMLCanvasElement;
+  shelvesLayer: (hot: boolean) => HTMLCanvasElement;
+  kitemoonLayer: (hot: boolean) => HTMLCanvasElement;
+  kite: (c: Ctx, x: number, y: number, s: number, rot: number, hot: boolean, col?: RGB) => void;
   glassLayer: (hot: boolean) => HTMLCanvasElement;
   verdLayer: (hot: boolean) => HTMLCanvasElement;
   seo: (c: Ctx, x: number, y: number, s: number, p: { wake?: number; fly?: number; sway?: number; flap?: number; lit?: number; t?: number; face?: number }) => void;

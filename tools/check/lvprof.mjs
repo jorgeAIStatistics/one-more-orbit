@@ -1,0 +1,21 @@
+import { chromium } from 'playwright-core';
+const [which, T0, T1] = process.argv.slice(2); const t0 = +T0, t1 = +T1;
+const b = await chromium.launch({ channel: 'chrome', headless: false, args: ['--mute-audio', '--autoplay-policy=no-user-gesture-required', '--window-position=4000,3000', '--window-size=1500,960', '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding', '--disable-background-timer-throttling'] });
+const page = await (await b.newContext({ viewport: null })).newPage();
+await page.addInitScript(() => { Storage.prototype.setItem = function () {}; });
+await page.goto('http://localhost:5199/?look=2', { waitUntil: 'load' }); await page.waitForTimeout(1500);
+const cdp = await page.context().newCDPSession(page);
+await cdp.send('Profiler.enable'); await cdp.send('Profiler.setSamplingInterval', { interval: 200 });
+await page.evaluate((w) => { const o = window.__omo; Object.assign(o.save, { music: 0, sfx: 0, hitVol: 0, tutorialDone: true, calibrated: true, unlockAll: true }); o.save.story.open = o.save.story.prologue = o.save.story.cold = true; o.opening.stop(); o.coldScene.stop(); o.show('levels'); if (w === 'first') o.first(true); else { o.level(Number(w)); o.start(true); }
+  window.__F = []; let last = performance.now(); const f = (t) => { window.__F.push([t - last, o.run ? o.run.time : -9]); last = t; requestAnimationFrame(f); }; requestAnimationFrame(f); }, which);
+await page.waitForFunction((t) => window.__omo.run && window.__omo.run.time > t, t0, { polling: 20, timeout: 120000 });
+await cdp.send('Profiler.start');
+await page.waitForFunction((t) => window.__omo.run && (window.__omo.run.time > t || window.__omo.screen !== 'play'), t1, { polling: 50, timeout: 120000 });
+const { profile } = await cdp.send('Profiler.stop');
+const F = await page.evaluate(([a, z]) => window.__F.filter((x) => x[1] > a && x[1] < z).sort((p, q) => q[0] - p[0]).slice(0, 3), [t0, t1]);
+console.log('worst', JSON.stringify(F.map((x) => [+x[0].toFixed(1), +x[1].toFixed(2)])));
+const nodes = new Map(profile.nodes.map((n) => [n.id, n])); const parent = new Map(); for (const n of profile.nodes) for (const c of n.children || []) parent.set(c, n.id);
+const stacks = new Map();
+profile.samples.forEach((id, i) => { let s = [], p = id; for (let d = 0; d < 7 && p; d++) { const q = nodes.get(p); s.push(`${q.callFrame.functionName || '(anon)'}@${q.callFrame.url.split('/').pop().split('?')[0]}:${q.callFrame.lineNumber}`); p = parent.get(p); } const k = s.join(' < '); stacks.set(k, (stacks.get(k) || 0) + profile.timeDeltas[i] / 1000); });
+console.log([...stacks].filter(([k]) => !k.startsWith('(idle)')).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, v]) => `${v.toFixed(1)} ms  ${k}`).join('\n'));
+await b.close();

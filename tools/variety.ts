@@ -181,13 +181,36 @@ export interface Journey {
 /** the first planets: a single quick double at most, nothing closer than 0.45 s otherwise */
 export const EARLY = new Set(['started', 'heroes']);
 export const QUICK_S = 0.45;
-const OBJECT = new Set(['leap (the signal, the hand)', 'leap', 'a light in the air (in a leap)', 'stone flower (pad)', 'mote of light (jump orb)', 'anvil (Meteor wall)', 'bellows (pad)', 'lava vent', 'ember in the air', 'launch (a strike, a fling)', 'great node', 'jump pad', 'spring']);
+/** each level's local limits (the owner's table of 2026-11-26): the shortest gap, and the longest run of quick taps */
+export const LOCAL: Record<string, { floor: number; dbl: number; run: number }> = {
+  started: { floor: 0.39, dbl: 0.45, run: 2 }, heroes: { floor: 0.29, dbl: 0.45, run: 2 }, skyhigh: { floor: 0.23, dbl: 0.35, run: 3 },
+  ambush: { floor: 0.33, dbl: 0.33, run: 3 }, blank: { floor: 0.29, dbl: 0.29, run: 4 }, invincible: { floor: 0.25, dbl: 0.25, run: 4 }, throne: { floor: 0.19, dbl: 0.19, run: 6 }
+};
+const OBJECT = new Set<string>(['leap (the signal, the hand)', 'leap', 'a light in the air (in a leap)', 'stone flower (pad)', 'mote of light (jump orb)', 'anvil (Meteor wall)', 'bellows (pad)', 'lava vent', 'ember in the air', 'launch (a strike, a fling)', 'great node', 'jump pad', 'spring']);
 export function journey(pack: LevelPack): Journey {
   const level = new Level(pack.level, pack.audio, pack.chart);
   const c = buildCourse(level, layers(pack), pitchLookup(pack), pack.level.lab, accentBeats(pack));
   const barOf = (b: number) => Math.floor(b / 4 + 1e-6);
   const holdAt = new Set(c.holds.map((h) => Math.round(h.a * 100)));
   const ember = pack.level.id === 'heroes';
+  // each world's own objects (2026-11-26): what its pads, launches, mid-air taps and form moves are in that world
+  const NAMES: Record<string, Partial<Record<'pad' | 'leap' | 'ember' | 'sat' | 'pulsar' | 'meteor' | 'orb', string>>> = {
+    skyhigh: { pad: 'kite (pad)', leap: 'gust (launch)', ember: 'wind chime (in the air)', sat: 'knot of residue (wave turn)', orb: 'wind chime' },
+    blank: { pad: 'ripple (pad)', leap: 'mirror portal (launch)', ember: 'droplet of light (in the air)', pulsar: 'ice shard (ball flip)', orb: 'droplet of light' },
+    invincible: { pad: 'seed pod (pad)', leap: 'vine (launch)', ember: 'seed-light (in the air)', pulsar: 'vine anchor (snap)', orb: 'seed-light' },
+  };
+  const nm = NAMES[pack.level.id] ?? {};
+  for (const v of Object.values(nm)) OBJECT.add(v);
+  const kind0 = (p: (typeof c.presses)[number]): string => {
+    if (p.leap && !p.leap.ember && nm.leap) return nm.leap;
+    if (p.leap?.ember && nm.ember) return nm.ember;
+    if (p.pad === 'jump' && nm.pad) return nm.pad;
+    if (p.orb === 'jump' && !p.leap && nm.orb) return nm.orb;
+    if (holdAt.has(Math.round(p.beat * 100))) return 'hold';
+    if (c.bars[barOf(p.beat)]?.mini && !p.leap && !p.pad) return 'mini (tight gust)';
+    if (p.form !== 'orb' && !p.leap && !p.smash && (nm as Record<string, string>)[p.form]) return (nm as Record<string, string>)[p.form];
+    return kind(p);
+  };
   const kind = (p: (typeof c.presses)[number]): string => {
     if (p.leap && !p.leap.ember) return ember ? 'launch (a strike, a fling)' : pack.level.id === 'started' ? 'leap (the signal, the hand)' : 'leap';
     if (p.leap?.ember) return ember ? 'ember in the air' : 'a light in the air (in a leap)';
@@ -207,7 +230,7 @@ export function journey(pack: LevelPack): Journey {
     return 'tap';
   };
   const ps = c.presses.filter((p) => !p.auto && p.act !== 'up');
-  const types = ps.map(kind);
+  const types = ps.map(kind0);
   const objects = types.filter((t) => OBJECT.has(t)).length;
   const minutes = ps.length ? ((ps[ps.length - 1].beat - ps[0].beat) * c.spb) / 60 : 1;
   const first = barOf(ps[0]?.beat ?? 0), last = barOf(ps[ps.length - 1]?.beat ?? 0);
@@ -244,7 +267,7 @@ export function journey(pack: LevelPack): Journey {
   }
   const lands = c.presses.filter((p) => p.leap && !p.leap.ember).map((p) => { const b1 = p.leap!.b1, nx = ps.find((q) => q.beat > b1 - 1e-6); return nx ? (nx.beat - b1) * c.spb : 99; });
   return { id: pack.level.id, places, hops, objects, objectsPerMin: +(objects / Math.max(0.1, minutes)).toFixed(1), minutes: +minutes.toFixed(2), phrases, plain: { ...best, ok: best.bars <= 4 },
-    shortestGap: +shortest.toFixed(3), quickRun: { ...worst, ok: !EARLY.has(pack.level.id) || worst.taps <= 2 },
+    shortestGap: +shortest.toFixed(3), quickRun: { ...worst, ok: worst.taps <= (LOCAL[pack.level.id]?.run ?? 99) && shortest >= (LOCAL[pack.level.id]?.floor ?? 0) - 1e-3 },
     landing: { shortest: +(lands.length ? Math.min(...lands) : 99).toFixed(2), ok: lands.every((x) => x >= c.spb - 1e-6) } };
 }
 
@@ -275,7 +298,7 @@ if (isMain) {
   console.log('\nTHE JOURNEY (places, hops, objects, actions per phrase, plain taps)');
   const js = packs.map(journey);
   for (const j of js) {
-    console.log(`\n${j.id}: shortest gap ${j.shortestGap} s; longest run of quick taps ${j.quickRun.taps} (at ${j.quickRun.at} s) ${j.quickRun.ok ? 'ok' : 'OVER (a double at most here)'}; landing to first tap ${j.landing.shortest === 99 ? '-' : `${j.landing.shortest} s`} ${j.landing.ok ? 'ok' : 'UNDER A BEAT'}`);
+    console.log(`\n${j.id}: shortest gap ${j.shortestGap} s; longest run of quick taps ${j.quickRun.taps} (at ${j.quickRun.at} s) ${j.quickRun.ok ? 'ok' : `OVER (table: gap ${LOCAL[j.id]?.floor} s, run ${LOCAL[j.id]?.run})`}; landing to first tap ${j.landing.shortest === 99 ? '-' : `${j.landing.shortest} s`} ${j.landing.ok ? 'ok' : 'UNDER A BEAT'}`);
     console.log(`${j.id}: ${j.places} places, ${j.hops} hops; ${j.objects} object interactions, ${j.objectsPerMin} a minute; longest plain-tap stretch ${j.plain.bars} bars (bars ${j.plain.from}-${j.plain.to}) ${j.plain.ok ? 'ok' : 'OVER 4'}`);
     for (const p of j.phrases) console.log(`  phrase ${p.bars.padEnd(6)} ${p.types.length} action types (${p.types.join(', ')}); objects: ${p.objects.join(', ') || 'none'}  ${p.ok ? 'ok' : 'UNDER'}`);
   }

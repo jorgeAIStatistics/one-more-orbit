@@ -3,6 +3,7 @@
 // its tendrils.
 import { CANON } from './canonpaint.js';
 import { DUSK, K } from './painter.js';
+import { mass, reachOut } from './stillness.js';
 
 const T = DUSK.tools, P = CANON.parts, TAU = Math.PI * 2;
 
@@ -41,56 +42,16 @@ function music(c, ax, ay, bx, by, u, t = 0, broken = 0, fade = 1) {
   }
 }
 
-/** The Stillness, with a faint ash rim so its shape reads against the dark. */
-// (painted once into an image at the screen's own resolution, at a size rounded to 32 px, and drawn at the exact size:
-// its blurred rim was the cold open's biggest cost, four times a frame)
-const DREAD = new Map();
+/** The Stillness (the redesign of 2026-11-26, src/art/stillness.js: the ink tide), drawn live: a mass at (x, y). */
 function dread(c, x, y, rx, ry, seed, near) {
-  const t = c.getTransform(), k = Math.min(3, Math.hypot(t.a, t.b)) || 1;
-  // (one image per shape, painted at the largest size asked for and drawn scaled: a new size used to mean a new
-  // picture, and its paint and upload were a 30-50 ms frame as it swelled during the loss; 2026-11-26)
-  const N = Math.round(near * 40) / 40, key = `${seed}|${N}|${k.toFixed(2)}`;
-  let e = DREAD.get(key);
-  if (e && (rx > e.RX * 1.05 || Math.abs(ry / rx - e.RY / e.RX) > 0.06)) e = null;
-  const RX = e ? e.RX : Math.max(32, Math.ceil(rx / 32) * 32), RY = e ? e.RY : Math.max(8, Math.round((ry / rx) * RX));
-  if (!e) {
-    const pad = Math.max(RX, RY) * 0.6 + 70, W = (RX + pad) * 2, H = (RY + pad) * 2;
-    const cv = document.createElement('canvas'); cv.width = Math.min(4096, Math.ceil(W * k)); cv.height = Math.min(4096, Math.ceil(H * k));
-    const g = cv.getContext('2d'); g.setTransform(cv.width / W, 0, 0, cv.height / H, 0, 0);
-    g.save(); g.shadowColor = 'rgba(176,168,196,0.55)'; g.shadowBlur = 26 * (cv.width / W) / k; P.stillness(g, W / 2, H / 2, RX, RY, K.RNG(seed), { near: N }); g.restore();
-    P.stillness(g, W / 2, H / 2, RX, RY, K.RNG(seed), { near: N });
-    e = { cv, W, H, RX, RY }; DREAD.set(key, e);
-    if (DREAD.size > 10) DREAD.delete(DREAD.keys().next().value);
-  }
-  const sx = rx / RX, sy = ry / RY;
-  c.drawImage(e.cv, x - (e.W / 2) * sx, y - (e.H / 2) * sy, e.W * sx, e.H * sy);
+  if (x < -1e4) return; // (the old warm-up calls: nothing to paint ahead any more)
+  mass(c, x, y, rx, ry, { near, seed });
 }
 
-/** Tendrils of it, from (x0, y0) curling round a point; reach: how far along they have come, 0..1. */
+/** Tendrils of it, from (x0, y0) reaching for a point; reach: how far along they have come, 0..1. */
 function tendrils(c, x0, y0, tx, ty, u, n, seed, reach = 1) {
-  const r = K.RNG(seed);
-  for (let i = 0; i < n; i++) {
-    const a = (i / n) * TAU + r(), ex = tx + Math.cos(a) * (14 + r() * 26) * u, ey = ty + Math.sin(a) * (20 + r() * 34) * u;
-    const c1 = [x0 + (tx - x0) * 0.3 + (r() - 0.5) * 120 * u, y0 + (r() - 0.5) * 160 * u], c2 = [tx + Math.cos(a + 1.4) * 70 * u, ty + Math.sin(a + 1.4) * 70 * u];
-    const len = Math.max(0, Math.min(1, reach * (1.15 - i * 0.03)));
-    if (len <= 0.02) continue;
-    for (const [col, wd, blur] of [['rgba(150,142,170,0.35)', 9, 12], ['rgba(5,4,10,0.96)', 6, 0]]) {
-      c.save(); c.shadowColor = col; c.shadowBlur = blur; c.strokeStyle = col; c.lineCap = 'round';
-      const steps = 24; let px = x0, py = y0;
-      if (blur) {
-        // the soft rim: one path (blurred once), as wide as the tendril is on average, rather than 24 blurred pieces
-        c.lineWidth = Math.max(0.6, wd * u * 0.62); c.beginPath(); c.moveTo(x0, y0);
-        for (let k = 1; k <= steps * len; k++) { const q = k / steps, m = 1 - q; c.lineTo(m * m * m * x0 + 3 * m * m * q * c1[0] + 3 * m * q * q * c2[0] + q * q * q * ex, m * m * m * y0 + 3 * m * m * q * c1[1] + 3 * m * q * q * c2[1] + q * q * q * ey); }
-        c.stroke(); c.restore(); continue;
-      }
-      for (let k = 1; k <= steps * len; k++) {
-        const q = k / steps, m = 1 - q;
-        const x = m * m * m * x0 + 3 * m * m * q * c1[0] + 3 * m * q * q * c2[0] + q * q * q * ex, y = m * m * m * y0 + 3 * m * m * q * c1[1] + 3 * m * q * q * c2[1] + q * q * q * ey;
-        c.lineWidth = Math.max(0.6, wd * u * (1 - q * 0.85)); c.beginPath(); c.moveTo(px, py); c.lineTo(x, y); c.stroke(); px = x; py = y;
-      }
-      c.restore();
-    }
-  }
+  if (reach <= 0.01) return;
+  reachOut(c, x0, y0, tx, ty, 10 * u, Math.max(3, Math.round(n * 0.6)), seed, reach);
 }
 
 export const COLDPAINT = { nebula, music, dread, tendrils };
