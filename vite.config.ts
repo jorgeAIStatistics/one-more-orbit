@@ -71,9 +71,11 @@ const HEARD_AUDIO = ['started', 'startedbed', 'opening', 'coldopen', 'nebula', '
  * song is saved the first time it is played, so a world played once plays again with no connection */
 const FIRST_AUDIO = ['coldopen', 'nebula', 'opening', 'startedbed', 'started', 'sting1', 'fire0', 'fire1', 'hub0', 'hub1', 'helion1'];
 function offline(mode: string): Plugin {
+  let outDir = resolve(root, 'dist');
   return {
     name: 'omo-offline',
     apply: 'build',
+    configResolved(cfg) { outDir = resolve(cfg.root, cfg.build.outDir); }, // (the folder actually built: --outDir included)
     transformIndexHtml() {
       return SPLASH.map(([w, h, r]) => ({
         tag: 'link',
@@ -82,7 +84,7 @@ function offline(mode: string): Plugin {
       }));
     },
     closeBundle() {
-      const dist = resolve(root, 'dist');
+      const dist = outDir;
       if (!existsSync(resolve(dist, 'index.html'))) return;
       const files: string[] = [];
       const walk = (dir: string): void => {
