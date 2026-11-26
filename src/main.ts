@@ -35,6 +35,7 @@ import { SkyMemory } from './ui/skymemory';
 import { askEmber, EdgeWorld, EmberWorld, type World, type WorldSky } from './ui/worlds';
 import { AmbushWorld, AMBUSH_SAYS } from './ui/worldamb';
 import { GuardianWorld, GUARDIAN_SAYS } from './ui/worldguard';
+import { SkyEnding } from './ui/skyending';
 import { LANDING } from './art/landingpaint.js';
 import { K as PK } from './art/painter.js';
 import { CANON as PCANON } from './art/canonpaint.js';
@@ -106,6 +107,8 @@ const skyStar = new SkyStar($<HTMLCanvasElement>('stage'));
 /** the cold open: a scene (calm, wrongness, the taking, black), its one interaction a press-and-hold */
 const coldScene = new SkyCold($<HTMLCanvasElement>('stage'));
 const memoryFilm = new SkyMemory($<HTMLCanvasElement>('stage'));
+/** the ending (2026-11-26): a film on The Long Road Home, after the guardian's first clear */
+const ending = new SkyEnding($<HTMLCanvasElement>('stage'));
 /** the worlds you play on: Emberwick and the Drifting Edge, each a planet in the ring and its inhabitant beside it */
 const emberWorld = new EmberWorld();
 const edgeWorld = new EdgeWorld();
@@ -413,6 +416,18 @@ function ambushHome(r: Run): void {
   show('title');
   const then = ambushThen; ambushThen = null;
   window.setTimeout(() => { if (screen !== 'title') return; fireTheme(); if (then) then(); else { renderMap(); landing.ascend(() => show('levels'), 3.2); } }, 2600);
+}
+
+/** The guardian's first clear: its star is recorded (no results screen), and the ending plays; then the map. */
+function playEnding(r: Run | null): void {
+  if (r) { showResults(r, true, 100, true); pendingStory = ''; r.fadeOut(1.6); }
+  run = null;
+  save.story.end = true; persist();
+  $('hud').classList.remove('veiled');
+  audio.stopPreview(0.5);
+  ending.prepare();
+  show('title');
+  ending.play(() => { renderMap(); show('levels'); });
 }
 
 /** the world just woken, on the way home: the hub says so once */
@@ -871,6 +886,7 @@ function onRunEnd(r: Run): void {
   }
   tally(r);
   if (r.pack === AMBUSH && !r.opts.practice) { ambushHome(r); return; }
+  if (r.pack === FINAL && !r.opts.practice && !r.opts.bot && !bestFor(FINAL.level.id).cleared) { playEnding(r); return; }
   showResults(r, true);
 }
 
@@ -1215,6 +1231,7 @@ $('title').addEventListener('click', () => { if (screen === 'title') landingTap(
 /** A tap at the Landing: it wakes him (or ends the quiet beat after a star comes home), and the camera rises to the map. */
 function landingTap(): void {
   if (landing.rising) return;
+  if (ending.on) { ending.tap(); return; } // (the ending: on to the credits, then out)
   if (memoryFilm.on) { memoryFilm.tap(); return; } // (a memory lets go early, into the fire)
   if (landing.inFire) return;
   audioReady = true;
@@ -1359,6 +1376,7 @@ function renderSettings(): void {
   const chapters = chaptersOpen().length;
   $('storyBtn').classList.toggle('hidden', chapters === 0);
   $('replayMemory').classList.toggle('hidden', !save.story[PACKS[0].level.id]);
+  $('replayEnding').classList.toggle('hidden', !save.story.end);
   $('replayAmbush').classList.toggle('hidden', !save.story.ambush && !bestFor('skyhigh').cleared && !progress.unlockAll);
   $('logNote').textContent = chapters === 1 ? 'one chapter' : `${chapters} chapters`;
   rooms.calm = save.reducedMotion;
@@ -1657,6 +1675,7 @@ $('chambersBtn').addEventListener('click', () => openChambers());
 $('chambersClose').addEventListener('click', () => closeChambers());
 $('botBtn').addEventListener('click', () => { botMode = true; practice = false; session.far = session.onBeat = session.judged = session.streak = session.attempts = 0; session.drop = -1; startRun(); });
 $('replayAmbush').addEventListener('click', () => startAmbush());
+$('replayEnding').addEventListener('click', () => { audio.ensure(); playEnding(null); });
 $('replayMemory').addEventListener('click', () => filmAgain(PACKS[0].level.id, () => { renderSettings(); show('settings'); }));
 $('replayTutorial').addEventListener('click', () => { practice = false; botMode = false; dare = false; audio.ensure(); startOpening(true); });
 $('recordBtn').addEventListener('click', () => { run?.stop(); run = null; audio.stopPreview(0.2); record.open(); });
@@ -1728,6 +1747,7 @@ function tick(now: number): void {
     else if (screen === 'story') skyStory.draw(now);
     else if (screen === 'moment') moment.draw(now);
     else if (screen === 'results') skyResult.draw(now, dt);
+    else if (screen === 'title' && ending.on) ending.draw(now);
     else if (screen === 'title' && memoryFilm.on) memoryFilm.draw(now);
     else if (screen === 'title') { if (warmMap && !landing.between) { warmMap = false; renderMap(); sky.draw(now, 0); } if (landing.between) sky.draw(now, dt); landing.draw(now, dt); } // rising, the galaxy shows through
     else renderer.drawIdle(now, dt);
@@ -1821,6 +1841,6 @@ Object.assign(window, {
     story: (k: string) => playStory(k, () => show('levels'), true),
     chambers: () => openChambers(), chamber: (id: string, bot = false) => { const c = CHAMBERS.find((x) => x.id === id); if (c) startChamber(c, bot); }, get room() { return chamber; },
     tutorial: startTutorial, results: (cleared: boolean) => { if (run) showResults(run, cleared, run.pct); }, pause,
-    opening, startOpening, startCold, coldScene, landing, skyStar, toTitle, toLanding, guardian: (bot = false, from = -1) => { hookRun = true; pack = FINAL; practice = dare = false; chamber = null; botMode = bot; guardianWorld.askAhead(); startRun(from); }, ambush: (bot = false, from = -1) => { ambushThen = null; pack = AMBUSH; practice = dare = false; chamber = null; botMode = bot; ambushWorld.askAhead(); startRun(from); }, first: (bot = false, from = -1) => { botMode = bot; practice = false; pack = FIRST; startRun(from); }, moment: (k: 'gift' | 'road', stars = 1) => { moment.play(k, 'heroes', stars, () => show('levels')); show('moment'); }, memory: (w = 'heroes') => filmAgain(w, () => show('levels')), memoryFilm, firstClear: (w = 'heroes') => firstClear(w, () => show('levels')), logbook: openLogbook, orbs: openGlows, stars: openStars, credits: openCredits, sync10: () => openCalib(), calTap, settings: () => openSettings('levels')
+    opening, startOpening, startCold, coldScene, landing, skyStar, toTitle, toLanding, guardian: (bot = false, from = -1) => { hookRun = true; pack = FINAL; practice = dare = false; chamber = null; botMode = bot; guardianWorld.askAhead(); startRun(from); }, ambush: (bot = false, from = -1) => { ambushThen = null; pack = AMBUSH; practice = dare = false; chamber = null; botMode = bot; ambushWorld.askAhead(); startRun(from); }, first: (bot = false, from = -1) => { botMode = bot; practice = false; pack = FIRST; startRun(from); }, moment: (k: 'gift' | 'road', stars = 1) => { moment.play(k, 'heroes', stars, () => show('levels')); show('moment'); }, memory: (w = 'heroes') => filmAgain(w, () => show('levels')), memoryFilm, ending: () => playEnding(null), endingFilm: ending, firstClear: (w = 'heroes') => firstClear(w, () => show('levels')), logbook: openLogbook, orbs: openGlows, stars: openStars, credits: openCredits, sync10: () => openCalib(), calTap, settings: () => openSettings('levels')
   }
 });

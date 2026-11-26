@@ -6,5 +6,5 @@ const page = await (await b.newContext({ viewport: { width: 390, height: 844 }, 
 await page.addInitScript(() => { Storage.prototype.setItem = function () {}; });
 await page.goto(`http://localhost:${process.env.OMO_PORT || 5199}/?look=2`, { waitUntil: 'load' }); await page.waitForTimeout(1500);
 await page.evaluate(() => { const o = window.__omo; o.save.story.open = o.save.story.prologue = o.save.story.cold = true; o.opening.stop(); o.coldScene.stop(); o.toTitle(); });
-for (const t of times) { await page.evaluate(([w, t]) => window.__omo.memoryFilm.seek(w, t), [world, t]); await page.waitForTimeout(250); await page.screenshot({ path: `${out}/m${String(t).padStart(5, '0')}.jpg`, quality: 85 }); }
+for (const t of times) { await page.evaluate(([w, t]) => (w === "ending" ? window.__omo.endingFilm.seek(t) : window.__omo.memoryFilm.seek(w, t)), [world, t]); await page.waitForTimeout(250); await page.screenshot({ path: `${out}/m${String(t).padStart(5, '0')}.jpg`, quality: 85 }); }
 await b.close();
