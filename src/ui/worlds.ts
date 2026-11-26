@@ -16,7 +16,7 @@ import { DUSK } from '../art/painter.js';
 import { writeSays, type Said, type SceneState } from './skyplanet';
 import { save } from '../save';
 import { EIGHT_LOBES } from '../gd/shapes';
-import { rings } from '../art/stillness.js';
+import { mass, rings } from '../art/stillness.js';
 
 const TAU = Math.PI * 2;
 const sm = (x: number) => { const t = x < 0 ? 0 : x > 1 ? 1 : x; return t * t * (3 - 2 * t); };
@@ -455,6 +455,31 @@ export class EmberWorld {
     }
     K.glow(c, 0, 0, R * 1.35 * (1 + 0.08 * kick), [255, 196, 120], (0.3 + 0.3 * kick) * in0, 'screen');
     c.globalAlpha = 1;
+    // (the heart rebuilt, 2026-11-26, Part 4B 5) the middle layer: relics of the forge orbiting the core, at their own
+    // depths, slowly turning; their edges catch the light as he plays the heart (and all of it at the seal's breaking)
+    const t = st.song, last = st.presses?.[st.presses.length - 1], sealAt = last ? last.beat * ET.spb : ET.end, broke = t >= sealAt ? sm((t - sealAt) / 0.5) : 0;
+    const lit = Math.min(1, (st.done ?? 0) > 0 ? 0.35 + 0.65 * sm((t - ET.core) / 12) : 0.35) * 0.7 + 0.3 * broke;
+    for (let i = 0; i < 7; i++) {
+      const r = K.RNG(i * 41 + 9), depth = 0.7 + 0.5 * r(), a = r() * TAU + time * (0.05 + 0.06 * r()) * (i % 2 ? 1 : -1), rr = R * (1.75 + 1.2 * r()) * depth;
+      const x = Math.cos(a) * rr, y = Math.sin(a) * rr * 0.62, sz = R * (0.22 + 0.2 * r()) * depth, rot = time * 0.2 * (r() - 0.5) + i;
+      c.save(); c.translate(x, y); c.rotate(rot); c.globalAlpha = in0 * (0.55 + 0.45 * depth);
+      c.fillStyle = `rgb(${Math.round(40 + 30 * lit)},${Math.round(20 + 10 * lit)},${Math.round(18 + 6 * lit)})`; c.strokeStyle = `rgba(255,${Math.round(150 + 60 * lit)},90,${0.35 + 0.5 * lit})`; c.lineWidth = Math.max(1, sz * 0.08);
+      c.beginPath();
+      if (i % 3 === 0) { c.moveTo(-sz, -sz * 0.3); c.lineTo(sz * 0.9, -sz * 0.3); c.lineTo(sz * 0.5, sz * 0.1); c.lineTo(sz * 0.3, sz * 0.6); c.lineTo(-sz * 0.3, sz * 0.6); c.lineTo(-sz * 0.4, sz * 0.1); c.closePath(); } // an anvil
+      else if (i % 3 === 1) { c.ellipse(0, 0, sz, sz * 0.45, 0, 0, TAU); c.moveTo(sz * 0.55, 0); c.ellipse(0, 0, sz * 0.55, sz * 0.22, 0, 0, TAU); } // a chain-link
+      else { for (let k = 0; k < 8; k++) { const aa = (k / 8) * TAU, ro = k % 2 ? sz : sz * 0.7; if (k) c.lineTo(Math.cos(aa) * ro, Math.sin(aa) * ro); else c.moveTo(Math.cos(aa) * ro, Math.sin(aa) * ro); } c.closePath(); } // a gear
+      c.fill(); c.stroke(); c.restore();
+    }
+    // the seal: over the last bars the Stillness's ink closes over the core and holds its light; the last tap breaks it,
+    // and the heart floods with light (the climax)
+    const close = sm((t - sealAt + 4.8) / 4) * (1 - broke);
+    if (close > 0.01) { c.save(); c.globalAlpha = close; mass(c, 0, 0, R * (0.7 + 0.5 * close), R * (0.65 + 0.45 * close), { near: 0.6 + 0.4 * close, seed: 13, t: time }); rings(c, 0, 0, R * 1.3, R * 0.5, close, time); c.restore(); }
+    if (broke > 0 && t < sealAt + 2.5) {
+      const q = Math.min(1, (t - sealAt) / 2.5), fl = save.reduceFlash ? 0.4 : 1;
+      K.glow(c, 0, 0, R * (1.5 + 6 * q), [255, 236, 190], (1 - q) * 0.9 * fl, 'screen');
+      c.save(); c.fillStyle = `rgba(6,4,12,${0.9 * (1 - q)})`; for (let i = 0; i < 18; i++) { const r = K.RNG(i * 13 + 2), a = r() * TAU, d = R * (0.6 + 4 * q * (0.6 + 0.6 * r())), sz = R * 0.08 * (1 - q); c.save(); c.translate(Math.cos(a) * d, Math.sin(a) * d); c.rotate(q * 8 + i); c.fillRect(-sz, -sz * 0.5, sz * 2, sz); c.restore(); } c.restore();
+      c.strokeStyle = `rgba(255,240,210,${0.7 * (1 - q) * fl})`; c.lineWidth = Math.max(1, R * 0.04 * (1 - q)); c.beginPath(); c.arc(0, 0, R * (1.2 + 5 * q), 0, TAU); c.stroke();
+    }
   }
 
   /** the inside of the planet, behind everything once the camera has dived in: molten walls flowing outward */
@@ -471,8 +496,17 @@ export class EmberWorld {
     }
     for (let i = 0; i < 24; i++) { const r = K.RNG(i * 29 + 3), ph = (time * 0.12 + r()) % 1; K.glow(c, cx + (r() - 0.5) * w * 1.1, cy + h * 0.5 - ph * h * 1.1, 2 + 2 * r(), [255, 200, 120], 0.7 * Math.sin(ph * Math.PI)); }
     c.restore();
+    // (the heart rebuilt) the far walls: plates of the planet's crust, turning slowly at their own depth (parallax with
+    // the camera), their seams glowing
+    { const px = st.cam ? -st.cam[0] * 0.05 : 0, py = st.cam ? -st.cam[1] * 0.05 : 0; c.save(); c.lineCap = 'round';
+      for (let i = 0; i < 9; i++) { const r = K.RNG(i * 7 + 1), a0 = (i / 9) * TAU + time * 0.03 * (i % 2 ? 1 : -1), rr = R * (0.55 + 0.25 * r()); c.strokeStyle = `rgba(255,${110 + Math.round(60 * r())},50,${0.18 + 0.12 * Math.sin(time * 0.8 + i)})`; c.lineWidth = 2 + 3 * r(); c.beginPath(); c.arc(cx + px, cy + py, rr, a0, a0 + 0.5); c.stroke(); c.strokeStyle = 'rgba(30,8,8,0.55)'; c.lineWidth = 10 + 14 * r(); c.beginPath(); c.arc(cx + px, cy + py, rr + 12, a0 + 0.05, a0 + 0.45); c.stroke(); }
+      c.restore(); }
     // Ossa's strikes, felt from inside: the whole heart pulses on them
     K.glow(c, cx, cy, R * 0.8, [255, 150, 80], 0.12 + 0.22 * kick, 'screen');
+    // the near layer: sparks streaking out past the camera, faster than everything, longer on the kick (soft: out of focus)
+    { c.save(); c.globalCompositeOperation = 'lighter'; c.lineCap = 'round'; const u0 = Math.min(w / 390, h / 844);
+      for (let i = 0; i < 18; i++) { const r = K.RNG(i * 23 + 11), ph = (time * (0.35 + 0.3 * r()) + r()) % 1, a = r() * TAU, d = Math.hypot(w, h) * (0.12 + 0.7 * ph * ph), L = (20 + 60 * ph) * u0 * (1 + kick); c.strokeStyle = `rgba(255,${190 + Math.round(40 * r())},130,${0.35 * Math.sin(ph * Math.PI)})`; c.lineWidth = (1.5 + 3 * ph) * u0; c.beginPath(); c.moveTo(cx + Math.cos(a) * d, cy + Math.sin(a) * d); c.lineTo(cx + Math.cos(a) * (d + L), cy + Math.sin(a) * (d + L)); c.stroke(); }
+      c.restore(); }
   }
 
   /** on the course: Ossa's strikes rising under it as rings of fire (the launches), and the Stillness's seal on the star */
