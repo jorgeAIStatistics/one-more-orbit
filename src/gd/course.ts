@@ -136,6 +136,15 @@ export interface Course {
   /** the star trails, in order (three in a finished level) */
   stars: Star[];
   checkpoints: number[];
+  /**
+   * Forgiving taps (the owner's rule of 2026-11-25): a tap up to `buffer` seconds before an opening (or an orb, a pad,
+   * a Meteor wall) is held and performed exactly on its beat. A tap earlier than that is ignored, unless it falls in the
+   * last `early` beats before the buffer: there it still hits the ring (0 = never: the first two levels).
+   */
+  buffer: number;
+  early: number;
+  /** every mark a tap answers, in order (presses and gold notes to tap): what the anti-mash rule compares tapping with */
+  marks: number[];
   /** stretches where nothing can end the run and on-beat taps charge the drop: [from, to] in beats */
   charges: Array<[number, number]>;
   chargeNotes: number;
@@ -171,6 +180,8 @@ export const CAP = 2; // a flight never lasts longer than this many beats; then 
 export const TOL_S = 0.12; // openings are clearable within this much either side of the note...
 export const TOL_SMASH_S = 0.16; // the drop's smash is wider still
 export const TOL_MIN_S = 0.055; // ...narrowing only if someone records presses faster than eighths
+export const BUFFER_S = 0.09; // a level's tap buffer when it sets none (the strictest of the owner's table)
+export const EARLY_ZONE = 0.45; // ...and the beats before it where a tap way too early still hits the ring
 export const NEAR = 0.6; // beats before an opening in which a tap is "going for it": too early and it hits the ring
 export const FLOW_TOL_S = 0.07; // how close a tap must be to a flow note to touch it
 export const FLOW_S = 0.04; // taps this close to a note build flow
@@ -715,6 +726,8 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
   return {
     spb, start, end, dropBeat: level.dropTime / spb, presses, flow, taps: tapped, rides: all.filter((t) => ups.has(t) || ridden.has(t)), holds, script, stars,
     checkpoints: segs.map((s) => s.beat0).filter((b) => b >= start && b < end),
+    buffer: level.file.rules?.buffer ?? BUFFER_S, early: level.file.rules?.early ?? EARLY_ZONE,
+    marks: [...presses.filter((p) => !p.auto && p.act !== 'up').map((p) => p.beat), ...flow.filter((f) => f.ride === 0).map((f) => f.beat)].sort((a, b) => a - b),
     charges, chargeNotes: flow.filter((f) => f.charge).length, inCharge, angle, turns, portals, twins, firsts, bars,
     lenses, mirrors, inverts, duals, formAt: (beat: number) => (barAt(beat).twin ? 'orb' : barAt(beat).form), at: where
   };

@@ -19,7 +19,7 @@
   "adds": "Every form, every gate, the Hush's red tethers, and two different sparks on one tap",
   "holds": true,
   "shards": [[38.5, 42.5], [158.5, 162.5], [242.5, 246.5]],
-  "rules": {"tol": 0.08, "ahead": 2.5, "branch": 0.055, "intro": false},
+  "rules": {"tol": 0.08, "ahead": 2.5, "branch": 0.055, "intro": false, "buffer": 0.09, "early": 0.45},
   "segments": [
     {"id": "verse", "core": {"bars": ["up", "down", "meteor", "meteor", "orb+spin", "up+long", "turn+down", "weave+long"]}, "bars": 8, "label": "VERSE", "lap": 8, "follow": "arp", "lead": "snare", "look": {"palette": "void", "bg": "stars", "eq": "bars", "zoom": [0.9, 1]},
       "plan": ["L=8"] },

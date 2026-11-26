@@ -19,7 +19,7 @@
   "difficulty": "Insane",
   "adds": "Every form so far, long combos, Helion's echo in step and out of it, and the Comet: hold to climb, let go to fall",
   "holds": true,
-  "rules": {"tol": 0.09, "ahead": 2.5, "branch": 0.06, "pairs": 2, "known": ["meteor", "sat", "pulsar"]},
+  "rules": {"tol": 0.09, "ahead": 2.5, "branch": 0.06, "pairs": 2, "known": ["meteor", "sat", "pulsar"], "buffer": 0.1, "early": 0.45},
   "shards": [[18.5, 21.5], [71.5, 74.5], [135.3333333, 139.3333333]],
   "segments": [
     {"id": "groove", "core": {"bars": ["up", "weave", "meteor", "sat"]}, "bars": 4, "label": "GROOVE", "lap": 4, "follow": "kick", "motif": "groove", "cycle": 4, "look": {"palette": "toxic", "bg": "grid", "eq": "bars", "zoom": [0.9, 1]},

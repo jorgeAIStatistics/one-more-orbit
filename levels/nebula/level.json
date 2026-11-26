@@ -8,7 +8,7 @@
   "scale": [8, 10, 0, 1, 3, 5, 7],
   "difficulty": "Before",
   "adds": "The twin orbit: both brothers, one tap",
-  "rules": {"tol": 0.25, "ahead": 4, "intro": false},
+  "rules": {"tol": 0.25, "ahead": 4, "intro": false, "buffer": 0.15, "early": 0},
   "segments": [
     {"id": "alone", "core": {"bars": ["orb+twin+sync"]}, "bars": 3, "label": "THE NEBULA", "lap": 8, "follow": "snare", "lead": "snare", "look": {"palette": "gold", "bg": "stars", "eq": "wave"}, "plan": ["-", "-", "-"]},
     {"id": "dance", "core": {"bars": ["orb+twin+sync"]}, "bars": 6, "label": "THE NEBULA", "lap": 8, "follow": "snare", "lead": "snare", "look": {"palette": "gold", "bg": "stars", "eq": "wave"}, "plan": ["L=@x...............", "L=@x...............", "L=@x.......x.......", "L=@x.......x.......", "L=@x.......x.......", "L=@x.......x......."]},

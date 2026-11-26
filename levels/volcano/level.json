@@ -10,7 +10,7 @@
   "difficulty": "Easy",
   "adds": "The Meteor: tap to dash through walls",
   "holds": false,
-  "rules": {"tol": 0.14, "ahead": 3.5, "branch": 0.09},
+  "rules": {"tol": 0.14, "ahead": 3.5, "branch": 0.09, "buffer": 0.15, "early": 0},
   "shards": [[8, 15.5], [44, 51.5], [84, 91.5]],
   "setpieces": [{"bar": 6, "kind": "turn", "name": "The switchback", "what": "on the second bar of stabs Ossa's ringing turns the orbit round (one of the level's two turns)"}, {"bar": 8, "kind": "drop", "name": "The forge relights", "what": "the drop's great node: the forge roars back, Ossa hammers on every kick, and you dash through the walls of residue"}, {"bar": 19, "kind": "speed", "name": "The forge sprint", "what": "a fast portal at the peak of the second drop, three bars, then back"}],
   "segments": [

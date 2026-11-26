@@ -18,7 +18,7 @@
   "difficulty": "Hard",
   "adds": "Gravity orbs and combos, mirror and upside-down gates, and the Pulsar: each tap flips to the other side of its ring",
   "holds": true,
-  "rules": {"tol": 0.105, "ahead": 3, "branch": 0.07, "known": ["meteor", "sat"]},
+  "rules": {"tol": 0.105, "ahead": 3, "branch": 0.07, "known": ["meteor", "sat"], "buffer": 0.12, "early": 0.35},
   "shards": [[44.25, 48.25], [86.25, 90.25], [203.25, 207.25]],
   "segments": [
     {"id": "verse", "core": {"bars": ["up", "down", "meteor", "meteor"]}, "bars": 4, "label": "VERSE", "lap": 8, "follow": "arp", "lead": "snare", "motif": "verse", "cycle": 4, "look": {"palette": "ice", "bg": "stars", "eq": "wave", "zoom": [0.9, 1]},

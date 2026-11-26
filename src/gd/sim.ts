@@ -44,6 +44,10 @@ export class Sim {
   private skipStart = 0;
   private pending = NaN;
   private pendingQuiet = false;
+  /** the pending tap was early and is held for its beat (forgiving taps): it goes exactly on the beat, not on landing */
+  private pendingBuf = false;
+  /** the taps of the last second, for the anti-mash rule */
+  private lately: number[] = [];
   private lastTap = -99;
   private doneUntil = -99;
   private doneBeat = 0;
@@ -139,6 +143,7 @@ export class Sim {
     this.doneBeat = p.beat;
     this.ni = p.i + 1;
     this.pending = NaN;
+    this.pendingBuf = false;
   }
 
   /** Radial position in ring levels at a beat (for the picture). */
@@ -213,6 +218,33 @@ export class Sim {
     this.muffle = Math.max(0, this.muffle - 0.5);
   }
 
+  /**
+   * The anti-mash rule (the owner's, 2026-11-25): tapping much faster than the chart asks round a press (more than twice
+   * its rate: more taps in the last second than marks within a second either side, and at least three) gets no
+   * forgiveness. The buffer does not apply and a tap too early hits the ring, as before.
+   */
+  private mashed(t: number): boolean {
+    const w = 1 / this.c.spb;
+    this.lately.push(t);
+    while (this.lately.length && this.lately[0] < t - w) this.lately.shift();
+    const n = this.lately.length;
+    if (n < 3) return false;
+    const m = this.c.marks;
+    let lo = 0, hi = m.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (m[mid] < t - w) lo = mid + 1; else hi = mid; }
+    let k = 0;
+    for (let i = lo; i < m.length && m[i] <= t + w; i++) k++;
+    return n > k;
+  }
+
+  /** A held (buffered) press: on the note builds flow; early, it is counted as early, and costs nothing else. */
+  private judgeHeld(err: number): boolean {
+    if (Math.abs(err) <= FLOW_S + 1e-9) return this.judge(err);
+    this.judged++;
+    this.offsets.press.push(err);
+    return false;
+  }
+
   /** A survival press: on the note builds flow, off it costs a notch. */
   private judge(err: number): boolean {
     this.judged++;
@@ -274,16 +306,23 @@ export class Sim {
     const spb = this.c.spb;
     if (!this.down) { this.down = true; this.downAt = t; }
     if (this.crashed || (t - this.lastTap) * spb < DEBOUNCE_S) return { kind: 'none' };
-    if (t < this.autoUntil) return { kind: 'none' }; // the game is still playing the run-in: taps do nothing until it hands over
+    // the game is still playing the run-in: taps do nothing until it hands over (a tap held early for the first press
+    // after the handover is the player's own)
+    const nx = this.c.presses[this.ni];
+    const handing = !!nx && nx.beat >= this.autoUntil && t >= nx.beat - Math.max(nx.tol, this.c.buffer / spb) - 1e-6;
+    if (t < this.autoUntil && !handing) return { kind: 'none' };
     this.lastTap = t;
     // mashing (outside a charge) is read as off-beat tapping: flow drains and the music muffles, whatever it happens to hit
     this.recent.push(t);
     if (this.recent.length > MASH_TAPS) this.recent.shift();
     this.mashing = this.recent.length === MASH_TAPS && (t - this.recent[0]) * spb < 1 && !this.c.inCharge(t);
     if (this.mashing) { this.off(); this.slip(t); }
+    const mash = this.mashed(t);
     const p = this.c.presses[this.ni];
     const up = !!p && p.act === 'up'; // a Comet's second mark is taken by letting go, never by a tap
     const d = p ? t - p.beat : -Infinity;
+    // the early side of the opening: its own window, or the level's buffer if that is wider (never while mashing)
+    const win = p ? Math.max(p.tol, mash ? 0 : this.c.buffer / spb) + 1e-6 : 0;
     const nf = this.nearFlow(t);
     const hit = nf && Math.abs(nf.d) <= nf.f.tol * spb && !this.used.has(nf.f.beat) ? nf.f : null;
     const free = (): TapResult => {
@@ -295,10 +334,16 @@ export class Sim {
     };
 
     // Survival first: a tap inside the next opening's window always opens it...
-    if (p && !up && d >= -p.tol) {
+    if (p && !up && d >= -win) {
       // ...but if it was really aimed at a flow note just before the press, the flow note gets the credit,
       // and the press is judged by the next tap inside its window (or not at all)
       const spark = hit && Math.abs(nf!.d) < Math.abs(d * spb) ? this.touch(hit, t) : null;
+      // an early tap is held and performed exactly on the beat (forgiving taps); never while mashing
+      const held = !mash && !spark && d < 0;
+      if (this.mode === 'ground' && held) {
+        if (Number.isNaN(this.pending)) { this.pending = t; this.pendingQuiet = false; this.pendingBuf = true; }
+        return { kind: 'none' };
+      }
       if (this.mode === 'ground') {
         this.openErr = spark ? NaN : d * spb;
         this.takeoff(p, t);
@@ -306,8 +351,9 @@ export class Sim {
         if (spark) return { ...spark, kind: p.kind };
         return { kind: p.kind, err: d * spb, flow: this.judge(d * spb), pitch: p.pitch };
       }
-      this.pending = t; // in the air: it goes the moment the ball touches down
+      this.pending = t; // in the air: it goes the moment the ball touches down (held for the beat, if it was early)
       this.pendingQuiet = !!spark;
+      this.pendingBuf = held;
       return spark ?? { kind: 'none' };
     }
     if (hit) {
@@ -330,8 +376,14 @@ export class Sim {
     if (!p || p.auto || p.after || p.wide) return free(); // nothing left to miss, or the first press after a planet hop: tapping early there is never punished
     // near a flow note, or with one still to come before the opening: the tap was for the flow note, never punished
     if (this.c.flow.some((f) => f.ride === 0 && f.beat < p.beat && (f.beat - t) * spb > -GRACE_S)) return free();
+    // mashing: a stray tap in the two beats before an opening hits the ring (never in the count-in) (a steady spammer would otherwise always have a tap
+    // inside every window)
+    if (mash && !this.forgiving && t >= this.c.start && d >= -2) return this.crash('early', t);
     if (d < -NEAR) { this.off(); return free(); } // far from any opening: free, though it is not on the beat
     if (this.forgiving) return free();
+    // way too early, but not mashing: ignored (the opening still waits for its tap), except in the level's last stretch
+    // before the buffer, where it still hits the ring (none in the first two levels)
+    if (!mash && (this.c.early <= 0 || d < -(win + this.c.early))) return { kind: 'none' };
     return this.crash('early', t); // went for the opening too soon and hit the ring
   }
 
@@ -449,13 +501,14 @@ export class Sim {
       } else if (this.mode === 'skip' && nb >= this.skipEnd) this.mode = 'ground';
       const p = ps[this.ni];
       if (!p || this.mode !== 'ground') continue;
-      if (!Number.isNaN(this.pending) && nb >= p.beat - p.tol) {
+      if (!Number.isNaN(this.pending) && nb >= (this.pendingBuf ? p.beat : p.beat - p.tol)) {
         const err = (this.pending - p.beat) * this.c.spb;
         const quiet = this.pendingQuiet;
+        const buf = this.pendingBuf;
         this.openErr = quiet ? NaN : err;
-        this.takeoff(p, nb);
+        this.takeoff(p, buf ? p.beat : nb);
         this.needJudge = quiet;
-        this.out.push(quiet ? { kind: p.kind } : { kind: p.kind, err, flow: this.judge(err), pitch: p.pitch });
+        this.out.push(quiet ? { kind: p.kind } : { kind: p.kind, err, flow: buf ? this.judgeHeld(err) : this.judge(err), pitch: p.pitch });
       } else if (p.auto || p.beat < this.autoUntil) {
         if (nb >= p.beat) {
           this.takeoff(p, p.beat);

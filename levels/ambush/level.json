@@ -8,7 +8,7 @@
   "scale": [4, 6, 7, 9, 11, 0, 2],
   "difficulty": "Ambush",
   "adds": "The Stillness reaching for your stars: strike it on the light notes",
-  "rules": {"tol": 0.12, "ahead": 3, "branch": 0.08, "intro": false, "known": ["meteor", "sat"]},
+  "rules": {"tol": 0.12, "ahead": 3, "branch": 0.08, "intro": false, "known": ["meteor", "sat"], "buffer": 0.1, "early": 0.45},
   "segments": [
     {"id": "arrive", "core": {"bars": ["up+sparse", "meteor+sparse", "sparse"]}, "bars": 3, "label": "VERSE", "lap": 8, "follow": "arp", "lead": "snare", "look": {"palette": "void", "bg": "stars", "eq": "bars"}, "plan": ["L=8"]},
     {"id": "roll1", "core": {"charge": true}, "bars": 1, "label": "VERSE", "lap": 8, "follow": "arp", "lead": "snare", "look": {"palette": "void", "bg": "stars", "eq": "bars"}, "plan": ["L=8"]},
