@@ -1807,10 +1807,10 @@ export class GdRenderer {
       { const w = 3.2, sdt = Math.min(dt, 0.034); this.speedV += (w * w * (want - this.speedK) - 2 * w * this.speedV) * sdt; this.speedK += this.speedV * sdt; }
       const mini = course.bars[Math.max(0, Math.min(course.bars.length - 1, Math.floor(beat / 4)))]?.mini ? 1 : 0;
       { const w = 7, sdt = Math.min(dt, 0.034); this.miniV += (w * w * (mini - this.miniK) - 2 * w * this.miniV) * sdt; this.miniK += this.miniV * sdt; }
-      const cs = this.planet?.cam?.(t) ?? 1, zk = 3.2, zdt = Math.min(dt, 0.034);
+      const cs = this.planet?.cam?.(t) ?? 1, zk = 5.5, zdt = Math.min(dt, 0.034);
       // (two springs in a row: a change of framing eases in and out, never starts at full speed; 2026-11-26)
       this.csTV += (zk * zk * (cs - this.csT) - 2 * zk * this.csTV) * zdt; this.csT += this.csTV * zdt;
-      this.camSV += (16 * (this.csT - this.camScale) - 8 * this.camSV) * zdt; this.camScale += this.camSV * zdt;
+      this.camSV += (49 * (this.csT - this.camScale) - 14 * this.camSV) * zdt; this.camScale += this.camSV * zdt;
     }
     const m = this.sizes();
     const span = Math.max(this.w, this.h) * 0.75;
@@ -2046,6 +2046,12 @@ export class GdRenderer {
       }
       const pull = this.planet?.pull?.(t);
       if (pull && pull.k > 0) { const U = this.rad(this.cam), wide = this.w >= this.h, px = wide ? -pull.y : pull.x, py = wide ? pull.x : pull.y; tx = lerp(tx, px * U, pull.k); ty = lerp(ty, py * U, pull.k); }
+      // (the aim is eased by a spring of its own, so a launch, a landing or a new place blends in over about a third of a
+      // second; the framing rules below then act on the eased aim, so they never lag: the Ufotable pass)
+      { const tk = 11, adt = Math.min(dt, 0.034);
+        if (!this.tgOn) { this.tgX = tx; this.tgY = ty; this.tgVX = this.tgVY = 0; this.tgOn = true; }
+        this.tgVX += (tk * tk * (tx - this.tgX) - 2 * tk * this.tgVX) * adt; this.tgVY += (tk * tk * (ty - this.tgY) - 2 * tk * this.tgVY) * adt;
+        this.tgX += this.tgVX * adt; this.tgY += this.tgVY * adt; tx = this.tgX; ty = this.tgY; }
       // framing (2026-11-26): wherever it aims, the camera keeps Orbin well inside the picture, and the path 1.5 s ahead
       // in it too (Orbin first: he is never pushed to the edge)
       const at = (b: number): [number, number] => { const h = course.at(b), [ox, oy] = this.planetXY(h.planet), [x, y] = this.loc(h.planet, -Math.PI / 2 + course.angle(b), this.rad(h.rho)); return [ox + x, oy + y]; };
@@ -2063,12 +2069,8 @@ export class GdRenderer {
     // Ufotable pass, 2026-11-26: the target itself is eased first, by a spring of its own, so when what the camera
     // follows changes (a launch, a landing, a new place) it blends there over about half a second: two springs in a
     // row, so even its acceleration never jumps.)
-    const tk = 9, sdt = Math.min(dt, 0.034);
-    if (!this.tgOn) { this.tgX = tx; this.tgY = ty; this.tgVX = this.tgVY = 0; this.tgOn = true; }
-    this.tgVX += (tk * tk * (tx - this.tgX) - 2 * tk * this.tgVX) * sdt; this.tgVY += (tk * tk * (ty - this.tgY) - 2 * tk * this.tgVY) * sdt;
-    this.tgX += this.tgVX * sdt; this.tgY += this.tgVY * sdt;
-    tx = this.tgX; ty = this.tgY;
-    const ok = 12;
+    const sdt = Math.min(dt, 0.034);
+    const ok = 14;
     this.camVX += (ok * ok * (tx - this.camX) - 2 * ok * this.camVX) * sdt;
     this.camVY += (ok * ok * (ty - this.camY) - 2 * ok * this.camVY) * sdt;
     this.camX += this.camVX * dt;
@@ -2084,9 +2086,9 @@ export class GdRenderer {
         this.camX += ex * k; this.camY += ey * k; if (ex) this.camVX *= 0.5; if (ey) this.camVY *= 0.5;
       };
       // (only as a safety net now, gently, and at the very edge: the framing is the eased target's job)
+      fix(pt(beat + 1.5 / course.spb), 10, 14, Math.min(1, dt * 9)); // (the path ahead, gently, if it is about to leave the picture)
       fix([qx + lx, qy + ly], this.w * 0.08, this.h * 0.06, Math.min(1, dt * 6));
       fix([qx + lx, qy + ly], 4, 4, 1);
-      void pt;
     }
     const [wx, wy] = this.planetXY(this.pf);
     this.coreX = wx - this.camX;

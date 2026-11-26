@@ -94,12 +94,12 @@ export class AmbushWorld {
   /** the camera leads each flight: from a second before the launch it leans to the middle of the flight (so the next
    * landing is in view before take-off), and lets go as he lands; the escape pulls back over everything */
   private pullAt(s: number): { x: number; y: number; k: number } | null {
-    if (s > AT.escape - 1.6 && s < AT.home + 0.6) return { x: -0.2, y: -3.4, k: 0.5 * sm((s - AT.escape + 1.6) / 1.2) * (1 - sm((s - AT.home + 0.4) / 0.9)) };
+    if (s > AT.escape - 2.4 && s < AT.home + 0.6) return { x: -0.2, y: -3.4, k: 0.5 * sm((s - AT.escape + 2.4) / 1.6) * (1 - sm((s - AT.home + 0.4) / 0.9)) };
     for (const [l0, l1, x, y] of LEADS) if (s > l0 - 1.2 && s < l1 + 0.6) return { x, y, k: 0.4 * sm((s - l0 + 1.2) / 1.0) * (1 - sm((s - l1 + 0.1) / 0.6)) };
     return null;
   }
   private camAt(s: number): number {
-    const esc = s > AT.escape - 1.6 && s < AT.home + 0.6 ? sm((s - AT.escape + 1.6) / 1.2) * (1 - sm((s - AT.home + 0.4) / 0.9)) : 0;
+    const esc = s > AT.escape - 2.4 && s < AT.home + 0.6 ? sm((s - AT.escape + 2.4) / 1.6) * (1 - sm((s - AT.home + 0.4) / 0.9)) : 0;
     const base = s < AT.away - 0.4 ? 0.8 : s < AT.go2 ? 0.88 : s < AT.drop ? 0.84 + 0.06 * sm((s - AT.skip) / (AT.drop - 0.4 - AT.skip)) : s < AT.drop + 1.2 ? 0.82 : 0.88;
     let lead = 0; for (const [l0, l1] of LEADS) if (s > l0 - 1.6 && s < l1 + 0.6) lead = sm((s - l0 + 1.6) / 1.2) * (1 - sm((s - l1 + 0.1) / 0.6));
     return base - 0.32 * esc - 0.4 * lead;
