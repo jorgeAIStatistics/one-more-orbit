@@ -357,7 +357,8 @@ function afterStar(r: Run, first: boolean, homeWas: number, at: { orbin: [number
   const rise = (secs: number, then: () => void) => { renderMap(); landing.ascend(() => { show('levels'); then(); }, secs); };
   // the next stretch of road lights as the camera arrives over the map (the old "road" moment, folded in here)
   const opened = () => { const i = PACKS.findIndex((p) => p.level.id === world); if (i >= 0) sky.reveal(i + 1); };
-  if (!first) { landing.rest(n, false, false); show('title'); rise(2.2, () => undefined); return; }
+  // (a replay: from the caught star straight up into the sky, one continuous camera move, no cut to the Landing)
+  if (!first) { renderMap(); sky.arrive(world); show('levels'); return; }
   landing.tilt = isFirst ? 0.26 : 0;
   window.setTimeout(() => { warmMap = true; }, 3600);
   landing.arrive({

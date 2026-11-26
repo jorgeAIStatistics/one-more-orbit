@@ -243,8 +243,8 @@ export class SkyMap {
     c.restore();
   }
   /** Drag and pinch (the map pass): how far the reader has moved the sky, and zoomed it */
-  private userX = 0; private userY = 0; private userZ = 1;
-  dragBy(dx: number, dy: number): void { this.userX -= dx / this.z; this.userY -= dy / this.z; }
+  private userX = 0; private userY = 0; private userZ = 1; private userMoving = 0; private fxV = 0; private fyV = 0; private zV = 0;
+  dragBy(dx: number, dy: number): void { this.userX -= dx / this.z; this.userY -= dy / this.z; this.userMoving = 0.15; }
   pinch(f: number): void { this.userZ = Math.max(0.8, Math.min(2.4, this.userZ * f)); }
   /** A shard as a small star of paint: lit, or only the place where one will be. */
   private dab(x: number, y: number, s: number, on: boolean, a = 1): void {
@@ -275,7 +275,11 @@ export class SkyMap {
     const k = Math.min(1, dt * (fly > 0 ? 14 : 7));
     const tx = focus ? lerp(w / 2, focus.x, fly > 0 ? 1 : 0.5) : w / 2, ty = focus ? lerp(h / 2, focus.y, fly > 0 ? 1 : 0.5) : h / 2;
     if ((this.chosen ?? '') !== this.shown) { this.userX = this.userY = 0; this.userZ = 1; } // (choosing a place takes the camera back to it)
-    this.z += (wantZ * (fly > 0 ? 1 : this.userZ) - this.z) * k; this.fx += (tx + this.userX - this.fx) * k; this.fy += (ty + this.userY - this.fy) * k;
+    // (springs, as the play camera: it gathers speed and settles, never starting at full speed; the Ufotable pass)
+    { const om = fly > 0 ? 14 : 5.5, sdt = Math.min(dt, 0.034), zt = wantZ * (fly > 0 ? 1 : this.userZ);
+      if (this.userMoving > 0) { this.fx += (tx + this.userX - this.fx) * k; this.fy += (ty + this.userY - this.fy) * k; this.fxV = this.fyV = 0; this.userMoving -= dt; } // (a drag follows the finger at once)
+      else { this.fxV += (om * om * (tx + this.userX - this.fx) - 2 * om * this.fxV) * sdt; this.fyV += (om * om * (ty + this.userY - this.fy) - 2 * om * this.fyV) * sdt; this.fx += this.fxV * sdt; this.fy += this.fyV * sdt; }
+      this.zV += (om * om * (zt - this.z) - 2 * om * this.zV) * sdt; this.z += this.zV * sdt; }
     // the camera never looks past the edge of the painting
     const hw = w / (2 * Math.max(1, this.z)), hh = h / (2 * Math.max(1, this.z));
     this.fx = Math.max(Math.min(hw, w / 2), Math.min(Math.max(w - hw, w / 2), this.fx)); this.fy = Math.max(Math.min(hh, h / 2), Math.min(Math.max(h - hh, h / 2), this.fy));
@@ -423,6 +427,9 @@ export class SkyMap {
     for (let i = this.hits.length - 1; i >= 0; i--) { const b = this.hits[i]; if (wx >= b.x && wx <= b.x + b.w && wy >= b.y && wy <= b.y + b.h) return b.hit; }
     return { kind: 'sky' };
   }
+  /** Out of a level straight into the sky (the after-level transition, 2026-11-26): the camera starts inside the world
+   * just played, where the star was caught, and pulls back up to the sky in one continuous move. */
+  arrive(id: string): void { this.layout(); const p = this.pos.get(id); this.chosen = id; this.shown = id; this.fade = 0; this.launchAt = -1; if (p) { this.fx = p.x; this.fy = p.y; } this.z = 4.2; this.zV = this.fxV = this.fyV = 0; this.userX = this.userY = 0; this.userZ = 1; }
   /** Back from the play field: the camera is by the planet again, not inside it. */
   settle(): void { this.launchAt = -1; this.z = 1.16; }
 }
