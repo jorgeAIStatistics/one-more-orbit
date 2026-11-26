@@ -219,7 +219,7 @@ export class EmberWorld {
       const flash = Math.exp(-(st.time - this.impact) * 6);
       if (flash > 0.02) { const ax = Math.cos(W.EMBER.anvil) * R, ay = Math.sin(W.EMBER.anvil) * R; K.glow(c, ax, ay, 120 * k, [255, 210, 140], 0.7 * flash, 'screen'); }
       // the Kindling, the forge's last spark, rising from its mouth at the held bar (it gives the Meteor on the stabs)
-      if (t > ET.held - 0.2 && t < ET.stabs + 0.3) {
+      if (!this.journeyOn && t > ET.held - 0.2 && t < ET.stabs + 0.3) {
         const q = sm((t - ET.held + 0.2) / 2.2), a = 1 - sm((t - ET.stabs) / 0.3);
         COMPANIONS.kindling(c, mouth[0] + Math.sin(st.time * 2) * 10 * k, mouth[1] - 140 * k * q, 0.5 * k * 1.6, COMPANIONS.KINDLE.heroes, { flap: 0.5 + 0.5 * Math.sin(st.time * 5), alpha: sm((t - ET.held + 0.2) / 0.5) * a });
       }
@@ -296,6 +296,32 @@ export class EmberWorld {
       if (t >= Ts) K.glow(c, px, py, U * (0.3 + 0.8 * after), [255, 200, 120], 0.8 * (1 - after), 'screen');
     }
     this.objects(c, st, U);
+    this.kindling(c, st, U);
+  }
+  /**
+   * The Kindling and the fling: it waits by the launch point on the Ash Moon (its wings breathing), curls into a ring of
+   * sparks over the beat before, throws him on the beat, then flies on behind him across the dark, and opens its wings
+   * across the path when he lands (the Meteor). Every move eased, its wings lagging its body.
+   */
+  private kindling(c: CanvasRenderingContext2D, st: WorldState, U: number): void {
+    const t = st.song, beat = t / ET.spb, launch = st.presses?.find((p) => p.leap && !p.leap.ember);
+    if (!launch || !st.at || t < 4 || t > ET.stabs + 0.6) return;
+    const L = launch.beat, land = launch.leap!.b1, time = st.time, col = COMPANIONS.KINDLE.heroes;
+    const [lx, ly] = st.at(L), up = st.up!(L), ux = Math.cos(up), uy = Math.sin(up);
+    const appear = sm((t - 4) / 1.2), gone = 1 - sm((t - ET.stabs - 0.2) / 0.4);
+    if (beat < L) {
+      // waiting beside the launch point, then curling into a ring round it (anticipation)
+      const curl = sm((beat - (L - 2)) / 2), hover = (1 - curl) * U * 0.55, bob = Math.sin(time * 2.1) * U * 0.04;
+      const x = lx + ux * (hover + bob) + Math.cos(time * 0.9) * U * 0.05 * (1 - curl), y = ly + uy * (hover + bob);
+      COMPANIONS.kindling(c, x, y, U * 0.0042 * (1 + 0.3 * curl), col, { flap: 0.5 + 0.5 * Math.sin(time * (5 + 6 * curl)), open: curl * 0.8, alpha: appear, rot: up + Math.PI / 2 });
+      if (curl > 0.01) for (let i = 0; i < 16; i++) { const a = (i / 16) * TAU + time * 3, rr = U * (0.32 - 0.1 * curl); K.glow(c, lx + Math.cos(a) * rr, ly + Math.sin(a) * rr, U * 0.02, [255, 190, 120], 0.85 * curl); }
+      return;
+    }
+    // the throw: a burst at the launch point, then it trails him, a little behind and above, wings beating hard
+    const since = beat - L;
+    if (since < 0.6) { const q = since / 0.6; for (let i = 0; i < 16; i++) { const a = (i / 16) * TAU; K.glow(c, lx + Math.cos(a) * U * (0.3 + 0.6 * q), ly + Math.sin(a) * U * (0.3 + 0.6 * q), U * 0.025 * (1 - q), [255, 200, 130], 0.9 * (1 - q)); } }
+    const b2 = Math.min(beat - 0.45, land), [x, y] = st.at(Math.max(L, b2)), a2 = st.up!(Math.max(L, b2));
+    COMPANIONS.kindling(c, x + Math.cos(a2) * U * 0.22, y + Math.sin(a2) * U * 0.22, U * 0.0042, col, { flap: 0.5 + 0.5 * Math.sin(time * 9), open: beat > land - 0.3 ? 0.9 : 0.2, alpha: gone, rot: a2 + Math.PI / 2 });
   }
   private jT = -1;
   /** Ossa's pose from the song: every change a spring, her hammering on the beat */
@@ -317,6 +343,7 @@ export class EmberWorld {
       } else rear = 0.1;
     }
     if (t >= ET.end) { lit = 1; rear = 0.95; head = -0.3; }
+    if (!hammer) head += 0.05 * Math.sin(time * 0.7) + 0.02 * Math.sin(time * 1.9); // (a living idle: she looks about, never still)
     const P = this.pose;
     P.R = this.rise.step(rise, dt); P.H = this.head.step(head, dt); P.L = this.litS.step(lit, dt);
     P.rear = hammer ? rear : (this.rearS ??= new Spring(0, 6)).step(rear, dt);

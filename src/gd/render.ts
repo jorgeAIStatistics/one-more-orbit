@@ -265,6 +265,8 @@ export class GdRenderer {
       // (an eight crosses itself where raw angle -PI/2 falls, scaled: its phase puts that on the beat it names)
       const placed = defs.map((d) => (d.shape === 'eight' && d.cross !== undefined ? { ...d, phase: -Math.PI / 2 * (d.size ?? 1) - (-Math.PI / 2 + c.angle(d.cross)) } : d));
       this.geo = { defs: placed, span: span.map(([a, b]) => [-Math.PI / 2 + a, -Math.PI / 2 + b]), win };
+      // each leap's flight: from its launch on one place to its landing on the next (drawn as one arc between them)
+      this.leapArcs = c.presses.filter((q) => q.leap && !q.leap.ember).map((q) => ({ p0: q.leap!.p0, a0: -Math.PI / 2 + c.angle(q.leap!.b0), a1: -Math.PI / 2 + c.angle(q.leap!.b1) }));
     }
     if (!this.globeCv) this.globeCv = stamp(160, 160, (g) => globe(g, 80, 80, 74, 225, rng(5)), 2);
     this.colour = 0;
@@ -354,11 +356,23 @@ export class GdRenderer {
     const g = this.geo!, i = clamp(k, 0, g.defs.length - 1);
     return placePoint(g.defs[i], a, r, this.rad(this.cam), g.span[i], g.win[i], this.w >= this.h);
   }
+  private leapArcs: Array<{ p0: number; a0: number; a1: number }> = [];
   /** Where angle a at radius r is, relative to the centre of place pf (part-way between two places in a leap). */
   private loc(pf: number, a: number, r: number): [number, number] {
     if (!this.geo) return [Math.cos(a) * r, Math.sin(a) * r];
     const k = Math.floor(pf + 1e-9), f = pf - k, p = this.locK(k, a, r);
     if (f < 1e-6 || k + 1 >= this.geo.defs.length) return [p[0], p[1]];
+    // in a leap: one smooth arc from the launch point to the landing, bowed up off the place he leaves (2026-11-26)
+    const L = this.leapArcs.find((l) => l.p0 === k);
+    if (L) {
+      const R = this.rad(this.cam), [c0x, c0y] = this.planetXY(k), [c1x, c1y] = this.planetXY(k + 1), s0 = this.locK(k, L.a0, r), s1 = this.locK(k + 1, L.a1, r);
+      const x0 = c0x + s0[0], y0 = c0y + s0[1], x1 = c1x + s1[0], y1 = c1y + s1[1], dx = x1 - x0, dy = y1 - y0, d = Math.hypot(dx, dy) || 1;
+      let nx = -dy / d, ny = dx / d; if (nx * s0[2] + ny * s0[3] < 0) { nx = -nx; ny = -ny; }
+      const lift = Math.min(d * 0.32, R * 2.2) + (r - R) * 0.6, mx = (x0 + x1) / 2 + nx * lift, my = (y0 + y1) / 2 + ny * lift;
+      const bx = (1 - f) * (1 - f) * x0 + 2 * (1 - f) * f * mx + f * f * x1, by = (1 - f) * (1 - f) * y0 + 2 * (1 - f) * f * my + f * f * y1;
+      const [ox, oy] = this.planetXY(pf);
+      return [bx - ox, by - oy];
+    }
     const q = this.locK(k + 1, a, r);
     return [lerp(p[0], q[0], f), lerp(p[1], q[1], f)];
   }
@@ -1615,12 +1629,15 @@ export class GdRenderer {
     const vr = dt > 0 && this.ball.r ? (br - this.ball.r) / dt : 0;
     const stretch = sim.mode !== 'ground' ? clamp(Math.abs(vr) / (r0 * 4), 0, 0.2) : 0;
     const [x, y] = this.wxy(this.pf, a, br);
+    // (in a leap he stretches along his flight with his speed across the screen: the take-off and landing ease it in and out)
+    const sv = dt > 0 && !twin ? Math.hypot(x - this.ballXY[0], y - this.ballXY[1]) / dt : 0;
+    const fly = this.geo && !twin && this.pf !== Math.round(this.pf) ? clamp(sv / (r0 * 12), 0, 0.28) : 0;
     this.ballXY = [x, y];
     // a dark halo, so the ball reads against anything
     c.fillStyle = 'rgba(3,5,14,0.5)';
     c.beginPath(); c.arc(x, y, rb * 2.1, 0, TWO_PI); c.fill();
     const dir = course.angle(beat + 0.05) >= course.angle(beat) ? 1 : -1;
-    this.drawHero(x, y, rb, skin, this.upA(this.pf, a), dir, heroForm, 1 + stretch - 0.3 * squash - 0.18 * dashK, 1 - stretch * 0.5 + 0.22 * squash + 0.45 * dashK, sim.down ? 1 : 0);
+    this.drawHero(x, y, rb, skin, this.upA(this.pf, a), dir, heroForm, 1 + stretch + fly - 0.3 * squash - 0.18 * dashK, 1 - (stretch + fly) * 0.5 + 0.22 * squash + 0.45 * dashK, sim.down ? 1 : 0);
     if (!twin) {
       this.ball.x = x;
       this.ball.y = y;
