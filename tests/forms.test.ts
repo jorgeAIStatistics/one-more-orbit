@@ -317,7 +317,7 @@ describe('gates, pads, chimes and slipstreams', () => {
       expect(p.form === 'orb' && p.twin === null && !p.spin && !p.sling, where).toBe(true);
       if (p.orb === 'dash') { expect(p.slip, where).toBe(true); expect(p.land - p.beat, where).toBe(SLIP_FLIGHT); expect(Math.abs(p.to - p.from), where).toBeCloseTo(2, 9); expect(p.line, where).toBe(true); }
       if (p.orb === 'grav') expect(p.kind, where).toBe('flip');
-      if (p.orb === 'jump') { expect(p.slip, where).toBe(false); expect(Math.abs(p.to - p.from), where).toBeGreaterThan(0.5); }
+      if (p.orb === 'jump' && !p.leap) { expect(p.slip, where).toBe(false); expect(Math.abs(p.to - p.from), where).toBeGreaterThan(0.5); } // (an ember in a leap carries the flight on: it does not climb)
     }
     for (const p of of('invincible').course.presses.filter((x) => x.slip)) { expect(p.land - p.beat).toBe(SLIP_FLIGHT); expect(p.line).toBe(true); }
     // a gravity orb turns gravity over for the rest of its bar: the next press in that bar leaves from the other side

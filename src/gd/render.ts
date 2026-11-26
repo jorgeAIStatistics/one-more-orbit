@@ -11,7 +11,8 @@ import { CANON } from '../art/canonpaint.js';
 import { COMPANIONS } from '../art/companions.js';
 import type { World } from '../ui/worlds';
 import { bestFor, save, starsFor } from '../save';
-import { LIFT, flightRho, smoothstep, type Course, type Feature, type Form, type Star } from './course';
+import { LIFT, flightRho, leapAt, smoothstep, type Course, type Feature, type Form, type Star } from './course';
+import { placeAt, placePoint, type PlaceDef } from './shapes';
 import type { GdRun } from './run';
 
 const TWO_PI = Math.PI * 2;
@@ -255,6 +256,16 @@ export class GdRenderer {
     const c = run.course;
     this.plats = platforms(c, level);
     this.padCol = level.id === 'heroes' ? [255, 168, 96] : [150, 235, 220];
+    this.geo = null;
+    if (level.file.places?.length) {
+      // each place's stretch of orbit (the angles the ball covers there), and a spiral's window, from the course itself
+      const defs = level.file.places, span: Array<[number, number]> = defs.map(() => [0, 0]), seen = defs.map(() => false);
+      for (let b = c.start; b <= c.end; b += 0.25) { const k = c.at(b).planet; if (k !== Math.round(k) || k < 0 || k >= defs.length) continue; const a = c.angle(b); if (!seen[k]) { span[k] = [a, a]; seen[k] = true; } else span[k][1] = a; }
+      const win = defs.map((d): [number, number] | null => (d.spiral ? [-Math.PI / 2 + c.angle(d.spiral[0]), -Math.PI / 2 + c.angle(d.spiral[1])] : null));
+      // (an eight crosses itself where raw angle -PI/2 falls, scaled: its phase puts that on the beat it names)
+      const placed = defs.map((d) => (d.shape === 'eight' && d.cross !== undefined ? { ...d, phase: -Math.PI / 2 * (d.size ?? 1) - (-Math.PI / 2 + c.angle(d.cross)) } : d));
+      this.geo = { defs: placed, span: span.map(([a, b]) => [-Math.PI / 2 + a, -Math.PI / 2 + b]), win };
+    }
     if (!this.globeCv) this.globeCv = stamp(160, 160, (g) => globe(g, 80, 80, 74, 225, rng(5)), 2);
     this.colour = 0;
     this.ahead = level.file.side?.ahead ?? level.file.rules?.ahead ?? 3;
@@ -334,8 +345,41 @@ export class GdRenderer {
     return m;
   }
 
+  // ---- the journey's places (the owner's brief of 2026-11-26; src/gd/shapes.ts). Without them, every ring is a circle
+  // round its planet's core, exactly as before.
+  private geo: { defs: PlaceDef[]; span: Array<[number, number]>; win: Array<[number, number] | null> } | null = null;
+  /** the place the ring being drawn belongs to (set before drawing round it) */
+  private lk = 0;
+  private locK(k: number, a: number, r: number): [number, number, number, number] {
+    const g = this.geo!, i = clamp(k, 0, g.defs.length - 1);
+    return placePoint(g.defs[i], a, r, this.rad(this.cam), g.span[i], g.win[i], this.w >= this.h);
+  }
+  /** Where angle a at radius r is, relative to the centre of place pf (part-way between two places in a leap). */
+  private loc(pf: number, a: number, r: number): [number, number] {
+    if (!this.geo) return [Math.cos(a) * r, Math.sin(a) * r];
+    const k = Math.floor(pf + 1e-9), f = pf - k, p = this.locK(k, a, r);
+    if (f < 1e-6 || k + 1 >= this.geo.defs.length) return [p[0], p[1]];
+    const q = this.locK(k + 1, a, r);
+    return [lerp(p[0], q[0], f), lerp(p[1], q[1], f)];
+  }
+  /** The same, relative to the camera. */
+  private wxy(pf: number, a: number, r: number): [number, number] { const [ox, oy] = this.planetXY(pf), [x, y] = this.loc(pf, a, r); return [ox - this.camX + x, oy - this.camY + y]; }
+  /** Which way is up (away from what he rides on) at angle a in place pf, as an angle. */
+  private upA(pf: number, a: number): number { if (!this.geo) return a; const p = this.locK(Math.round(pf), a, this.rad(this.cam)); return Math.atan2(p[3], p[2]); }
+  /** A ring round the place being drawn, or the stretch of it near angle a0 (a bridge, a spiral). */
+  private ringPath(r: number, a0: number): void {
+    const c = this.ctx;
+    if (!this.geo) { c.arc(0, 0, r, 0, TWO_PI); return; }
+    for (let i = 0; i <= 96; i++) { const [x, y] = this.loc(this.lk, a0 - Math.PI + (TWO_PI * i) / 96, r); if (i) c.lineTo(x, y); else c.moveTo(x, y); }
+  }
+
   /** Where a planet's core is in the world. Each planet hop goes on to the next: across on a wide screen, up on a tall one. */
   private planetXY(pf: number): [number, number] {
+    if (this.geo) {
+      const d = this.geo.defs, U = this.rad(this.cam), wide = this.w >= this.h, k = clamp(Math.floor(pf), 0, d.length - 1), f = clamp(pf - k, 0, 1);
+      const [x0, y0] = placeAt(d[k], wide), [x1, y1] = placeAt(d[Math.min(d.length - 1, k + 1)], wide);
+      return [lerp(x0, x1, f) * U, lerp(y0, y1, f) * U];
+    }
     const d = this.r0 * 2.75;
     const at = (k: number): [number, number] => (this.w >= this.h ? [k * d, k % 2 ? -0.42 * d : 0] : [k % 2 ? 0.4 * d : 0, -k * d]);
     const k = Math.floor(pf);
@@ -352,6 +396,7 @@ export class GdRenderer {
     const last = run.course.presses[sim.ni - 1];
     if (!last) return 0;
     if (last.sling && sim.mode === 'flight' && sim.fl) return last.planet + smoothstep((beat - sim.fl.t0) / (sim.fl.t1 - sim.fl.t0));
+    if (last.leap && beat < last.leap.b1) return leapAt(last.leap, Math.min(beat, last.land)); // (an ember not yet tapped: he waits at it)
     return last.planetTo;
   }
 
@@ -868,6 +913,11 @@ export class GdRenderer {
   /** Adds the stretch of a ring between two beats to the current path, following the orbit through any turn. */
   private arcPath(c0: Course, r: number, b0: number, b1: number): void {
     const c = this.ctx;
+    if (this.geo) { // (a place's own shape: followed point by point)
+      const n = Math.max(2, Math.ceil(Math.abs(b1 - b0) * 20));
+      for (let i = 0; i <= n; i++) { const [x, y] = this.loc(this.lk, -Math.PI / 2 + c0.angle(b0 + ((b1 - b0) * i) / n), r); if (i) c.lineTo(x, y); else c.moveTo(x, y); }
+      return;
+    }
     let from = b0;
     for (const t of c0.turns) {
       if (t <= from || t >= b1) continue;
@@ -902,8 +952,7 @@ export class GdRenderer {
       // Gold with four ticks: a jump orb. Cyan with chevrons: a dash orb. Violet with an arrow each way: a gravity orb.
       if (plain || pl.note < lo || pl.note > hi) return;
       const a = ang(pl.note);
-      const x = Math.cos(a) * (r + pl.side * rb);
-      const y = Math.sin(a) * (r + pl.side * rb);
+      const [x, y] = this.loc(this.lk, a, r + pl.side * rb);
       const tick = Math.exp(-(((beat % 1) + 1) % 1) * 5);
       const col = pl.orb === 'dash' ? CYAN : pl.orb === 'grav' ? VIOLET : GOLD;
       c.globalAlpha = alpha;
@@ -949,7 +998,7 @@ export class GdRenderer {
     c.globalAlpha = alpha * (0.07 + pulse * 0.04 + lit * 0.16);
     c.strokeStyle = this.look === 2 ? rgba(STONE) : this.col(pal.ring);
     c.lineWidth = 1.2 + lit;
-    c.beginPath(); c.arc(0, 0, r, 0, TWO_PI); c.stroke();
+    c.beginPath(); this.ringPath(r, ang(beat)); c.stroke();
     void time;
     c.globalAlpha = alpha;
     if (!plain) {
@@ -1038,12 +1087,11 @@ export class GdRenderer {
           c.globalAlpha = alpha * gone;
           if (pl.form === 'meteor') {
             c.lineCap = 'round';
-            c.beginPath(); c.moveTo(Math.cos(e) * (r - rb * 2.8), Math.sin(e) * (r - rb * 2.8)); c.lineTo(Math.cos(e) * (r + rb * 2.8), Math.sin(e) * (r + rb * 2.8));
+            { const [x0, y0] = this.loc(this.lk, e, r - rb * 2.8), [x1, y1] = this.loc(this.lk, e, r + rb * 2.8); c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); }
             if (this.look === 2) { c.strokeStyle = HALO; c.lineWidth = rb * 1.5; c.stroke(); c.strokeStyle = rgba(WOKEN, 0.92); c.lineWidth = rb * 1.05; c.stroke(); c.strokeStyle = 'rgba(20,26,62,0.96)'; c.lineWidth = rb * 0.62; c.stroke(); } // (soft blue: a wall is scenery until its node is the next tap)
             else { c.strokeStyle = rgba(INK_RIM); c.lineWidth = rb * 1.25; c.stroke(); c.strokeStyle = rgba(INK); c.lineWidth = rb * 0.85; c.stroke(); }
           } else {
-            const bx = Math.cos(e) * (r + pl.side * rb * 1.5);
-            const by = Math.sin(e) * (r + pl.side * rb * 1.5);
+            const [bx, by] = this.loc(this.lk, e, r + pl.side * rb * 1.5);
             c.fillStyle = rgba(INK_RIM); c.beginPath(); c.arc(bx, by, rb * 1.55, 0, TWO_PI); c.fill();
             c.fillStyle = rgba(INK); c.beginPath(); c.arc(bx, by, rb * 1.2, 0, TWO_PI); c.fill();
           }
@@ -1058,7 +1106,7 @@ export class GdRenderer {
           c.strokeStyle = rgba(pl.pad === 'spring' ? CYAN : pl.pad === 'jump' || pl.pad === 'vent' ? this.padCol : VIOLET); c.lineWidth = pl.pad === 'jump' ? 11 : 9; c.stroke(); // (a jump pad: the woken teal of the world's own life)
         }
         const ahead = pl.note - beat;
-        const nx = Math.cos(a) * r, ny = Math.sin(a) * r, nr = rb * 1.5 * (pl.smash ? 1.7 : pl.accent || pl.after ? 1.3 : pl.wide ? 1.15 : 1) * (1 + pulse * 0.2);
+        const [nx, ny] = this.loc(this.lk, a, r), nr = rb * 1.5 * (pl.smash ? 1.7 : pl.accent || pl.after ? 1.3 : pl.wide ? 1.15 : 1) * (1 + pulse * 0.2);
         if (pl.act === 'up') {
           // the Comet's second mark: a white ring. Let go here.
           c.strokeStyle = HALO; c.lineWidth = wide + 5;
@@ -1110,9 +1158,9 @@ export class GdRenderer {
             const tip = rr + pl.side * rb * 1.1;
             c.globalAlpha = alpha * (1 - j * 0.25);
             c.beginPath();
-            c.moveTo(Math.cos(a - (rb * 1.1) / r) * rr, Math.sin(a - (rb * 1.1) / r) * rr);
-            c.lineTo(Math.cos(a) * tip, Math.sin(a) * tip);
-            c.lineTo(Math.cos(a + (rb * 1.1) / r) * rr, Math.sin(a + (rb * 1.1) / r) * rr);
+            c.moveTo(...this.loc(this.lk, a - (rb * 1.1) / r, rr));
+            c.lineTo(...this.loc(this.lk, a, tip));
+            c.lineTo(...this.loc(this.lk, a + (rb * 1.1) / r, rr));
             c.stroke();
           }
           c.globalAlpha = alpha;
@@ -1121,7 +1169,7 @@ export class GdRenderer {
           // and the edge: ride past it and the run ends
           const e = ang(fe);
           c.fillStyle = rgba(DANGER);
-          c.beginPath(); c.arc(Math.cos(e) * r, Math.sin(e) * r, 3.2, 0, TWO_PI); c.fill();
+          c.beginPath(); c.arc(...this.loc(this.lk, e, r), 3.2, 0, TWO_PI); c.fill();
         }
       }
       c.lineCap = 'butt';
@@ -1155,8 +1203,7 @@ export class GdRenderer {
         const p1 = h.path[k + 1];
         const f = u - k;
         const r = this.rad(lerp(p0.rho, p1.rho, f)) + lerp(p0.side, p1.side, f) * rb;
-        const [ox, oy] = origin(lerp(p0.planet, p1.planet, f));
-        return [ox + Math.cos(ang(t)) * r, oy + Math.sin(ang(t)) * r];
+        return this.wxy(lerp(p0.planet, p1.planet, f), ang(t), r);
       };
       // a rail starts a little way past its white mark, so the mark stands clear of it
       const from = Math.max(h.a + (h.rail ? 0.22 : 0), beat);
@@ -1205,6 +1252,7 @@ export class GdRenderer {
       const mine = twin ? pl.twin === 'b' || pl.twin === 'both' : pl.twin !== 'b';
       const [ox, oy] = origin(pl.planet);
       c.translate(ox, oy);
+      this.lk = pl.planet;
       this.drawPlatform(pl, course, beat, pal, kick, dropStyle, !mine, time);
       c.translate(-ox, -oy);
     }
@@ -1216,11 +1264,10 @@ export class GdRenderer {
       c.fillStyle = rgba(STAR, this.look === 2 ? 0.5 : 0.9);
       for (let b = Math.ceil(b0 * 8) / 8; b <= b1; b += this.look === 2 ? 0.25 : 0.125) {
         const wpt = course.at(b);
-        const [ox, oy] = origin(wpt.planet);
         // (second look: the stretch that counts for a star is a quiet dotted line well outside the path, never on it)
         const r = this.rad(wpt.rho) + wpt.side * (this.look === 2 ? rb * 3.4 : rb + this.gap * LIFT * this.env(trail, b));
         c.globalAlpha = clamp((this.ahead - (b - beat)) / 0.6, 0, 1);
-        c.beginPath(); c.arc(ox + Math.cos(ang(b)) * r, oy + Math.sin(ang(b)) * r, rb * 0.2, 0, TWO_PI); c.fill();
+        c.beginPath(); c.arc(...this.wxy(wpt.planet, ang(b), r), rb * 0.2, 0, TWO_PI); c.fill();
       }
       c.globalAlpha = 1;
     }
@@ -1236,6 +1283,7 @@ export class GdRenderer {
       const [ox, oy] = origin(p.planetTo);
       const on = sim.down && beat >= p.beat - 0.1;
       c.translate(ox, oy);
+      this.lk = p.planetTo;
       c.globalAlpha = clamp((this.ahead - (p.beat - beat)) / 0.6, 0, 1);
       c.lineCap = 'round';
       c.beginPath(); this.arcPath(course, this.rad(p.to) - p.side * rb, b0, b1);
@@ -1254,7 +1302,7 @@ export class GdRenderer {
         if (course.holds.some((h) => h.rail && h.a === p.beat)) continue; // a rail shows the way itself
         if (p.slip) {
           // a slipstream: cyan chevrons along the way it carries you
-          const pt = (u: number): [number, number] => { const b = p.beat + (p.land - p.beat) * u; const r = this.rad(flightRho(p, b)) + (p.kind === 'flip' ? p.side * rb * (1 - 2 * u) : p.side * rb); const [ox, oy] = origin(p.planet); return [ox + Math.cos(ang(b)) * r, oy + Math.sin(ang(b)) * r]; };
+          const pt = (u: number): [number, number] => { const b = p.beat + (p.land - p.beat) * u; const r = this.rad(flightRho(p, b)) + (p.kind === 'flip' ? p.side * rb * (1 - 2 * u) : p.side * rb); return this.wxy(p.planet, ang(b), r); };
           c.strokeStyle = rgba(CYAN, 0.9);
           c.lineWidth = 2.6;
           c.lineCap = 'round';
@@ -1271,23 +1319,22 @@ export class GdRenderer {
           c.lineJoin = 'miter';
           continue;
         }
-        const n = Math.max(3, Math.round((p.land - p.beat) * (p.sling ? 14 : 8)));
+        const n = Math.max(3, Math.round((p.land - p.beat) * (p.sling || p.leap ? 14 : 8)));
         c.fillStyle = p.sling ? rgba(CYAN, 0.8) : this.look === 2 ? rgba(STONE, k === sim.ni ? 0.7 : 0.35) : rgba(WHITE, k === sim.ni ? 0.8 : 0.4);
         for (let i = 1; i < n; i++) {
           const b = p.beat + ((p.land - p.beat) * i) / n;
           const r = this.rad(flightRho(p, b)) + (p.kind === 'flip' ? p.side * rb * (1 - (2 * i) / n) : p.side * rb);
-          const [ox, oy] = origin(p.sling ? p.planet + smoothstep(i / n) : p.planet); // a planet hop's path crosses to the next planet
-          c.beginPath(); c.arc(ox + Math.cos(ang(b)) * r, oy + Math.sin(ang(b)) * r, p.sling ? 2.4 : 2, 0, TWO_PI); c.fill();
+          const pf = p.leap ? leapAt(p.leap, b) : p.sling ? p.planet + smoothstep(i / n) : p.planet; // a planet hop's path crosses to the next planet
+          c.beginPath(); c.arc(...this.wxy(pf, ang(b), r), p.sling || p.leap ? 2.4 : 2, 0, TWO_PI); c.fill();
         }
       }
       // planet hops: from a couple of beats before the launch until it lands, a cyan target marks the landing spot
-      for (let k = Math.max(0, sim.ni - 1); k < Math.min(course.presses.length, sim.ni + 2); k++) {
+      for (let k = Math.max(0, sim.ni - 3); k < Math.min(course.presses.length, sim.ni + 2); k++) {
         const p = course.presses[k];
-        if (!p.sling || beat < p.beat - 2.5 || beat > p.land) continue;
-        const [ox, oy] = origin(p.planetTo);
+        const lp = p.leap && !p.leap.ember ? p.leap : null; // (a leap's landing is shown from before its launch to its end)
+        if (!(p.sling || lp) || beat < p.beat - 2.5 || beat > (lp ? lp.b1 : p.land)) continue;
         const r = this.rad(p.to) + p.side * rb;
-        const x = ox + Math.cos(ang(p.land)) * r;
-        const y = oy + Math.sin(ang(p.land)) * r;
+        const [x, y] = lp ? this.wxy(lp.p0 + 1, ang(lp.b1), r) : this.wxy(p.planetTo, ang(p.land), r);
         const tick = Math.exp(-(((beat % 1) + 1) % 1) * 5);
         c.globalAlpha = clamp((beat - (p.beat - 2.5)) / 0.5, 0, 1);
         c.strokeStyle = HALO;
@@ -1305,8 +1352,7 @@ export class GdRenderer {
         const d = sp.beat - beat;
         if (d > this.ahead || d < -0.4) continue;
         c.save();
-        c.translate(bx0, by0);
-        c.rotate(ang(sp.beat) + Math.PI / 2);
+        { const [px, py] = this.wxy(this.pf, ang(sp.beat), rr); c.translate(px, py); c.rotate(this.upA(this.pf, ang(sp.beat)) + Math.PI / 2); c.translate(0, rr); } // (to the ring under the sign, turned as the path turns there)
         c.globalAlpha = clamp((this.ahead - d) / 0.6, 0, 1) * clamp(1 + d / 0.4, 0, 1);
         c.strokeStyle = rgba(CYAN);
         c.lineWidth = 3 + (d < 2.05 && d > 0 ? Math.exp(-(((beat % 1) + 1) % 1) * 5) * 3 : 0); // in its last two beats the sign beats with the music
@@ -1319,7 +1365,7 @@ export class GdRenderer {
         c.restore();
         // a tempo gate says how fast: 0.5x ... 2x
         const ga = ang(sp.beat);
-        this.tag(`${sp.speed}\u00d7`, bx0 + Math.cos(ga) * (rr + rb * 5.2), by0 + Math.sin(ga) * (rr + rb * 5.2), clamp(rb * 1.9, 11, 18), CYAN, clamp((this.ahead - d) / 0.6, 0, 1) * clamp(1 + d / 0.4, 0, 1));
+        this.tag(`${sp.speed}\u00d7`, ...this.wxy(this.pf, ga, rr + rb * 5.2), clamp(rb * 1.9, 11, 18), CYAN, clamp((this.ahead - d) / 0.6, 0, 1) * clamp(1 + d / 0.4, 0, 1));
       }
       // embers: a small dark coal lying on the ring at a section line; it catches as he passes (a ring of warm light, then a
       // small steady flame), and the lit ones stay lit behind him. Deep orange, never the gold of the tap signal.
@@ -1327,7 +1373,7 @@ export class GdRenderer {
         const d = eb - beat;
         if (d > this.ahead || d < -8) continue;
         const ea = ang(eb), here = course.at(eb), er = this.rad(here.rho) - here.side * rb * 0.9;
-        const ex = bx0 + Math.cos(ea) * er, ey = by0 + Math.sin(ea) * er;
+        const [ex, ey] = this.wxy(here.planet, ea, er);
         const al = clamp((this.ahead - d) / 0.6, 0, 1);
         c.globalAlpha = al;
         if (d > 0) {
@@ -1348,7 +1394,7 @@ export class GdRenderer {
       // the world's own set pieces on the course (Helion's light, the Sleeper's hand, the residue, Ossa's fire, the seal)
       if (this.planet?.onCourse && !twin) {
         const hit = run.events.some((e) => (e.kind === 'hop' || e.kind === 'flip') && e.flow !== false);
-        const pos = (b: number, dl = 0, ref?: number): [number, number] => { const h = course.at(ref ?? b), r = this.rad(h.rho + dl) + h.side * rb; return [bx0 + Math.cos(ang(b)) * r, by0 + Math.sin(ang(b)) * r]; };
+        const pos = (b: number, dl = 0, ref?: number): [number, number] => { const h = course.at(ref ?? b), r = this.rad(h.rho + dl) + h.side * rb; return this.wxy(course.at(b).planet, ang(b), r); };
         c.save();
         this.planet.onCourse(c, { beat, song: beat * course.spb, time, spb: course.spb, rb, presses: course.presses, pos, ring: (b) => this.rad(course.at(b).rho), ang, center: [bx0, by0], planetR: this.worldR, hit });
         c.restore();
@@ -1362,7 +1408,7 @@ export class GdRenderer {
         if (this.look === 2) {
           // the companion IS the mode portal: a Kindling hovering over the path, its wings opening across it as he
           // comes, and closing round him as he passes (he takes its shape)
-          const la = ang(ln.beat), px = bx0 + Math.cos(la) * rr, py = by0 + Math.sin(la) * rr;
+          const la = ang(ln.beat), [px, py] = this.wxy(course.at(ln.beat).planet, la, rr);
           const open = clamp(1 - d / 1.5, 0, 1), passK = clamp(-d / 0.4, 0, 1);
           COMPANIONS.kindling(c, px, py, rb * (0.11 + 0.05 * open), COMPANIONS.KINDLE[run.level.file.side?.of ?? run.level.id] ?? COMPANIONS.KINDLE.heroes, { flap: 0.5 + 0.5 * Math.sin(time * 3), open: open * (1 - passK), alpha: al * (1 - passK), rot: la + Math.PI / 2 });
           continue;
@@ -1382,7 +1428,7 @@ export class GdRenderer {
         c.beginPath(); c.moveTo(-W * 0.18, -H * 0.55); c.quadraticCurveTo(-W * 0.42, -H * 0.1, -W * 0.2, H * 0.3); c.stroke();
         c.restore();
         const la = ang(ln.beat);
-        this.tag(FORM_NAME[ln.form], bx0 + Math.cos(la) * (rr + rb * 6.4), by0 + Math.sin(la) * (rr + rb * 6.4), clamp(rb * 1.5, 13, 16), col, al); // (a form is named once, where it is given; after that its shape speaks)
+        this.tag(FORM_NAME[ln.form], ...this.wxy(course.at(ln.beat).planet, la, rr + rb * 6.4), clamp(rb * 1.5, 13, 16), col, al); // (a form is named once, where it is given; after that its shape speaks)
       }
       // mirror and upside-down gates: a cyan line across the path, with an arrow each way along the orbit (mirror) or
       // toward and away from the core (upside-down), and its name. In its last two beats the sign beats with the music.
@@ -1415,15 +1461,16 @@ export class GdRenderer {
         c.globalAlpha = clamp((this.ahead - d) / 0.6, 0, 1) * clamp(1 + d / 0.4, 0, 1);
         c.lineCap = 'round';
         // a wall across the path with a U-turn arrow in front of it
-        c.translate(bx0, by0);
-        c.beginPath(); c.moveTo(Math.cos(a) * (rr - rb * 3), Math.sin(a) * (rr - rb * 3)); c.lineTo(Math.cos(a) * (rr + rb * 3), Math.sin(a) * (rr + rb * 3));
+        const tpf = course.at(tb).planet, [tox, toy] = origin(tpf);
+        c.translate(tox, toy); this.lk = tpf;
+        c.beginPath(); c.moveTo(...this.loc(tpf, a, rr - rb * 3)); c.lineTo(...this.loc(tpf, a, rr + rb * 3));
         c.strokeStyle = HALO; c.lineWidth = 8; c.stroke();
         c.strokeStyle = rgba(CYAN); c.lineWidth = 3.5 + (d < 2.05 && d > 0 ? Math.exp(-(((beat % 1) + 1) % 1) * 5) * 3.5 : 0); c.stroke();
         const back = course.angle(tb - 0.1) < course.angle(tb) ? -1 : 1;
         const ac = a + (back * rb * 2.6) / rr;
         c.lineWidth = 2.5;
-        c.beginPath(); c.arc(Math.cos(ac) * rr, Math.sin(ac) * rr, rb * 1.3, a + Math.PI / 2 * back, a + Math.PI / 2 * back + Math.PI * 1.2 * back, back < 0); c.stroke();
-        c.translate(-bx0, -by0);
+        { const ua = this.upA(tpf, ac); c.beginPath(); c.arc(...this.loc(tpf, ac, rr), rb * 1.3, ua + Math.PI / 2 * back, ua + Math.PI / 2 * back + Math.PI * 1.2 * back, back < 0); c.stroke(); }
+        c.translate(-tox, -toy);
         c.globalAlpha = 1;
       }
       c.lineCap = 'butt';
@@ -1474,9 +1521,8 @@ export class GdRenderer {
       const state = sim.stars[st.i];
       const kept = starsFor(run.level.id)[st.i];
       const spot = (w: Star['at'], b: number): [number, number] => {
-        const [ox, oy] = origin(w.planet);
         const r = this.rad(w.rho) + w.side * rb;
-        return [ox + Math.cos(ang(b)) * r, oy + Math.sin(ang(b)) * r];
+        return this.wxy(w.planet, ang(b), r);
       };
       if (state === -1) {
         // lost: it greys, shrinks and is gone
@@ -1515,7 +1561,9 @@ export class GdRenderer {
     const cue = this.cues.reduce((m, q) => (q.beat >= beat - 0.02 && q.beat < m ? q.beat : m), Infinity);
     const crouch = sim.mode === 'ground' && !twin && this.look === 2 ? clamp(1 - (cue - beat) * course.spb / 0.16, 0, 1) : 0;
     const squash = 4 * this.landPulse * (1 - this.landPulse) + 0.35 * crouch * crouch;
-    const off = sim.sideAt(beat) * rb * (1 - 0.3 * squash);
+    // (the journey's feel, 2026-11-26: on the ground he bobs with the beat, down on it, up between; visual only)
+    const bob = this.geo && sim.mode === 'ground' && !twin ? Math.pow(Math.sin(Math.PI * (((beat % 1) + 1) % 1)), 2) * rb * 0.28 * (1 - crouch) : 0;
+    const off = sim.sideAt(beat) * (rb * (1 - 0.3 * squash) + bob);
     // at the finish the ball launches straight out through every ring and off the screen
     const away = run.finale ? Math.pow(Math.min(1.4, run.finaleAge / 0.9), 2.2) * this.r0 * 7 : 0;
     if (away > Math.hypot(this.w, this.h)) return;
@@ -1533,18 +1581,18 @@ export class GdRenderer {
       const u = i / n;
       const ra = this.rad(p0.rho) + p0.off + (p0.away ?? 0);
       const rz = this.rad(p1.rho) + p1.off + (p1.away ?? 0);
-      const [x0, y0] = origin(p0.pf);
-      const [x1, y1] = origin(p1.pf);
+      const [x0, y0] = this.wxy(p0.pf, ang(p0.beat), ra);
+      const [x1, y1] = this.wxy(p1.pf, ang(p1.beat), rz);
       c.strokeStyle = rgba(tint, u * u * (this.look === 2 ? 0.28 : 0.55));
       c.lineWidth = rb * 1.7 * u;
-      c.beginPath(); c.moveTo(x0 + Math.cos(ang(p0.beat)) * ra, y0 + Math.sin(ang(p0.beat)) * ra); c.lineTo(x1 + Math.cos(ang(p1.beat)) * rz, y1 + Math.sin(ang(p1.beat)) * rz); c.stroke();
+      c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
     }
     // his trail takes the element of the mode he is in: a flame for the Meteor, wind for the wave, water for the ball,
     // leaves for the snap (the cinematic pass); it stays behind him and under the course's marks
     if (!twin && this.look === 2 && heroForm !== 'orb' && n > 2) {
       const world = run.level.file.side?.of ?? run.level.id, el = heroForm === 'meteor' ? 'fire' : heroForm === 'sat' ? 'wind' : heroForm === 'pulsar' ? (world === 'invincible' ? 'leaf' : 'water') : heroForm === 'comet' ? 'wind' : '';
       const ecol: RGB = el === 'fire' ? [255, 150, 70] : el === 'wind' ? [255, 215, 245] : el === 'water' ? [170, 220, 255] : [160, 240, 160];
-      const pts = this.trail.map((p) => { const rr = this.rad(p.rho) + p.off + (p.away ?? 0), [ox, oy] = origin(p.pf); return [ox + Math.cos(ang(p.beat)) * rr, oy + Math.sin(ang(p.beat)) * rr] as [number, number]; });
+      const pts = this.trail.map((p) => this.wxy(p.pf, ang(p.beat), this.rad(p.rho) + p.off + (p.away ?? 0)));
       c.save(); c.globalCompositeOperation = 'lighter';
       for (let i = 1; i < pts.length; i++) { const u = i / pts.length; c.strokeStyle = rgba(ecol, u * 0.45); c.lineWidth = rb * (el === 'fire' ? 2.4 : 1.6) * u; c.beginPath(); c.moveTo(pts[i - 1][0], pts[i - 1][1]); c.lineTo(pts[i][0], pts[i][1]); c.stroke(); }
       for (let i = 0; i < pts.length; i++) {
@@ -1559,14 +1607,13 @@ export class GdRenderer {
     c.lineCap = 'butt';
     const vr = dt > 0 && this.ball.r ? (br - this.ball.r) / dt : 0;
     const stretch = sim.mode !== 'ground' ? clamp(Math.abs(vr) / (r0 * 4), 0, 0.2) : 0;
-    const x = bx0 + Math.cos(a) * br;
-    const y = by0 + Math.sin(a) * br;
+    const [x, y] = this.wxy(this.pf, a, br);
     this.ballXY = [x, y];
     // a dark halo, so the ball reads against anything
     c.fillStyle = 'rgba(3,5,14,0.5)';
     c.beginPath(); c.arc(x, y, rb * 2.1, 0, TWO_PI); c.fill();
     const dir = course.angle(beat + 0.05) >= course.angle(beat) ? 1 : -1;
-    this.drawHero(x, y, rb, skin, a, dir, heroForm, 1 + stretch - 0.3 * squash - 0.18 * dashK, 1 - stretch * 0.5 + 0.22 * squash + 0.45 * dashK, sim.down ? 1 : 0);
+    this.drawHero(x, y, rb, skin, this.upA(this.pf, a), dir, heroForm, 1 + stretch - 0.3 * squash - 0.18 * dashK, 1 - stretch * 0.5 + 0.22 * squash + 0.45 * dashK, sim.down ? 1 : 0);
     if (!twin) {
       this.ball.x = x;
       this.ball.y = y;
@@ -1773,7 +1820,7 @@ export class GdRenderer {
         if (ev.charge) this.punch = Math.max(this.punch, 0.2); // each roll note you catch winds the picture a little tighter
         if (ev.kind === 'flip') this.burst(this.ball.x, this.ball.y, 12, VIOLET, r0 * 0.9);
         if (ev.kind === 'hop' && (formEv === 'meteor' || this.look === 2)) this.strike = 1; // (the planet's soul strikes with it; in the new look every good tap touches the world)
-        if (ev.kind === 'hop' && ev.flow !== false) this.planet?.spark(-Math.PI / 2 + course.angle(beat), t); // (a good tap relights the zone under him)
+        if (ev.kind === 'hop' && ev.flow !== false) this.planet?.spark(-Math.PI / 2 + course.angle(beat), t, this.pf); // (a good tap relights the zone under him)
         if (ev.kind === 'hop' && formEv === 'meteor') { this.burst(this.ball.x, this.ball.y, 16, INK_RIM, r0 * 1.4); this.burst(this.ball.x, this.ball.y, 8, FORM_COL.meteor, r0 * 0.9); } // the wall goes to pieces
         if (ev.flow && loud) {
           // in the loud parts an on-beat tap drives the picture: a shockwave off the ball's ring, the rings light up, a burst
@@ -1908,6 +1955,23 @@ export class GdRenderer {
       tx += (nx - tx) * lean;
       ty += (ny - ty) * lean;
     }
+    if (this.geo) {
+      // the journey's camera: in a leap it travels ahead of him to the next place, so the landing is in view before he
+      // gets there; before a leap it leans a little toward where he will go; on a bridge it runs with him, looking ahead
+      let aim = this.pf;
+      let leapP: typeof nextP | undefined = undefined as typeof nextP | undefined;
+      for (let i = Math.max(0, sim.ni - 1); i < course.presses.length && course.presses[i].beat - beat < 2.5; i++) { const q = course.presses[i]; if (q.leap && !q.leap.ember && beat < q.leap.b1) { leapP = q; break; } }
+      if (leapP?.leap && beat >= leapP.beat) aim = leapAt(leapP.leap, Math.min(leapP.leap.b1, beat + 0.9));
+      else if (leapP?.leap) aim = this.pf + 0.22 * smoothstep((2.5 - (leapP.beat - beat)) / 2);
+      [tx, ty] = this.planetXY(aim);
+      const k = Math.round(aim);
+      if (Math.abs(aim - k) < 1e-3 && this.geo.defs[k]?.shape === 'line') {
+        const ahead = this.wxy(k, -Math.PI / 2 + course.angle(beat + 1.2), this.rad(this.cam));
+        tx += ahead[0] + this.camX - tx; ty += ahead[1] + this.camY - ty;
+      }
+      const pull = this.planet?.pull?.(t);
+      if (pull && pull.k > 0) { const U = this.rad(this.cam), wide = this.w >= this.h, px = wide ? -pull.y : pull.x, py = wide ? pull.x : pull.y; tx = lerp(tx, px * U, pull.k); ty = lerp(ty, py * U, pull.k); }
+    }
     // a spring, like the zoom: the camera picks up speed and settles, it never changes pace in a single frame
     const ok = 11;
     this.camVX += (ok * ok * (tx - this.camX) - 2 * ok * this.camVX) * dt;
@@ -1995,7 +2059,7 @@ export class GdRenderer {
     // (only the one a planet hop is about to go to, or has just left)
     const soon = course.presses.slice(sim.ni, sim.ni + 3).find((p) => p.sling && p.beat - beat < 3);
     const flying = lastP?.sling && sim.mode === 'flight' ? lastP : null;
-    for (let k = Math.max(0, Math.floor(this.pf) - 1); k <= Math.floor(this.pf) + 2; k++) {
+    for (let k = Math.max(0, Math.floor(this.pf) - 1); k <= Math.floor(this.pf) + 2 && !this.geo; k++) {
       if (Math.abs(k - this.pf) < 0.5 || !(soon?.planetTo === k || flying?.planet === k || flying?.planetTo === k)) continue;
       const [px, py] = this.planetXY(k);
       const g = c.createRadialGradient(px - this.camX, py - this.camY, 0, px - this.camX, py - this.camY, m * 0.09);
@@ -2012,7 +2076,12 @@ export class GdRenderer {
       // (one size, just under the base ring: the course climbs away from it and comes back, the world stays put)
       const Rt = Math.max(m * 0.16, this.r0 * 0.84);
       this.worldR = this.worldR > 0 ? this.worldR + (Rt - this.worldR) * Math.min(1, dt * 3) : Rt;
-      this.planet.draw(c, this.worldR, { time: now / 1000, song: t, drive: this.plain ? 0 : drive, kick, strike: this.strike, calm });
+      this.planet.draw(c, this.worldR, { time: now / 1000, song: t, drive: this.plain ? 0 : drive, kick, strike: this.strike, calm, pf: this.pf, unit: this.rad(this.cam),
+        // (the journey: where each place is from here, and a point on its path, so the world can paint every place in view)
+        rel: (k: number) => { const [x, y] = this.planetXY(k), [x0, y0] = this.planetXY(this.pf); return [x - x0, y - y0]; },
+        along: this.geo ? (k: number, a: number, r: number) => { const p = this.locK(k, a, r); return [p[0], p[1]]; } : undefined, span: this.geo ? (k: number) => this.geo!.span[k] ?? [0, 0] : undefined, wide: this.w >= this.h,
+        at: (b: number) => { const h = course.at(b), [x, y] = this.wxy(h.planet, -Math.PI / 2 + course.angle(b), this.rad(h.rho) + h.side * this.rb); return [x - this.coreX, y - this.coreY]; },
+        up: (b: number) => this.upA(course.at(b).planet, -Math.PI / 2 + course.angle(b)), presses: course.presses, done: sim.ni, rb: this.rb });
     } else this.core(pal, m * 0.045, m * 0.04 * (0.4 + 1.1 * inten) * (1 + wound * 0.7 + drive * 0.5), kick * (0.3 + 0.7 * inten), snare * inten, dt, this.flowV, chargeShown, this.plain ? 0 : drive, span, PLANETS[level.file.side?.of ?? level.id]?.rgb, !!level.file.side);
     if (this.look === 2 && !this.planet) { // (the second look: the core is scenery, and steps back; nothing bright sits in the middle of the course)
       const va = 0.6 * (1 - 0.85 * this.coreFlare), vr = m * 0.12;

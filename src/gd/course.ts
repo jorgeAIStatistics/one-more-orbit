@@ -65,6 +65,11 @@ export interface Press {
   pad: '' | 'spring' | 'tide' | 'jump' | 'vent';
   /** part of a form's safe introduction: the game plays it, to show the move */
   intro: boolean;
+  /**
+   * A leap (the journey, 2026-11-26): this press is the launch of a flight to the next place, or an ember tapped in the
+   * air along it. b0..b1: the whole flight; p0: the place it leaves (it reaches p0 + 1 on landing).
+   */
+  leap?: { b0: number; b1: number; p0: number; ember: boolean };
   /** the first press after a lens or a gate: a wider opening, and tapping early for it is never punished */
   wide: boolean;
 }
@@ -116,7 +121,7 @@ export interface Layers { survival: number[]; flow: number[] }
 /** Things a level can ask of the player; the first time each appears it gets a hint. */
 export type Feature = 'smash' | 'charge' | 'flip' | 'weave' | 'spin' | 'sling' | 'reverse' | 'faster' | 'slower' | 'twin' | 'rail' | 'line' | 'tether' | 'meteor' | 'sat' | 'pulsar' | 'comet' | 'spring' | 'tide' | 'chime' | 'slip' | 'grav' | 'combo' | 'mirror' | 'invert' | 'dual';
 /** How one bar plays. */
-export interface BarCfg { token: string; mode: 'up' | 'down' | 'weave'; pad: boolean; throw: boolean; vent: boolean; mini: boolean; snap: boolean; spin: boolean; twin: boolean; dual: boolean; echo: Form; sling: boolean; spring: boolean; tide: boolean; turn: boolean; mirror: boolean; invert: boolean; long: boolean; tether: boolean; chime: boolean; slip: boolean; grav: boolean; combo: string; sparse: boolean; strong: boolean; beats: boolean; every: boolean; hold: boolean; sync: boolean; speed: number; form: Form }
+export interface BarCfg { token: string; leap: number; leapOff: number; mode: 'up' | 'down' | 'weave'; pad: boolean; throw: boolean; vent: boolean; mini: boolean; snap: boolean; spin: boolean; twin: boolean; dual: boolean; echo: Form; sling: boolean; spring: boolean; tide: boolean; turn: boolean; mirror: boolean; invert: boolean; long: boolean; tether: boolean; chime: boolean; slip: boolean; grav: boolean; combo: string; sparse: boolean; strong: boolean; beats: boolean; every: boolean; hold: boolean; sync: boolean; speed: number; form: Form }
 
 export interface Course {
   spb: number;
@@ -187,6 +192,10 @@ export const FLOW_TOL_S = 0.07; // how close a tap must be to a flow note to tou
 export const FLOW_S = 0.04; // taps this close to a note build flow
 export const MIN_GAP = 1; // beats between generated survival presses: quarter notes at most
 export const SLING_FLIGHT = 2; // beats a planet hop spends in the air
+/** after a leap lands, nothing is asked for this many beats (the camera settles on the new place) */
+export const LEAP_GRACE = 1;
+/** Where a leap's flight is between its two places at a beat (p0 .. p0 + 1, eased). */
+export function leapAt(l: { b0: number; b1: number; p0: number }, beat: number): number { return l.p0 + smoothstep(Math.max(0, Math.min(1, (beat - l.b0) / (l.b1 - l.b0)))); }
 export const COUNT_IN = 4; // beats at the very start of a level with no survival press: the 3, 2, 1
 export const LIFT = 0.42; // ring levels a held ball floats above its ring
 export const HOLD_MIN = 1; // beats: no hold is shorter
@@ -265,7 +274,12 @@ export function autoLayers(beats: number[], accents: number[] = []): Layers {
  * hold: the bar's last press is kept down: a ribbon runs on from it along the path, to three quarters of a beat before
  * the next mark (the charge before a drop; a held note over a pad). It can never end the run.
  * sync: in a twin orbit, every press is taken by both sparks at once (the brothers in step).
+ * leap, leap2, leap3, leap4 (and leap2@2: from the bar's third beat): the bar's press on its downbeat launches a flight of that many beats
+ * (4 by default) to the next place of the journey; the charted presses inside the flight are embers, tapped in the air
+ * (each one carries him on: miss it and he falls). Nothing is asked for a beat after he lands.
  */
+/** leap2@2: a two-beat flight launched from the bar's third beat (`@` defaults to the downbeat, the length to 4) */
+const leapOf = (w: string | undefined): { leap: number; leapOff: number } => { const m = w ? /^leap(\d)?(?:@(\d))?$/.exec(w) : null; return m ? { leap: m[1] ? +m[1] : 4, leapOff: m[2] ? +m[2] : 0 } : { leap: 0, leapOff: 0 }; };
 export function barPlan(level: Level): BarCfg[] {
   const out: BarCfg[] = [];
   let speed = 1;
@@ -285,7 +299,7 @@ export function barPlan(level: Level): BarCfg[] {
       const twin = w.includes('twin') || dual;
       const combo = (w.find((s) => s.startsWith('c=')) ?? '').slice(2);
       // a planet hop only ever starts a phrase or its second half (every other bar), and never in a twin orbit
-      out.push({ token, mode: w.includes('weave') ? 'weave' : w.includes('down') ? 'down' : 'up', pad: w.includes('pad'), throw: w.includes('throw'), vent: w.includes('vent'), mini: w.includes('mini'), snap: w.includes('snap'), spin: w.includes('spin'), twin, dual, echo, sling: w.includes('sling') && !twin && k % 2 === 0, spring: w.includes('spring') && !twin && k % 2 === 0, tide: w.includes('tide') && !twin, turn: w.includes('turn'), mirror: w.includes('mirror'), invert: w.includes('invert'), long: w.includes('long'), tether: w.includes('tether'), chime: w.includes('chime'), slip: w.includes('slip'), grav: w.includes('grav'), combo, sparse: w.includes('sparse'), strong: w.includes('strong'), beats: w.includes('beats') || w.includes('every'), every: w.includes('every'), hold: w.includes('hold'), sync: w.includes('sync'), speed, form });
+      out.push({ token, mode: w.includes('weave') ? 'weave' : w.includes('down') ? 'down' : 'up', pad: w.includes('pad'), throw: w.includes('throw'), vent: w.includes('vent'), mini: w.includes('mini'), snap: w.includes('snap'), spin: w.includes('spin'), twin, dual, echo, ...leapOf(twin ? undefined : w.find((s) => /^leap\d?(@\d)?$/.test(s))), sling: w.includes('sling') && !twin && k % 2 === 0, spring: w.includes('spring') && !twin && k % 2 === 0, tide: w.includes('tide') && !twin, turn: w.includes('turn'), mirror: w.includes('mirror'), invert: w.includes('invert'), long: w.includes('long'), tether: w.includes('tether'), chime: w.includes('chime'), slip: w.includes('slip'), grav: w.includes('grav'), combo, sparse: w.includes('sparse'), strong: w.includes('strong'), beats: w.includes('beats') || w.includes('every'), every: w.includes('every'), hold: w.includes('hold'), sync: w.includes('sync'), speed, form });
     }
   }
   return out;
@@ -385,12 +399,25 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
   const kept: number[] = [];
   let hold = -Infinity;
   let waiting = false;
+  const leaps = new Map<number, number>(); // launch beat -> flight length
+  const emberOf = new Map<number, number>(); // an ember's beat -> its leap's launch
+  let air: [number, number] = [-Infinity, -Infinity]; // the leap in flight: launch, landing
   for (const b of ground) {
     const fixed = smash.has(b) || auto.has(b);
+    if (b > air[0] + 1e-6 && b < air[1] - 0.25 + 1e-6 && !fixed) { emberOf.set(b, air[0]); kept.push(b); continue; } // tapped in the air
     if (b < hold - 1e-6 && !fixed) continue;
     const bar = Math.floor((b + 1e-6) / 4);
     const firstInBar = !kept.some((x) => Math.floor((x + 1e-6) / 4) === bar);
-    if (waiting) { afters.add(b); waiting = false; }
+    if (waiting && !(b < air[1] - 1e-6)) { afters.add(b); waiting = false; }
+    if (!fixed && barAt(b).leap && Math.abs(b - bar * 4 - barAt(b).leapOff) < 0.01 && !leaps.has(bar * 4 + barAt(b).leapOff)) {
+      const F = barAt(b).leap;
+      leaps.set(b, F);
+      air = [b, b + F];
+      hold = b + F + LEAP_GRACE;
+      waiting = true;
+      kept.push(b);
+      continue;
+    }
     if (!fixed && (barAt(b).sling || barAt(b).spring) && firstInBar && Math.abs(b - Math.round(b)) < 0.01 && b - bar * 4 < 2 - 1e-6) {
       slings.add(b);
       if (barAt(b).spring && !barAt(b).sling) springs.add(b); // a springboard: the same throw, with no tap
@@ -423,7 +450,7 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
       if (was && (b.turn || b.mirror || b.invert || b.speed !== was.speed) && beat > start && beat < end) gates.push(beat);
     });
   }
-  const formOf = (b: number): Form => (smash.has(b) || auto.has(b) || slings.has(b) || barAt(b).twin ? 'orb' : barAt(b).form);
+  const formOf = (b: number): Form => (smash.has(b) || auto.has(b) || slings.has(b) || leaps.has(b) || emberOf.has(b) || barAt(b).twin ? 'orb' : barAt(b).form);
   // a form's introduction is played for the player. Pads are not: a spring pad (the bar's planet hop) and a tide pad
   // (the bar's first press, where gravity turns over) are marks to tap like any other, drawn as pads.
   const gift = new Map<number, 'intro' | 'spring' | 'tide'>();
@@ -481,7 +508,8 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
   let side: 1 | -1 = 1;
   let planet = 0;
   let lastTwin: 'a' | 'b' = 'b';
-  let gravBar = -1; // the bar in which a gravity orb has turned gravity over: it stays that way to the bar's end
+  let gravBar = -1;
+  let leapFrom = 0; // the place the leap in flight left // the bar in which a gravity orb has turned gravity over: it stays that way to the bar's end
   const nthInBar = new Map<number, number>();
   ground.forEach((beat, i) => {
     const prev = i > 0 ? beat - ground[i - 1] : 99;
@@ -494,6 +522,10 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
     const seg = level.segAt((beat + 1e-6) * spb);
     const cfg = barAt(beat);
     const sling = slings.has(beat);
+    // a leap's launch, or an ember along it: the flight is cut at each ember (each is tapped in mid-air, like an orb)
+    const l0 = leaps.has(beat) ? beat : emberOf.get(beat);
+    const leap = l0 === undefined ? undefined : { b0: l0, b1: l0 + leaps.get(l0)!, p0: l0 === beat ? planet : leapFrom, ember: l0 !== beat };
+    if (leap && !leap.ember) leapFrom = planet;
     const plain = isSmash || auto.has(beat); // the drop's own press is never anything else
     const form = formOf(beat);
     const act = acts.get(beat) ?? 'tap';
@@ -504,33 +536,33 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
     const nth = nthInBar.get(barOf(beat)) ?? 0;
     nthInBar.set(barOf(beat), nth + 1);
     const ask = cfg.combo ? cfg.combo[nth] ?? '.' : '';
-    const free = orb && !sling && !plain && !cfg.twin;
+    const free = orb && !sling && !plain && !cfg.twin && !leap;
     const chained = free && !!before && before.form === 'orb' && !before.sling && !before.auto && Math.abs(before.land - beat) < 1e-6;
     // a slipstream carries the ball for a beat, two rings on (from the ring, or as a dash orb from mid-air)
     const slip = free && (ask === 'd' || (!cfg.combo && cfg.slip)) && next >= SLIP_FLIGHT - 1e-6;
     const grav = chained && !slip && (ask === 'g' || (!cfg.combo && cfg.grav));
-    const kindOf: Press['orb'] = !chained ? '' : slip && ask === 'd' ? 'dash' : grav ? 'grav' : ask === 'j' || (!cfg.combo && cfg.chime && !slip) ? 'jump' : '';
+    const kindOf: Press['orb'] = leap?.ember ? 'jump' : !chained ? '' : slip && ask === 'd' ? 'dash' : grav ? 'grav' : ask === 'j' || (!cfg.combo && cfg.chime && !slip) ? 'jump' : '';
     const chime = kindOf !== '';
     // a jump pad (the bar's first press, on its downbeat): a long high hop on the same planet, two beats in the air (the
     // Drifting Edge's flowers, Ossa's hammer); a throw: the same, a whole bar in the air (the Sleeper's hand)
-    const padK = !plain && !sling && !cfg.twin && (cfg.pad || cfg.throw || cfg.vent) && nth === 0 && Math.abs(beat - barOf(beat) * 4) < 0.01;
+    const padK = !plain && !sling && !leap && !cfg.twin && (cfg.pad || cfg.throw || cfg.vent) && nth === 0 && Math.abs(beat - barOf(beat) * 4) < 0.01;
     // a teleport vent (Emberwick's second idea, 2026-11-25): the same, but it throws him across the orbit in one beat
     const padTo = padK ? Math.min(i + 1 < ground.length ? ground[i + 1] : end, beat + (cfg.throw ? 4 : cfg.vent ? 1 : 2)) : 0;
     // (a snap, Verdance's: the Pulsar's flip made instant, a spider's jump from branch to branch)
     const quick = form === 'pulsar' && cfg.snap ? Math.min(0.12, next) : form === 'meteor' || form === 'pulsar' || (form === 'comet' && act === 'tap') ? Math.min(QUICK, next) : form === 'comet' ? Math.min(QUICK, next * 0.5) : 0;
-    const land = padK ? padTo : sling ? beat + SLING_FLIGHT : quick ? beat + quick : slip ? beat + SLIP_FLIGHT : i + 1 < ground.length ? Math.min(ground[i + 1], beat + CAP) : Math.min(beat + 1, end);
+    const land = leap ? Math.min(leap.b1, i + 1 < ground.length ? ground[i + 1] : leap.b1) : padK ? padTo : sling ? beat + SLING_FLIGHT : quick ? beat + quick : slip ? beat + SLIP_FLIGHT : i + 1 < ground.length ? Math.min(ground[i + 1], beat + CAP) : Math.min(beat + 1, end);
     const dur = land - beat;
     // gravity: a weave flips on every press (so do the Satellite and the Comet, which travel between two rings);
     // a Pulsar flips on its own ring; otherwise flip only when the bar wants the other side of the ring
     const pair = form === 'sat' || (form === 'comet' && act !== 'tap');
-    const weave = !plain && !sling && (pair || (orb && cfg.mode === 'weave'));
+    const weave = !plain && !sling && !leap && (pair || (orb && cfg.mode === 'weave'));
     const want = gravBar === barOf(beat) ? side : cfg.mode === 'up' ? 1 : cfg.mode === 'down' ? -1 : side;
     // (a tide pad is only there where the bar turns gravity over: otherwise the press is an ordinary one to tap)
     const given = gift.get(beat) === 'tide' && !(orb && want !== side) ? '' : gift.get(beat) ?? '';
     const still = form === 'meteor' || form === 'pulsar' || (form === 'comet' && act === 'tap'); // stays on its ring
-    const flip = !plain && !sling && (weave || form === 'pulsar' || (orb && want !== side) || grav);
+    const flip = !plain && !sling && !leap && (weave || form === 'pulsar' || (orb && want !== side) || grav);
     if (grav) gravBar = barOf(beat);
-    const step = still ? 0 : weave ? 1 : slip ? 2 : clamp(dur, 0.6, 1.4);
+    const step = leap ? 0 : still ? 0 : weave ? 1 : slip ? 2 : clamp(dur, 0.6, 1.4);
     const to = lv + side * step;
     // big hits: the chart's accents, and in a drop the first press of each half of the phrase
     const rel = beat - seg.beat0;
@@ -554,15 +586,15 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
     if (spin) first(beat, 'spin');
     presses.push({
       i, beat, tol, kind: flip ? 'flip' : 'hop', auto: auto.has(beat) || given === 'intro', smash: isSmash, accent, sling, after, weave, spin, twin,
-      from: lv, to, side, planet, planetTo: sling ? planet + 1 : planet, camLv: weave ? lv + side * 0.5 : to,
+      from: lv, to, side, planet: leap ? leapAt(leap, beat) : planet, planetTo: sling || leap ? (leap ? leapAt(leap, land) : planet + 1) : planet, camLv: weave ? lv + side * 0.5 : to, leap,
       land, bounce: i + 1 < ground.length && ground[i + 1] === land,
       // (mini, Cirra's tight gusts: Orbin small, his hops half as high)
-      bulge: (cfg.mini ? 0.45 : 1) * (padK ? (cfg.throw ? 1.0 : cfg.vent ? 0.55 : 0.75) : form === 'meteor' ? 0.28 : form === 'comet' && act === 'tap' ? 0.45 : flip || slip ? 0 : sling ? 0.5 : clamp(0.35 * dur - 0.1, 0.06, 0.7)), pitch: pitchAt(beat), seg: seg.index,
-      form, act, line: form === 'sat' || slip, chime, slip, orb: kindOf, pad: padK ? (cfg.vent ? 'vent' : 'jump') : given === 'spring' || given === 'tide' ? given : '', intro: given === 'intro', wide: isWide || easy.has(beat)
+      bulge: leap ? (leap.ember ? 0.45 : 0.6) : (cfg.mini ? 0.45 : 1) * (padK ? (cfg.throw ? 1.0 : cfg.vent ? 0.55 : 0.75) : form === 'meteor' ? 0.28 : form === 'comet' && act === 'tap' ? 0.45 : flip || slip ? 0 : sling ? 0.5 : clamp(0.35 * dur - 0.1, 0.06, 0.7)), pitch: pitchAt(beat), seg: seg.index,
+      form, act, line: form === 'sat' || slip, chime: chime || !!leap?.ember, slip, orb: kindOf, pad: padK ? (cfg.vent ? 'vent' : 'jump') : given === 'spring' || given === 'tide' ? given : '', intro: given === 'intro', wide: isWide || easy.has(beat)
     });
     lv = to;
     if (flip) side = side === 1 ? -1 : 1;
-    if (sling) planet++;
+    if (sling || (leap && !leap.ember)) planet++;
   });
 
   // ---- holds (levels that have them): rails on long hops, gold lines over empty stretches of ring
@@ -652,7 +684,7 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
     // gold along a Comet's climb is collected by holding; in a form's introduction it is collected for the player
     const ride: FlowNote['ride'] = p && p.form === 'comet' && p.act === 'down' && nextP && beat < nextP.beat ? (p.auto ? 2 : 1) : introBars.has(barOf(beat)) && !inCharge(beat) ? 2 : 0;
     const branch = branches.findIndex(([a, b]) => beat >= a - 1e-6 && beat <= b + 1e-6);
-    const pl = p ? (air && p.sling ? p.planet + smoothstep((beat - p.beat) / (p.land - p.beat)) : p.planetTo) : 0;
+    const pl = p ? (air && p.leap ? leapAt(p.leap, beat) : air && p.sling ? p.planet + smoothstep((beat - p.beat) / (p.land - p.beat)) : p.planetTo) : 0;
     return { beat, tol: Math.min(branch >= 0 ? branchTol : FLOW_TOL_S, 0.45 * gap) / spb, pitch: pitchAt(beat), charge: inCharge(beat), rho, side: sd, air, twin: tw, planet: pl, hold: flowStart.get(beat) ?? -1, ride, branch };
   });
   // ---- star trails, from the level file: [from, to] in beats
@@ -662,7 +694,7 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
     const p = presses[j];
     if (!p) return { rho: presses[0] ? presses[0].from : 0, side: 1, planet: 0 };
     const air = beat < p.land - 1e-6;
-    return { rho: air ? flightRho(p, beat) : p.to, side: p.kind === 'flip' ? (air ? p.side : -p.side) : p.side, planet: air && p.sling ? p.planet + smoothstep((beat - p.beat) / (p.land - p.beat)) : p.planetTo };
+    return { rho: air ? flightRho(p, beat) : p.to, side: p.kind === 'flip' ? (air ? p.side : -p.side) : p.side, planet: air && p.leap ? leapAt(p.leap, beat) : air && p.sling ? p.planet + smoothstep((beat - p.beat) / (p.land - p.beat)) : p.planetTo };
   };
   const stars: Star[] = branches.map(([a, b], i) => {
     const gold = flow.filter((f) => f.beat >= a - 1e-6 && f.beat <= b + 1e-6).length + holds.filter((h) => h.a >= a - 1e-6 && h.b <= b + 1e-6).reduce((n, h) => n + h.ticks.length, 0);

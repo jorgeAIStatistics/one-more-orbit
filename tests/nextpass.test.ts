@@ -38,7 +38,7 @@ describe('Emberwick on Volcano: the Meteor, and nothing the song is not playing'
     expect(course.lenses.map((l) => [l.form, bar(l.beat)])).toEqual([['meteor', 5]]);
     expect(course.lenses[0].intro).toBe(true); // named once, where it is given
     // (the drop's great node is struck, not dashed: it has no wall; Orbin stays the Meteor through it)
-    for (const p of course.presses) if (!p.smash && !p.sling) expect(p.form, `press at ${p.beat}`).toBe(bar(p.beat) < 5 ? 'orb' : 'meteor'); // (a planet hop and the great node are struck as the Orb)
+    for (const p of course.presses) if (!p.smash && !p.sling && !p.leap) expect(p.form, `press at ${p.beat}`).toBe(bar(p.beat) < 5 ? 'orb' : 'meteor'); // (a planet hop and the great node are struck as the Orb)
     for (let b = 20; b < course.end; b += 0.5) expect(course.formAt(b), `form at ${b}`).toBe('meteor');
   });
   it('the Meteor is given safely: its first walls are played for him, and the drums are not there yet', () => {

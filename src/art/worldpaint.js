@@ -79,6 +79,48 @@ function emberLayer(hot) {
   return cv;
 }
 
+// ---------------------------------------------------------------- Emberwick's system (the journey, 2026-11-26)
+/** The Ash Moon, Emberwick's cold outer moon: ash and frost, pocked; relit, the frost melts to a dusk-warm grey. */
+function ashLayer(hot) {
+  const S = Math.round(R0 * 2.7), cv = document.createElement('canvas'); cv.width = cv.height = S;
+  const c = cv.getContext('2d'); c.translate(S / 2, S / 2);
+  const r = K.RNG(5);
+  T.sphere(c, 0, 0, R0, hot ? [110, 62, 58] : [52, 54, 68], hot ? [255, 176, 130] : [140, 146, 170], [14, 12, 22], -0.8, r, { haze: 0 });
+  c.save(); c.beginPath(); c.arc(0, 0, R0, 0, TAU); c.clip();
+  for (let i = 0; i < 70; i++) { const a = r() * TAU, d = r() * R0; c.fillStyle = hot ? `rgba(255,200,160,${0.04 + 0.08 * r()})` : `rgba(205,214,238,${0.06 + 0.12 * r()})`; c.beginPath(); c.ellipse(Math.cos(a) * d, Math.sin(a) * d, 10 + r() * 30, 5 + r() * 12, a, 0, TAU); c.fill(); }
+  for (let i = 0; i < 16; i++) { const a = r() * TAU, d = r() * R0 * 0.85, rr = 8 + r() * 22; c.fillStyle = 'rgba(14,12,22,0.35)'; c.beginPath(); c.arc(Math.cos(a) * d + 2, Math.sin(a) * d + 3, rr, 0, TAU); c.fill(); c.strokeStyle = hot ? 'rgba(255,190,150,0.35)' : 'rgba(200,210,240,0.3)'; c.lineWidth = 2; c.beginPath(); c.arc(Math.cos(a) * d, Math.sin(a) * d, rr, Math.PI * 1.1, Math.PI * 1.9); c.stroke(); }
+  if (!hot) { c.filter = 'blur(5px)'; for (let k = 0; k < 10; k++) { const a = r() * TAU, d = R0 * (0.2 + 0.7 * r()); c.fillStyle = 'rgba(34,20,52,0.55)'; c.beginPath(); c.ellipse(Math.cos(a) * d, Math.sin(a) * d, 18 + r() * 30, 9 + r() * 14, a, 0, TAU); c.fill(); } c.filter = 'none'; }
+  else { K.glow(c, -R0 * 0.3, -R0 * 0.4, R0 * 1.2, [255, 160, 100], 0.32, 'screen'); for (let i = 0; i < 9; i++) { const a = r() * TAU, d = r() * R0 * 0.8; K.glow(c, Math.cos(a) * d, Math.sin(a) * d, 26 + r() * 30, [255, 150, 80], 0.35, 'screen'); } }
+  c.restore();
+  c.strokeStyle = hot ? 'rgba(255,190,150,0.6)' : 'rgba(170,180,220,0.3)'; c.lineWidth = 3; c.beginPath(); c.arc(0, 0, R0, 0, TAU); c.stroke();
+  return cv;
+}
+/** A lava moonlet: a black crust cracked over fire. Cold, the cracks are dull embers; relit, they run bright. */
+function lavaLayer(seed) {
+  return (hot) => {
+    const S = Math.round(R0 * 2.7), cv = document.createElement('canvas'); cv.width = cv.height = S;
+    const c = cv.getContext('2d'); c.translate(S / 2, S / 2);
+    const r = K.RNG(seed);
+    if (hot) K.glow(c, 0, 0, R0 * 1.3, [255, 110, 50], 0.35, 'screen');
+    T.sphere(c, 0, 0, R0, hot ? [70, 34, 30] : [36, 28, 36], hot ? [170, 90, 66] : [92, 76, 88], [12, 8, 14], -0.8, r, { haze: 0 });
+    c.save(); c.beginPath(); c.arc(0, 0, R0, 0, TAU); c.clip(); c.lineCap = 'round'; c.lineJoin = 'round';
+    for (let i = 0; i < 40; i++) { const a = r() * TAU, d = r() * R0; c.fillStyle = `rgba(10,6,12,${0.2 + 0.25 * r()})`; c.beginPath(); c.ellipse(Math.cos(a) * d, Math.sin(a) * d, 12 + r() * 30, 8 + r() * 16, r() * 3, 0, TAU); c.fill(); }
+    for (let k = 0; k < 9; k++) {
+      let a = r() * TAU, x = Math.cos(a) * R0 * 0.15, y = Math.sin(a) * R0 * 0.15;
+      const pts = [[x, y]];
+      for (let i = 0; i < 7; i++) { a += (r() - 0.5) * 0.9; x += Math.cos(a) * R0 * 0.17; y += Math.sin(a) * R0 * 0.17; pts.push([x, y]); }
+      if (hot) { c.shadowColor = 'rgba(255,110,40,0.8)'; c.shadowBlur = 14; c.strokeStyle = 'rgba(255,150,70,0.9)'; c.lineWidth = 7; }
+      else { c.strokeStyle = 'rgba(120,48,40,0.55)'; c.lineWidth = 6; }
+      c.beginPath(); pts.forEach(([px, py], i) => (i ? c.lineTo(px, py) : c.moveTo(px, py))); c.stroke(); c.shadowBlur = 0;
+      if (hot) { c.strokeStyle = 'rgba(255,230,170,0.6)'; c.lineWidth = 2; c.stroke(); }
+    }
+    c.restore();
+    c.strokeStyle = hot ? 'rgba(255,160,90,0.75)' : 'rgba(150,140,180,0.28)'; c.lineWidth = 3; c.beginPath(); c.arc(0, 0, R0, 0, TAU); c.stroke();
+    return cv;
+  };
+}
+const crucibleLayer = lavaLayer(21), twinaLayer = lavaLayer(33), twinbLayer = lavaLayer(44);
+
 // ---------------------------------------------------------------- Ossa, rigged
 /**
  * Ossa as a cutout: body, four legs (thigh and shin, a knee each), neck and head, two antler forks, a short tail.
@@ -211,4 +253,4 @@ function sleeper(c, R, p) {
   c.restore();
 }
 
-export const WORLDS = { R0, EMBER, CHANNELS, emberLayer, edgeLayer, ossa, OSSA_HOOF, hearthStone, sleeper, onSurface, forgeShape, anvilShape };
+export const WORLDS = { R0, EMBER, CHANNELS, emberLayer, edgeLayer, ashLayer, crucibleLayer, twinaLayer, twinbLayer, ossa, OSSA_HOOF, hearthStone, sleeper, onSurface, forgeShape, anvilShape };

@@ -7,6 +7,10 @@ export const WORLDS: {
   CHANNELS: number[][][];
   emberLayer: (hot: boolean) => HTMLCanvasElement;
   edgeLayer: (lit: boolean) => HTMLCanvasElement;
+  ashLayer: (hot: boolean) => HTMLCanvasElement;
+  crucibleLayer: (hot: boolean) => HTMLCanvasElement;
+  twinaLayer: (hot: boolean) => HTMLCanvasElement;
+  twinbLayer: (hot: boolean) => HTMLCanvasElement;
   ossa: (c: Ctx, x: number, y: number, s: number, p: OssaPose) => void;
   OSSA_HOOF: [number, number];
   hearthStone: (c: Ctx, x: number, y: number, s: number, flash: number) => void;

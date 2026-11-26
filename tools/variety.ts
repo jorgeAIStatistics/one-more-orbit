@@ -75,7 +75,7 @@ export function audit(pack: LevelPack): Audit {
   }
   const sp = ((pack.level as unknown as { setpieces?: SetPiece[] }).setpieces ?? []).map((p) => {
     const n = p.bar;
-    const found = p.kind === 'hop' ? acts[n].has('planet hop') : p.kind === 'speed' ? acts[n].has('speed gate') : p.kind === 'invert' ? acts[n].has('world turns over') : p.kind === 'turn' ? acts[n].has('turn (spike)') : p.kind === 'orb' ? acts[n].has('jump orb') : p.kind === 'drop' ? acts[n].has('great node') : p.kind === 'pad' ? acts[n].has('jump pad') || acts[n].has('throw') : p.kind === 'vent' ? acts[n].has('teleport vent') : p.kind === 'story' ? acts[n].size > 0 : false;
+    const found = p.kind === 'leap' ? c.presses.some((q) => barOf(q.beat) === n && !!q.leap && !q.leap.ember) : p.kind === 'hop' ? acts[n].has('planet hop') : p.kind === 'speed' ? acts[n].has('speed gate') : p.kind === 'invert' ? acts[n].has('world turns over') : p.kind === 'turn' ? acts[n].has('turn (spike)') : p.kind === 'orb' ? acts[n].has('jump orb') : p.kind === 'drop' ? acts[n].has('great node') : p.kind === 'pad' ? acts[n].has('jump pad') || acts[n].has('throw') : p.kind === 'vent' ? acts[n].has('teleport vent') : p.kind === 'story' ? acts[n].size > 0 : false;
     return { ...p, found };
   });
   return { id: pack.level.id, title: pack.level.title, bars: nBars, played: playedBars.length, unique, uniquePct: Math.round((100 * unique) / Math.max(1, playedBars.length)), longestRun: longest, longestAt, sections, phrases, setpieces: sp, rest: { longestGapBeats: gap, at: gapAt } };
@@ -160,6 +160,75 @@ export function difficulty(pack: LevelPack): Difficulty {
   return { id: pack.level.id, tolMs, limit: L, sections, bursts, turns: c.turns.map(barOf), turnsInDrop: turnsInDrop.map(barOf), forbidden, stacked, verdict };
 }
 
+/**
+ * The journey's measures (the owner's brief of 2026-11-26), reported for every level next to the old ones:
+ *   distinct action types in each 8-bar phrase (at least 4, at least one of them an object), interactive objects a
+ *   minute, places visited and hops between them, and the longest stretch of nothing but plain taps (at most 4 bars
+ *   outside the calm intro). Objects: the things of the world you act on (Emberwick: Ossa's anvils as the Meteor's
+ *   walls, the bellows as pads, lava vents, embers in the air, Ossa's strikes that launch you, the great node).
+ */
+export interface Journey {
+  id: string; places: number; hops: number; objectsPerMin: number; objects: number; minutes: number;
+  phrases: Array<{ bars: string; types: string[]; objects: string[]; ok: boolean }>;
+  plain: { bars: number; from: number; to: number; ok: boolean };
+}
+const OBJECT = new Set(['anvil (Meteor wall)', 'bellows (pad)', 'lava vent', 'ember in the air', 'launch (a strike, a fling)', 'great node', 'jump pad', 'spring']);
+export function journey(pack: LevelPack): Journey {
+  const level = new Level(pack.level, pack.audio, pack.chart);
+  const c = buildCourse(level, layers(pack), pitchLookup(pack), pack.level.lab, accentBeats(pack));
+  const barOf = (b: number) => Math.floor(b / 4 + 1e-6);
+  const holdAt = new Set(c.holds.map((h) => Math.round(h.a * 100)));
+  const ember = pack.level.id === 'heroes';
+  const kind = (p: (typeof c.presses)[number]): string => {
+    if (p.leap && !p.leap.ember) return 'launch (a strike, a fling)';
+    if (p.leap?.ember) return 'ember in the air';
+    if (p.smash) return 'great node';
+    if (p.pad === 'vent') return 'lava vent';
+    if (p.pad === 'jump') return ember ? 'bellows (pad)' : 'jump pad';
+    if (p.pad === 'spring') return 'spring';
+    if (p.sling) return 'planet hop';
+    if (p.orb === 'jump') return ember ? 'ember in the air' : 'jump orb';
+    if (p.orb) return `${p.orb} orb`;
+    if (p.form === 'meteor') return ember ? 'anvil (Meteor wall)' : 'Meteor wall';
+    if (p.form !== 'orb') return `${p.form} move`;
+    if (holdAt.has(Math.round(p.beat * 100))) return 'hold';
+    if (p.spin) return 'spin gate';
+    if (p.weave) return 'weave';
+    if (p.kind === 'flip') return 'gravity flip';
+    return 'tap';
+  };
+  const ps = c.presses.filter((p) => !p.auto && p.act !== 'up');
+  const types = ps.map(kind);
+  const objects = types.filter((t) => OBJECT.has(t)).length;
+  const minutes = ps.length ? ((ps[ps.length - 1].beat - ps[0].beat) * c.spb) / 60 : 1;
+  const first = barOf(ps[0]?.beat ?? 0), last = barOf(ps[ps.length - 1]?.beat ?? 0);
+  const phrases: Journey['phrases'] = [];
+  for (let b = first; b <= last; b += 8) {
+    const t = new Set<string>(), o = new Set<string>();
+    ps.forEach((p, i) => { if (barOf(p.beat) >= b && barOf(p.beat) < b + 8) { t.add(types[i]); if (OBJECT.has(types[i])) o.add(types[i]); } });
+    for (const g of c.turns) if (barOf(g) >= b && barOf(g) < b + 8) t.add('turn');
+    for (const g of c.portals) if (barOf(g.beat) >= b && barOf(g.beat) < b + 8) t.add('speed gate');
+    phrases.push({ bars: `${b}-${Math.min(b + 7, last)}`, types: [...t], objects: [...o], ok: t.size >= 4 && o.size >= 1 });
+  }
+  // plain taps: a run of ordinary hops with nothing else on them (not counted in the calm intro, before the first build or drop)
+  const calmEnd = (level.segments.find((g) => !/VERSE|INTRO|CALM/i.test(g.label))?.bar0 ?? 0) * 4;
+  const event = (b: number) => c.turns.some((g) => Math.abs(g - b) < 1e-6) || c.portals.some((g) => Math.abs(g.beat - b) < 1e-6);
+  let best = { bars: 0, from: 0, to: 0 }, start = -1;
+  ps.forEach((p, i) => {
+    const plain = types[i] === 'tap' && !event(p.beat);
+    if (plain && start < 0) start = i;
+    if ((!plain || i === ps.length - 1) && start >= 0) {
+      const a = start > 0 ? ps[start - 1].beat : ps[start].beat, z = plain ? ps[i].beat : p.beat;
+      const from = Math.max(a, calmEnd), len = (z - from) / 4;
+      if (z > calmEnd && len > best.bars) best = { bars: +len.toFixed(2), from: barOf(from), to: barOf(z) };
+      start = -1;
+    }
+  });
+  const places = pack.level.places?.length ?? new Set(c.presses.map((p) => p.planetTo)).size;
+  const hops = c.presses.filter((p) => (p.leap && !p.leap.ember) || p.sling).length;
+  return { id: pack.level.id, places, hops, objects, objectsPerMin: +(objects / Math.max(0.1, minutes)).toFixed(1), minutes: +minutes.toFixed(2), phrases, plain: { ...best, ok: best.bars <= 4 } };
+}
+
 const isMain = typeof process !== 'undefined' && !process.env.VITEST;
 if (isMain) {
   const ids = process.argv.slice(2).filter((x) => !x.startsWith('-'));
@@ -184,4 +253,11 @@ if (isMain) {
     console.log(`  VERDICT: ${d.verdict.length ? d.verdict.join('; ') : 'within the table'}`);
   }
   writeFileSync(new URL('./cache/difficulty.json', import.meta.url), JSON.stringify(diffs, null, 1));
+  console.log('\nTHE JOURNEY (places, hops, objects, actions per phrase, plain taps)');
+  const js = packs.map(journey);
+  for (const j of js) {
+    console.log(`\n${j.id}: ${j.places} places, ${j.hops} hops; ${j.objects} object interactions, ${j.objectsPerMin} a minute; longest plain-tap stretch ${j.plain.bars} bars (bars ${j.plain.from}-${j.plain.to}) ${j.plain.ok ? 'ok' : 'OVER 4'}`);
+    for (const p of j.phrases) console.log(`  phrase ${p.bars.padEnd(6)} ${p.types.length} action types (${p.types.join(', ')}); objects: ${p.objects.join(', ') || 'none'}  ${p.ok ? 'ok' : 'UNDER'}`);
+  }
+  writeFileSync(new URL('./cache/journey.json', import.meta.url), JSON.stringify(js, null, 1));
 }

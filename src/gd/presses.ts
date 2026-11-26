@@ -11,20 +11,24 @@ const TICKS = 48; // per bar
 /** tools/export-layers.ts turns this off to get the generated layers before the audit */
 export const auditSwitch = { on: true };
 const key = (id: string) => `omo_presses_${id}`;
-const store = new Map<string, PressFile>();
+/** the level's folder (its song's): a world keeps its id when its song changes (Emberwick, "heroes", is on Volcano) */
+const folderOf = (pack: LevelPack): string => /audio\/([a-z0-9_-]+)\./i.exec(pack.audio.file ?? '')?.[1] ?? pack.level.id;
+// (kept per pack, not per id: the test chambers keep an old pack under the same id as Emberwick's, and the first one
+// asked for used to win for both; 2026-11-26)
+const store = new WeakMap<LevelPack, PressFile>();
 const DOC = 'Notes recorded by hand in Record Mode. Per bar: t = survival presses, f = flow notes, as ticks inside the bar (12 per beat). The tools never overwrite this file.';
 
 /** The hand-recorded bars for a level: the file in its folder, unless this browser holds a newer unsaved copy. */
 export function handBars(pack: LevelPack): PressFile {
   const id = pack.level.id;
-  let f = store.get(id);
+  let f = store.get(pack);
   if (!f) {
     f = { bars: { ...(pack.presses?.bars ?? {}) } };
     try {
       const raw = localStorage.getItem(key(id));
       if (raw) f = JSON.parse(raw) as PressFile;
     } catch { /* no storage */ }
-    store.set(id, f);
+    store.set(pack, f);
   }
   return f;
 }
@@ -86,7 +90,7 @@ export async function saveBars(pack: LevelPack): Promise<'file' | 'browser'> {
   const id = pack.level.id;
   const body = JSON.stringify({ _doc: DOC, bars: handBars(pack).bars }, null, 1);
   try {
-    const r = await fetch(`/__presses/${id}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body });
+    const r = await fetch(`/__presses/${folderOf(pack)}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body });
     if (r.ok) { try { localStorage.removeItem(key(id)); } catch { /* ignore */ } return 'file'; }
   } catch { /* no dev server */ }
   try { localStorage.setItem(key(id), body); } catch { /* ignore */ }
@@ -97,12 +101,12 @@ export async function saveBars(pack: LevelPack): Promise<'file' | 'browser'> {
 export async function refreshBars(pack: LevelPack): Promise<void> {
   if (!import.meta.env.DEV) return; // the released game has no such address to ask
   try {
-    const r = await fetch(`/__presses/${pack.level.id}`);
+    const r = await fetch(`/__presses/${folderOf(pack)}`);
     if (!r.ok || !(r.headers.get('content-type') || '').includes('json')) return;
     const f = (await r.json()) as PressFile;
     let local = false;
     try { local = !!localStorage.getItem(key(pack.level.id)); } catch { /* ignore */ }
-    if (!local && f && f.bars) store.set(pack.level.id, { bars: f.bars });
+    if (!local && f && f.bars) store.set(pack, { bars: f.bars });
   } catch { /* not the dev server */ }
 }
 

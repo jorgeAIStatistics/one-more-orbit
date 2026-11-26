@@ -93,6 +93,8 @@ export interface LevelFile {
    * one at the drop in Cirra and Glassmere, none after). A fall goes back to the last one passed, with a one-bar run-in.
    */
   embers?: number[];
+  /** the journey's places (the owner's brief of 2026-11-26): see src/gd/shapes.ts. Each leap goes on to the next. */
+  places?: import('../gd/shapes').PlaceDef[];
   side?: { of: string; tol?: number; ahead?: number; mirror?: boolean; speed?: number };
   /** a harder level's own rules: tol = half-width of the openings in seconds (default 0.12), ahead = beats of course shown (default 3) */
   /**
