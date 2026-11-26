@@ -11,6 +11,7 @@ import { COLDPAINT as C } from '../art/coldpaint.js';
 import { DUSK, K } from '../art/painter.js';
 import { WORLDS2 as W2 } from '../art/world2paint.js';
 import { writeSays, type Said, type SceneState } from './skyplanet';
+import { save } from '../save';
 import { horizon, zoneOf, zones, ZONES, type CourseView, type World, type WorldSky, type WorldState } from './worlds';
 
 const TAU = Math.PI * 2;
@@ -100,13 +101,17 @@ abstract class PlanetWorld {
       // the Stillness, far off and growing world by world: a mass of it on the edge of the sky
       const S = this.cfg.stillness;
       if (S > 0) { c.save(); c.globalAlpha = 0.5 + 0.5 * S; C.dread(c, w * (1.02 - 0.08 * S), h * 0.08, (90 + 220 * S) * u, (70 + 160 * S) * u, 61, 0.4 + 0.6 * S); c.restore(); }
+      // depth: a haze between the far sky and the world (cooler, paler, far things softer), and in the lighter worlds,
+      // rays of light falling through it (the cinematic pass)
+      { const hz = c.createLinearGradient(0, h * 0.35, 0, h); hz.addColorStop(0, 'rgba(160,170,210,0)'); hz.addColorStop(0.5, `rgba(160,170,210,${0.05 + 0.05 * warm})`); hz.addColorStop(1, 'rgba(160,170,210,0)'); c.fillStyle = hz; c.fillRect(0, h * 0.35, w, h * 0.65); }
+      if (S < 0.7 && warm > 0.05) { c.save(); c.globalCompositeOperation = 'screen'; for (let i = 0; i < 5; i++) { const a = -0.25 + i * 0.12 + 0.02 * Math.sin(time * 0.2 + i), x0 = w * 0.1, y0 = -h * 0.05, L = Math.hypot(w, h); const g = c.createLinearGradient(x0, y0, x0 + Math.cos(a + 1.2) * L, y0 + Math.sin(a + 1.2) * L); g.addColorStop(0, K.rgba(this.cfg.col, 0.1 * warm)); g.addColorStop(1, K.rgba(this.cfg.col, 0)); c.fillStyle = g; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x0 + Math.cos(a + 1.17) * L, y0 + Math.sin(a + 1.17) * L); c.lineTo(x0 + Math.cos(a + 1.23) * L, y0 + Math.sin(a + 1.23) * L); c.closePath(); c.fill(); } c.restore(); }
       // Helion's moment: his silhouette in the shadow ring on the horizon, on the build's thin bar (stronger world by world)
       horizon(c, w, h, (t > T.helion - 0.2 && t < T.drop ? sm((t - T.helion + 0.2) / 0.5) * (1 - sm((t - T.drop + 0.3) / 0.3)) : 0) * (0.7 + 0.6 * this.cfg.signal), time);
       this.skyMore(c, w, h, u, st, t, this.dt);
       // the drop: half a beat of the world drawing in (near stillness), then the release: radial speed lines, the element outward
       const pre = t > T.drop - 0.45 && t < T.drop ? sm((t - T.drop + 0.45) / 0.45) : 0;
       if (pre > 0) { c.fillStyle = `rgba(6,4,12,${0.35 * pre})`; c.fillRect(0, 0, w, h); }
-      const rel = t >= T.drop && t < T.drop + 1.1 ? 1 - (t - T.drop) / 1.1 : 0;
+      const rel = (t >= T.drop && t < T.drop + 1.1 ? 1 - (t - T.drop) / 1.1 : 0) * (save.reduceFlash ? 0.3 : 1);
       if (rel > 0) {
         const cx = w / 2, cy = h * 0.52, R0 = Math.hypot(w, h) * 0.6, r = K.RNG(5), col = this.cfg.col;
         c.save(); c.globalCompositeOperation = 'lighter'; c.lineCap = 'round';

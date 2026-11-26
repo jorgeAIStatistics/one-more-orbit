@@ -19,6 +19,8 @@ export interface SaveData {
   audioOffset: number; // ms; raise it if your taps read late
   visualOffset: number; // ms; raise it if the ball looks behind the music
   reducedMotion: boolean;
+  /** softer impact flashes and camera shake (the accessibility setting of 2026-11-25) */
+  reduceFlash: boolean;
   hardcore: boolean;
   errorBar: boolean;
   level: number;
@@ -60,7 +62,7 @@ export interface SaveData {
 }
 
 const defaults = (): SaveData => ({
-  music: 0.8, sfx: 0.7, audioOffset: 0, visualOffset: 0, reducedMotion: false, hardcore: false, errorBar: true, level: 0, skin: 'cyan', badges: {}, practiced: {}, bests: {}, teachSeen: {}, core: 4, calibrated: false, calLatency: -1, syncOverlay: false, hitVol: 1, tutorialDone: false, unlockAll: false, rel: 1, haptics: true, stars: {}, quests: {}, at: '', story: {}, gold: {}, feats: {}
+  music: 0.8, sfx: 0.7, audioOffset: 0, visualOffset: 0, reducedMotion: false, reduceFlash: false, hardcore: false, errorBar: true, level: 0, skin: 'cyan', badges: {}, practiced: {}, bests: {}, teachSeen: {}, core: 4, calibrated: false, calLatency: -1, syncOverlay: false, hitVol: 1, tutorialDone: false, unlockAll: false, rel: 1, haptics: true, stars: {}, quests: {}, at: '', story: {}, gold: {}, feats: {}
 });
 
 /**
@@ -73,7 +75,7 @@ export const guest = typeof location !== 'undefined' && /[?&#]fresh\b/.test(loca
 function load(): SaveData {
   const d = defaults();
   if (guest) {
-    try { const p = JSON.parse(localStorage.getItem(KEY) || '{}') as Partial<SaveData>; for (const k of ['music', 'sfx', 'hitVol', 'audioOffset', 'visualOffset', 'reducedMotion', 'haptics'] as const) if (p[k] !== undefined) (d as unknown as Record<string, unknown>)[k] = p[k]; } catch { /* defaults */ }
+    try { const p = JSON.parse(localStorage.getItem(KEY) || '{}') as Partial<SaveData>; for (const k of ['music', 'sfx', 'hitVol', 'audioOffset', 'visualOffset', 'reducedMotion', 'reduceFlash', 'haptics'] as const) if (p[k] !== undefined) (d as unknown as Record<string, unknown>)[k] = p[k]; } catch { /* defaults */ }
     return d;
   }
   try {

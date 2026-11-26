@@ -13,6 +13,7 @@ import { WORLDS as W } from '../art/worldpaint.js';
 import { CANON } from '../art/canonpaint.js';
 import { DUSK } from '../art/painter.js';
 import { writeSays, type Said, type SceneState } from './skyplanet';
+import { save } from '../save';
 
 const TAU = Math.PI * 2;
 const sm = (x: number) => { const t = x < 0 ? 0 : x > 1 ? 1 : x; return t * t * (3 - 2 * t); };
@@ -329,7 +330,7 @@ export class EmberWorld {
       // radial speed lines and a burst of fire from the forge outward
       const pre = t > ET.drop - 0.45 && t < ET.drop ? sm((t - ET.drop + 0.45) / 0.45) : 0;
       if (pre > 0) { c.fillStyle = `rgba(8,4,10,${0.35 * pre})`; c.fillRect(0, 0, w, h); }
-      const rel = t >= ET.drop && t < ET.drop + 1.1 ? 1 - (t - ET.drop) / 1.1 : 0;
+      const rel = (t >= ET.drop && t < ET.drop + 1.1 ? 1 - (t - ET.drop) / 1.1 : 0) * (save.reduceFlash ? 0.3 : 1);
       if (rel > 0) {
         const cx = w / 2, cy = h * 0.52, R0 = Math.hypot(w, h) * 0.6, r = K.RNG(5);
         c.save(); c.globalCompositeOperation = 'lighter'; c.lineCap = 'round';

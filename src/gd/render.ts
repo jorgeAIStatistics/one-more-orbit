@@ -390,6 +390,7 @@ export class GdRenderer {
   private camScale = 1;
   /** mini (Cirra's tight gusts): how small Orbin is drawn, eased */
   private miniK = 0;
+  private orbitK = 0; private whipAt = -1e9; private lensSeen = -1;
   /**
    * One continuous journey (the owner's brief of 2026-11-25): a level opens out of the light of the planet the map
    * dived into (a match cut: the camera settles back from close in, through the planet's colour), and a fall goes
@@ -399,6 +400,12 @@ export class GdRenderer {
   beginIntro(col: RGB, dur = 0.9, zoom = 0.9): void { this.introCol = col; this.introDur = dur; this.introZ = zoom; this.introAt = performance.now(); this.introK = 1; }
   /** Over everything, after the course: the light the level opens out of. */
   drawIntro(now: number): void {
+    if (this.dropAge < 0.16 && this.dropPower >= 0.3 && !save.reduceFlash && !save.reducedMotion) {
+      const c = this.ctx, k = 1 - this.dropAge / 0.16, d = 3 * k * this.dpr;
+      c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = 'lighter'; c.globalAlpha = 0.12 * k;
+      try { c.drawImage(this.canvas, -d, 0); c.drawImage(this.canvas, d, 0); } catch { /* (a canvas with no size yet) */ }
+      c.restore();
+    }
     if (this.introK <= 0) return;
     this.introK = Math.max(0, 1 - (now - this.introAt) / 1000 / this.introDur);
     const k = this.introK * this.introK * (3 - 2 * this.introK), c = this.ctx;
@@ -798,6 +805,7 @@ export class GdRenderer {
     { const t = this.ctx.getTransform(), k = this.canvas.width / Math.max(1, this.w); this.heroAt = [(t.a * x + t.c * y + t.e) / k, (t.b * x + t.d * y + t.f) / k]; }
     const tint = form === 'orb' ? col : mix(col, FORM_COL[form], 0.45 * mk);
     this.drawBall(x, y, r * (1 - 0.4 * this.miniK), tint, angle, along, across, true);
+    if (this.look === 2) { const c2 = this.ctx; c2.save(); c2.strokeStyle = 'rgba(255,250,235,0.5)'; c2.lineWidth = Math.max(1, r * 0.16); c2.lineCap = 'round'; c2.beginPath(); c2.arc(x, y, r * (1.08 - 0.4 * this.miniK), -2.5, -1.0); c2.stroke(); c2.restore(); } // (his rim light, from the world's light above)
   }
   /** What a form adds round him: the Meteor's flame, the Satellite's panels, the Pulsar's beams. */
   private formDeco(x: number, y: number, r: number, angle: number, dir: number, form: Form, lit: number): void {
@@ -1531,6 +1539,23 @@ export class GdRenderer {
       c.lineWidth = rb * 1.7 * u;
       c.beginPath(); c.moveTo(x0 + Math.cos(ang(p0.beat)) * ra, y0 + Math.sin(ang(p0.beat)) * ra); c.lineTo(x1 + Math.cos(ang(p1.beat)) * rz, y1 + Math.sin(ang(p1.beat)) * rz); c.stroke();
     }
+    // his trail takes the element of the mode he is in: a flame for the Meteor, wind for the wave, water for the ball,
+    // leaves for the snap (the cinematic pass); it stays behind him and under the course's marks
+    if (!twin && this.look === 2 && heroForm !== 'orb' && n > 2) {
+      const world = run.level.file.side?.of ?? run.level.id, el = heroForm === 'meteor' ? 'fire' : heroForm === 'sat' ? 'wind' : heroForm === 'pulsar' ? (world === 'invincible' ? 'leaf' : 'water') : heroForm === 'comet' ? 'wind' : '';
+      const ecol: RGB = el === 'fire' ? [255, 150, 70] : el === 'wind' ? [255, 215, 245] : el === 'water' ? [170, 220, 255] : [160, 240, 160];
+      const pts = this.trail.map((p) => { const rr = this.rad(p.rho) + p.off + (p.away ?? 0), [ox, oy] = origin(p.pf); return [ox + Math.cos(ang(p.beat)) * rr, oy + Math.sin(ang(p.beat)) * rr] as [number, number]; });
+      c.save(); c.globalCompositeOperation = 'lighter';
+      for (let i = 1; i < pts.length; i++) { const u = i / pts.length; c.strokeStyle = rgba(ecol, u * 0.45); c.lineWidth = rb * (el === 'fire' ? 2.4 : 1.6) * u; c.beginPath(); c.moveTo(pts[i - 1][0], pts[i - 1][1]); c.lineTo(pts[i][0], pts[i][1]); c.stroke(); }
+      for (let i = 0; i < pts.length; i++) {
+        const u = i / pts.length, [px, py] = pts[i], ph = time * 6 + i * 1.7;
+        if (el === 'fire') { c.fillStyle = rgba([255, 200, 120], 0.6 * u); c.beginPath(); c.arc(px + Math.sin(ph) * rb * 0.6, py - (1 - u) * rb * 1.4, rb * 0.22 * u, 0, TWO_PI); c.fill(); }
+        else if (el === 'wind') { c.strokeStyle = rgba(ecol, 0.35 * u); c.lineWidth = 1; c.beginPath(); c.arc(px, py, rb * (0.6 + 0.4 * Math.sin(ph)), ph, ph + 2); c.stroke(); }
+        else if (el === 'water') { c.fillStyle = rgba([230, 245, 255], 0.55 * u); c.beginPath(); c.arc(px + Math.sin(ph) * rb * 0.4, py + Math.cos(ph) * rb * 0.4, rb * 0.16, 0, TWO_PI); c.fill(); }
+        else { c.save(); c.translate(px + Math.sin(ph) * rb * 0.5, py + Math.cos(ph) * rb * 0.5); c.rotate(ph); c.fillStyle = rgba(ecol, 0.6 * u); c.beginPath(); c.ellipse(0, 0, rb * 0.35, rb * 0.13, 0, 0, TWO_PI); c.fill(); c.restore(); }
+      }
+      c.restore();
+    }
     c.lineCap = 'butt';
     const vr = dt > 0 && this.ball.r ? (br - this.ball.r) / dt : 0;
     const stretch = sim.mode !== 'ground' ? clamp(Math.abs(vr) / (r0 * 4), 0, 0.2) : 0;
@@ -1948,15 +1973,22 @@ export class GdRenderer {
     this.strike = Math.max(0, this.strike - dt * 3.2);
     c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.background(pal, now / 1000, dt, inten, groove, this.dark, drive, kick);
-    if (this.flash > 0 && !this.plain) { c.fillStyle = `rgba(255,255,255,${this.flash * (calm ? 0.08 : 0.26)})`; c.fillRect(0, 0, this.w, this.h); }
-    if (this.strobe > 0.01 && !this.plain) { c.fillStyle = this.col(pal.acc, this.strobe * 0.09); c.fillRect(0, 0, this.w, this.h); }
+    const soft = calm || save.reduceFlash; // (softer flashes and shake: the accessibility setting)
+    if (this.flash > 0 && !this.plain) { c.fillStyle = `rgba(255,255,255,${this.flash * (soft ? 0.08 : 0.26)})`; c.fillRect(0, 0, this.w, this.h); }
+    if (this.strobe > 0.01 && !this.plain) { c.fillStyle = this.col(pal.acc, this.strobe * (soft ? 0.03 : 0.09)); c.fillRect(0, 0, this.w, this.h); }
     c.save();
     let cx = this.w / 2;
     let cy = this.h * 0.52;
     // the drop shakes the picture: a quick sway that dies away, not a new random place every frame
-    if (this.shake > 0) { const sh = 4 * this.shake * (1 - this.shake) * 5; cx += Math.sin(now * 0.031) * sh; cy += Math.sin(now * 0.026 + 1) * sh; }
-    if (this.dropPower >= 0.3 && this.dropAge < 1.2 && !calm) cx += Math.exp(-this.dropAge * 4) * Math.sin(this.dropAge * 10) * m * 0.045 * this.dropPower; // the launch swings the camera
+    if (this.shake > 0) { const sh = 4 * this.shake * (1 - this.shake) * 5 * (soft ? 0.25 : 1); cx += Math.sin(now * 0.031) * sh; cy += Math.sin(now * 0.026 + 1) * sh; }
+    if (this.dropPower >= 0.3 && this.dropAge < 1.2 && !soft) cx += Math.exp(-this.dropAge * 4) * Math.sin(this.dropAge * 10) * m * 0.045 * this.dropPower; // the launch swings the camera
     c.translate(cx, cy);
+    // the camera (the cinematic pass): a slow orbit round the planet while a drop is going, and a quick whip when the
+    // mode changes (on the gift's bar, which is played for him: no tap is ever under a whip)
+    { const lens = course.lenses.filter((l) => l.beat <= beat).length; if (lens !== this.lensSeen) { if (lens > this.lensSeen && this.lensSeen >= 0) this.whipAt = now; this.lensSeen = lens; } }
+    this.orbitK += ((drive > 0.3 && !soft ? 1 : 0) - this.orbitK) * Math.min(1, dt * 0.8);
+    const whip = soft ? 0 : 0.09 * Math.exp(-(now - this.whipAt) / 220) * Math.sin(Math.min(1, (now - this.whipAt) / 220) * Math.PI);
+    c.rotate(0.05 * Math.sin(now / 1000 * 0.32) * this.orbitK + whip);
     c.scale(this.mx, this.my);
 
     // the other planets nearby: a small glowing core each, so you can see where a planet hop is going
@@ -2016,11 +2048,11 @@ export class GdRenderer {
     const dim = c.createRadialGradient(this.coreX, this.coreY, r0 * 0.4, this.coreX, this.coreY, reach);
     // (over a painted sky in the one-signal look the sky keeps its own soft veil, so this is light and has no edge:
     // two darks stacked read as a disc behind the orbit)
-    const soft = this.look === 2 && !!this.backdrop;
-    const deep = soft ? 0.16 + 0.12 * drive : 0.32 + 0.4 * Math.max(drive, this.colour);
+    const veiled = this.look === 2 && !!this.backdrop;
+    const deep = veiled ? 0.16 + 0.12 * drive : 0.32 + 0.4 * Math.max(drive, this.colour);
     dim.addColorStop(0, 'rgba(4,5,12,0)');
     dim.addColorStop(0.16, `rgba(4,5,12,${deep})`);
-    if (soft) { dim.addColorStop(0.45, `rgba(4,5,12,${deep})`); dim.addColorStop(0.75, `rgba(4,5,12,${deep * 0.35})`); }
+    if (veiled) { dim.addColorStop(0.45, `rgba(4,5,12,${deep})`); dim.addColorStop(0.75, `rgba(4,5,12,${deep * 0.35})`); }
     else dim.addColorStop(0.74, `rgba(4,5,12,${deep})`);
     dim.addColorStop(1, 'rgba(4,5,12,0)');
     c.fillStyle = dim;

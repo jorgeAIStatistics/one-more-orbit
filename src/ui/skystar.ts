@@ -8,6 +8,7 @@
 import { LANDING } from '../art/landingpaint.js';
 import { K } from '../art/painter.js';
 import { Actor } from './actor';
+import { save } from '../save';
 import type { SceneState } from './skyplanet';
 
 const SERIF = '"Cormorant Garamond", "Hoefler Text", Baskerville, Palatino, Georgia, serif';
@@ -145,7 +146,7 @@ export class SkyStar {
     o.step(dt); o.draw(c);
     if (fRaw > 0 && p.flight) LANDING.star(c, o.x + 8 * u * (o.s / u), o.y - 4 * u, 0.34 * size * lerp(1, 0.45, f), p.col, 1, now / 300);
     // the flash on the last hit: it is what the course goes out behind
-    if (s < 0.7) { c.fillStyle = `rgba(255,240,210,${(s < T.open ? s / T.open : 1 - smooth((s - T.open) / 0.58)) * 0.85})`; c.fillRect(0, 0, w, h); }
+    if (s < 0.7) { c.fillStyle = `rgba(255,240,210,${(s < T.open ? s / T.open : 1 - smooth((s - T.open) / 0.58)) * (save.reduceFlash ? 0.35 : 0.85)})`; c.fillRect(0, 0, w, h); }
     // its name, written softly in the sky
     const wEnd = q ? T.words + 1.1 : T.end, wa = smooth((s - T.words) / 0.7) * (1 - smooth((s - (wEnd - 0.6)) / 0.5)), wy = h * (q ? 0.2 : 0.17);
     this.write(c, p.name, cx, wy, Math.min(w * 0.13, 56 * u), wa);

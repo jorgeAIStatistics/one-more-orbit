@@ -292,6 +292,7 @@ export class SkyCold {
     for (const hv of this.heaves) shake += 7 * Math.exp(-(t - hv) / 0.18) * (t >= hv ? 1 : 0);
     if (tau >= L.wave) shake += 16 * Math.exp(-(tau - L.wave) / 0.5);
     for (const st of T.stutter) if (t > st && t < st + 0.09) shake += 6;
+    if (save.reduceFlash) shake *= 0.25; // (softer flashes and shake)
     const sx = shake * u * Math.sin(now * 0.091) * Math.sin(now * 0.037), sy = shake * u * Math.cos(now * 0.083);
     c.save(); c.translate(sx, sy);
     // the sky: gold; a little drained by the omen; then the strike's wave of grey sweeps across from the right
@@ -434,9 +435,11 @@ export class SkyCold {
     if (tau >= L.wave - 0.05) {
       const k = tau - L.wave, R = Math.hypot(w, h);
       c.strokeStyle = `rgba(255,250,236,${Math.max(0, 1 - k / 0.5)})`; c.lineWidth = 30 * u; c.beginPath(); c.arc(w * 0.8, h * 0.24, Math.max(1, k * R * 2.4), 0, TAU); c.stroke();
-      c.fillStyle = `rgba(255,250,236,${sm(k / 0.12) * (1 - sm((k - 0.25) / 0.4))})`; c.fillRect(0, 0, w, h);
+      c.fillStyle = `rgba(255,250,236,${sm(k / 0.12) * (1 - sm((k - 0.25) / 0.4)) * (save.reduceFlash ? 0.35 : 1)})`; c.fillRect(0, 0, w, h);
       c.fillStyle = `rgba(4,4,10,${sm((k - (L.black - L.wave) + 0.1) / 0.6)})`; c.fillRect(0, 0, w, h);
       const out = 1 - sm((tau - L.out) / 0.9);
+      // (Orbin, tiny and alone in all that dark: what is left of him after the loss)
+      { const a = sm((tau - L.black - 0.1) / 0.8) * out, x = w * 0.24 + (tau - L.black) * 4 * u, y = h * 0.82 + (tau - L.black) * 2 * u; if (a > 0.01) { K.glow(c, x, y, 26 * u, [255, 226, 170], 0.35 * a); c.save(); c.globalAlpha = a * 0.85; c.translate(x, y); c.rotate(-0.9 + 0.08 * (tau - L.black)); P.spark(c, 0, 0, 0.16 * u, { who: 'orbin', eyes: 'closed', arms: 'rest', glow: 0.5, face: 1, crest: 0.3 }); c.restore(); } }
       L.lines.forEach((at, i) => {
         const a = sm((tau - at) / 1.0) * out, line = COLD_LINES[i], y0 = h * [0.42, 0.53, 0.63][i];
         line.forEach((s, j) => this.write(s, cx, y0 + j * 30 * u, (i === 1 ? 19 : 21) * u, a, i === 2 ? '#ffe6b8' : '#fff1d8'));

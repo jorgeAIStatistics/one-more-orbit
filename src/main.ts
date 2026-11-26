@@ -1292,7 +1292,7 @@ function renderSettings(): void {
   showVolumes();
   $('aoVal').textContent = fmtMs(save.audioOffset);
   $('voVal').textContent = fmtMs(save.visualOffset);
-  for (const [id, on] of [['setMotion', save.reducedMotion], ['setSync', save.syncOverlay], ['setUnlock', save.unlockAll], ['setHaptics', save.haptics]] as const) $(id).setAttribute('aria-pressed', String(on));
+  for (const [id, on] of [['setMotion', save.reducedMotion], ['setFlash', save.reduceFlash], ['setSync', save.syncOverlay], ['setUnlock', save.unlockAll], ['setHaptics', save.haptics]] as const) $(id).setAttribute('aria-pressed', String(on));
   $('setHaptics').classList.toggle('hidden', !canHaptics);
   $('gcBtn').classList.toggle('hidden', !gameCenter.available);
   $('installNote').classList.toggle('hidden', !installHint());
@@ -1333,7 +1333,7 @@ function nudge(key: 'audioOffset' | 'visualOffset', by: number): void {
   persist();
   renderSettings();
 }
-function toggle(key: 'reducedMotion' | 'syncOverlay' | 'unlockAll' | 'haptics'): void {
+function toggle(key: 'reducedMotion' | 'reduceFlash' | 'syncOverlay' | 'unlockAll' | 'haptics'): void {
   save[key] = !save[key];
   persist();
   renderSettings();
@@ -1588,6 +1588,7 @@ $('aoPlus').addEventListener('click', () => nudge('audioOffset', 5));
 $('voMinus').addEventListener('click', () => nudge('visualOffset', -5));
 $('voPlus').addEventListener('click', () => nudge('visualOffset', 5));
 $('setMotion').addEventListener('click', () => toggle('reducedMotion'));
+$('setFlash').addEventListener('click', () => toggle('reduceFlash'));
 $('setSync').addEventListener('click', () => toggle('syncOverlay'));
 $('setUnlock').addEventListener('click', () => toggle('unlockAll'));
 $('setHaptics').addEventListener('click', () => { toggle('haptics'); feel('big'); });
