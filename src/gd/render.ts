@@ -1417,7 +1417,7 @@ export class GdRenderer {
         const hit = run.events.some((e) => (e.kind === 'hop' || e.kind === 'flip') && e.flow !== false);
         const pos = (b: number, dl = 0, ref?: number): [number, number] => { const h = course.at(ref ?? b), r = this.rad(h.rho + dl) + h.side * rb; return this.wxy(course.at(b).planet, ang(b), r); };
         c.save();
-        this.planet.onCourse(c, { beat, song: beat * course.spb, time, spb: course.spb, rb, presses: course.presses, pos, ring: (b) => this.rad(course.at(b).rho), ang, center: [bx0, by0], planetR: this.worldR, hit });
+        this.planet.onCourse(c, { beat, song: beat * course.spb, time, spb: course.spb, rb, presses: course.presses, pos, place: (k: number) => origin(k), unit: this.rad(this.cam), pf: this.pf, ring: (b) => this.rad(course.at(b).rho), ang, center: [bx0, by0], planetR: this.worldR, hit });
         c.restore();
       }
       // lenses: a tall lens standing across the path, in the colour of the form it gives
@@ -2117,7 +2117,7 @@ export class GdRenderer {
         rel: (k: number) => { const [x, y] = this.planetXY(k), [x0, y0] = this.planetXY(this.pf); return [x - x0, y - y0]; },
         along: this.geo ? (k: number, a: number, r: number) => { const p = this.locK(k, a, r); return [p[0], p[1]]; } : undefined, span: this.geo ? (k: number) => this.geo!.span[k] ?? [0, 0] : undefined, wide: this.w >= this.h,
         at: (b: number) => { const h = course.at(b), [x, y] = this.wxy(h.planet, -Math.PI / 2 + course.angle(b), this.rad(h.rho) + h.side * this.rb); return [x - this.coreX, y - this.coreY]; },
-        up: (b: number) => this.upA(course.at(b).planet, -Math.PI / 2 + course.angle(b)), presses: course.presses, done: sim.ni, rb: this.rb });
+        up: (b: number) => this.upA(course.at(b).planet, -Math.PI / 2 + course.angle(b)), presses: course.presses, done: sim.ni, rb: this.rb, origin: [cx + this.coreX, cy + this.coreY], beat });
     } else this.core(pal, m * 0.045, m * 0.04 * (0.4 + 1.1 * inten) * (1 + wound * 0.7 + drive * 0.5), kick * (0.3 + 0.7 * inten), snare * inten, dt, this.flowV, chargeShown, this.plain ? 0 : drive, span, PLANETS[level.file.side?.of ?? level.id]?.rgb, !!level.file.side);
     if (this.look === 2 && !this.planet) { // (the second look: the core is scenery, and steps back; nothing bright sits in the middle of the course)
       const va = 0.6 * (1 - 0.85 * this.coreFlare), vr = m * 0.12;

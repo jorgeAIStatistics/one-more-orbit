@@ -11,6 +11,9 @@ export const WORLDS: {
   crucibleLayer: (hot: boolean) => HTMLCanvasElement;
   twinaLayer: (hot: boolean) => HTMLCanvasElement;
   twinbLayer: (hot: boolean) => HTMLCanvasElement;
+  shardsLayer: (hot: boolean) => HTMLCanvasElement;
+  rocksLayer: (hot: boolean) => HTMLCanvasElement;
+  hearthLayer: (hot: boolean) => HTMLCanvasElement;
   ossa: (c: Ctx, x: number, y: number, s: number, p: OssaPose) => void;
   OSSA_HOOF: [number, number];
   hearthStone: (c: Ctx, x: number, y: number, s: number, flash: number) => void;

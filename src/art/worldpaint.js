@@ -121,6 +121,56 @@ function lavaLayer(seed) {
 }
 const crucibleLayer = lavaLayer(21), twinaLayer = lavaLayer(33), twinbLayer = lavaLayer(44);
 
+// ---------------------------------------------------------------- the Drifting Edge's fragments (the journey, 2026-11-26)
+// What is left of the brothers' home nebula, drifting: the Shards (its glass), the Rocks, the Old Hearth (their home).
+// Cold: grey and dim, the Stillness's stain on them. Relit (as he plays there): the nebula's teal and their hearth's gold.
+function sheetE() { const S = Math.round(R0 * 2.7), cv = document.createElement('canvas'); cv.width = cv.height = S; const c = cv.getContext('2d'); c.translate(S / 2, S / 2); return [cv, c]; }
+function shardsLayer(hot) {
+  const [cv, c] = sheetE(), r = K.RNG(61);
+  if (hot) K.glow(c, 0, 0, R0 * 1.2, [150, 235, 220], 0.3, 'screen');
+  T.sphere(c, 0, 0, R0 * 0.55, hot ? [70, 80, 96] : [52, 54, 66], hot ? [150, 190, 200] : [110, 112, 130], [12, 12, 20], -0.8, r, { haze: 0 });
+  for (let i = 0; i < 11; i++) {
+    const a = r() * TAU, d = R0 * (0.35 + 0.55 * r()), L = R0 * (0.25 + 0.4 * r()), w = L * (0.18 + 0.15 * r()), rot = a + (r() - 0.5) * 1.2;
+    c.save(); c.translate(Math.cos(a) * d, Math.sin(a) * d); c.rotate(rot);
+    const g = c.createLinearGradient(0, -L / 2, 0, L / 2);
+    g.addColorStop(0, hot ? 'rgba(190,250,240,0.95)' : 'rgba(150,150,180,0.8)'); g.addColorStop(1, hot ? 'rgba(90,150,170,0.85)' : 'rgba(60,60,80,0.85)');
+    c.fillStyle = g; c.beginPath(); c.moveTo(0, -L / 2); c.lineTo(w, -L * 0.1); c.lineTo(w * 0.6, L / 2); c.lineTo(-w * 0.7, L * 0.35); c.lineTo(-w, -L * 0.15); c.closePath(); c.fill();
+    c.strokeStyle = hot ? 'rgba(230,255,250,0.8)' : 'rgba(190,190,220,0.35)'; c.lineWidth = 2; c.stroke();
+    if (hot) K.glow(c, 0, 0, L * 0.6, [170, 245, 230], 0.35, 'screen');
+    c.restore();
+  }
+  if (!hot) { c.filter = 'blur(5px)'; for (let k = 0; k < 6; k++) { const a = r() * TAU, d = R0 * 0.4 * r(); c.fillStyle = 'rgba(34,20,52,0.6)'; c.beginPath(); c.ellipse(Math.cos(a) * d, Math.sin(a) * d, 26, 12, a, 0, TAU); c.fill(); } c.filter = 'none'; }
+  return cv;
+}
+function rocksLayer(hot) {
+  const [cv, c] = sheetE(), r = K.RNG(73);
+  for (const [x, y, rr] of [[-R0 * 0.35, R0 * 0.1, R0 * 0.55], [R0 * 0.45, -R0 * 0.25, R0 * 0.4], [R0 * 0.15, R0 * 0.55, R0 * 0.3], [-R0 * 0.55, -R0 * 0.55, R0 * 0.22]]) {
+    T.sphere(c, x, y, rr, hot ? [86, 92, 100] : [58, 58, 70], hot ? [170, 200, 190] : [120, 120, 136], [12, 12, 20], -0.8, r, { haze: 0 });
+    c.save(); c.beginPath(); c.arc(x, y, rr, 0, TAU); c.clip();
+    for (let i = 0; i < 6; i++) { const a = r() * TAU, d = r() * rr * 0.8; c.strokeStyle = 'rgba(14,12,22,0.5)'; c.lineWidth = 2; c.beginPath(); c.arc(x + Math.cos(a) * d, y + Math.sin(a) * d, rr * (0.08 + 0.12 * r()), 0, TAU); c.stroke(); }
+    if (hot) for (let i = 0; i < 8; i++) { const a = r() * TAU, d = r() * rr * 0.8; K.glow(c, x + Math.cos(a) * d, y + Math.sin(a) * d, rr * 0.18, [150, 235, 220], 0.5, 'screen'); }
+    else { c.filter = 'blur(4px)'; c.fillStyle = 'rgba(34,20,52,0.55)'; c.beginPath(); c.ellipse(x + rr * 0.2, y, rr * 0.4, rr * 0.2, 0.4, 0, TAU); c.fill(); c.filter = 'none'; }
+    c.restore();
+  }
+  return cv;
+}
+function hearthLayer(hot) {
+  const [cv, c] = sheetE(), r = K.RNG(83);
+  if (hot) K.glow(c, 0, 0, R0 * 1.3, [255, 200, 140], 0.28, 'screen');
+  // the floor of their home: a round slab, broken off on one side
+  c.fillStyle = hot ? 'rgb(86,74,80)' : 'rgb(50,48,60)';
+  c.beginPath(); c.arc(0, 0, R0 * 0.9, -0.3, Math.PI * 1.55); for (const [x, y] of [[0.05, -0.62], [0.12, -0.4], [0.3, -0.5], [0.36, -0.28], [0.55, -0.36], [0.62, -0.2], [0.86, -0.27]]) c.lineTo(R0 * x, R0 * y); c.closePath(); c.fill();
+  c.strokeStyle = hot ? 'rgba(255,220,170,0.6)' : 'rgba(170,170,200,0.3)'; c.lineWidth = 3; c.stroke();
+  for (let i = 0; i < 18; i++) { const a = r() * TAU, d = r() * R0 * 0.8; c.strokeStyle = 'rgba(20,18,28,0.45)'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(Math.cos(a) * d, Math.sin(a) * d); c.lineTo(Math.cos(a) * d + (r() - 0.5) * 40, Math.sin(a) * d + (r() - 0.5) * 40); c.stroke(); }
+  // a broken arch (the doorway), and the hearth's ring of stones
+  c.strokeStyle = hot ? 'rgb(120,104,108)' : 'rgb(70,66,80)'; c.lineWidth = 16; c.lineCap = 'round';
+  c.beginPath(); c.moveTo(-R0 * 0.55, R0 * 0.45); c.lineTo(-R0 * 0.55, -R0 * 0.15); c.quadraticCurveTo(-R0 * 0.55, -R0 * 0.6, -R0 * 0.2, -R0 * 0.62); c.stroke();
+  for (let i = 0; i < 9; i++) { const a = (i / 9) * TAU; c.fillStyle = hot ? 'rgb(140,120,118)' : 'rgb(80,76,90)'; c.beginPath(); c.arc(R0 * 0.2 + Math.cos(a) * R0 * 0.2, R0 * 0.15 + Math.sin(a) * R0 * 0.2, R0 * 0.06, 0, TAU); c.fill(); }
+  if (hot) { K.glow(c, R0 * 0.2, R0 * 0.15, R0 * 0.35, [255, 180, 100], 0.85, 'screen'); K.glow(c, R0 * 0.2, R0 * 0.15, R0 * 0.12, [255, 240, 200], 0.9); }
+  else { c.filter = 'blur(5px)'; for (let k = 0; k < 8; k++) { const a = r() * TAU, d = R0 * 0.7 * r(); c.fillStyle = 'rgba(34,20,52,0.6)'; c.beginPath(); c.ellipse(Math.cos(a) * d, Math.sin(a) * d, 26, 12, a, 0, TAU); c.fill(); } c.filter = 'none'; }
+  return cv;
+}
+
 // ---------------------------------------------------------------- Ossa, rigged
 /**
  * Ossa as a cutout: body, four legs (thigh and shin, a knee each), neck and head, two antler forks, a short tail.
@@ -253,4 +303,4 @@ function sleeper(c, R, p) {
   c.restore();
 }
 
-export const WORLDS = { R0, EMBER, CHANNELS, emberLayer, edgeLayer, ashLayer, crucibleLayer, twinaLayer, twinbLayer, ossa, OSSA_HOOF, hearthStone, sleeper, onSurface, forgeShape, anvilShape };
+export const WORLDS = { R0, EMBER, CHANNELS, emberLayer, edgeLayer, ashLayer, crucibleLayer, twinaLayer, twinbLayer, shardsLayer, rocksLayer, hearthLayer, ossa, OSSA_HOOF, hearthStone, sleeper, onSurface, forgeShape, anvilShape };

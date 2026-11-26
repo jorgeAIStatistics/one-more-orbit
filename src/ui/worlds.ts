@@ -37,6 +37,8 @@ export interface WorldState {
   pf?: number; unit?: number; rel?: (k: number) => [number, number]; along?: (k: number, a: number, r: number) => [number, number]; span?: (k: number) => [number, number]; wide?: boolean;
   /** the course as a perfect run plays it: where he is at a beat (in this frame), which way is up there, its presses, and how many are done */
   at?: (beat: number) => [number, number]; up?: (beat: number) => number; presses?: ReadonlyArray<{ beat: number; tol: number; form: string; auto: boolean; pad: string; land: number; leap?: { b0: number; b1: number; p0: number; ember: boolean } }>; done?: number; rb?: number;
+  /** where this frame's origin is on the screen (so a world can reach the horizon, which is fixed on the screen); the beat */
+  origin?: [number, number]; beat?: number;
 }
 export interface World {
   /** the planet, drawn at the course's centre (the canvas is already translated there), radius R */
@@ -60,7 +62,9 @@ export interface World {
 export interface CourseView {
   beat: number; song: number; time: number; spb: number; rb: number;
   /** the course: its presses (the last is the level's last wall) */
-  presses: Array<{ beat: number; pad: string; land: number }>;
+  presses: Array<{ beat: number; pad: string; land: number; leap?: { b0: number; b1: number; p0: number; ember: boolean } }>;
+  /** the journey: where place k's centre is (in this frame), one base-ring radius, the place he is at */
+  place?: (k: number) => [number, number]; unit?: number; pf?: number;
   /** where the course runs at a beat (a perfect run), lifted `dl` ring levels (at the ring of beat `ref`, if given) */
   pos(beat: number, dl?: number, ref?: number): [number, number];
   /** the screen radius of the course's ring at a beat */
@@ -577,6 +581,10 @@ export class EmberWorld {
 }
 
 // ================================================================ the Drifting Edge
+/** the line when Helion's signal first comes (always shown: it says what the light is) */
+const EDGE_SAYS: Said[] = [{ from: 17.9, to: 21.6, text: 'That song... Helion?', x: 0.5, y: 0.2, size: 21, align: 'center' }];
+/** the Drifting Edge's fragments: what is left of the brothers' home nebula */
+const FRAGS = ['shardsLayer', 'rocksLayer', 'hearthLayer'] as const;
 const DT = { helion: 17.6, drop: 19.2, climb: 32.0, slip: 44.8, rise: 45.6, toss: 49.6, drop2: 51.2, end: 70.4, spb: 0.4 };
 
 export class EdgeWorld {
@@ -587,15 +595,23 @@ export class EdgeWorld {
   private wake = new Spring(0, 3); private curl = new Spring(0.7, 2.5); private lastT = -1; private seed = 1;
 
   /** Asks the paint worker for this world's sky ahead (the Landing's own, at one to one). */
-  askAhead(): void { askLandingSky(window.innerWidth, window.innerHeight, 1, 0); askPlanet('edgeLayer'); }
+  askAhead(): void { askLandingSky(window.innerWidth, window.innerHeight, 1, 0); askPlanet('edgeLayer'); for (const n of FRAGS) askPlanet(n); }
+  private bodies: Partial<Record<(typeof FRAGS)[number], [Pic, Pic]>> = {};
+  private taps: Array<{ k: number; at: number }> = [];
+  private heat = [0, 0, 0, 0];
+  private jT = -1; private moteK = new Spring(1, 2.2);
   private paint(w: number, h: number): void {
     const key = `${w}x${h}`; if (key === this.key) return; this.key = key;
     if (!this.cold) { this.cold = planetLayer('edgeLayer', false) ?? W.edgeLayer(false); this.hot = planetLayer('edgeLayer', true) ?? W.edgeLayer(true); }
+    for (const n of FRAGS) if (!this.bodies[n]) this.bodies[n] = [planetLayer(n, false) ?? W[n](false), planetLayer(n, true) ?? W[n](true)];
     const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const pre = landingSky(w, h, 1, 0); if (pre) cv.getContext('2d')!.drawImage(pre, 0, 0, w, h); else LANDING.sky(cv.getContext('2d')!, w, h, 0); this.skyLayer = cv; // (from the paint worker when it is ready)
   }
-  reset(): void { this.lit.fill(-1); this.sparks = 0; this.blooms = []; this.lastT = -1; this.wake.x = 0; this.curl.x = 0.7; }
-  rewind(to: number): void { for (let z = 0; z < ZONES; z++) if (this.lit[z] > to) this.lit[z] = -1; this.blooms = this.blooms.filter((b) => b.at <= to); this.lastT = -1; }
-  spark(a: number, song: number): void {
+  reset(): void { this.lit.fill(-1); this.sparks = 0; this.blooms = []; this.lastT = -1; this.wake.x = 0; this.curl.x = 0.7; this.taps = []; this.heat.fill(0); }
+  rewind(to: number): void { for (let z = 0; z < ZONES; z++) if (this.lit[z] > to) this.lit[z] = -1; this.blooms = this.blooms.filter((b) => b.at <= to); this.lastT = -1; this.taps = this.taps.filter((x) => x.at <= to); }
+  spark(a: number, song: number, pf = 0): void {
+    const k = Math.round(pf);
+    this.taps.push({ k, at: song });
+    if (k !== 0) return; // (a fragment lights from its own taps; the planetoid's zones and flowers from the planetoid's)
     const z = zoneOf(a); if (this.lit[z] < 0) this.lit[z] = song; this.sparks++;
     const r = K.RNG(this.seed++ * 7919);
     if (this.blooms.length < 120) for (let i = 0; i < 3; i++) this.blooms.push({ a: a + (r() - 0.5) * 0.3, d: 0.62 + 0.33 * r(), at: song + i * 0.06, hue: r() });
@@ -604,11 +620,21 @@ export class EdgeWorld {
   readonly world: World = {
     reset: () => this.reset(),
     rewind: (to) => this.rewind(to),
-    spark: (a, song) => this.spark(a, song),
+    spark: (a, song, pf) => this.spark(a, song, pf),
     onCourse: (c, v) => this.onCourse(c, v),
-    // the Sleeper's throw: the camera pulls back to show the planetoid and the Sleeper whole
-    cam: (song) => (song > DT.toss - 0.3 && song < DT.drop2 + 0.3 ? 0.74 : 1),
+    // the Sleeper's throw: the camera pulls back to show the planetoid, its arm across space, and the Rocks
+    cam: (song) => (song > DT.rise && song < DT.drop2 + 0.4 ? 0.92 - 0.36 * sm((song - DT.rise) / 1.6) + 0.36 * sm((song - DT.drop2 + 0.2) / 0.6) : 0.92),
+    pull: (song) => (song > DT.rise && song < DT.drop2 + 0.4 ? { x: 0.35, y: -3.4, k: 0.55 * sm((song - DT.rise) / 1.6) * (1 - sm((song - DT.drop2 + 0.2) / 0.6)) } : null),
     draw: (c, R, st) => {
+      if (!this.cold || !this.hot) return;
+      if (st.rel && st.at) { this.journey(c, R, st); return; }
+      this.planetoid(c, R, st);
+    }
+  };
+
+  /** the planetoid (at the frame's origin) */
+  private planetoid(c: CanvasRenderingContext2D, R: number, st: WorldState): void {
+    {
       if (!this.cold || !this.hot) return;
       const t = st.song, time = st.time, dt = this.lastT < 0 ? 0 : Math.min(0.05, Math.max(0, time - this.lastT)); this.lastT = time;
       zones(c, this.cold, this.hot, R, this.lit, t, sm((t - DT.drop) / 1.5) * 0.6);
@@ -625,47 +651,92 @@ export class EdgeWorld {
       W.sleeper(c, R, { wake, curl, breath: (time * 0.22) % 1 });
       if (t > DT.drop) for (let i = 0; i < 14; i++) { const r = K.RNG(i * 31), ph = ((time * 0.15 + r()) % 1), a = r() * TAU; K.glow(c, Math.cos(a) * R * (0.7 + 0.6 * ph), Math.sin(a) * R * (0.7 + 0.6 * ph) - ph * 30, 2.2, [170, 240, 230], 0.8 * (1 - ph)); }
     }
-  };
+  }
+
+  /**
+   * The journey (2026-11-26): the planetoid and the three fragments of the brothers' broken home nebula, each relit by
+   * the taps played on it; and Helion's signal. It comes from the horizon, the shadow ring where he was taken: a light
+   * that always hangs one place ahead of Orbin (never beside him), with a thread back to the horizon carrying the song,
+   * and motes drawn off Orbin toward it. It pulses with the music-box motif and flares on each good tap.
+   */
+  private journey(c: CanvasRenderingContext2D, R: number, st: WorldState): void {
+    const t = st.song, U = st.unit ?? R / 0.84, rel = st.rel!, time = st.time, dt = this.jT < 0 ? 0 : Math.min(0.05, Math.max(0, time - this.jT)); this.jT = time;
+    const n = [0, 0, 0, 0]; for (const x of this.taps) if (x.at <= t && x.k >= 0 && x.k < 4) n[x.k]++;
+    for (let k = 0; k < 4; k++) { const want = Math.min(1, n[k] / 5); this.heat[k] += (want - this.heat[k]) * Math.min(1, dt * 2.5); }
+    const sizes = [0, 0.62, 0.66, 0.78];
+    FRAGS.forEach((name, i) => { const pic = this.bodies[name]; if (!pic) return; const [x, y] = rel(i + 1), S = (pic[0].width * U * sizes[i + 1]) / W.R0; c.drawImage(pic[0], x - S / 2, y - S / 2, S, S); if (this.heat[i + 1] > 0.01) { c.globalAlpha = this.heat[i + 1]; c.drawImage(pic[1], x - S / 2, y - S / 2, S, S); c.globalAlpha = 1; } });
+    { const [x, y] = rel(0); c.save(); c.translate(x, y); this.planetoid(c, U * 0.84, st); c.restore(); }
+    this.signal(c, st, U, t, time, dt);
+  }
+  private signal(c: CanvasRenderingContext2D, st: WorldState, U: number, t: number, time: number, dt: number): void {
+    if (t < DT.helion - 0.2 || !st.origin || !st.at) return;
+    const rel = st.rel!, W0 = c.canvas.clientWidth || window.innerWidth, H0 = c.canvas.clientHeight || window.innerHeight;
+    const hx = W0 * 0.2 - st.origin[0], hy = H0 * 0.12 - st.origin[1]; // the horizon's shadow ring, in this frame
+    const pf = st.pf ?? 0, beat = st.beat ?? t / DT.spb;
+    // where it hangs: one place on (the horizon itself once he is on the last place); it slips away at 44.8 and comes back far off
+    const slip = sm((t - DT.slip) / 1.6) * (1 - sm((t - DT.drop2) / 1.2)), target = Math.min(3, Math.floor(pf + 1e-6) + 1);
+    const k = this.moteK.step(t < DT.drop ? 1 : target, dt);
+    const k0 = Math.floor(k), f = k - k0, [ax, ay] = rel(Math.min(3, k0)), [bx, by] = rel(Math.min(3, k0 + 1));
+    const onLast = sm((pf - 2.5) / 0.5) * sm((t - DT.drop2) / 1.5);
+    let mx = lerp(ax, bx, f), my = lerp(ay, by, f) - U * 0.9;
+    mx = lerp(mx, hx, onLast); my = lerp(my, hy, onLast);
+    if (t < DT.drop) { mx = hx; my = hy; } // (at first it is only at the horizon, where he was taken)
+    const show = sm((t - DT.helion + 0.2) / 0.6) * (1 - 0.85 * slip), pulse = Math.exp(-((((beat % 2) + 2) % 2) * DT.spb) / 0.25), flare = Math.exp(-(time - this.flareAt) / 0.35);
+    // the thread back to the horizon, the song travelling down it as beads of light
+    c.save(); c.globalCompositeOperation = 'lighter';
+    if (Math.hypot(mx - hx, my - hy) > U * 0.5) {
+      c.strokeStyle = `rgba(255,210,150,${0.16 * show})`; c.lineWidth = Math.max(1, U * 0.02); c.beginPath(); c.moveTo(hx, hy); c.quadraticCurveTo((hx + mx) / 2, (hy + my) / 2 - U * 0.8, mx, my); c.stroke();
+      for (let i = 0; i < 7; i++) { const q = ((time * 0.35 + i / 7) % 1), qq = 1 - q, x = qq * qq * hx + 2 * qq * q * (hx + mx) / 2 + q * q * mx, y = qq * qq * hy + 2 * qq * q * ((hy + my) / 2 - U * 0.8) + q * q * my; K.glow(c, x, y, U * 0.03, [255, 220, 160], 0.7 * show * Math.sin(q * Math.PI)); }
+    }
+    // motes drawn off Orbin toward it: it pulls him on
+    if (t > DT.drop && slip < 0.5) {
+      const [ox, oy] = st.at(beat);
+      for (let i = 0; i < 6; i++) { const q = ((time * 0.5 + i / 6) % 1), x = lerp(ox, mx, q), y = lerp(oy, my, q) - Math.sin(q * Math.PI) * U * 0.3; K.glow(c, x, y, U * 0.025, [255, 200, 140], 0.55 * show * Math.sin(q * Math.PI)); }
+    }
+    c.restore();
+    // the light itself: warm gold, beating with the motif, flaring on a good tap
+    K.glow(c, mx, my, U * (0.55 + 0.25 * pulse + 0.3 * flare), [255, 180, 110], (0.35 + 0.3 * pulse + 0.3 * flare) * show, 'screen');
+    K.glow(c, mx, my, U * 0.13, [255, 244, 220], 0.95 * show);
+    // its rays: a beacon, not a planet's glow (long and short, turning slowly, longer on the motif's beat)
+    c.save(); c.globalCompositeOperation = 'lighter'; c.lineCap = 'round';
+    for (let i = 0; i < 8; i++) { const a = (i / 8) * TAU + time * 0.25, L = U * (i % 2 ? 0.28 : 0.6) * (1 + 0.5 * pulse + 0.4 * flare); const g = c.createLinearGradient(mx, my, mx + Math.cos(a) * L, my + Math.sin(a) * L); g.addColorStop(0, `rgba(255,236,200,${0.8 * show})`); g.addColorStop(1, 'rgba(255,200,140,0)'); c.strokeStyle = g; c.lineWidth = Math.max(1.2, U * 0.025); c.beginPath(); c.moveTo(mx, my); c.lineTo(mx + Math.cos(a) * L, my + Math.sin(a) * L); c.stroke(); }
+    c.restore();
+    // and the horizon answers: the shadow ring is where it comes from
+    K.glow(c, hx, hy, U * (0.4 + 0.2 * pulse), [255, 214, 140], 0.45 * show, 'screen');
+  }
 
   private flareAt = -9; private pushAt = -9;
   /** on the course: Helion's light to chase, the Sleeper's hand, the residue creeping up behind */
   private onCourse(c: CanvasRenderingContext2D, v: CourseView): void {
     const s = v.song, rb = v.rb;
     if (v.hit) { if (s > DT.drop && s < DT.slip) this.flareAt = v.time; if (s > DT.drop2) this.pushAt = v.time; }
-    // Helion's light: on the drop his flicker becomes a light on the course a few beats ahead; it flares on each good
-    // tap; from 32 s it climbs off the surface; at 44.8 it slips away into the dark
-    if (s > DT.drop - 0.2 && s < DT.slip + 1.8) {
-      const slip = sm((s - DT.slip) / 1.6), lead = 2.5 + slip * 7, lift = 0.15 + 1.3 * sm((s - DT.climb) / 3);
-      const a = sm((s - DT.drop) / 0.5) * (1 - slip), fl = Math.exp(-(v.time - this.flareAt) / 0.35), flick = 0.85 + 0.15 * Math.sin(v.time * 17) * Math.sin(v.time * 5.3);
-      for (let i = 1; i <= 6; i++) { const [mx, my] = v.pos(v.beat + lead - i * 0.3, lift - i * 0.03); K.glow(c, mx, my, rb * (1.2 - i * 0.12), [255, 200, 140], 0.35 * a * (1 - i / 7)); }
-      const [x, y] = v.pos(v.beat + lead, lift);
-      K.glow(c, x, y, rb * (5 + 3 * fl), [255, 170, 100], (0.45 + 0.4 * fl) * a * flick, 'screen');
-      K.glow(c, x, y, rb * 1.5, [255, 240, 210], 0.95 * a);
-      if (a > 0.05) { c.save(); c.globalAlpha = a * 0.9; CANON.parts.spark(c, x, y + rb * 0.5, rb * 0.02, { who: 'helion', glow: 1, arms: 'back', face: 1, eyes: 'soft', crest: 1, lite: true }); c.restore(); }
-    }
-    // the Sleeper's hand: it rises out of the planetoid under the throw (anticipation: a dip first), its palm a giant
-    // pad; it flicks up as he is thrown, and sinks back
-    const toss = v.presses.find((p) => p.pad === 'jump' && p.land - p.beat > 2.5);
-    if (toss && s > DT.slip && s < DT.drop2 + 2.4) {
-      const up = s < DT.rise + 0.4 ? -0.06 * sm((s - DT.slip) / 1.0) : sm((s - DT.rise - 0.4) / 2.4);
-      const flick = sm((s - DT.toss) / 0.25), sink = sm((s - DT.toss - 1.6) / 1.8), rise = Math.max(-0.06, up) * (1 - sink);
-      const A = v.ang(toss.beat), [cx, cy] = v.center, r0 = v.planetR * 0.92, rp = lerp(r0, v.ring(toss.beat) - rb * 1.4, Math.max(0, rise));
-      c.save(); c.translate(cx, cy); c.rotate(A + Math.PI / 2);
-      const stone = 'rgba(118,126,150,0.97)', rim = 'rgba(205,235,228,0.7)';
-      const wrist = rp - rb * 1.6;
-      // the arm, from the planetoid's surface
-      c.fillStyle = stone; c.strokeStyle = rim; c.lineWidth = rb * 0.25;
-      c.beginPath(); c.moveTo(-rb * 2.4, -r0 * 0.9); c.quadraticCurveTo(-rb * 2.0, -(r0 + wrist) / 2, -rb * 1.5, -wrist); c.lineTo(rb * 1.5, -wrist); c.quadraticCurveTo(rb * 2.0, -(r0 + wrist) / 2, rb * 2.4, -r0 * 0.9); c.closePath(); c.fill(); c.stroke();
-      // the palm, cupped, and its fingers (curled up at the sides; open as he is thrown)
-      c.beginPath(); c.ellipse(0, -rp + rb * 0.4, rb * 2.6, rb * 1.2, 0, 0, TAU); c.fill(); c.stroke();
-      c.lineCap = 'round';
-      for (let i = 0; i < 4; i++) {
-        const fx = -rb * 2.0 + i * rb * 1.33, curl = (1 - flick) * (i === 0 || i === 3 ? 0.9 : 0.5);
-        c.lineWidth = rb * 0.95; c.strokeStyle = stone; c.beginPath(); c.moveTo(fx, -rp + rb * 0.2); c.quadraticCurveTo(fx * (1 + 0.15 * flick), -rp - rb * 1.6, fx * (1 - 0.6 * curl), -rp - rb * (2.6 - 1.2 * curl)); c.stroke();
-        c.lineWidth = rb * 0.2; c.strokeStyle = rim; c.stroke();
+    // (Helion's signal is drawn with the world now, ahead of him: see signal())
+    // the Sleeper's hand: on the journey it reaches across space from the planetoid to the Rocks, the arm rising out of
+    // the dark over the slow bars (a dip first: anticipation), its palm under him; it flicks as he is thrown and draws back
+    const toss = v.presses.find((p) => p.leap && !p.leap.ember && p.beat * v.spb > DT.slip);
+    if (toss && v.place && s > DT.slip && s < DT.drop2 + 2.4) {
+      const reach = s < DT.rise ? -0.05 * sm((s - DT.slip) / 0.8) : sm((s - DT.rise) / 2.6), flick = sm((s - DT.toss) / 0.25), back = sm((s - DT.toss - 1.2) / 2.2);
+      const ext = Math.max(0, reach) * (1 - back);
+      if (ext > 0.005) {
+        const [px, py] = v.place(0), [lx, ly] = v.pos(toss.beat, -0.25), dx = lx - px, dy = ly - py, d = Math.hypot(dx, dy) || 1, ux = dx / d, uy = dy / d;
+        const r0 = (v.unit ?? rb * 15) * 0.8, sx = px + ux * r0, sy = py + uy * r0, tx = lerp(sx, lx, ext), ty = lerp(sy, ly, ext);
+        const nx = -uy, ny = ux, bow = d * 0.18, cx2 = (sx + tx) / 2 + nx * bow, cy2 = (sy + ty) / 2 + ny * bow;
+        const stone = 'rgba(118,126,150,0.97)', rim = 'rgba(205,235,228,0.7)';
+        c.save(); c.lineCap = 'round';
+        for (const [col, wd] of [[rim, rb * 2.6], [stone, rb * 2.2]] as Array<[string, number]>) { c.strokeStyle = col; c.lineWidth = wd; c.beginPath(); c.moveTo(sx, sy); c.quadraticCurveTo(cx2, cy2, tx, ty); c.stroke(); }
+        // the palm, cupped under the launch point, and its fingers (curled; open as he is thrown)
+        const ang = Math.atan2(ty - cy2, tx - cx2);
+        c.translate(tx, ty); c.rotate(ang);
+        c.fillStyle = stone; c.strokeStyle = rim; c.lineWidth = rb * 0.25;
+        c.beginPath(); c.ellipse(rb * 0.6, 0, rb * 1.3, rb * 2.6, 0, 0, TAU); c.fill(); c.stroke();
+        for (let i = 0; i < 4; i++) {
+          const fy = -rb * 2.0 + i * rb * 1.33, curl = (1 - flick) * (i === 0 || i === 3 ? 0.9 : 0.5);
+          c.lineWidth = rb * 0.95; c.strokeStyle = stone; c.beginPath(); c.moveTo(rb * 1.4, fy); c.quadraticCurveTo(rb * 3.0, fy * (1 + 0.15 * flick), rb * (3.9 - 1.2 * curl), fy * (1 - 0.6 * curl)); c.stroke();
+          c.lineWidth = rb * 0.2; c.strokeStyle = rim; c.stroke();
+        }
+        c.restore();
+        K.glow(c, tx, ty, rb * (2.5 + 4 * flick * (1 - back)), [150, 235, 220], 0.35 + 0.5 * flick * (1 - back), 'screen');
       }
-      K.glow(c, 0, -rp, rb * (2.5 + 4 * flick * (1 - sink)), [150, 235, 220], 0.35 + 0.5 * flick * (1 - sink), 'screen'); // the seam's light in its palm
-      c.restore();
     }
     // the residue: a grey tide creeping up the course behind him on the music; it gains toward each phrase's end and
     // is pushed back by every good landing (pressure only: it never ends a run). At 70.4 it falls away.
@@ -697,8 +768,8 @@ export class EdgeWorld {
       this.paint(w, h);
       if (this.skyLayer) c.drawImage(this.skyLayer, 0, 0, w, h);
       const t = st.song ?? -10;
-      horizon(c, w, h, t > DT.helion - 0.2 && t < DT.drop ? sm((t - DT.helion + 0.2) / 0.5) * (1 - sm((t - DT.drop + 0.3) / 0.3)) : 0, st.time);
-      writeSays(c, w, h, Math.min(w / 390, h / 844), this.sky.says, st.song);
+      horizon(c, w, h, t > DT.helion - 0.2 ? sm((t - DT.helion + 0.2) / 0.5) * (t < DT.drop ? 1 : 0.45) : 0, st.time);
+      writeSays(c, w, h, Math.min(w / 390, h / 844), [...this.sky.says, ...EDGE_SAYS], st.song);
     }
   };
 }

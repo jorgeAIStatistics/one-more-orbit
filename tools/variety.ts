@@ -33,7 +33,7 @@ export function audit(pack: LevelPack): Audit {
     const ps = c.presses.filter((p) => barOf(p.beat) === n);
     const cfg = c.bars[n];
     const a = new Set<string>();
-    const rhythm = ps.map((p) => `${(p.beat - n * 4).toFixed(2)}${holdAt.has(Math.round(p.beat * 100)) ? 'h' : ''}${p.spin ? 's' : ''}${p.sling ? 'p' : ''}${p.kind === 'flip' ? 'f' : ''}${p.auto ? 'a' : ''}${p.pad ? 'P' : ''}`).join(' ');
+    const rhythm = ps.map((p) => `${(p.beat - n * 4).toFixed(2)}${holdAt.has(Math.round(p.beat * 100)) ? 'h' : ''}${p.spin ? 's' : ''}${p.sling ? 'p' : ''}${p.kind === 'flip' ? 'f' : ''}${p.auto ? 'a' : ''}${p.pad ? 'P' : ''}${p.leap ? (p.leap.ember ? 'e' : 'L') : ''}${p.chime ? 'o' : ''}`).join(' ');
     const moves = [cfg?.mode ?? '', has(c.turns, n) ? 'turn' : '', c.portals.some((g) => barOf(g.beat) === n) ? `x${cfg?.speed}` : '', has(c.inverts, n) || has(c.mirrors, n) ? 'flip-world' : '', cfg?.form ?? ''].join('/');
     sig.push(ps.length ? `${rhythm} | ${moves}` : '');
     if (ps.length === 1) a.add('single');
@@ -55,6 +55,7 @@ export function audit(pack: LevelPack): Audit {
     acts.push(a);
   }
   const playedBars = sig.map((s, n) => (s ? n : -1)).filter((n) => n >= 0);
+  if (process.env.DUPS) { const g = new Map<string, number[]>(); playedBars.forEach((n) => g.set(sig[n], [...(g.get(sig[n]) ?? []), n])); for (const [k, v] of g) if (v.length > 1) console.log('DUP', v.join(','), k); }
   const unique = new Set(playedBars.map((n) => sig[n])).size;
   let run = 0, longest = 0, longestAt = 0;
   playedBars.forEach((n, i) => { run = i > 0 && playedBars[i - 1] === n - 1 && sig[n] === sig[n - 1] ? run + 1 : 1; if (run > longest) { longest = run; longestAt = n - run + 1; } });
@@ -180,7 +181,7 @@ export interface Journey {
 /** the first planets: a single quick double at most, nothing closer than 0.45 s otherwise */
 export const EARLY = new Set(['started', 'heroes']);
 export const QUICK_S = 0.45;
-const OBJECT = new Set(['anvil (Meteor wall)', 'bellows (pad)', 'lava vent', 'ember in the air', 'launch (a strike, a fling)', 'great node', 'jump pad', 'spring']);
+const OBJECT = new Set(['leap (the signal, the hand)', 'leap', 'a light in the air (in a leap)', 'stone flower (pad)', 'mote of light (jump orb)', 'anvil (Meteor wall)', 'bellows (pad)', 'lava vent', 'ember in the air', 'launch (a strike, a fling)', 'great node', 'jump pad', 'spring']);
 export function journey(pack: LevelPack): Journey {
   const level = new Level(pack.level, pack.audio, pack.chart);
   const c = buildCourse(level, layers(pack), pitchLookup(pack), pack.level.lab, accentBeats(pack));
@@ -188,14 +189,14 @@ export function journey(pack: LevelPack): Journey {
   const holdAt = new Set(c.holds.map((h) => Math.round(h.a * 100)));
   const ember = pack.level.id === 'heroes';
   const kind = (p: (typeof c.presses)[number]): string => {
-    if (p.leap && !p.leap.ember) return 'launch (a strike, a fling)';
-    if (p.leap?.ember) return 'ember in the air';
+    if (p.leap && !p.leap.ember) return ember ? 'launch (a strike, a fling)' : pack.level.id === 'started' ? 'leap (the signal, the hand)' : 'leap';
+    if (p.leap?.ember) return ember ? 'ember in the air' : 'a light in the air (in a leap)';
     if (p.smash) return 'great node';
     if (p.pad === 'vent') return 'lava vent';
-    if (p.pad === 'jump') return ember ? 'bellows (pad)' : 'jump pad';
+    if (p.pad === 'jump') return ember ? 'bellows (pad)' : pack.level.id === 'started' ? 'stone flower (pad)' : 'jump pad';
     if (p.pad === 'spring') return 'spring';
     if (p.sling) return 'planet hop';
-    if (p.orb === 'jump') return ember ? 'ember in the air' : 'jump orb';
+    if (p.orb === 'jump') return ember ? 'ember in the air' : pack.level.id === 'started' ? 'mote of light (jump orb)' : 'jump orb';
     if (p.orb) return `${p.orb} orb`;
     if (p.form === 'meteor') return ember ? 'anvil (Meteor wall)' : 'Meteor wall';
     if (p.form !== 'orb') return `${p.form} move`;

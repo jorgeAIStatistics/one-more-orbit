@@ -25,7 +25,7 @@ export function landingSky(w: number, h: number, q: number, stars: number): Imag
 export function askLandingSky(w: number, h: number, q: number, stars: number): void { ask(skyKey(w, h, q, stars), { kind: 'landingSky', w, h, q, stars }); }
 
 /** the planets the worker can paint (worldpaint's and world2paint's layers) */
-export type LayerName = 'emberLayer' | 'edgeLayer' | 'cirraLayer' | 'glassLayer' | 'verdLayer' | 'ashLayer' | 'crucibleLayer' | 'twinaLayer' | 'twinbLayer';
+export type LayerName = 'emberLayer' | 'edgeLayer' | 'cirraLayer' | 'glassLayer' | 'verdLayer' | 'ashLayer' | 'crucibleLayer' | 'twinaLayer' | 'twinbLayer' | 'shardsLayer' | 'rocksLayer' | 'hearthLayer';
 /** A planet's picture, cold or relit, if the worker has painted it. */
 export function planetLayer(name: LayerName, hot: boolean): ImageBitmap | null { return done.get(`${name}:${hot}`) ?? null; }
 /** Ask for a planet's two pictures. */
