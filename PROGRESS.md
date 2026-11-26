@@ -68,10 +68,13 @@ beat later.
   its memory), replayable from Settings ("The ambush, again"); hooks: __omo.ambush(bot, from). Note: in the game's time
   bar k of a cut starts at k bars (the audio offset is taken off): the ambush's bar k is at 1.6k s.
 
+- (2026-11-26) 4. Glassmere as a journey (rim -> ice stones -> the looking-lake -> the Underlake spiral -> back up);
+  Vell under the waterline between the lake and its reflection; ripples, mirror portals, droplets, ice shards. Worlds
+  with `lead: true` (PlanetWorld) have the camera lead each flight; a world's own pull-back wins over it.
+
 ## In progress / next
-- 4. Glassmere as a journey: spec in tools/journeys.py ('luna'), chart written (levels/luna), GlassWorld rebuilt as a
-  journey in src/ui/worlds2.ts (Vell as a reflection at the waterline, the lake's surface across the sky, the Underlake
-  as Glassmere upside down; ripples, mirror portals, droplets, ice shards). Next: freeze-frames, checks, report, commit.
+- 5. Verdance: spec 'willow' in tools/journeys.py (roots -> trunk spiral -> branches -> canopy -> crown, dual at the
+  crown); world drafted (the great tree through every place, Morrow climbing beside him).
 - Tools: tools/journey.py now takes 'clear' (ticks kept free of embers before a landing). The dev server must be
   restarted after new level folders are added (it served a stale levels/darkness once).
 

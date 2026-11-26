@@ -42,6 +42,9 @@ interface Cfg {
   stillness: number;
   /** how strongly Helion's signal comes through (0..1): it grows world by world */
   signal: number;
+  /** the camera leads each flight (it leans to the middle of the flight and pulls back a little before the launch, so the
+   * next landing is in view before take-off; 2026-11-26) */
+  lead?: boolean;
 }
 
 /** The machinery every world after Emberwick shares; each world adds its inhabitant, its set pieces and its camera. */
@@ -83,8 +86,26 @@ abstract class PlanetWorld {
   protected journeyBack(_c: CanvasRenderingContext2D, _st: WorldState, _U: number): void { /* (per world) */ }
   /** over the planet, under the course: the other places' bodies and the world's objects */
   protected journeyMore(_c: CanvasRenderingContext2D, _st: WorldState, _U: number): void { /* (per world) */ }
+  /** the flights the camera leads: launch and landing (song s) and the middle of the flight (place units, portrait) */
+  private leads: Array<[number, number, number, number]> | null = null;
+  private findLeads(st: WorldState): void {
+    if (this.leads || !st.presses || !st.rel) return;
+    const U = st.unit ?? 100, [ox, oy] = st.rel(0), wide = !!st.wide, spb = this.cfg.T.spb;
+    const unturn = (x: number, y: number): [number, number] => (wide ? [y, -x] : [x, y]);
+    this.leads = st.presses.filter((p) => p.leap && !p.leap.ember).map((p) => {
+      const k = Math.round(p.leap!.p0), [ax, ay] = st.rel!(k), [bx, by] = st.rel!(k + 1), [mx, my] = unturn(((ax + bx) / 2 - ox) / U, ((ay + by) / 2 - oy) / U);
+      return [p.beat * spb, p.leap!.b1 * spb, mx, my];
+    });
+  }
+  /** how far the camera is leading a flight now (0..1), and where to */
+  protected leadAt(s: number): { x: number; y: number; k: number } | null {
+    if (!this.cfg.lead || !this.leads) return null;
+    for (const [l0, l1, x, y] of this.leads) if (s > l0 - 1.6 && s < l1 + 0.6) return { x, y, k: sm((s - l0 + 1.6) / 1.2) * (1 - sm((s - l1 + 0.1) / 0.6)) };
+    return null;
+  }
   private journey(c: CanvasRenderingContext2D, st: WorldState): void {
     this.journeyOn = true;
+    this.findLeads(st);
     const t = st.song, U = st.unit ?? 100, time = st.time, dt = this.jT < 0 ? 0 : Math.min(0.05, Math.max(0, time - this.jT)); this.jT = time;
     const n = [0, 0, 0, 0, 0, 0]; for (const x of this.taps) if (x.at <= t && x.k >= 0 && x.k < 6) n[x.k]++;
     for (let k = 0; k < 6; k++) { const want = Math.min(1, n[k] / 5) * 0.8 + (t >= this.cfg.T.drop ? 0.2 : 0); this.heat[k] += (want - this.heat[k]) * Math.min(1, dt * 2.5); }
@@ -109,8 +130,8 @@ abstract class PlanetWorld {
     rewind: (to) => this.rewind(to),
     spark: (a, song, pf) => this.spark(a, song, pf),
     onCourse: (c, v) => this.onCourse(c, v),
-    cam: (s) => this.camAt(s),
-    pull: (s) => this.pullAt(s),
+    cam: (s) => Math.max(0.32, this.camAt(s) - (this.pullAt(s) ? 0 : 0.4 * (this.leadAt(s)?.k ?? 0))), // (a world's own pull-back wins over the lead)
+    pull: (s) => this.pullAt(s) ?? (() => { const l = this.leadAt(s); return l ? { x: l.x, y: l.y, k: 0.4 * l.k } : null; })(),
     relit: 0,
     draw: (c, R, st) => {
       this.ensurePlanet();
@@ -334,38 +355,149 @@ export class CirraWorld extends PlanetWorld {
   }
 }
 
-// ================================================================ Glassmere, on Luna (128 BPM)
-const GT = { gift: 7.5, helion: 13.125, drop: 15.0, vell: 26.25, riser: 37.5, mirror: 45.0, back: 69.375, end: 76.875, spb: 60 / 128 };
+// ================================================================ Glassmere, on Luna (128 BPM, a bar 1.875 s)
+// The journey (2026-11-26): the rim (0-5) → the ice stepping-stones (6-7) → the looking-lake, Glassmere itself (the drop,
+// 8-23) → the Underlake, the reflection world, winding inward (24-35) → back up through the surface (36-40).
+const GT = { gift: 7.5, stones: 11.25, helion: 13.125, drop: 15.0, lake: 15.94, vell: 26.25, riser: 37.5, under: 45.94, land2: 46.875, mirror: 48.75, sprint: 56.25, spiral: 58.125, up: 67.5, back: 69.375, end: 76.875, spb: 60 / 128 };
+/** where Vell stands at the waterline, from Glassmere's centre (base-ring radii, portrait) */
+const VELL_AT: [number, number] = [1.9, 2.05];
 export class GlassWorld extends PlanetWorld {
-  private wake = new Spring(0, 2.5); private side = new Spring(0, 5); private bow = new Spring(0, 3); private flips = 0; private flipAt = -9;
+  private wake = new Spring(0, 2.5); private side = new Spring(0, 5); private bow = new Spring(0, 3); private real = new Spring(0, 2.2); private flips = 0; private flipAt = -9;
   constructor() {
-    super({ key: 'blank', T: GT, layer: W2.glassLayer, layerName: 'glassLayer', col: [170, 220, 255], stillness: 0.55, signal: 0.65,
+    super({ key: 'blank', T: GT, layer: W2.glassLayer, layerName: 'glassLayer', col: [170, 220, 255], stillness: 0.55, signal: 0.65, lead: true,
       sky: [[[0, [8, 10, 22]], [0.55, [18, 24, 40]], [1, [26, 32, 50]]], [[0, [10, 24, 60]], [0.55, [40, 90, 150]], [1, [140, 200, 240]]]] });
     this.world.relit = 20;
+    this.planetAt = [0, 2, 4];
   }
-  protected resetMore(): void { this.wake.x = 0; this.flips = 0; }
-  spark(a: number, song: number): void { super.spark(a, song); this.flips++; this.flipAt = song; }
+  protected resetMore(): void { this.wake.x = 0; this.flips = 0; this.real.x = 0; }
+  spark(a: number, song: number, pf = 0): void { super.spark(a, song, pf); this.flips++; this.flipAt = song; }
+  /** inside the reflection (the Underlake, after the mirror portal, until he is back up) */
+  private inside(t: number): number { return sm((t - GT.land2) / 1.2) * (1 - sm((t - GT.back + 0.4) / 0.8)); }
+  /** Vell at the waterline beside Glassmere: above, only its reflection; in the Underlake, Vell itself, upright */
+  protected journeyBack(c: CanvasRenderingContext2D, st: WorldState, U: number): void {
+    const t = st.song, dt = this.dt, rel = st.rel!, wide = !!st.wide;
+    // the lake's surface between the world and its reflection: a band of light across the whole sky
+    { const [ax, ay] = rel(0), [bx, by] = rel(3), mx = (ax + bx) / 2, my = (ay + by) / 2, W0 = c.canvas.clientWidth || window.innerWidth, ang = Math.atan2(by - ay, bx - ax) + Math.PI / 2, L = W0 * 3;
+      c.save(); c.translate(mx, my); c.rotate(ang); c.globalCompositeOperation = 'screen';
+      const g = c.createLinearGradient(0, -U * 0.5, 0, U * 0.5); g.addColorStop(0, 'rgba(120,170,230,0)'); g.addColorStop(0.5, `rgba(150,200,245,${0.12 + 0.1 * this.heat[2]})`); g.addColorStop(1, 'rgba(120,170,230,0)');
+      c.fillStyle = g; c.fillRect(-L / 2, -U * 0.5, L, U);
+      c.strokeStyle = `rgba(210,240,255,${0.25 + 0.25 * this.heat[2]})`; c.lineWidth = 1.2; c.beginPath();
+      for (let i = 0; i <= 60; i++) { const x = -L / 2 + (i / 60) * L; c.lineTo(x, Math.sin(i * 0.9 + st.time * 1.6) * U * 0.02 * (1 + 2 * Math.exp(-(t - this.flipAt) * 3))); }
+      c.stroke(); c.restore(); }
+    // the Underlake: Glassmere's reflection, upside down and cool, relit by the taps played there
+    { const [x, y] = rel(3), R = U * 0.84; if (this.cold && this.hot) { const S = this.cold.width * (R / W2.R0); c.save(); c.translate(x, y); c.scale(1, -1); c.drawImage(this.cold, -S / 2, -S / 2, S, S); const h = this.heat[3]; if (h > 0.01) { c.globalAlpha = h; c.drawImage(this.hot, -S / 2, -S / 2, S, S); c.globalAlpha = 1; } c.restore();
+      c.save(); c.globalCompositeOperation = 'multiply'; c.fillStyle = 'rgba(90,120,210,0.45)'; c.beginPath(); c.arc(x, y, R * 1.01, 0, TAU); c.fill(); c.restore();
+      K.glow(c, x, y, R * 1.6, [150, 200, 255], 0.18 + 0.3 * h, 'screen'); W2.ripples(c, x, y, R, st.time * 0.8, 0.35 + 0.5 * h, [170, 210, 255]); } }
+    // Vell
+    const real = this.real.step(this.inside(t), dt), [ex, ey] = rel(0), [ux, uy] = rel(3);
+    const at = (base: [number, number], k: number): [number, number] => { const [ox, oy] = wide ? [-VELL_AT[1] * k, VELL_AT[0]] : [VELL_AT[0], VELL_AT[1] * k]; return [base[0] * 0.9 + ox * U, base[1] * 0.9 + oy * U]; };
+    const wake = this.wake.step(t >= GT.gift ? 1 : Math.min(0.3, this.sparks * 0.03), dt);
+    const mirrorTarget = t >= GT.drop ? (this.flips % 2 ? 1 : -1) : 0, side = this.side.step(mirrorTarget, dt);
+    const bow = this.bow.step(t >= GT.end - 2 ? 1 : 0, dt), lit = sm((t - GT.drop) / 1.2), ripple = Math.exp(-(t - this.flipAt) * 3) + 0.3 * sm((t - GT.drop) / 1);
+    const s = U * 0.012, o = { wake, mirror: side, bow, ripple, lit, t: st.time };
+    // (one Vell, under the waterline between the lake and its reflection, to the side of both rings; in the reflection
+    // world it is lit as itself, no longer wavering)
+    { const [x, y] = at([ex, ey], 1); W2.vell(c, x, y, s, { ...o, lit: Math.max(lit, real), ripple: ripple * (1 - 0.8 * real) }); if (real > 0.01) K.glow(c, x, y + U * 1.2, U * 1.2, [170, 215, 255], 0.25 * real, 'screen'); }
+    void ux; void uy;
+  }
+  /** the stepping-stones and the lake's objects */
+  protected journeyMore(c: CanvasRenderingContext2D, st: WorldState, U: number): void {
+    const rel = st.rel!;
+    if (st.along && st.span) {
+      // ice floes along the line he runs, bobbing on the dark water; they brighten as he plays on them
+      const [o0, o1] = st.span(1), [bx, by] = rel(1), h = this.heat[1];
+      for (let i = 0; i < 8; i++) {
+        const q = -0.1 + 1.2 * (i / 7), side = i % 2 ? 0.6 : 1.4, [x, y] = st.along(1, o0 + (o1 - o0) * q, U * (side + 0.03 * Math.sin(st.time * 0.8 + i))), r = U * (0.13 + 0.04 * (i % 3));
+        c.save(); c.translate(bx + x, by + y); c.rotate(i * 1.3 + 0.05 * Math.sin(st.time * 0.6 + i));
+        c.fillStyle = `rgba(${150 + 60 * h},${180 + 50 * h},${215 + 30 * h},0.85)`; c.strokeStyle = `rgba(235,248,255,${0.4 + 0.4 * h})`; c.lineWidth = 1;
+        c.beginPath(); c.moveTo(-r, -r * 0.2); c.lineTo(-r * 0.3, -r * 0.55); c.lineTo(r * 0.8, -r * 0.35); c.lineTo(r, r * 0.25); c.lineTo(-r * 0.2, r * 0.5); c.closePath(); c.fill(); c.stroke();
+        c.restore();
+      }
+    }
+    this.objects(c, st, U);
+  }
+  private objects(c: CanvasRenderingContext2D, st: WorldState, U: number): void {
+    const t = st.song, beat = st.beat ?? t / GT.spb, at = st.at!, up = st.up!, rb = st.rb ?? U * 0.066;
+    const ICE: [number, number, number] = [200, 232, 255];
+    for (const p of st.presses ?? []) {
+      const d = p.beat - beat;
+      if (d > 3 || d < -1.6) continue;
+      const [x, y] = at(p.beat), a = up(p.beat), ux = Math.cos(a), uy = Math.sin(a);
+      if (p.pad === 'jump') {
+        // a ripple: rings draw in under him over the beats before (brighter on each beat), it throws him up in a splash,
+        // and its rings run out over the water after
+        const pre = Math.max(0, Math.min(1, 1 - d / 2.5)), after = beat < p.beat ? 0 : (beat - p.beat) / 1.6, bp = Math.exp(-(((beat % 1) + 1) % 1) * 5);
+        c.save(); c.translate(x, y); c.rotate(a + Math.PI / 2); c.lineWidth = Math.max(1, rb * 0.14);
+        if (after === 0) for (let i = 0; i < 3; i++) { const rr = rb * (1.2 + (2.6 - 1.8 * pre) * (1 + i * 0.45)); c.strokeStyle = `rgba(210,238,255,${(0.25 + 0.4 * pre + 0.2 * bp * pre) * (1 - i * 0.25)})`; c.beginPath(); c.ellipse(0, 0, rr, rr * 0.38, 0, 0, TAU); c.stroke(); }
+        else if (after < 1) { for (let i = 0; i < 3; i++) { const rr = rb * (1.5 + 9 * after * (1 + i * 0.3)); c.strokeStyle = `rgba(215,240,255,${0.7 * (1 - after) * (1 - i * 0.25)})`; c.beginPath(); c.ellipse(0, 0, rr, rr * 0.38, 0, 0, TAU); c.stroke(); }
+          for (let i = 0; i < 9; i++) { const aa = -Math.PI / 2 + (i - 4) * 0.22, dd = rb * 5 * after, fall = after * after * rb * 6; K.glow(c, Math.cos(aa) * dd, Math.sin(aa) * dd + fall, rb * 0.22, ICE, 0.9 * (1 - after)); } }
+        c.restore();
+      } else if (p.leap && !p.leap.ember) {
+        // a mirror portal: a standing oval of mirror-ice rises across his path, he goes through it (it flashes and breaks
+        // into its reflection), its shards follow him a moment
+        const pre = Math.max(0, Math.min(1, 1 - d / 2)), after = beat < p.beat ? 0 : (beat - p.beat) / 1.3;
+        if (after < 1) {
+          const sx = x + ux * rb * 0.2, sy = y + uy * rb * 0.2, H = rb * (2.6 * sm(pre * 1.4)) * (1 + 0.3 * after);
+          c.save(); c.translate(sx, sy); c.rotate(a); c.globalAlpha = 1 - after;
+          const g = c.createLinearGradient(-H * 0.4, 0, H * 0.4, 0); g.addColorStop(0, 'rgba(150,190,240,0.15)'); g.addColorStop(0.5, `rgba(235,248,255,${0.35 + 0.4 * pre})`); g.addColorStop(1, 'rgba(150,190,240,0.15)');
+          c.fillStyle = g; c.strokeStyle = `rgba(240,250,255,${0.8})`; c.lineWidth = Math.max(1, rb * 0.16);
+          if (after === 0) { c.beginPath(); c.ellipse(0, 0, H, H * 0.36, 0, 0, TAU); c.fill(); c.stroke(); }
+          else for (let i = 0; i < 10; i++) { const aa = (i / 10) * TAU, dd = H * (1 + 1.6 * after); c.save(); c.translate(Math.cos(aa) * dd * 0.6, Math.sin(aa) * dd * 0.3); c.rotate(aa + after * 4); c.fillRect(-rb * 0.3, -rb * 0.1, rb * 0.6, rb * 0.2); c.restore(); }
+          c.restore();
+          if (after > 0 && after < 0.3) K.glow(c, x, y, rb * (3 + 8 * after), ICE, 0.7 * (1 - after / 0.3), 'screen');
+        }
+        // landing: the water rings where he comes down
+        if (beat >= p.leap.b1 && beat < p.leap.b1 + 1.2) { const [lx, ly] = at(p.leap.b1), q = (beat - p.leap.b1) / 1.2; c.strokeStyle = `rgba(215,240,255,${0.7 * (1 - q)})`; c.lineWidth = Math.max(1, rb * 0.15); for (const k of [1, 1.6]) { c.beginPath(); c.ellipse(lx, ly, rb * (1.4 + 6 * q * k), rb * (0.6 + 2.6 * q * k), 0, 0, TAU); c.stroke(); } }
+      } else if (p.leap?.ember) {
+        // a droplet of light hanging in the air, quivering; it swells as its beat comes; caught, it bursts into a ring
+        const pre = Math.max(0, Math.min(1, 1 - d / 1.6)), after = beat < p.beat ? 0 : (beat - p.beat) / 1.1;
+        if (after < 1) {
+          if (after === 0) { const r = rb * (0.5 + 0.25 * pre) * (1 + 0.06 * Math.sin(st.time * 11)); c.fillStyle = `rgba(220,242,255,${0.55 + 0.35 * pre})`; c.beginPath(); c.moveTo(x, y - r * 1.9); c.quadraticCurveTo(x + r * 1.1, y - r * 0.2, x, y + r); c.quadraticCurveTo(x - r * 1.1, y - r * 0.2, x, y - r * 1.9); c.fill(); K.glow(c, x, y, rb * (1.4 + pre), ICE, 0.3 * pre, 'screen'); }
+          else { c.strokeStyle = `rgba(220,244,255,${0.8 * (1 - after)})`; c.lineWidth = Math.max(1, rb * 0.15); c.beginPath(); c.arc(x, y, rb * (1 + 6 * after), 0, TAU); c.stroke(); for (let i = 0; i < 8; i++) { const aa = (i / 8) * TAU; K.glow(c, x + Math.cos(aa) * rb * 4 * after, y + Math.sin(aa) * rb * 4 * after + after * after * rb * 3, rb * 0.18, ICE, 0.8 * (1 - after)); } }
+        }
+      } else if (p.form === 'pulsar' && !p.auto && !p.smash && !p.pad) {
+        // an ice shard standing off the path on the side he would meet: it grows up out of the water as he comes,
+        // he turns over past it (it cracks), and its pieces drop away
+        const pre = Math.max(0, Math.min(1, 1 - d / 1.8)), after = beat < p.beat ? 0 : (beat - p.beat) / 1.2;
+        if (pre <= 0 || after >= 1) continue;
+        const sd = (Math.round(p.beat * 4) % 2 ? 1 : -1), bx = x + ux * rb * 1.9 * sd, by = y + uy * rb * 1.9 * sd, Hh = rb * 1.3 * sm(pre * 1.5);
+        c.save(); c.translate(bx, by); c.rotate(a + (sd < 0 ? Math.PI : 0) - Math.PI / 2);
+        if (after === 0) { c.fillStyle = 'rgba(190,225,250,0.7)'; c.strokeStyle = 'rgba(240,250,255,0.85)'; c.lineWidth = 1; c.beginPath(); c.moveTo(-rb * 0.3, 0); c.lineTo(-rb * 0.05, -Hh); c.lineTo(rb * 0.1, -Hh * 0.7); c.lineTo(rb * 0.3, 0); c.closePath(); c.fill(); c.stroke(); }
+        else { c.globalAlpha = 1 - after; c.fillStyle = 'rgba(200,230,252,0.8)'; for (let i = 0; i < 4; i++) { c.save(); c.translate((i - 1.5) * rb * 0.3 * (1 + 2 * after), -Hh * (0.3 + 0.2 * i) + after * after * rb * 3); c.rotate(after * (3 + i)); c.fillRect(-rb * 0.12, -rb * 0.2, rb * 0.24, rb * 0.4); c.restore(); } }
+        c.restore();
+      }
+    }
+  }
+  protected pullAt(s: number): { x: number; y: number; k: number } | null { return s > GT.up - 0.4 && s < GT.back + 0.8 ? { x: 0.25, y: 0.3, k: 0.6 * sm((s - GT.up + 0.4) / 1.0) * (1 - sm((s - GT.back) / 0.8)) } : null; }
   protected planetMore(c: CanvasRenderingContext2D, R: number, st: WorldState): void {
     const t = st.song;
     // the surface breaking: ripples ring out from the planet on every good tap, and on the drop
     W2.ripples(c, 0, 0, R, st.time, sm((t - GT.drop) / 0.5) * 0.8 + Math.exp(-(t - this.flipAt) * 3) * 0.6);
-    // in the reflection world (the mirror), the planet's light is cooler and deeper
-    const inside = sm((t - GT.mirror) / 0.4) * (1 - sm((t - GT.back) / 0.4));
+    // in the reflection world, the planet's light is cooler and deeper
+    const inside = this.inside(t);
     if (inside > 0.01) { c.save(); c.globalCompositeOperation = 'multiply'; c.fillStyle = `rgba(120,140,220,${0.45 * inside})`; c.beginPath(); c.arc(0, 0, R * 1.01, 0, TAU); c.fill(); c.restore(); }
   }
   protected skyMore(c: CanvasRenderingContext2D, w: number, h: number, u: number, st: SceneState, t: number, dt: number): void {
-    // Vell, under the water at the bottom of the picture: it stands as the lake wakes, mirrors each flip above, bows at the end
-    const wake = this.wake.step(t >= GT.gift ? 1 : Math.min(0.3, this.sparks * 0.03), dt);
-    const mirrorTarget = t >= GT.vell ? (this.flips % 2 ? 1 : -1) : 0, side = this.side.step(mirrorTarget, dt);
-    const bow = this.bow.step(t >= GT.end - 2 ? 1 : 0, dt), lit = sm((t - GT.drop) / 1.2);
-    W2.vell(c, w * 0.7, h * 0.84, 0.75 * u, { wake, mirror: side, bow, ripple: Math.exp(-(t - this.flipAt) * 3) + 0.3 * sm((t - GT.drop) / 1), lit, t: st.time });
+    if (!this.journeyOn) {
+      const wake = this.wake.step(t >= GT.gift ? 1 : Math.min(0.3, this.sparks * 0.03), dt);
+      const mirrorTarget = t >= GT.vell ? (this.flips % 2 ? 1 : -1) : 0, side = this.side.step(mirrorTarget, dt);
+      const bow = this.bow.step(t >= GT.end - 2 ? 1 : 0, dt), lit = sm((t - GT.drop) / 1.2);
+      W2.vell(c, w * 0.7, h * 0.84, 0.75 * u, { wake, mirror: side, bow, ripple: Math.exp(-(t - this.flipAt) * 3) + 0.3 * sm((t - GT.drop) / 1), lit, t: st.time });
+    }
     // through the looking-lake: the whole picture is the reflection (cool, with the stars below the line as above it)
-    const inside = sm((t - GT.mirror) / 0.4) * (1 - sm((t - GT.back) / 0.4));
+    const inside = this.inside(t);
     if (inside > 0.01) { c.save(); c.globalCompositeOperation = 'multiply'; c.fillStyle = `rgba(110,140,230,${0.4 * inside})`; c.fillRect(0, 0, w, h); c.restore(); for (let i = 0; i < 30; i++) { const r = K.RNG(i * 7 + 9); K.glow(c, r() * w, h * (0.55 + 0.45 * r()), 3 * u, [210, 235, 255], 0.7 * inside); } }
     // mist over the water, slow
     for (let i = 0; i < 6; i++) { const r = K.RNG(i * 3 + 5), x = ((r() * w + st.time * (6 + 6 * r()) * u) % (w * 1.4)) - w * 0.2; K.glow(c, x, h * (0.7 + 0.2 * r()), (80 + 60 * r()) * u, [170, 200, 230], 0.06, 'screen'); }
   }
-  protected camAt(s: number): number { return s >= GT.riser && s < GT.mirror ? 1 + 0.12 * sm((s - GT.riser) / (GT.mirror - 0.3 - GT.riser)) : s >= GT.mirror ? 0.8 + 0.12 * sm((s - GT.mirror - 0.6) / 3) : super.camAt(s); }
+  protected camAt(s: number): number {
+    if (!this.journeyOn) return s >= GT.riser && s < GT.under ? 1 + 0.12 * sm((s - GT.riser) / (GT.under - 0.3 - GT.riser)) : s >= GT.under ? 0.8 + 0.12 * sm((s - GT.under - 0.6) / 3) : super.camAt(s);
+    // the rim calm; the build pushes in; the drop pulls back onto the lake; the riser pushes in; the Underlake wide, closer
+    // as it winds in; back up pulls far back over the whole lake; the last stretch settles
+    const back = s > GT.up - 0.4 && s < GT.back + 0.8 ? sm((s - GT.up + 0.4) / 1.0) * (1 - sm((s - GT.back) / 0.8)) : 0;
+    const base = s < GT.gift ? 0.95 : s < GT.stones - 0.3 ? 0.95 + 0.05 * sm((s - GT.gift) / 3) : s < GT.helion + 0.4 ? 0.86 : s < GT.drop ? 0.86 + 0.18 * sm((s - GT.helion - 0.4) / 1.2) : s < GT.riser ? 0.76 + 0.02 * sm((s - GT.lake - 1) / 2) : s < GT.under - 0.4 ? 0.78 + 0.16 * sm((s - GT.riser) / 7) : s < GT.spiral ? 0.76 : s < GT.up ? 0.76 + 0.1 * sm((s - GT.spiral) / 6) : 0.8;
+    return base - 0.42 * back;
+  }
 }
 
 // ================================================================ Verdance, on Willow Tree (100 BPM, a bar 2.4 s)
