@@ -51,7 +51,7 @@ function dread(c, x, y, rx, ry, seed, near) {
 /** Tendrils of it, from (x0, y0) reaching for a point; reach: how far along they have come, 0..1. */
 function tendrils(c, x0, y0, tx, ty, u, n, seed, reach = 1) {
   if (reach <= 0.01) return;
-  reachOut(c, x0, y0, tx, ty, 10 * u, Math.max(3, Math.round(n * 0.6)), seed, reach);
+  reachOut(c, x0, y0, tx, ty, 26 * u, Math.max(4, Math.round(n * 0.8)), seed, reach);
 }
 
 export const COLDPAINT = { nebula, music, dread, tendrils };

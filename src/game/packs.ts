@@ -31,6 +31,10 @@ import invLevel from '../../levels/willow/level.json';
 import invAudio from '../../levels/willow/audio.json';
 import invChart from '../../levels/willow/chart.json';
 import invPresses from '../../levels/willow/presses.json';
+import ambLevel from '../../levels/darkness/level.json';
+import ambAudio from '../../levels/darkness/audio.json';
+import ambChart from '../../levels/darkness/chart.json';
+import ambPresses from '../../levels/darkness/presses.json';
 import royLevel from '../../levels/royalty/level.json';
 import royAudio from '../../levels/royalty/audio.json';
 import royChart from '../../levels/royalty/chart.json';
@@ -89,6 +93,12 @@ function bside(base: LevelPack, file: unknown): LevelPack {
 
 /** The hidden levels: one B-side per level, in the same order. */
 export const BSIDES: LevelPack[] = [bside(PACKS[0], heroesB), bside(PACKS[1], skyB), bside(PACKS[2], blankB), bside(PACKS[3], invB)];
+
+/**
+ * The ambush (2026-11-26), on Darkness: after the second star, the Stillness reaches for the Landing's light and Orbin
+ * leads it away. It follows Cirra's first clear, and stands on the road before Glassmere.
+ */
+export const AMBUSH: LevelPack = pack(ambLevel, ambAudio, ambChart, ambPresses);
 
 /** The level behind the gate at the end of the world. Not on the route: it opens on stars, not on a clear. */
 export const FINAL: LevelPack = pack(royLevel, royAudio, royChart, royPresses, royAudit);

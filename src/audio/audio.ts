@@ -147,6 +147,13 @@ export class AudioEngine {
     return isFinite(off) ? (ctxTime - off) * 1000 : performance.now();
   }
 
+  /** the music skips (the ambush, 2026-11-26): it drops out for `dur` seconds at `at` on the audio clock, and comes back */
+  skip(at: number, dur = 0.09): void {
+    if (!this.ctx || !this.pre) return;
+    const g = this.pre.gain, a = Math.max(this.ctx.currentTime, at);
+    g.cancelScheduledValues(a); g.setValueAtTime(1, a); g.linearRampToValueAtTime(0.04, a + 0.006); g.setValueAtTime(0.04, a + dur); g.linearRampToValueAtTime(1, a + dur + 0.012);
+  }
+
   setVolumes(music: number, sfx: number): void {
     this.musicVol = music;
     this.sfxVol = sfx;

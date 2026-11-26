@@ -61,12 +61,19 @@ beat later.
   guardian's corruption, the residue walls on the course.
 - Pictures not ready from the worker fade in when they come (paintcache pairNow) instead of being painted on the page.
 
+- (2026-11-26) 3. The ambush on Darkness: a loop out from the Landing and back (the Landing -> the debris bridge -> the
+  twin wrecks -> the dead moon -> home); the Stillness follows his trail (src/ui/worldamb.ts) and swallows each place he
+  leaves; freezes (holds), skips (vents: the picture tears and the music drops out for 90 ms, audio.skip), colour
+  draining in waves; the light holds, the Kindlings by the fire, Helion's pulse. Starts after Cirra's first clear (after
+  its memory), replayable from Settings ("The ambush, again"); hooks: __omo.ambush(bot, from). Note: in the game's time
+  bar k of a cut starts at k bars (the audio offset is taken off): the ambush's bar k is at 1.6k s.
+
 ## In progress / next
-- 3. The ambush on Darkness (cut: levels/darkness, 32 bars, 150 BPM, drop at bar 16 = 27.2 s). Plan: the Landing
-  (the planetoid) -> the debris bridge (leap at bar 4) -> the twin wrecks (eight, leap at bar 11) -> the dead moon
-  (drop, leap at 16@2) -> escape to the Landing (leap4 at bar 29). Hazards: frozen stretches (holds), skips (vents),
-  colour draining in waves; the Stillness mass chasing and swallowing places. Wire it after Cirra's first clear and
-  as a map node before Glassmere.
+- 4. Glassmere as a journey: spec in tools/journeys.py ('luna'), chart written (levels/luna), GlassWorld rebuilt as a
+  journey in src/ui/worlds2.ts (Vell as a reflection at the waterline, the lake's surface across the sky, the Underlake
+  as Glassmere upside down; ripples, mirror portals, droplets, ice shards). Next: freeze-frames, checks, report, commit.
+- Tools: tools/journey.py now takes 'clear' (ticks kept free of embers before a landing). The dev server must be
+  restarted after new level folders are added (it served a stale levels/darkness once).
 
 ## Open issues
 - The owner's iPhone frame times (?phonecheck) have never been sent.

@@ -287,7 +287,8 @@ export class GdRenderer {
     // (each world names its own gift once: Cirra's Satellite is the wave, Glassmere's Pulsar the ball, Verdance's the snap)
     const GIFT: Record<string, Partial<Record<Feature, string>>> = { skyhigh: { sat: 'the wave: each tap turns the zig-zag' }, blank: { pulsar: 'the ball: each tap turns gravity over' }, invincible: { pulsar: 'the snap: each tap jumps you across the branch at once' } };
     const named = (w: Feature) => GIFT[level.file.side?.of ?? level.id]?.[w] ?? said(w);
-    for (const f of c.firsts) if (!taught(f.what)) this.hints.push(f.what === 'charge' ? [f.beat - 2.5, f.beat + 4, HINT.charge] : f.what === 'smash' ? [f.beat - 5, f.beat, HINT.smash] : [f.beat - 4.5, f.beat + 1.5, named(f.what)]);
+    // (the ambush brings nothing new: everything so far, under pressure; nothing is named)
+    for (const f of c.firsts) if (!taught(f.what) && level.id !== 'ambush') this.hints.push(f.what === 'charge' ? [f.beat - 2.5, f.beat + 4, HINT.charge] : f.what === 'smash' ? [f.beat - 5, f.beat, HINT.smash] : [f.beat - 4.5, f.beat + 1.5, named(f.what)]);
     this.hints.sort((a, b) => a[0] - b[0]);
     this.energy = barEnergy(level);
     this.particles = [];
@@ -1417,7 +1418,7 @@ export class GdRenderer {
         const hit = run.events.some((e) => (e.kind === 'hop' || e.kind === 'flip') && e.flow !== false);
         const pos = (b: number, dl = 0, ref?: number): [number, number] => { const h = course.at(ref ?? b), r = this.rad(h.rho + dl) + h.side * rb; return this.wxy(course.at(b).planet, ang(b), r); };
         c.save();
-        this.planet.onCourse(c, { beat, song: beat * course.spb, time, spb: course.spb, rb, presses: course.presses, pos, place: (k: number) => origin(k), unit: this.rad(this.cam), pf: this.pf, ring: (b) => this.rad(course.at(b).rho), ang, center: [bx0, by0], planetR: this.worldR, hit });
+        this.planet.onCourse(c, { beat, song: beat * course.spb, time, spb: course.spb, rb, presses: course.presses, holds: course.holds, pos, place: (k: number) => origin(k), unit: this.rad(this.cam), pf: this.pf, ring: (b) => this.rad(course.at(b).rho), ang, center: [bx0, by0], planetR: this.worldR, hit });
         c.restore();
       }
       // lenses: a tall lens standing across the path, in the colour of the form it gives

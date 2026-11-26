@@ -6,7 +6,7 @@
 // Usage: npx vite-node tools/variety.ts [ids...]      (default: the first stage and Emberwick)
 // Writes tools/cache/variety.json too.
 import { writeFileSync } from 'node:fs';
-import { FIRST, PACKS, type LevelPack } from '../src/game/packs';
+import { AMBUSH, FIRST, PACKS, type LevelPack } from '../src/game/packs';
 import { Level } from '../src/game/level';
 import { buildCourse } from '../src/gd/course';
 import { accentBeats, layers, pitchLookup } from '../src/gd/presses';
@@ -93,6 +93,7 @@ export const LIMITS: Record<string, { calm: number; peak: number; tolMs: number;
   skyhigh: { calm: 1.2, peak: 2.4, tolMs: 125, maxTurns: 99, turnsInDrop: true, forbid: [] },
   blank: { calm: 1.3, peak: 2.7, tolMs: 110, maxTurns: 99, turnsInDrop: true, forbid: [] },
   invincible: { calm: 1.4, peak: 3, tolMs: 100, maxTurns: 99, turnsInDrop: true, forbid: [] },
+  ambush: { calm: 1.2, peak: 2.5, tolMs: 120, maxTurns: 99, turnsInDrop: true, forbid: [] },
   royalty: { calm: 1.5, peak: 3.5, tolMs: 90, maxTurns: 99, turnsInDrop: true, forbid: [] }
 };
 export interface Difficulty {
@@ -194,7 +195,8 @@ export function journey(pack: LevelPack): Journey {
   const holdAt = new Set(c.holds.map((h) => Math.round(h.a * 100)));
   const ember = pack.level.id === 'heroes';
   // each world's own objects (2026-11-26): what its pads, launches, mid-air taps and form moves are in that world
-  const NAMES: Record<string, Partial<Record<'pad' | 'leap' | 'ember' | 'sat' | 'pulsar' | 'meteor' | 'orb', string>>> = {
+  const NAMES: Record<string, Partial<Record<'pad' | 'leap' | 'ember' | 'sat' | 'pulsar' | 'meteor' | 'orb' | 'vent', string>>> = {
+    ambush: { pad: 'a slab of debris (pad)', leap: 'a throw into the dark (launch)', ember: 'a light to catch (in the air)', sat: 'a wreck’s edge (wave turn)', meteor: 'a dead fragment (Meteor wall)', vent: 'the skip (vent)', orb: 'a light to catch' },
     skyhigh: { pad: 'kite (pad)', leap: 'gust (launch)', ember: 'wind chime (in the air)', sat: 'knot of residue (wave turn)', orb: 'wind chime' },
     blank: { pad: 'ripple (pad)', leap: 'mirror portal (launch)', ember: 'droplet of light (in the air)', pulsar: 'ice shard (ball flip)', orb: 'droplet of light' },
     invincible: { pad: 'seed pod (pad)', leap: 'vine (launch)', ember: 'seed-light (in the air)', pulsar: 'vine anchor (snap)', orb: 'seed-light' },
@@ -205,6 +207,7 @@ export function journey(pack: LevelPack): Journey {
     if (p.leap && !p.leap.ember && nm.leap) return nm.leap;
     if (p.leap?.ember && nm.ember) return nm.ember;
     if (p.pad === 'jump' && nm.pad) return nm.pad;
+    if (p.pad === 'vent' && nm.vent) return nm.vent;
     if (p.orb === 'jump' && !p.leap && nm.orb) return nm.orb;
     if (holdAt.has(Math.round(p.beat * 100))) return 'hold';
     if (c.bars[barOf(p.beat)]?.mini && !p.leap && !p.pad) return 'mini (tight gust)';
@@ -240,6 +243,7 @@ export function journey(pack: LevelPack): Journey {
     ps.forEach((p, i) => { if (barOf(p.beat) >= b && barOf(p.beat) < b + 8) { t.add(types[i]); if (OBJECT.has(types[i])) o.add(types[i]); } });
     for (const g of c.turns) if (barOf(g) >= b && barOf(g) < b + 8) t.add('turn');
     for (const g of c.portals) if (barOf(g.beat) >= b && barOf(g.beat) < b + 8) t.add('speed gate');
+    for (const g of [...c.mirrors, ...c.inverts]) if (barOf(g) >= b && barOf(g) < b + 8) { t.add(nm.leap === 'mirror portal (launch)' ? 'mirror portal (the world turns over)' : 'world turns over'); }
     phrases.push({ bars: `${b}-${Math.min(b + 7, last)}`, types: [...t], objects: [...o], ok: t.size >= 4 && o.size >= 1 });
   }
   // plain taps: a run of ordinary hops with nothing else on them (not counted in the calm intro, before the first build or drop)
@@ -274,7 +278,7 @@ export function journey(pack: LevelPack): Journey {
 const isMain = typeof process !== 'undefined' && !process.env.VITEST;
 if (isMain) {
   const ids = process.argv.slice(2).filter((x) => !x.startsWith('-'));
-  const packs = (ids.length ? ids : [FIRST.level.id, 'heroes']).map((id) => (id === FIRST.level.id ? FIRST : PACKS.find((p) => p.level.id === id)!));
+  const packs = (ids.length ? ids : [FIRST.level.id, 'heroes']).map((id) => (id === FIRST.level.id ? FIRST : id === 'ambush' ? AMBUSH : PACKS.find((p) => p.level.id === id)!));
   const out = packs.map(audit);
   for (const a of out) {
     console.log(`\n${a.id} (${a.title}): ${a.bars} bars, ${a.played} played; ${a.unique} unique patterns (${a.uniquePct}%); longest run of identical bars ${a.longestRun} (from bar ${a.longestAt}); longest stretch with no tap ${a.rest.longestGapBeats} beats (from beat ${a.rest.at})`);

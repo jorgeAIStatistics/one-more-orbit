@@ -1,12 +1,12 @@
 // The moments worth a freeze-frame in a level (the owner's checks): every launch (just before, its landing shown), every
 // landing, every eight's crossing, and every cluster of quick taps (just before its second tap). Prints JSON:
 // [{ t: song seconds, what }]. Usage: npx vite-node tools/check/moments.ts <level id>
-import { FIRST, PACKS } from '../../src/game/packs';
+import { AMBUSH, FIRST, PACKS } from '../../src/game/packs';
 import { Level } from '../../src/game/level';
 import { buildCourse } from '../../src/gd/course';
 import { accentBeats, layers, pitchLookup } from '../../src/gd/presses';
 const id = process.argv[2];
-const p = id === FIRST.level.id ? FIRST : PACKS.find((q) => q.level.id === id)!;
+const p = id === FIRST.level.id ? FIRST : id === AMBUSH.level.id ? AMBUSH : PACKS.find((q) => q.level.id === id)!;
 const c = buildCourse(new Level(p.level, p.audio, p.chart), layers(p), pitchLookup(p), p.level.lab, accentBeats(p));
 const out: Array<{ t: number; what: string }> = [];
 for (const q of c.presses) if (q.leap && !q.leap.ember) { out.push({ t: q.beat * c.spb - 0.25, what: 'launch, landing shown' }); out.push({ t: q.leap.b1 * c.spb + 0.05, what: 'landing' }); }

@@ -1,0 +1,15 @@
+{
+  "file": "audio/darkness.mp3",
+  "frames": 2328480,
+  "firstSig": 12730,
+  "bpm": 150,
+  "offset": 1.6,
+  "length": 52.8,
+  "dropTime": 27.2,
+  "source": [
+    [
+      139.223,
+      192.023
+    ]
+  ]
+}

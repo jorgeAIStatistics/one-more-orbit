@@ -2,7 +2,7 @@
 // is held and performed exactly on time, counted early, never a kill; in the first two levels a tap way too early is
 // ignored. But mashing must still fail: tapping much faster than the chart asks gets no buffer and no forgiveness.
 import { describe, expect, it } from 'vitest';
-import { FIRST, PACKS, type LevelPack } from '../src/game/packs';
+import { AMBUSH, FIRST, PACKS, type LevelPack } from '../src/game/packs';
 import { Level } from '../src/game/level';
 import { buildCourse, type Course } from '../src/gd/course';
 import { accentBeats, layers, pitchLookup } from '../src/gd/presses';
@@ -26,9 +26,9 @@ export function tapRun(c: Course, taps: number[], start = c.start - 3, from = -I
 /** A spam bot: taps at a steady rate (taps a second) from `a` to `b`, whatever the chart asks. */
 const spam = (c: Course, rate: number, phase: number, a: number, b: number) => { const out: number[] = []; for (let t = a + phase / rate / c.spb; t < b; t += 1 / rate / c.spb) out.push(t); return out; };
 
-const W1: Array<[string, LevelPack]> = [['the Drifting Edge', FIRST], ['Emberwick', EMBER], ...(['skyhigh', 'blank', 'invincible'] as const).map((id, i): [string, LevelPack] => [['Cirra', 'Glassmere', 'Verdance'][i], PACKS.find((p) => p.level.id === id)!])];
+const W1: Array<[string, LevelPack]> = [['the Drifting Edge', FIRST], ['Emberwick', EMBER], ...(['skyhigh', 'blank', 'invincible'] as const).map((id, i): [string, LevelPack] => [['Cirra', 'Glassmere', 'Verdance'][i], PACKS.find((p) => p.level.id === id)!]), ['the ambush', AMBUSH]];
 /** the owner's table: the buffer, and the stretch before it where a tap way too early still hits the ring (beats) */
-const TABLE: Record<string, [number, number]> = { started: [0.15, 0], heroes: [0.15, 0], skyhigh: [0.13, 0.25], blank: [0.12, 0.35], invincible: [0.1, 0.45] };
+const TABLE: Record<string, [number, number]> = { started: [0.15, 0], heroes: [0.15, 0], skyhigh: [0.13, 0.25], blank: [0.12, 0.35], invincible: [0.1, 0.45], ambush: [0.125, 0.3] };
 for (const [name, pack] of W1) {
   describe(`forgiving taps: ${name}`, () => {
     const c = build(pack);
@@ -56,7 +56,7 @@ for (const [name, pack] of W1) {
     });
     it('has its embers as the table says: every section in the first two worlds, one at the drop in Cirra and Glassmere, none after', () => {
       const e = pack.level.embers ?? [];
-      if (pack.level.id === 'invincible') { expect(e).toEqual([]); return; }
+      if (pack.level.id === 'invincible' || pack.level.id === 'ambush') { expect(e).toEqual([]); return; }
       if (pack.level.id === 'skyhigh' || pack.level.id === 'blank') { expect(e).toEqual([c.dropBeat]); return; }
       expect(e.length).toBe(5);
       const last = taps[taps.length - 1];

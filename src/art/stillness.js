@@ -117,7 +117,7 @@ function tendrilsTo(c, cx, cy, R, ry, tx, ty, t, seed, n, reach, near, dbl, wBas
     }
     const W0 = Math.max(2.5, (wBase || R) * (wisp ? 0.035 : 0.085)) * (1 - Math.abs(spread) * 0.35);
     ribbon(c, pts, W0 * 2.2, `rgba(30,22,52,${0.25 * near})`);
-    ribbon(c, pts, W0 * 1.35, `rgba(70,60,110,${0.22 * near})`);
+    ribbon(c, pts, W0 * 1.4, `rgba(130,120,185,${0.42 * near})`); // (its cold rim: it must read against its own dark too)
     ribbon(c, pts, W0, 'rgba(3,2,8,0.97)');
     if (dbl >= 0 && !wisp) { c.save(); c.globalAlpha *= 0.4; c.strokeStyle = 'rgba(200,190,235,0.9)'; c.lineWidth = 1; path(c, pts.map(([x, y]) => [x + R * 0.04, y - R * 0.02]), false); c.stroke(); c.restore(); }
   }

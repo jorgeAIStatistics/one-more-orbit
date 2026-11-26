@@ -62,7 +62,7 @@ def build(folder, write):
             F_, off = lp
             t0 = b * 48 + off * 12
             forced[t0] = 'launch'
-            flights.append((t0, t0 + F_ * 12, opts.get('e', 1)))
+            flights.append((t0, t0 + F_ * 12, opts.get('e', 1), opts.get('clear', 2)))
             graces.append((t0 + F_ * 12, t0 + F_ * 12 + 12))
     taken = []  # absolute ticks chosen so far (sorted)
 
@@ -88,9 +88,9 @@ def build(folder, write):
         else:
             # embers for the flights that start in this bar (inside the flight, not in its last quarter beat)
             ember = []
-            for (f0, f1, e) in flights:
+            for (f0, f1, e, clr) in flights:
                 if lo <= f0 < hi and e:
-                    cand = [t for t in range(f0 + 3, f1 - 2) if (t - f0) % T.get('step', 3) == 0]
+                    cand = [t for t in range(f0 + 3, f1 - clr) if (t - f0) % T.get('step', 3) == 0]
                     best = None
                     for combo in itertools.combinations(cand, e):
                         seq = sorted(taken[-3:] + [f0] + list(combo))
@@ -99,19 +99,22 @@ def build(folder, write):
                         if best is None or sc > best[0]: best = (sc, list(combo))
                     if best is None: raise SystemExit(f'{folder}: no embers for the flight at bar {b}')
                     ember += best[1]
-            blocked = lambda t: any(g0 <= t < g1 for g0, g1 in graces) or any(f0 < t < f1 for f0, f1, _ in flights)
+            blocked = lambda t: any(g0 <= t < g1 for g0, g1 in graces) or any(f0 < t < f1 for f0, f1, *_ in flights)
             cand = [lo + t for t in grid if not blocked(lo + t) and lo + t not in fixed]
             want = max(0, n - len(fixed) - len(ember))
             best = None
-            for combo in itertools.combinations(cand, want):
-                seq = sorted(taken[-4:] + fixed + ember + list(combo) + [t for t in forced if hi <= t < hi + 48])
-                if not ok_seq(seq): continue
-                rel = [t - lo for t in combo]
-                sc = sum(strength(b, t) for t in rel)
-                if len(hist) >= 2 and hist[-1] == hist[-2] == rel: sc -= 99
-                sc -= 0.6 * sum(1 for h in hist[-4:] if h == rel)
-                sc -= 0.25 * sum(1 for h in hist[:-4] if h == rel)
-                if best is None or sc > best[0]: best = (sc, list(combo))
+            while True:
+              for combo in itertools.combinations(cand, want):
+                  seq = sorted(taken[-4:] + fixed + ember + list(combo) + [t for t in forced if hi <= t < hi + 48])
+                  if not ok_seq(seq): continue
+                  rel = [t - lo for t in combo]
+                  sc = sum(strength(b, t) for t in rel)
+                  if len(hist) >= 2 and hist[-1] == hist[-2] == rel: sc -= 99
+                  sc -= 0.6 * sum(1 for h in hist[-4:] if h == rel)
+                  sc -= 0.25 * sum(1 for h in hist[:-4] if h == rel)
+                  if best is None or sc > best[0]: best = (sc, list(combo))
+              if best is not None or want == 0: break
+              print(f'   (bar {b}: {want} taps do not fit the table here; trying {want - 1})'); want -= 1
             if best is None: raise SystemExit(f'{folder}: no pattern for bar {b} ({words}, {n} taps) within the table; before it {[ (t - lo) for t in taken[-4:]]}, fixed {[t - lo for t in fixed]}')
             ts = sorted(fixed + ember + best[1])
             hist.append([t - lo for t in best[1]])

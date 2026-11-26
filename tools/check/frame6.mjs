@@ -6,7 +6,7 @@ const page = await (await b.newContext({ viewport: { width: W, height: H }, devi
 page.on('pageerror', (e) => console.log('ERR', String(e).slice(0, 300)));
 await page.addInitScript(() => { Storage.prototype.setItem = function () {}; });
 await page.goto('http://localhost:5199/?look=2', { waitUntil: 'load' }); await page.waitForTimeout(1500);
-await page.evaluate((w) => { const o = window.__omo; Object.assign(o.save, { music: 0, sfx: 0, hitVol: 0, tutorialDone: true, calibrated: true, unlockAll: true }); o.save.story.open = o.save.story.prologue = o.save.story.cold = true; o.opening.stop(); o.coldScene.stop(); o.show('levels'); if (w === 'first') o.first(true); else { o.level(Number(w)); o.start(true); }
+await page.evaluate((w) => { const o = window.__omo; Object.assign(o.save, { music: 0, sfx: 0, hitVol: 0, tutorialDone: true, calibrated: true, unlockAll: true }); o.save.story.open = o.save.story.prologue = o.save.story.cold = true; o.opening.stop(); o.coldScene.stop(); o.show('levels'); if (w === 'first') o.first(true); else if (w === 'ambush') o.ambush(true); else { o.level(Number(w)); o.start(true); }
   const r = o.renderer, M = (window.__M = { cue: [], edge: [], ahead: [] });
   const f = () => { const run = o.run; if (run && run.state === 'playing' && run.time > 0.5) { const c = run.course, beat = run.time / c.spb, cx = r.w / 2, cy = r.h * 0.52;
       const q = r.cues; if (q.length >= 2) M.cue.push([Math.hypot(q[0].x - q[1].x, q[0].y - q[1].y), +run.time.toFixed(2)]);

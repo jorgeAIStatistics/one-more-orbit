@@ -15,7 +15,7 @@ export const PLANETS: Record<string, { name: string; col: string; rgb: [RGB, RGB
 const SONGS: Record<string, string> = { heroes: 'Volcano', started: 'Where We Started', skyhigh: 'Sky High', blank: 'Blank', invincible: 'Invincible' };
 /** A level's planet name ("Emberwick"); for a B-side, its planet's. */
 /** places that are not planets on the map: the planetoid of the first stage */
-const PLACES: Record<string, string> = { started: 'The Drifting Edge' };
+const PLACES: Record<string, string> = { started: 'The Drifting Edge', ambush: 'The ambush' };
 export const planetName = (id: string): string => PLACES[id] ?? (PLANETS[id.replace(/-b$/, '')] ?? PLANETS.heroes).name;
 
 const cache = new Map<string, string>();
