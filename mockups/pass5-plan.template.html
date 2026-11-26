@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ONE MORE ORBIT · forgiving taps, embers, the cold open as a film, story in the levels</title>
+<link rel="stylesheet" href="plan.css">
+<style>
+  .shot { display: grid; grid-template-columns: 170px 1fr; gap: 0 22px; border-top: 1px solid var(--line); padding: 16px 0; }
+  .shot img { width: 170px; height: auto; border-radius: 6px; display: block; }
+  .shot h3 { margin: 0 0 4px; } .shot .t { color: var(--gold); font-variant-numeric: tabular-nums; font-size: 14px; letter-spacing: .04em; }
+  .shot p { margin: 6px 0; font-size: 15.5px; } .shot .snd { color: var(--aqua); } .shot .you { color: var(--gold); }
+  @media (max-width: 560px) { .shot { grid-template-columns: 1fr; } .shot img { width: 100%; max-width: 300px; margin-bottom: 10px; } }
+</style>
+</head><body><main>
+<span class="tag">Your playtest notes · the plan · waiting for your OK</span>
+<h1>Taps that forgive, embers that save your place, a cold open you live through, and a story you play</h1>
+<p class="lede">What you asked to see first: the buffering and checkpoint plan, the cold open as a storyboard with its sound, and each level's set pieces with times. Your later note is in too: the rescue is now a struggle you play, in two beats (reach, then pull), so the storyboard has seven stills instead of six. Nothing here is built yet; the decisions are at the end.</p>
+
+<h2>1. Forgiving taps</h2>
+<p><b>What goes wrong today.</b> A tap up to 0.6 beats (about 0.24 s at the Drifting Edge's tempo) before an opening or an orb crashes the run as “early”. And a tap inside the window but early makes Orbin take off early, so his arc lands off the beat.</p>
+<ul>
+<li><b>The buffer.</b> A tap up to <b>150 ms</b> before an opening, a jump orb, a jump pad or a Meteor wall is held and performed <b>exactly on time</b>: Orbin leaves on the beat, the arc is the perfect one. It counts as “early” for timing and score (a good, not a perfect; your combo is kept), and it never kills.</li>
+<li><b>Way too early, in the first two levels.</b> A tap earlier than that (up to the old 0.6-beat zone) is <b>simply ignored</b>: nothing happens, and the opening is still waiting for your tap. Only not tapping at all fails.</li>
+<li><b>Late taps</b> are unchanged: inside the window they are performed at once, a little late, as now.</li>
+<li><b>Later planets narrow it gradually</b>, following the difficulty table:</li>
+</ul>
+<div class="scroll"><table>
+<tr><th>Place</th><th>Window (table)</th><th>Buffer</th><th>A tap way too early</th></tr>
+<tr><td>The Drifting Edge</td><td class="n">±160 ms</td><td class="n">150 ms</td><td>ignored</td></tr>
+<tr><td>Emberwick</td><td class="n">±140 ms</td><td class="n">150 ms</td><td>ignored</td></tr>
+<tr><td>Cirra</td><td class="n">±125 ms</td><td class="n">130 ms</td><td>crashes only in the last 0.25 beat before the buffer</td></tr>
+<tr><td>Glassmere</td><td class="n">±110 ms</td><td class="n">120 ms</td><td>crashes in the last 0.35 beat</td></tr>
+<tr><td>Verdance, the ambush</td><td class="n">±100 ms</td><td class="n">100 ms</td><td>crashes in the last 0.45 beat</td></tr>
+<tr><td>The guardian</td><td class="n">±90 ms</td><td class="n">90 ms</td><td>crashes in the last 0.45 beat (today: 0.6 everywhere)</td></tr>
+</table></div>
+<p><b>The check.</b> A new test drives the bot through both levels tapping every press <b>50, 100 and 150 ms early</b>: every orb, every pad, every Meteor wall, from the start and from every checkpoint. None of those runs may die. Two more: a tap 200 ms and 300 ms early is ignored (the run carries on and the bot taps again on time), and a tap 150 ms early scores “early”, not “perfect”. The results go in the audit file with the recordings.</p>
+
+<h2>2. Embers: checkpoints that fade as the world darkens</h2>
+<ul>
+<li><b>In the world.</b> A checkpoint is a small ember lying on the course at a section line: a dark coal, until Orbin passes and it catches (a soft chime, a ring of warm light). The lit ones stay lit behind you, so you see how far you have come. No flag, no label, no box.</li>
+<li><b>A fall</b> takes you back to the last lit ember at once: no menu, no fade to black, just a short flash. The music rewinds <b>one bar</b> before the ember and plays you in: that lead-in bar plays itself (Orbin glides, nothing to tap), so the first tap you owe is the ember's own first. The planet is as it was at the ember: what you had relit stays relit.</li>
+<li><b>The planet's star</b> is earned by a clear with or without embers. <b>A run with no falls earns a bonus star</b> (see the decisions: I suggest it takes Daredevil's place).</li>
+<li><b>Practice mode</b> keeps an ember at every section, on every planet.</li>
+</ul>
+<div class="scroll"><table>
+<tr><th>Place</th><th>Embers</th><th>Where</th><th>Longest stretch between</th></tr>
+<tr><td>The Drifting Edge</td><td class="n">5</td><td>0:12.8 (the build), 0:19.2 (the drop), 0:32.0, 0:44.8 (the hand), 0:57.6</td><td class="n">12.8 s</td></tr>
+<tr><td>Emberwick</td><td class="n">5</td><td>0:12.0 (the Meteor), 0:19.2 (the drop), 0:28.8, 0:38.4 (into the core), 0:48.0</td><td class="n">12.0 s</td></tr>
+<tr><td>Cirra, Glassmere</td><td class="n">1</td><td>at the drop</td><td></td></tr>
+<tr><td>Verdance, the ambush, the guardian</td><td class="n">0</td><td colspan="2">none: the world has gone dark (the ambush keeps its own windows, as now)</td></tr>
+</table></div>
+
+<h2>3. The cold open, as a short film (about 42 s)</h2>
+<p><b>In one sentence, for someone who has never played:</b> two brothers made of light are playing in their song when a dark thing swallows the stars and drags one of them away, and the other fights to hold on and loses him.</p>
+<p>Two places where you act, both in the struggle: <b>hold</b> to reach him, then <b>tap</b> to pull him back. Neither can fail and neither can stall: if you do nothing for four seconds, Orbin does it on his own, slower. Whatever you do, his hand slips.</p>
+
+<div class="shot"><img src="{{img:film1}}" alt="Play: the brothers chase each other, their trails braiding; Catch me! Always."><div>
+<span class="t">0:00 – 0:08 · PLAY</span><h3>Two embers. One song.</h3>
+<p>The brothers chase each other in loops through the golden nebula; their trails braid, and where they cross, a note of their song. Helion darts ahead: “Catch me!” Orbin: “Always.” (two bubbles of light; tap and Orbin catches up, a spin together). The line fades in at the top.</p>
+<p class="snd"><b>Sound:</b> their duet on the music box, two voices trading phrases (Orbin a glassy bell, Helion a warmer one); a chime at every crossing; Helion's laugh is a quick bright rising run of chimes; a soft warm pad of wind under it all.</p></div></div>
+
+<div class="shot"><img src="{{img:film2}}" alt="The omen: a gap in the braid, two stars going out, Helion looking out"><div>
+<span class="t">0:08 – 0:14 · THE OMEN</span><h3>A note goes missing</h3>
+<p>One note of their song doesn't come: a dark hole in the braid. Helion stops and looks out. Far off, a star goes out; then a nearer one. Orbin follows his look.</p>
+<p class="snd"><b>Sound:</b> the motif with one note dropped, then the loop skips like a scratched record; each star goes out with a small swallowed pluck; a low tone rises under the music; the duet stutters twice and thins to one voice.</p></div></div>
+
+<div class="shot"><img src="{{img:film3}}" alt="The strike: the colour drains in a wave, a vast arm of ink reaches for them"><div>
+<span class="t">0:14 – 0:20 · THE STRIKE</span><h3>The Stillness arrives</h3>
+<p>Half a second of silence and stillness. Then it comes all at once: a vast tide of dark ink pouring in from the edge, a reaching hand within it, huge and fast, swallowing the stars as it comes. The colour drains out of the nebula in a wave; the screen shakes.</p>
+<p class="snd"><b>Sound:</b> total silence for half a second (even the wind stops). Then a deep sub-bass impact, a roar of rushing ink (a reversed swell into noise), a cascade of crackles as the stars go out, and the pad bends down in pitch as the colour drains, like a tape stopping. A low rumble stays.</p></div></div>
+
+<div class="shot"><img src="{{img:film4}}" alt="The reach: Orbin flies against a headwind of ash toward Helion, who is being dragged away; Hold on"><div>
+<span class="t">0:20 – 0:26 · THE REACH (you hold)</span><h3>Hold on</h3>
+<p>Slow motion. The ink has Helion and drags him off his feet into the dark; he reaches back. Orbin goes after him into the Stillness's breath: a headwind of ash pouring against him. <b>Hold</b> and Orbin drives forward: his light burns hotter, embers are torn off him and blown back, the camera pushes in, the gap between their hands closes. <b>Let go</b> and the tide takes him back and the gap opens again. The ring fills while you hold; when it is full (about 2.5 s of holding), their fingertips touch.</p>
+<p class="snd"><b>Sound:</b> everything slowed and muffled, as if under water. A heartbeat that speeds up while you hold; a rising string-like swell that climbs as the gap closes and sags when you let go; the howl of the headwind; the sizzle of embers torn away. When their fingers touch, one clear note.</p></div></div>
+
+<div class="shot"><img src="{{img:film5}}" alt="The pull: hands locked in a burst of light, Helion half out of the dark, three notes rung and a fourth empty; Pull!"><div>
+<span class="t">0:26 – 0:31 · THE PULL (you tap)</span><h3>Pull!</h3>
+<p>Their hands lock. <b>Tap</b> and Orbin heaves back with everything: a camera kick, the picture shakes, his light goes white-hot, and Helion comes a little further out of the dark, his colour coming back. Each heave rings one note of their song (the same notes as the opening's braid). After the third, Helion is half free; he looks at his brother; the song swells: it is working. The fourth tap: no note. Silence.</p>
+<p class="snd"><b>Sound:</b> each tap a deep heave (a thud and a strained creak of the ink) and a note of their motif, each one brighter, the harmony filling in; after the third, the whole chord swells, hopeful. On the fourth tap, a dead click where the note should be, and everything cuts out.</p></div></div>
+
+<div class="shot"><img src="{{img:film6}}" alt="The loss: Helion dragged into the dark calling Orbin!, a shockwave throws Orbin away"><div>
+<span class="t">0:31 – 0:35 · THE LOSS</span><h3>His hand slips</h3>
+<p>The Stillness surges. In slow motion his fingers slip, one by one; Helion's last look. He is dragged into the dark calling “Orbin!”. Their song plays once more, broken. A shockwave throws Orbin away, tumbling.</p>
+<p class="snd"><b>Sound:</b> a grinding low groan from the Stillness; the heartbeat stops. Helion's call is two falling notes in his bell voice (his name for his brother), under the bubble. The song once more, detuned, notes missing. Then a deep whump and a blast of white noise, and a high ringing that fades.</p></div></div>
+
+<div class="shot"><img src="{{img:film7}}" alt="Black: three short lines"><div>
+<span class="t">0:35 – 0:42 · BLACK AND SILENCE</span><h3>Three lines</h3>
+<p>Black. Silence. Then, one by one: “Orbin and Helion were the two embers of the Harmonic Nebula.” / “The Stillness took Helion, and the music with him.” / “Wake the fallen stars. Bring your brother home.” Then the crash-landing, and the storyboard as now.</p>
+<p class="snd"><b>Sound:</b> two seconds of true silence while the ringing dies; one low soft tone as each line appears; a hard cut into the landing.</p></div></div>
+
+<p class="note"><b>How it is made:</b> painted live in the game with the same brushes as these stills (the brothers rigged, the ink animated). The sound is in two parts: a scored track for the film (made by the sound tool, like the current cold open) and the struggle's sounds played live from your hold and your taps, so the swell, the heartbeat and the notes answer you. On your phone, a light buzz on every heave where the browser allows it (Android; the iPhone's browser does not, the App Store build will).</p>
+
+<h2>4. Story moments in the levels</h2>
+<p>Every set piece starts on one of the song's big moments, is shown by the one gold signal, and gives the next 10–15 s a different feel. Times are level time from the first tap.</p>
+<h3>The Drifting Edge</h3>
+<div class="scroll"><table>
+<tr><th>When</th><th>Set piece</th><th>What you do</th><th>The feel</th></tr>
+<tr><td class="n">0:09.6</td><td>The first orb (as now)</td><td>A pickup, then a jump orb</td><td>learning</td></tr>
+<tr><td class="n">0:17.6</td><td>Helion's moment (as now): his motif from far off, his light on the horizon</td><td>One tap on the riser</td><td>a call</td></tr>
+<tr><td class="n">0:19.2 – 0:32.0</td><td><b>Chase his light.</b> On the drop his flicker becomes a light on the course itself, a few beats ahead of you. The jump orbs hang in its wake; it flares each time you catch one; the camera leans forward</td><td>Jumps and jump orbs</td><td>pursuit</td></tr>
+<tr><td class="n">0:32.0 – 0:44.8</td><td><b>The light climbs.</b> It lifts off the surface; jump pads open where it passed (the Sleeper's flowers), and long floating pad jumps carry you high over the planetoid</td><td>Jump pads and orbs</td><td>flight</td></tr>
+<tr><td class="n">0:44.8 – 0:51.2</td><td><b>The Sleeper's hand.</b> The light slips into the dark ahead. The Sleeper's stone hand rises out of the planetoid and opens under you; the world slows as it rises (the level's one slow portal). At 0:49.6 its palm is a giant jump pad: one gold tap and it throws you across the planetoid, a whole bar in the air, the camera pulling back to show the planetoid and the Sleeper whole. You land on the second drop</td><td>One tap</td><td>awe</td></tr>
+<tr><td class="n">0:51.2 – 1:10.4</td><td><b>The residue chases you.</b> At speed (the level's one fast portal), the Stillness's residue creeps up the course behind you on the music: a grey tide that gains at the end of each phrase and is pushed back by every good landing, the flowers burning it off. It is pressure, never a second way to die: only a missed tap ends a run. At 1:10.4 the planetoid blooms whole and the tide falls away</td><td>Jumps and orbs at speed</td><td>chase</td></tr>
+</table></div>
+<h3>Emberwick</h3>
+<div class="scroll"><table>
+<tr><th>When</th><th>Set piece</th><th>What you do</th><th>The feel</th></tr>
+<tr><td class="n">0:12.0</td><td>The Meteor (as now): the Kindling opens its wings; the first wall broken for you</td><td>Dash</td><td>a new power</td></tr>
+<tr><td class="n">0:14.4</td><td>The switchback (as now): Ossa's ringing turns the orbit round</td><td>Dash</td><td>a lurch</td></tr>
+<tr><td class="n">0:19.2 – 0:36.0</td><td><b>Ossa's hammer.</b> On the drop each of Ossa's great strikes on her hearth-stone sends a shock through the planet. At 0:19.2, 0:24.0, 0:28.8 and 0:33.6 it rises under the course as a ring of fire: one gold tap and it launches you high like a pad, a long arc over the walls, the camera following. Between strikes, the dash through the walls on the stabs. Never a wall within two beats of a launch</td><td>Launches and dashes</td><td>power</td></tr>
+<tr><td class="n">0:36.0 – 0:38.4</td><td>The breath: the world awake in one look. “Strike with me.”</td><td>One dash</td><td>rest</td></tr>
+<tr><td class="n">0:38.4 – 0:55.2</td><td><b>Into the core.</b> The camera dives through the forge's mouth, and the last stretch runs inside the planet's glowing heart: molten walls in white-gold and deep red, the core turning at the centre where the planet was. A new place and a new look. The forge sprint (the fast portal) at 0:45.6, three bars</td><td>Dashes at speed</td><td>heat, descent</td></tr>
+<tr><td class="n">0:55.2</td><td><b>The seal.</b> The last wall is the Stillness's seal on the star: a ring of ink across the core. One gold dash on the last downbeat breaks it; the star bursts free at 0:57.6</td><td>One dash</td><td>release</td></tr>
+</table></div>
+<h3>The variety audit, now and after</h3>
+<p>Run again today on the built levels: <b>the Drifting Edge has 26 unique bar patterns out of 43 played (60%)</b>, exactly on the floor, which matches what you felt: repetitive. Longest identical run 1 bar. <b>Emberwick: 23 of 23 (100%)</b>. Both inside the difficulty table (Edge's drop 1.41 taps/s against 1.5; Emberwick's 1.61 against 2; nothing stacked; Emberwick's two turns outside the drop).</p>
+<p>After the build the Drifting Edge's two long drops are each split into stretches with their own mix (orbs, then pads, then the throw, then speed), so I expect it well above 70%. The audit is re-run on the built levels and sent with the recordings, with every set piece listed at its time.</p>
+
+<h2>5. The decisions I need</h2>
+<ol>
+<li><b>The buffer</b>: 150 ms in both early levels, way-too-early taps ignored there, and the narrowing table for the later planets.</li>
+<li><b>The embers</b>: five in each of the first two levels at the times above, one-bar lead-in, the planet kept as it was.</li>
+<li><b>The no-fall star</b>: I suggest it replaces Daredevil as <b>Unbroken</b> (“clear it without a fall”): any clean run earns it, no special mode needed, and the count stays at 26. Daredevil mode stays as a way to play. Or keep Daredevil and add Unbroken (27 in all).</li>
+<li><b>The film</b>: the seven beats, the two interactions (hold to reach, tap to pull, four heaves, the fourth note never comes), and the sound.</li>
+<li><b>The set pieces</b>: both levels' lists, including the residue chase as pressure rather than a second way to die.</li>
+</ol>
+<p>On your OK I build all of it, run the forgiving-tap tests and the audit, and send a recording of the cold open and of each level's set pieces.</p>
+</main></body></html>

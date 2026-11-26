@@ -1,0 +1,8 @@
+<!doctype html><meta charset="utf-8"><title>the cold open as a short film: storyboard</title>
+<style>body{margin:0;background:#07060f;display:flex;flex-wrap:wrap;gap:12px;padding:12px}canvas{display:block}</style>
+<script type="module">
+import { cold6 } from './pass5-stills.js';
+await document.fonts.ready;
+for (const n of [1, 2, 3, 4, 5, 6, 7]) { const w = 390, h = 844, cv = document.createElement('canvas'); cv.width = w * 2; cv.height = h * 2; cv.style.width = w + 'px'; cv.dataset.name = `film-${n}`; const c = cv.getContext('2d'); c.scale(2, 2); cold6(c, w, h, n); document.body.append(cv); }
+document.title = 'ready';
+</script>
