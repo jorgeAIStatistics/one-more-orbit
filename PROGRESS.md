@@ -76,13 +76,23 @@ beat later.
   Morrow climbs beside him; seed pods, vines, seed-lights, thorn knots. Lesson: a line place ridden for many bars grows
   very long (its span is the time spent on it) and throws launches off screen; keep lines to a few bars.
 
+- (2026-11-26) The owner's two additions: the Ufotable pass (smoothness audit tools/check/smooth.mjs + smooth.py; camera,
+  zoom and flight springs; under-course drawing; parallax; Orbin's plume) and Verdance's readability.
+- (2026-11-26) 6. The last memory (memory film chapter 5, 'royalty'), then the guardian on Throne (levels/throne,
+  src/ui/worldguard.ts; FINAL now points there, id 'royalty'); 7. the ending on The Long Road Home (src/ui/skyending.ts).
+- (2026-11-26) 8. The map (Play/Practice/Dare buttons, systems and inhabitants, the ambush on the road, drag/pinch) and
+  the menus (clean upright face, 44 pt); one continuous rise after a replay's star. 9. Emberwick's heart rebuilt.
+- Checks run against a frozen build: tools/check/snap.sh <dir> then OMO_PORT=5300 tools/check/allcheck.sh <out>.
+- Final report: tools/final_report.py <report dir> (notes in final-notes.html there).
+
 ## In progress / next
-- 6. The last memory (memory 5: a fifth chapter in src/ui/skymemory.ts and tools/pass2.py memfilms), then the guardian
-  on Throne (three phases; tracks.json 'throne').
-- Tools: tools/journey.py now takes 'clear' (ticks kept free of embers before a landing). The dev server must be
-  restarted after new level folders are added (it served a stale levels/darkness once).
+- Done: every check re-run after the Ufotable pass (18/6 the Ufotable pass, the guardian included), the final report
+  (18/0 World 1, complete (final report).html). Waiting for the owner's playtest of all of World 1 and their two
+  decisions (Darkness vs Dead of Night; the guardian's restart rule, built as the whole fight).
 
 ## Open issues
+- Not done from the Ufotable list: true 3D per place with depth of field, one light direction per place, a colour
+  grade, smears on the fastest frames. A failed run still goes to the results screen.
 - The owner's iPhone frame times (?phonecheck) have never been sent.
 - Two one-off frame spikes seen once (Drifting Edge 17.5 s, Emberwick finale), not reproduced.
 - Darkness (the ambush) is sung; the brief says switch to "Dead of Night" (instrumental) if the vocals clash.
