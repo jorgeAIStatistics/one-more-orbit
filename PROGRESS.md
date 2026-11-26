@@ -82,7 +82,17 @@ beat later.
   src/ui/worldguard.ts; FINAL now points there, id 'royalty'); 7. the ending on The Long Road Home (src/ui/skyending.ts).
 - (2026-11-26) 8. The map (Play/Practice/Dare buttons, systems and inhabitants, the ambush on the road, drag/pinch) and
   the menus (clean upright face, 44 pt); one continuous rise after a replay's star. 9. Emberwick's heart rebuilt.
+- (2026-11-26) RELEASE PASS: src/release.ts (TOOLS only in dev and `--mode checks`; the public build hides every dev
+  tool), version and feedback row in Settings (VITE_FEEDBACK_URL in .env), NCS credits, boot moment and friendly error
+  screen, PWA/offline (sw.js precaches the shell and first songs; others cached on first play), saving checks.
+- (2026-11-26) THE MAP, REDESIGNED: src/ui/skyroad.ts (RoadMap) replaced src/ui/skymap.ts. One road on a 390x830
+  sheet, stops landing/started/heroes/skyhigh/ambush/blank/invincible/gate, moons beside their world, a level card,
+  Menu/Stars, story beats (main.ts storyBeat/afterBeat, once each: save.story['map:<beat>'], arrivals
+  'map:arrive:<id>'). Stills: tools/check/roadshots.mjs, beats: tools/check/beatshots.mjs. ?unlock=1 (dev/checks only)
+  opens every stop, the gate included.
 - Checks run against a frozen build: tools/check/snap.sh <dir> then OMO_PORT=5300 tools/check/allcheck.sh <out>.
+  The release sweep: tools/check/sweep.mjs (ONLY=<name part>), browsers.mjs, loadtime.mjs (public build).
+  Test saves must carry `core: 4` or their bests are dropped.
 - Final report: tools/final_report.py <report dir> (notes in final-notes.html there).
 
 ## In progress / next
