@@ -34,14 +34,15 @@ const all = Object.fromEntries(W4.flatMap((id) => [[`shards:${id}`, true], [`cle
 await shot('map all stars', { ...saveFor([...W4, 'royalty', 'ambush', ...W4.map((i) => `${i}-b`)], { ambush: true, lastmemory: true, end: true }, all), gold: Object.fromEntries([...W4, 'royalty'].map((i) => [i, 100])) }, (o) => o.select('invincible', true));
 await shot('level card (Cirra)', saveFor(['heroes', 'skyhigh'], { 'map:arrive:skyhigh': true }, { 'shards:skyhigh': true }), (o) => { o.select('skyhigh', true); o.sky.openCard('skyhigh'); }, 1800);
 await shot('the Landing card', saveFor(['heroes']), (o) => { o.sky.place('landing'); o.sky.openCard('landing'); }, 1800);
-await shot('arrival at Glassmere', saveFor(['heroes', 'skyhigh'], { ambush: true }), (o) => { o.select('blank', true); o.sky.openCard('blank', ['Glassmere, the still lake.', 'Vell, waiting under the water.']); }, 1500);
+await shot('arrival at Glassmere', saveFor(['heroes', 'skyhigh'], { ambush: true }), (o) => { o.select('blank', true); o.sky.openCard('blank', ['Glassmere, the still lake.', 'Vell, waiting under the water.']); }, 2150);
 // the story beat after Emberwick, recorded (as a player sees it: back on the map after the memory, the beat plays)
 if (!only || 'recording'.includes(only)) {
   const { ctx, page } = await open(saveFor(['heroes']), true);
-  await page.evaluate(() => { const o = window.__omo; o.opening.stop(); o.coldScene.stop(); o.select('heroes', true); o.show('levels'); });
+  // as it comes in the game: by the fire after the memory, the camera rises from the Landing into the map, and the beat plays
+  await page.evaluate(() => { const o = window.__omo; o.opening.stop(); o.coldScene.stop(); o.select('heroes', true); o.landing.rest(2, false, false); o.show('title'); });
   await page.waitForTimeout(1500);
-  await page.evaluate(() => { const o = window.__omo; o.sky.playBeat('heroes', () => { window.__beatDone = true; }); });
-  await page.waitForFunction(() => window.__beatDone === true, null, { timeout: 20000 });
+  await page.evaluate(() => { const o = window.__omo; o.landing.ascend(() => { o.show('levels'); o.sky.playBeat('heroes', () => { window.__beatDone = true; }); }, 3.2); });
+  await page.waitForFunction(() => window.__beatDone === true, null, { timeout: 30000 });
   await page.waitForTimeout(2500);
   const v = page.video(); await ctx.close();
   fs.renameSync(await v.path(), `${out}/after Emberwick (story beat).webm`); console.log('recorded');

@@ -10,6 +10,7 @@ const results = [];
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function scenario(name, save, fn, view = { width: 390, height: 844 }) {
+  if (process.env.ONLY && !name.includes(process.env.ONLY)) return;
   if (only.length && !only.includes(name)) return;
   const ctx = await b.newContext({ viewport: view, deviceScaleFactor: 1 });
   const page = await ctx.newPage();
@@ -199,6 +200,39 @@ await scenario('phone landscape: Cirra', after(['heroes']), async (page) => {
   await until(page, () => window.__omo.run && window.__omo.run.time > 25, null, 60000);
   return 'ok';
 }, { width: 844, height: 390 });
+
+// 12. the map (redesigned 2026-11-26), by real taps: a world, Orbin flies there; again, its arrival, then its card; Play
+// (where a stop is on the screen, with the whole map in view on a 390 x 844 phone)
+const onScreen = (x, y) => { const u = Math.min((844 - 58) / 830, 390 / 360); return [195 + (x - 195) * u, 422 + (y - 422) * u]; };
+const findHit = (page, kind) => omo(page, (k) => { for (let y = 844 - 10; y > 400; y -= 6) for (let x = 20; x < 380; x += 6) if (window.__omo.sky.hit(x, y).kind === k) return [x, y]; return null; }, kind);
+await scenario('map: tap Cirra, fly there, its arrival and card, Play', after(['heroes'], { 'map:heroes': true }), async (page) => {
+  await omo(page, () => { const o = window.__omo; o.select('heroes', true); o.show('levels'); }); await wait(1500);
+  const [cx, cy] = onScreen(100, 508);
+  await page.mouse.click(cx, cy); await wait(2200);
+  const at = await omo(page, () => window.__omo.sky.at); if (at !== 'skyhigh') throw new Error(`a tap on Cirra: Orbin is at ${at}`);
+  await page.mouse.click(cx, cy); await wait(600);
+  if (!(await omo(page, () => window.__omo.sky.playing))) throw new Error('no arrival before the first card');
+  await wait(3200);
+  if ((await omo(page, () => window.__omo.sky.card)) !== 'skyhigh') throw new Error('the card did not open after the arrival');
+  const play = await findHit(page, 'play'); if (!play) throw new Error('no Play on the card');
+  await page.mouse.click(play[0], play[1]);
+  await until(page, () => window.__omo.run && window.__omo.run.pack.level.id === 'skyhigh' && window.__omo.run.state === 'playing', null, 40000);
+  return 'flew, arrived, card, Play: Cirra under way';
+});
+await scenario('map: the Landing card, Stars, Menu; a story beat skipped by a tap', after(['heroes', 'skyhigh']), async (page) => {
+  await omo(page, () => { const o = window.__omo; o.select('skyhigh', true); o.show('levels'); }); await wait(1500);
+  const [lx, ly] = onScreen(196, 772); await page.mouse.click(lx, ly); await wait(2200); await page.mouse.click(lx, ly); await wait(900);
+  if ((await omo(page, () => window.__omo.sky.card)) !== 'landing') throw new Error('the Landing card did not open');
+  const pool = await findHit(page, 'pool'); if (!pool) throw new Error('no "The story so far" on the Landing card');
+  const close = await findHit(page, 'close'); await page.mouse.click(close[0], close[1]); await wait(600);
+  const st = await omo(page, () => { for (let x = 380; x > 150; x -= 4) { const h = window.__omo.sky.hit(x, 34); if (h.kind === 'stars') return [x, 34]; } return null; });
+  if (!st) throw new Error('no Stars button'); await page.mouse.click(st[0], st[1]); await wait(1200);
+  const s1 = await screen(page); await omo(page, () => window.__omo.show('levels')); await wait(800);
+  await omo(page, () => window.__omo.sky.playBeat('heroes', () => { window.__beatDone = true; })); await wait(1500);
+  await page.mouse.click(195, 422); await wait(400);
+  if (!(await omo(page, () => window.__beatDone === true))) throw new Error('a tap did not skip the beat');
+  return `Landing card ok; Stars opened ${s1}; beat skipped`;
+});
 
 fs.writeFileSync(`${out}/sweep.json`, JSON.stringify(results, null, 1));
 console.log(`${results.filter((r) => r.ok).length} of ${results.length} passed`);
