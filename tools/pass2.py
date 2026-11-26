@@ -193,6 +193,130 @@ def coldopen():
     return np.clip(out, -0.97, 0.97)
 
 
+def coldfilm():
+    """The cold open as a short film (the owner's brief of 2026-11-25, approved with seven beats), in three parts the
+    scene plays separately, because the struggle in the middle lasts as long as the player makes it:
+       0-20   A, the film: play (the duet on the music box, a chime at every crossing, Helion's laugh at 1.6), the omen
+              (8.4 a note missing, 9.0 the loop skips, stars swallowed at 10.5 and 12.0, a low tone rising, stutters
+              at 12.8 and 13.4), the strike (14.0 total silence, 14.5 the impact, the rush, stars crackling out, the
+              pad bending down like a tape stopping, a rumble)
+      20-30   the bed for the struggle, made to go round: the rumble, the headwind, everything slowed and muffled
+              (the heartbeat, the swell, the heaves and the notes are played live, from the hold and the taps)
+      30-42   B, from the moment his hand slips: the Stillness's groan, Helion's call (two falling notes, his bell
+              voice) at 0.4, their song once more broken, the shockwave at 3.2 (a whump, white noise, a ringing), true
+              silence, a low soft tone as each line appears (4.4, 6.0, 7.6)"""
+    total = 42.0
+    out = np.zeros((int(total * SR), 2))
+    # ---------------- A: the film
+    a = np.zeros((int(22 * SR), 2))
+    # play: the theme in two voices trading phrases (Orbin a glassy bell, Helion a warmer one), the hum under it
+    for b in range(3):
+        t0 = b * BAR
+        L.place(a, t0, hum(L.CH[L.CHORDS[b]], BAR) * (0.9 if b < 2 else 0.6))
+        at = 0.0
+        for i, (name, beats) in enumerate(L.TUNE[b]):
+            when = t0 + at * BEAT
+            if 8.2 < when < 8.9: at += beats; continue  # the omen: one note of their song does not come
+            if when < 9.0:
+                L.place(a, when, L.tine(L.hz(name) * UP, beats * BEAT, 0.9), pan=0.25)                 # Orbin's voice
+                L.place(a, when + BEAT * 0.5, L.tine(L.hz(name) * UP * 2, beats * BEAT, 0.34), pan=-0.4)  # Helion answers, higher and warmer
+            at += beats
+    # a chime where their trails cross, and Helion's laugh: a quick bright rising run
+    for k, when in enumerate((0.75, 2.25, 3.75, 5.25, 6.75)): L.place(a, when, L.tine(L.hz('E6') * UP * (1.0 if k % 2 else 1.26), 0.4, 0.22), pan=(-0.5 if k % 2 else 0.5))
+    for i, n in enumerate(('C5', 'E5', 'G5', 'C6', 'E6')): L.place(a, 1.6 + i * 0.055, L.tine(L.hz(n) * UP / 2 ** (6 / 12) * 2 ** (8 / 12), 0.25, 0.3 - i * 0.03), pan=-0.35)
+    # warm wind under the play
+    w = O.wind(14.0) * 1.4; a[:len(w)] += w
+    # the omen: the loop skips like a scratched record, then thins, slower and flatter, to one voice
+    frag = L.tine(L.hz('F#4') * UP, 0.22, 0.8); frag = frag[:int(0.2 * SR)] * np.linspace(1, 0.2, int(0.2 * SR))
+    for k in range(3): L.place(a, 9.0 + k * 0.24, frag, pan=0.2)
+    at = 9.75
+    for i, (name, beats) in enumerate(L.TUNE[3] + L.TUNE[4]):
+        if at > 13.9: break
+        sig = L.tine(L.hz(name) * UP * 2 ** (-45 / 1200), beats * BEAT * 1.25, 0.55)
+        if abs(at - 12.8) < 0.45 or abs(at - 13.4) < 0.3:  # the stutters: the note stops dead
+            cut = int(0.11 * SR); sig[cut:] = 0
+        L.place(a, at, lowpass(sig[:, None].repeat(2, 1), 1800)[:, 0] if False else sig, pan=0.15)
+        at += beats * BEAT * 1.25
+    for when in (10.5, 12.0):  # a star goes out: a high tine swallowed into a low gulp
+        L.place(a, when, L.tine(L.hz('B6'), 0.2, 0.25), pan=0.5)
+        n = int(0.5 * SR); t = np.arange(n) / SR; gulp = np.sin(2 * np.pi * (300 * t - 220 * t * t)) * np.exp(-t / 0.12) * 0.18
+        L.place(a, when + 0.12, gulp, pan=0.4)
+    n = int(4.2 * SR); t = np.arange(n) / SR; env = (t / 4.2) ** 2
+    tone = (np.sin(2 * np.pi * 41.2 * t) + 0.5 * np.sin(2 * np.pi * 82.4 * t)) * env * 0.12
+    a[int(9.8 * SR):int(9.8 * SR) + n, 0] += tone; a[int(9.8 * SR):int(9.8 * SR) + n, 1] += tone
+    a = room(a, 0.5, 0.025)
+    a[int(14.0 * SR):] = 0  # half a second of total silence: even the wind stops
+    # the strike at 14.5: a sub-bass impact, a roar of rushing ink, stars crackling out, the pad bending down, a rumble
+    T = 14.5
+    n = int(0.12 * SR); t = np.arange(n) / SR
+    pre = bandpass(rng.standard_normal((n, 2)), 400, 6000) * ((t / 0.12) ** 4)[:, None] * 0.25; a[int((T - 0.12) * SR):int(T * SR)] += pre[:int(0.12 * SR)]
+    n = int(3.0 * SR); t = np.arange(n) / SR
+    boom = np.sin(2 * np.pi * (30 * t + 70 * (1 - np.exp(-t * 7)) / 7)) * np.exp(-t / 0.8) * 0.9
+    rush = bandpass(rng.standard_normal((n, 2)), 120, 3000) * (np.exp(-t / 0.9) * 0.5)[:, None]
+    i0 = int(T * SR); a[i0:i0 + n, 0] += boom; a[i0:i0 + n, 1] += boom; a[i0:i0 + n] += rush
+    for k in range(40):  # the crackle of stars going out, a cascade
+        when = T + 0.1 + 1.8 * (k / 40) ** 0.7 + rng.uniform(0, 0.05)
+        m = int(0.03 * SR); click = bandpass(rng.standard_normal((m, 2)), 2000, 9000) * np.exp(-np.arange(m) / (0.004 * SR))[:, None] * rng.uniform(0.1, 0.3)
+        j = int(when * SR); a[j:j + m] += click
+    padv = O.pad(['Ab3', 'Eb4', 'Ab4', 'C5', 'Eb5'], 2.6) * 0.12  # the pad, bending down like a tape stopping
+    nn = len(padv); bend = np.cumsum(np.clip(1 - (np.arange(nn) / nn) ** 1.6 * 0.85, 0.1, 1)); idx = np.clip(bend.astype(int), 0, nn - 1)
+    padv = padv[idx] * np.linspace(1, 0, nn)[:, None]; a[i0:i0 + nn] += padv
+    n = int(6.6 * SR); t = np.arange(n) / SR
+    rum = (np.sin(2 * np.pi * 36.7 * t) + 0.6 * np.sin(2 * np.pi * 38.9 * t)) * np.clip(t / 0.6, 0, 1) * 0.16
+    a[i0:i0 + n, 0] += rum; a[i0:i0 + n, 1] += rum
+    a[i0:i0 + n] += lowpass(rng.standard_normal((n, 2)), 160) * (np.clip(t / 0.6, 0, 1) * 0.35)[:, None]
+    a *= 10 ** ((-24 - level(a[:int(8 * SR)])) / 20)  # the play at about -24 dB; the rest of the film in proportion
+    out[:int(20 * SR)] = a[:int(20 * SR)]
+    # ---------------- the bed, 20-30, made to go round
+    n = int(11 * SR); t = np.arange(n) / SR
+    bed = np.zeros((n, 2))
+    r1 = (np.sin(2 * np.pi * 36.7 * t) + 0.6 * np.sin(2 * np.pi * 38.9 * t)) * 0.16; bed[:, 0] += r1; bed[:, 1] += r1
+    bed += lowpass(rng.standard_normal((n, 2)), 160) * 0.35
+    howl = bandpass(rng.standard_normal((n, 2)), 250, 900) * (0.06 + 0.035 * np.sin(2 * np.pi * t / 5.5))[:, None]
+    bed += lowpass(howl, 1200)
+    x = int(1.0 * SR); ramp = np.linspace(0, 1, x)[:, None]
+    bed10 = bed[:int(10 * SR)].copy(); bed10[:x] = bed[int(10 * SR):int(10 * SR) + x] * (1 - ramp) + bed10[:x] * ramp
+    bed10 *= 10 ** ((-30 - level(bed10)) / 20)
+    out[int(20 * SR):int(30 * SR)] = bed10
+    # match the film's last second into the bed (no seam at 20)
+    # ---------------- B, from the slip
+    b = np.zeros((int(12 * SR), 2))
+    n = int(1.6 * SR); t = np.arange(n) / SR
+    groan = np.tanh(2.5 * np.sin(2 * np.pi * (80 * t - 14 * t * t))) * np.exp(-t / 0.9) * np.clip(t / 0.15, 0, 1) * 0.16
+    b[:n, 0] += lowpass(groan[:, None], 400)[:, 0]; b[:n, 1] += lowpass(groan[:, None], 400)[:, 0]
+    b[:n] += lowpass(rng.standard_normal((n, 2)), 120) * (np.exp(-t / 1.0) * 0.4)[:, None]
+    call = np.zeros((int(3 * SR), 2))
+    L.place(call, 0.0, L.tine(L.hz('C6'), 0.35, 0.7), pan=0.45); L.place(call, 0.32, L.tine(L.hz('A5'), 0.6, 0.7), pan=0.5)  # "Orbin!": two falling notes
+    b[int(0.4 * SR):int(0.4 * SR) + len(call)] += O.room(call, 1.4, 0.15)[:len(b) - int(0.4 * SR)]
+    at = 1.0
+    for i, (name, beats) in enumerate(L.TUNE[0] + L.TUNE[1]):  # their song once more, broken: detuned, notes missing
+        if i in (2, 5): at += beats * BEAT * 0.6; continue
+        if at > 3.0: break
+        L.place(b, at, L.tine(L.hz(name) * UP * 2 ** (-70 / 1200), beats * BEAT * 0.6, 0.45), pan=-0.1)
+        at += beats * BEAT * 0.6
+    S = 3.2
+    n = int(0.9 * SR); t = np.arange(n) / SR
+    b[int((S - 0.9) * SR):int(S * SR)] += bandpass(rng.standard_normal((n, 2)), 300, 5000) * ((t / 0.9) ** 3 * 0.2)[:, None]
+    n = int(2.8 * SR); t = np.arange(n) / SR
+    whump = np.sin(2 * np.pi * (32 * t + 60 * (1 - np.exp(-t * 9)) / 9)) * np.exp(-t / 0.6) * 3.0
+    blast = rng.standard_normal((n, 2)) * (np.exp(-t / 0.25) * 0.6)[:, None]
+    i0 = int(S * SR); b[i0:i0 + n, 0] += whump; b[i0:i0 + n, 1] += whump; b[i0:i0 + n] += lowpass(blast, 7000)
+    b = room(b, 0.6, 0.03)
+    b[int(4.2 * SR):int(4.3 * SR)] *= np.linspace(1, 0, int(0.1 * SR))[:, None]; b[int(4.3 * SR):] = 0
+    n = int(3.2 * SR); t = np.arange(n) / SR
+    ring = np.sin(2 * np.pi * 3150 * t) * np.exp(-t / 0.9) * np.clip(t / 0.05, 0, 1) * 0.035
+    b[i0:i0 + n, 0] += ring; b[i0:i0 + n, 1] += ring
+    for when, name in ((4.4, 'Ab2'), (6.0, 'F2'), (7.6, 'Db3')):  # a low soft tone as each line appears
+        n = int(2.4 * SR); t = np.arange(n) / SR; f = hz(name.replace('Ab', 'G#').replace('Db', 'C#'))
+        tone = (np.sin(2 * np.pi * f * t) + 0.3 * np.sin(2 * np.pi * 2 * f * t)) * np.clip(t / 0.25, 0, 1) * np.exp(-t / 0.9) * 2.4
+        j = int(when * SR); b[j:j + n, 0] += tone; b[j:j + n, 1] += tone
+    b *= 10 ** ((-21 - level(b[:int(2 * SR)])) / 20)
+    out[int(30 * SR):] = b[:int(12 * SR)]
+    pk = np.abs(out).max()
+    if pk > 0.9: out *= 0.9 / pk
+    return np.clip(out, -0.97, 0.97)
+
+
 def helion_far(notes, beat=0.6):
     """Helion's moment in a level: his music-box motif from far away (low-passed, in a large room), in the song's key."""
     buf = np.zeros((int((sum(b for _, b in notes) * beat + 5) * SR), 2)); at = 0.0
@@ -314,11 +438,14 @@ def fire(big):
 
 if __name__ == '__main__':
     (ROOT / 'tools/cache').mkdir(exist_ok=True)
-    made = {'helion1': helion_far([('A#4', 1), ('C#5', 1), ('F#5', 2), ('D#5', 2)], 0.4), 'helion2': helion_far([('A4', 1), ('C#5', 1), ('F#5', 2), ('E5', 2)], 0.6), 'coldopen': coldopen(), 'nebula': nebula(), 'opening': opening_parts(), 'startedbed': started_bed(),
+    import sys
+    want = set(sys.argv[1:])
+    made = {'helion1': helion_far([('A#4', 1), ('C#5', 1), ('F#5', 2), ('D#5', 2)], 0.4), 'helion2': helion_far([('A4', 1), ('C#5', 1), ('F#5', 2), ('E5', 2)], 0.6), 'coldopen': coldfilm(), 'nebula': nebula(), 'opening': opening_parts(), 'startedbed': started_bed(),
             'sting1': sting(['F#3', 'A#3', 'C#4', 'F#4'], ['A#5', 'C#6', 'F#6'], 'A#6', 'B1'),
             'sting2': sting(['A2', 'E3', 'A3', 'C#4', 'E4'], ['C#6', 'E6', 'A6'], 'C#7', 'A1'),
             'fire0': fire(False), 'fire1': fire(True)}
     for name, x in made.items():
+        if want and name not in want: continue
         assert np.abs(x).max() < 0.99, (name, np.abs(x).max())
         sf.write(str(ROOT / f'tools/cache/{name}-src.wav'), x, SR, subtype='PCM_16')
         print(f'{name}: {len(x) / SR:.2f} s, peak {np.abs(x).max():.2f}, level {level(x):.1f} dB')

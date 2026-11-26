@@ -264,6 +264,7 @@ function startCold(): void {
   audio.stopPreview(0.3);
   coldScene.onDone = () => { save.story.cold = true; persist(); startOpening(); };
   coldScene.onSlip = () => feel('crash');
+  coldScene.onHeave = () => feel('big');
   coldScene.start(!!save.story.cold);
   show('cold');
 }

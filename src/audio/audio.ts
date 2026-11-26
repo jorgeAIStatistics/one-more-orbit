@@ -372,6 +372,9 @@ export class AudioEngine {
     src.start();
   }
 
+  /** Where live sound effects go (the effects volume), for scenes that synthesise their own: null with no audio. */
+  sfxOut(): AudioNode | null { return this.ctx ? this.sfxGain : null; }
+
   /** Live spectrum of the music (0..255 per bin), or null when there is no audio. */
   spectrum(): Uint8Array | null {
     if (!this.analyser || !this.running) return null;
