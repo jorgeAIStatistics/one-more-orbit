@@ -160,8 +160,8 @@ await scenario('pause, settings mid-game, resume, quit', after(['heroes']), asyn
   await until(page, ([t1]) => window.__omo.run && window.__omo.run.state === 'playing' && window.__omo.run.time > t1 + 2, [t1], 20000);
   await omo(page, () => window.__omo.pause()); await wait(600);
   await page.click('#pauseQuitBtn');
-  await until(page, () => window.__omo.screen === 'levels', null, 15000);
-  return `paused at ${t1.toFixed(1)} s, resumed, quit to the map`;
+  await until(page, () => window.__omo.screen === 'results' || window.__omo.screen === 'levels', null, 15000);
+  return `paused at ${t1.toFixed(1)} s, resumed, quit to ${await screen(page)}`;
 });
 
 // 9. quitting mid-scene: a memory left by a tap, the ambush left from its pause

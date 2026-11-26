@@ -1396,6 +1396,7 @@ function quit(): void {
   const reached = r.pct;
   r.stop();
   if (session.far === 0 && reached === 0 && session.attempts <= 1) { toLevels(); return; }
+  if (r.pack === AMBUSH) { ambushThen = null; renderMap(); toLevels(); return; } // (the ambush has no results screen: left, it waits on the road)
   showResults(r, false, reached);
 }
 /** Where the build-up before the drop begins (the first charge section), as a song time. */
