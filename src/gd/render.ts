@@ -76,7 +76,7 @@ interface Platform {
   /** the planet this ring belongs to; and, if it is entered through a spin gate, when, how wide and from which side */
   planet: number; spinAt: number; spinTol: number; enterSide: number;
   /** the press that leaves this ring: its form, what the button does on it, and whether the game takes it as a pad */
-  form: Form; act: 'tap' | 'down' | 'up'; pad: '' | 'spring' | 'tide'; wide: boolean;
+  form: Form; act: 'tap' | 'down' | 'up'; pad: '' | 'spring' | 'tide' | 'jump'; wide: boolean;
   /** an orb: there is no ring here, only the mark in mid-air (and which orb). noCeil: the press before stayed on this ring */
   chime: boolean; orb: '' | 'jump' | 'dash' | 'grav'; noCeil: boolean;
 }
@@ -252,6 +252,7 @@ export class GdRenderer {
     const level = run.level;
     const c = run.course;
     this.plats = platforms(c, level);
+    this.padCol = level.id === 'heroes' ? [255, 168, 96] : [150, 235, 220];
     if (!this.globeCv) this.globeCv = stamp(160, 160, (g) => globe(g, 80, 80, 74, 225, rng(5)), 2);
     this.colour = 0;
     this.ahead = level.file.side?.ahead ?? level.file.rules?.ahead ?? 3;
@@ -359,7 +360,7 @@ export class GdRenderer {
 
   /** Screen radius of a ring level. The camera bumps on big hits and pulls right back as the drop goes off. */
   private rad(lv: number): number {
-    return (this.r0 * this.baseR + (lv - this.cam) * this.gap) * (1 + this.punchS * 0.05) * (1 - this.zoomS * 0.2) * (1 - 0.12 * clamp(this.speedK, 0, 1));
+    return (this.r0 * this.baseR + (lv - this.cam) * this.gap) * (1 + this.punchS * 0.05) * (1 - this.zoomS * 0.2) * (1 - 0.12 * clamp(this.speedK, 0, 1)) * this.camScale;
   }
 
   private burst(x: number, y: number, n: number, col: RGB, speed: number, size = 1, back = false): void {
@@ -374,6 +375,10 @@ export class GdRenderer {
 
   /** how much faster than normal the course is going (eased), 0 at the normal pace */
   private speedK = 0;
+  /** the world's own camera (eased): pulled back for a set piece that shows the planet whole (the Sleeper's throw) */
+  private camScale = 1;
+  /** a jump pad's colour: the world's own life (the Edge's teal, Emberwick's fire) */
+  private padCol: RGB = [150, 235, 220];
   /** stars stretched into streaks, behind the course, when the pace goes up */
   private streaks(time: number): void {
     const k = clamp(this.speedK / 0.5, 0, 1);
@@ -1014,7 +1019,7 @@ export class GdRenderer {
           // it is drawn as on any ring: a pad is tapped.
           c.beginPath(); this.arcPath(c0, r, pl.note - 0.2, pl.note + 0.2);
           c.strokeStyle = HALO; c.lineWidth = 14; c.stroke();
-          c.strokeStyle = rgba(pl.pad === 'spring' ? CYAN : VIOLET); c.lineWidth = 9; c.stroke();
+          c.strokeStyle = rgba(pl.pad === 'spring' ? CYAN : pl.pad === 'jump' ? this.padCol : VIOLET); c.lineWidth = pl.pad === 'jump' ? 11 : 9; c.stroke(); // (a jump pad: the woken teal of the world's own life)
         }
         const ahead = pl.note - beat;
         const nx = Math.cos(a) * r, ny = Math.sin(a) * r, nr = rb * 1.5 * (pl.smash ? 1.7 : pl.accent || pl.after ? 1.3 : pl.wide ? 1.15 : 1) * (1 + pulse * 0.2);
@@ -1303,6 +1308,14 @@ export class GdRenderer {
           c.fillStyle = `rgba(255,214,150,${flick})`; c.beginPath(); c.arc(ex, ey, rb * 0.22, 0, TWO_PI); c.fill();
         }
         c.globalAlpha = 1;
+      }
+      // the world's own set pieces on the course (Helion's light, the Sleeper's hand, the residue, Ossa's fire, the seal)
+      if (this.planet?.onCourse && !twin) {
+        const hit = run.events.some((e) => (e.kind === 'hop' || e.kind === 'flip') && e.flow !== false);
+        const pos = (b: number, dl = 0, ref?: number): [number, number] => { const h = course.at(ref ?? b), r = this.rad(h.rho + dl) + h.side * rb; return [bx0 + Math.cos(ang(b)) * r, by0 + Math.sin(ang(b)) * r]; };
+        c.save();
+        this.planet.onCourse(c, { beat, song: beat * course.spb, time, spb: course.spb, rb, presses: course.presses, pos, ring: (b) => this.rad(course.at(b).rho), ang, center: [bx0, by0], planetR: this.worldR, hit });
+        c.restore();
       }
       // lenses: a tall lens standing across the path, in the colour of the form it gives
       for (const ln of course.lenses) {
@@ -1622,6 +1635,8 @@ export class GdRenderer {
       const ahead = course.portals.find((g) => g.beat > beat - 0.01 && g.beat - beat <= 4);
       const want = Math.max(0, Math.max(barNow?.speed ?? 1, ahead && ahead.faster ? 1 + (ahead.speed - 1) * clamp(1 - (ahead.beat - beat) / 4, 0, 1) : 0) - 1);
       this.speedK += (want - this.speedK) * Math.min(1, dt * 2.5);
+      const cs = this.planet?.cam?.(t) ?? 1;
+      this.camScale += (cs - this.camScale) * Math.min(1, dt * 2.2);
     }
     const m = this.sizes();
     const span = Math.max(this.w, this.h) * 0.75;

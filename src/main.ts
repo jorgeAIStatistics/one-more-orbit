@@ -577,7 +577,7 @@ function startRun(from = -1, quick = false, made: Run | null = null, ember = fal
   if (before) { const n = starsHome(); landing.prepare([n, n + 1], () => run === r && r.time < -1.2); }
   carryLights = null;
   // the embers on the course: a coal at each, catching as he passes (the ones behind a respawn are already lit)
-  emberBeats = chamber || botMode || dare ? [] : practice ? r.level.segments.map((s) => s.t0 / spb).filter((b) => b > r.t0 / spb + 0.01) : pack.level.embers ?? [];
+  emberBeats = chamber || dare ? [] : practice ? r.level.segments.map((s) => s.t0 / spb).filter((b) => b > r.t0 / spb + 0.01) : pack.level.embers ?? [];
   renderer.embers = emberBeats;
   emberLit = emberBeats.filter((b) => b * spb <= r.startAt + 1e-6).length - 1;
   const b = bestFor(pack.level.id);

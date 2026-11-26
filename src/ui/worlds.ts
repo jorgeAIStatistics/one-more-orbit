@@ -36,6 +36,26 @@ export interface World {
   reset(): void;
   /** back to an ember: what was relit after this song time goes dark again; what was relit before it stays */
   rewind(to: number): void;
+  /** the level's set pieces that live on the course itself (drawn over the course, in its own frame) */
+  onCourse?(c: CanvasRenderingContext2D, v: CourseView): void;
+  /** the camera's scale at a song time (1: as the course sets it; less: pulled back to show the world whole) */
+  cam?(song: number): number;
+}
+/** What a world is told to draw on the course: where things are, at which beat. */
+export interface CourseView {
+  beat: number; song: number; time: number; spb: number; rb: number;
+  /** the course: its presses (the last is the level's last wall) */
+  presses: Array<{ beat: number; pad: string; land: number }>;
+  /** where the course runs at a beat (a perfect run), lifted `dl` ring levels (at the ring of beat `ref`, if given) */
+  pos(beat: number, dl?: number, ref?: number): [number, number];
+  /** the screen radius of the course's ring at a beat */
+  ring(beat: number): number;
+  /** the angle of the course at a beat (screen, radians) */
+  ang(beat: number): number;
+  center: [number, number];
+  planetR: number;
+  /** a good tap this frame */
+  hit: boolean;
 }
 /** The backdrop a world brings (the renderer's `backdrop`): it also carries the lines the inhabitant speaks. */
 export interface WorldSky { says: Said[]; prepare(): void; draw(c: CanvasRenderingContext2D, w: number, h: number, st: SceneState): void }
@@ -81,7 +101,7 @@ function horizon(c: CanvasRenderingContext2D, w: number, h: number, helion: numb
 
 // ================================================================ Emberwick
 /** Emberwick's timeline, in song seconds (the re-cut of 2026-11-25) */
-const ET = { held: 9.6, stabs: 12, riser: 16.8, drop: 19.2, breath: 36, breathEnd: 38.4, end: 57.6, spb: 0.6 };
+const ET = { held: 9.6, stabs: 12, riser: 16.8, drop: 19.2, breath: 36, breathEnd: 38.4, dive: 37.6, core: 38.4, end: 57.6, spb: 0.6 };
 
 export class EmberWorld {
   private cold: HTMLCanvasElement | null = null; private hot: HTMLCanvasElement | null = null;
@@ -109,9 +129,15 @@ export class EmberWorld {
     reset: () => this.reset(),
     rewind: (to) => this.rewind(to),
     spark: (a, song) => this.spark(a, song),
+    onCourse: (c, v) => this.onCourse(c, v),
     draw: (c, R, st) => {
       if (!this.cold || !this.hot) return;
       const t = st.song, dropK = sm((t - ET.drop) / 0.35);
+      // into the core (the second half): the camera dives through the forge's mouth, and the planet's heart is the place
+      if (t >= ET.core) { this.heart(c, R, st); return; }
+      const dive = sm((t - ET.dive) / (ET.core - ET.dive));
+      const k0 = R / W.R0, mx = Math.cos(W.EMBER.forge) * R * 0.97, my = Math.sin(W.EMBER.forge) * R * 0.97 - 26 * k0;
+      if (dive > 0) { c.save(); const z = 1 + 9 * dive * dive; c.translate(mx, my); c.scale(z, z); c.translate(-mx, -my); }
       zones(c, this.cold, this.hot, R, this.lit, t, dropK);
       // the forge: banked, then glowing as Ossa wakes, then roaring on the drop (with the kick)
       const heat = t < ET.held ? 0.04 + Math.min(0.2, this.sparks * 0.02) : t < ET.stabs ? 0.35 : t < ET.drop ? 0.5 + 0.2 * sm((t - ET.riser) / 2.4) : 0.85 + 0.15 * st.kick;
@@ -126,8 +152,83 @@ export class EmberWorld {
         const q = sm((t - ET.held + 0.2) / 2.2), a = 1 - sm((t - ET.stabs) / 0.3);
         COMPANIONS.kindling(c, mouth[0] + Math.sin(st.time * 2) * 10 * k, mouth[1] - 140 * k * q, 0.5 * k * 1.6, COMPANIONS.KINDLE.heroes, { flap: 0.5 + 0.5 * Math.sin(st.time * 5), alpha: sm((t - ET.held + 0.2) / 0.5) * a });
       }
+      if (dive > 0) { c.restore(); K.glow(c, mx, my, R * 3 * dive, [255, 230, 170], dive * dive, 'screen'); }
     }
   };
+
+  /** the planet's heart, from inside: white-gold at the centre, deep red at its edge, its flows turning, pulsing on the kick */
+  private heart(c: CanvasRenderingContext2D, R: number, st: WorldState): void {
+    const time = st.time, kick = st.kick, in0 = sm((st.song - ET.core) / 0.6);
+    const g = c.createRadialGradient(0, 0, 0, 0, 0, R * 1.15);
+    g.addColorStop(0, 'rgba(255,250,232,1)'); g.addColorStop(0.32, 'rgba(255,214,140,0.96)'); g.addColorStop(0.7, 'rgba(232,108,52,0.9)'); g.addColorStop(1, 'rgba(120,30,20,0)');
+    c.globalAlpha = in0; c.fillStyle = g; c.beginPath(); c.arc(0, 0, R * 1.15, 0, TAU); c.fill();
+    c.lineCap = 'round';
+    for (let i = 0; i < 6; i++) {
+      const rr = R * (0.28 + 0.13 * i), a0 = time * (0.35 + 0.08 * i) * (i % 2 ? 1 : -1);
+      c.strokeStyle = `rgba(255,${236 - i * 14},${200 - i * 22},${0.32 - i * 0.03})`; c.lineWidth = R * (0.05 - i * 0.004);
+      for (let j = 0; j < 2; j++) { c.beginPath(); c.arc(0, 0, rr, a0 + j * Math.PI, a0 + j * Math.PI + 1.1 + 0.3 * Math.sin(time + i)); c.stroke(); }
+    }
+    K.glow(c, 0, 0, R * 1.35 * (1 + 0.08 * kick), [255, 196, 120], (0.3 + 0.3 * kick) * in0, 'screen');
+    c.globalAlpha = 1;
+  }
+
+  /** the inside of the planet, behind everything once the camera has dived in: molten walls flowing outward */
+  private inside(c: CanvasRenderingContext2D, w: number, h: number, st: SceneState): void {
+    const cx = w / 2, cy = h * 0.52, R = Math.hypot(w, h) * 0.6, time = st.time, kick = st.kick ?? 0;
+    const g = c.createRadialGradient(cx, cy, 0, cx, cy, R);
+    g.addColorStop(0, 'rgb(128,44,26)'); g.addColorStop(0.45, 'rgb(70,18,14)'); g.addColorStop(1, 'rgb(18,5,8)');
+    c.fillStyle = g; c.fillRect(0, 0, w, h);
+    c.save(); c.globalCompositeOperation = 'screen'; c.lineCap = 'round';
+    for (let i = 0; i < 16; i++) {
+      const r = K.RNG(i * 17 + 5), ph = (time * 0.09 + r()) % 1, rr = R * (0.22 + 0.85 * ph), a0 = r() * TAU + time * 0.05 * (r() - 0.5);
+      c.strokeStyle = `rgba(255,${120 + Math.round(80 * r())},60,${0.22 * Math.sin(ph * Math.PI)})`; c.lineWidth = (6 + 18 * r()) * (0.5 + ph);
+      c.beginPath(); c.arc(cx, cy, rr, a0, a0 + 0.5 + r() * 0.9); c.stroke();
+    }
+    for (let i = 0; i < 24; i++) { const r = K.RNG(i * 29 + 3), ph = (time * 0.12 + r()) % 1; K.glow(c, cx + (r() - 0.5) * w * 1.1, cy + h * 0.5 - ph * h * 1.1, 2 + 2 * r(), [255, 200, 120], 0.7 * Math.sin(ph * Math.PI)); }
+    c.restore();
+    // Ossa's strikes, felt from inside: the whole heart pulses on them
+    K.glow(c, cx, cy, R * 0.8, [255, 150, 80], 0.12 + 0.22 * kick, 'screen');
+  }
+
+  /** on the course: Ossa's strikes rising under it as rings of fire (the launches), and the Stillness's seal on the star */
+  private onCourse(c: CanvasRenderingContext2D, v: CourseView): void {
+    const rb = v.rb;
+    for (const p of v.presses) {
+      if (p.pad !== 'jump') continue;
+      const d = v.beat - p.beat;
+      if (d < -1.6 || d > 1.4) continue;
+      const [x, y] = v.pos(p.beat, -0.05);
+      c.lineCap = 'round';
+      if (d < 0) { // the shock arriving: a ring of fire closing on the pad
+        const q = -d / 1.6; c.strokeStyle = `rgba(255,150,70,${0.75 * (1 - q)})`; c.lineWidth = rb * 0.45; c.beginPath(); c.arc(x, y, rb * (2 + 7 * q), 0, TAU); c.stroke();
+        K.glow(c, x, y, rb * 3, [255, 170, 90], 0.35 * (1 - q), 'screen');
+      } else { // the strike: it goes up under him
+        const q = d / 1.4; c.strokeStyle = `rgba(255,210,150,${0.85 * (1 - q)})`; c.lineWidth = rb * (0.7 - 0.4 * q); c.beginPath(); c.arc(x, y, rb * (2 + 12 * q), 0, TAU); c.stroke();
+        K.glow(c, x, y, rb * (4 + 6 * q), [255, 180, 100], 0.6 * (1 - q), 'screen');
+      }
+    }
+    // the seal: the last wall is the Stillness's seal on the star, a ring of ink; the last dash shatters it
+    const last = v.presses[v.presses.length - 1];
+    if (!last) return;
+    const d = v.beat - last.beat;
+    if (d < -6 || d > 1.6) return;
+    const [x, y] = v.pos(last.beat, 0);
+    if (d < 0) {
+      const a = sm((d + 6) / 1.5), R0 = rb * 4.4 * (1 + 0.04 * Math.sin(v.time * 3));
+      c.globalAlpha = a;
+      c.strokeStyle = 'rgba(176,166,198,0.5)'; c.lineWidth = rb * 1.6; c.beginPath(); c.arc(x, y, R0, 0, TAU); c.stroke();
+      c.strokeStyle = 'rgba(8,6,12,0.96)'; c.lineWidth = rb * 1.1; c.beginPath(); c.arc(x, y, R0, 0, TAU); c.stroke();
+      c.strokeStyle = 'rgba(176,166,198,0.6)'; c.lineWidth = rb * 0.18;
+      for (let i = 0; i < 10; i++) { const an = (i / 10) * TAU + v.time * 0.4; c.beginPath(); c.moveTo(x + Math.cos(an) * R0 * 0.78, y + Math.sin(an) * R0 * 0.78); c.lineTo(x + Math.cos(an + 0.12) * R0 * 0.62, y + Math.sin(an + 0.12) * R0 * 0.62); c.stroke(); }
+      K.glow(c, x, y, rb * 2.2, [255, 240, 210], 0.5 * a); // the star, behind the seal
+      c.globalAlpha = 1;
+    } else {
+      const q = d / 1.6;
+      c.strokeStyle = `rgba(8,6,12,${0.95 * (1 - q)})`; c.lineWidth = rb * 0.9 * (1 - q);
+      for (let i = 0; i < 14; i++) { const an = (i / 14) * TAU, rr = rb * 4.4 + d * rb * 16; c.beginPath(); c.arc(x, y, rr, an, an + 0.25); c.stroke(); }
+      K.glow(c, x, y, rb * (4 + 14 * q), [255, 244, 214], Math.exp(-d * 3), 'screen');
+    }
+  }
 
   /** the sky and Ossa beside the planet, behind everything */
   readonly sky: WorldSky = {
@@ -136,6 +237,7 @@ export class EmberWorld {
     draw: (c, w, h, st) => {
       this.paint(w, h);
       const t = st.song ?? -10, time = st.time, dt = this.lastT < 0 ? 0 : Math.min(0.05, Math.max(0, time - this.lastT)); this.lastT = time;
+      if (t >= ET.core) { this.inside(c, w, h, st); writeSays(c, w, h, Math.min(w / 390, h / 844), this.sky.says, st.song); return; }
       const warm = sm((t - ET.drop) / 1.2);
       if (this.skyCold) c.drawImage(this.skyCold, 0, 0, w, h);
       if (this.skyHot && warm > 0) { c.globalAlpha = warm * (0.85 + 0.15 * st.kick); c.drawImage(this.skyHot, 0, 0, w, h); c.globalAlpha = 1; }
@@ -170,6 +272,8 @@ export class EmberWorld {
       W.ossa(c, ox, oy, s, { rise: R, rear: rearX, head: H, antler: A, tail: Tl, breath: (time * 0.28) % 1, lit: L, flicker: 0.5 + 0.5 * Math.sin(time * 1.7) * Math.sin(time * 0.6), face: 1 });
       // embers shaken off her back with every blow (secondary motion)
       for (let i = this.embers.length - 1; i >= 0; i--) { const e = this.embers[i], a = time - e.at; if (a > 1.2) { this.embers.splice(i, 1); continue; } K.glow(c, ox + W.OSSA_HOOF[0] * s + e.vx * a * u, oy - 20 * s + (e.vy * a + 140 * a * a) * u, 2.5 * u, [255, 190, 110], 1 - a / 1.2); }
+      const dive = sm((t - ET.dive) / (ET.core - ET.dive));
+      if (dive > 0) { c.fillStyle = `rgba(255,190,120,${0.7 * dive * dive})`; c.fillRect(0, 0, w, h); }
       writeSays(c, w, h, u, this.sky.says, st.song);
     }
   };
@@ -177,7 +281,7 @@ export class EmberWorld {
 }
 
 // ================================================================ the Drifting Edge
-const DT = { helion: 17.6, drop: 19.2, spb: 0.4 };
+const DT = { helion: 17.6, drop: 19.2, climb: 32.0, slip: 44.8, rise: 45.6, toss: 49.6, drop2: 51.2, end: 70.4, spb: 0.4 };
 
 export class EdgeWorld {
   private cold: HTMLCanvasElement | null = null; private hot: HTMLCanvasElement | null = null;
@@ -203,6 +307,9 @@ export class EdgeWorld {
     reset: () => this.reset(),
     rewind: (to) => this.rewind(to),
     spark: (a, song) => this.spark(a, song),
+    onCourse: (c, v) => this.onCourse(c, v),
+    // the Sleeper's throw: the camera pulls back to show the planetoid and the Sleeper whole
+    cam: (song) => (song > DT.toss - 0.3 && song < DT.drop2 + 0.3 ? 0.74 : 1),
     draw: (c, R, st) => {
       if (!this.cold || !this.hot) return;
       const t = st.song, time = st.time, dt = this.lastT < 0 ? 0 : Math.min(0.05, Math.max(0, time - this.lastT)); this.lastT = time;
@@ -221,6 +328,69 @@ export class EdgeWorld {
       if (t > DT.drop) for (let i = 0; i < 14; i++) { const r = K.RNG(i * 31), ph = ((time * 0.15 + r()) % 1), a = r() * TAU; K.glow(c, Math.cos(a) * R * (0.7 + 0.6 * ph), Math.sin(a) * R * (0.7 + 0.6 * ph) - ph * 30, 2.2, [170, 240, 230], 0.8 * (1 - ph)); }
     }
   };
+
+  private flareAt = -9; private pushAt = -9;
+  /** on the course: Helion's light to chase, the Sleeper's hand, the residue creeping up behind */
+  private onCourse(c: CanvasRenderingContext2D, v: CourseView): void {
+    const s = v.song, rb = v.rb;
+    if (v.hit) { if (s > DT.drop && s < DT.slip) this.flareAt = v.time; if (s > DT.drop2) this.pushAt = v.time; }
+    // Helion's light: on the drop his flicker becomes a light on the course a few beats ahead; it flares on each good
+    // tap; from 32 s it climbs off the surface; at 44.8 it slips away into the dark
+    if (s > DT.drop - 0.2 && s < DT.slip + 1.8) {
+      const slip = sm((s - DT.slip) / 1.6), lead = 2.5 + slip * 7, lift = 0.15 + 1.3 * sm((s - DT.climb) / 3);
+      const a = sm((s - DT.drop) / 0.5) * (1 - slip), fl = Math.exp(-(v.time - this.flareAt) / 0.35), flick = 0.85 + 0.15 * Math.sin(v.time * 17) * Math.sin(v.time * 5.3);
+      for (let i = 1; i <= 6; i++) { const [mx, my] = v.pos(v.beat + lead - i * 0.3, lift - i * 0.03); K.glow(c, mx, my, rb * (1.2 - i * 0.12), [255, 200, 140], 0.35 * a * (1 - i / 7)); }
+      const [x, y] = v.pos(v.beat + lead, lift);
+      K.glow(c, x, y, rb * (5 + 3 * fl), [255, 170, 100], (0.45 + 0.4 * fl) * a * flick, 'screen');
+      K.glow(c, x, y, rb * 1.5, [255, 240, 210], 0.95 * a);
+      if (a > 0.05) { c.save(); c.globalAlpha = a * 0.9; CANON.parts.spark(c, x, y + rb * 0.5, rb * 0.02, { who: 'helion', glow: 1, arms: 'back', face: 1, eyes: 'soft', crest: 1, lite: true }); c.restore(); }
+    }
+    // the Sleeper's hand: it rises out of the planetoid under the throw (anticipation: a dip first), its palm a giant
+    // pad; it flicks up as he is thrown, and sinks back
+    const toss = v.presses.find((p) => p.pad === 'jump' && p.land - p.beat > 2.5);
+    if (toss && s > DT.slip && s < DT.drop2 + 2.4) {
+      const up = s < DT.rise + 0.4 ? -0.06 * sm((s - DT.slip) / 1.0) : sm((s - DT.rise - 0.4) / 2.4);
+      const flick = sm((s - DT.toss) / 0.25), sink = sm((s - DT.toss - 1.6) / 1.8), rise = Math.max(-0.06, up) * (1 - sink);
+      const A = v.ang(toss.beat), [cx, cy] = v.center, r0 = v.planetR * 0.92, rp = lerp(r0, v.ring(toss.beat) - rb * 1.4, Math.max(0, rise));
+      c.save(); c.translate(cx, cy); c.rotate(A + Math.PI / 2);
+      const stone = 'rgba(118,126,150,0.97)', rim = 'rgba(205,235,228,0.7)';
+      const wrist = rp - rb * 1.6;
+      // the arm, from the planetoid's surface
+      c.fillStyle = stone; c.strokeStyle = rim; c.lineWidth = rb * 0.25;
+      c.beginPath(); c.moveTo(-rb * 2.4, -r0 * 0.9); c.quadraticCurveTo(-rb * 2.0, -(r0 + wrist) / 2, -rb * 1.5, -wrist); c.lineTo(rb * 1.5, -wrist); c.quadraticCurveTo(rb * 2.0, -(r0 + wrist) / 2, rb * 2.4, -r0 * 0.9); c.closePath(); c.fill(); c.stroke();
+      // the palm, cupped, and its fingers (curled up at the sides; open as he is thrown)
+      c.beginPath(); c.ellipse(0, -rp + rb * 0.4, rb * 2.6, rb * 1.2, 0, 0, TAU); c.fill(); c.stroke();
+      c.lineCap = 'round';
+      for (let i = 0; i < 4; i++) {
+        const fx = -rb * 2.0 + i * rb * 1.33, curl = (1 - flick) * (i === 0 || i === 3 ? 0.9 : 0.5);
+        c.lineWidth = rb * 0.95; c.strokeStyle = stone; c.beginPath(); c.moveTo(fx, -rp + rb * 0.2); c.quadraticCurveTo(fx * (1 + 0.15 * flick), -rp - rb * 1.6, fx * (1 - 0.6 * curl), -rp - rb * (2.6 - 1.2 * curl)); c.stroke();
+        c.lineWidth = rb * 0.2; c.strokeStyle = rim; c.stroke();
+      }
+      K.glow(c, 0, -rp, rb * (2.5 + 4 * flick * (1 - sink)), [150, 235, 220], 0.35 + 0.5 * flick * (1 - sink), 'screen'); // the seam's light in its palm
+      c.restore();
+    }
+    // the residue: a grey tide creeping up the course behind him on the music; it gains toward each phrase's end and
+    // is pushed back by every good landing (pressure only: it never ends a run). At 70.4 it falls away.
+    if (s > DT.drop2 - 0.2 && s < DT.end + 2) {
+      const enter = sm((s - DT.drop2) / 1.5), leave = sm((s - DT.end) / 1.4);
+      const ph = (((v.beat - DT.drop2 / v.spb) % 16) + 16) % 16, surge = sm((ph - 10) / 5) * (1 - sm((ph - 15.2) / 0.8));
+      const push = Math.exp(-(v.time - this.pushAt) / 0.5);
+      const gap = 3.4 - 1.7 * surge + 1.0 * push + leave * 10 + (1 - enter) * 4, a = enter * (1 - leave);
+      if (a > 0.01) {
+        c.globalAlpha = a; c.lineCap = 'round';
+        const ref = v.beat, front = v.beat - gap;
+        // a smear of ink along the course behind him (at his own ring), thickest at its front, with an ash rim
+        for (const [col, extra] of [['rgba(170,160,190,0.3)', 0.5], ['rgba(8,7,14,0.94)', 0]] as Array<[string, number]>) {
+          c.strokeStyle = col;
+          for (let i = 0; i < 12; i++) { const b0 = front - i * 0.2, [x0, y0] = v.pos(b0, -0.05, ref), [x1, y1] = v.pos(b0 - 0.24, -0.05, ref); c.lineWidth = rb * ((4.4 - i * 0.3) + extra) * (1 + 0.06 * Math.sin(v.time * 3 + i)); c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke(); }
+        }
+        // its reaching edge: thin fingers of it, feeling forward along the course
+        c.strokeStyle = 'rgba(8,7,14,0.9)'; c.lineWidth = rb * 0.45;
+        for (let j = 0; j < 4; j++) { const [x0, y0] = v.pos(front, -0.05 + (j - 1.5) * 0.12, ref), [x1, y1] = v.pos(front + 0.7 + 0.25 * Math.sin(v.time * 4 + j), -0.05 + (j - 1.5) * 0.22, ref); c.beginPath(); c.moveTo(x0, y0); c.quadraticCurveTo((x0 + x1) / 2 + Math.sin(v.time * 5 + j) * rb, (y0 + y1) / 2, x1, y1); c.stroke(); }
+        c.globalAlpha = 1;
+      }
+    }
+  }
 
   readonly sky: WorldSky = {
     says: [],

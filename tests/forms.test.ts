@@ -270,7 +270,7 @@ describe('gates, pads, chimes and slipstreams', () => {
 
   it('pads are tapped: a spring pad throws the ball to the next planet, a tide pad turns gravity over, and missing either ends the run', () => {
     // (spring pads were on the first planet; the next pass leaves Emberwick to its one idea, and they wait for a later world)
-    expect(of('heroes').course.presses.some((p) => p.pad)).toBe(false);
+    expect(of('heroes').course.presses.some((p) => p.pad === 'spring' || p.pad === 'tide')).toBe(false); // (Ossa's hammer launches are jump pads, on the same planet)
     const tide = of('skyhigh').course.presses.filter((p) => p.pad === 'tide');
     expect(tide.length).toBeGreaterThanOrEqual(3);
     for (const p of tide) { expect(p.auto).toBe(false); expect(p.kind).toBe('flip'); }

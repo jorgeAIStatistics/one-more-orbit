@@ -33,7 +33,7 @@ export function audit(pack: LevelPack): Audit {
     const ps = c.presses.filter((p) => barOf(p.beat) === n);
     const cfg = c.bars[n];
     const a = new Set<string>();
-    const rhythm = ps.map((p) => `${(p.beat - n * 4).toFixed(2)}${holdAt.has(Math.round(p.beat * 100)) ? 'h' : ''}${p.spin ? 's' : ''}${p.sling ? 'p' : ''}${p.kind === 'flip' ? 'f' : ''}${p.auto ? 'a' : ''}`).join(' ');
+    const rhythm = ps.map((p) => `${(p.beat - n * 4).toFixed(2)}${holdAt.has(Math.round(p.beat * 100)) ? 'h' : ''}${p.spin ? 's' : ''}${p.sling ? 'p' : ''}${p.kind === 'flip' ? 'f' : ''}${p.auto ? 'a' : ''}${p.pad ? 'P' : ''}`).join(' ');
     const moves = [cfg?.mode ?? '', has(c.turns, n) ? 'turn' : '', c.portals.some((g) => barOf(g.beat) === n) ? `x${cfg?.speed}` : '', has(c.inverts, n) || has(c.mirrors, n) ? 'flip-world' : '', cfg?.form ?? ''].join('/');
     sig.push(ps.length ? `${rhythm} | ${moves}` : '');
     if (ps.length === 1) a.add('single');
@@ -48,7 +48,7 @@ export function audit(pack: LevelPack): Audit {
     if (has(c.inverts, n) || has(c.mirrors, n)) a.add('world turns over');
     if (ps.some((p) => p.form === 'meteor' && !p.auto)) a.add('meteor dash');
     if (ps.some((p) => p.orb === 'jump')) a.add('jump orb');
-    if (ps.some((p) => p.pad === 'spring')) a.add('jump pad');
+    if (ps.some((p) => p.pad === 'spring' || p.pad === 'jump')) a.add(ps.some((p) => p.pad === 'jump' && p.land - p.beat > 2.5) ? 'throw' : 'jump pad');
     if (ps.some((p) => p.smash)) a.add('great node');
     if (n > 0 && c.bars[n - 1] && cfg && c.bars[n - 1].mode !== cfg.mode && ps.length) a.add('height change');
     acts.push(a);
@@ -74,7 +74,7 @@ export function audit(pack: LevelPack): Audit {
   }
   const sp = ((pack.level as unknown as { setpieces?: SetPiece[] }).setpieces ?? []).map((p) => {
     const n = p.bar;
-    const found = p.kind === 'hop' ? acts[n].has('planet hop') : p.kind === 'speed' ? acts[n].has('speed gate') : p.kind === 'invert' ? acts[n].has('world turns over') : p.kind === 'turn' ? acts[n].has('turn (spike)') : p.kind === 'orb' ? acts[n].has('jump orb') : p.kind === 'drop' ? acts[n].has('great node') : false;
+    const found = p.kind === 'hop' ? acts[n].has('planet hop') : p.kind === 'speed' ? acts[n].has('speed gate') : p.kind === 'invert' ? acts[n].has('world turns over') : p.kind === 'turn' ? acts[n].has('turn (spike)') : p.kind === 'orb' ? acts[n].has('jump orb') : p.kind === 'drop' ? acts[n].has('great node') : p.kind === 'pad' ? acts[n].has('jump pad') || acts[n].has('throw') : p.kind === 'story' ? acts[n].size > 0 : false;
     return { ...p, found };
   });
   return { id: pack.level.id, title: pack.level.title, bars: nBars, played: playedBars.length, unique, uniquePct: Math.round((100 * unique) / Math.max(1, playedBars.length)), longestRun: longest, longestAt, sections, phrases, setpieces: sp, rest: { longestGapBeats: gap, at: gapAt } };

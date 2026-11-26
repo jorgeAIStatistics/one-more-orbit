@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ONE MORE ORBIT · forgiving taps, embers, the film, set pieces (built)</title>
+<link rel="stylesheet" href="plan.css">
+</head><body><main>
+<span class="tag">Built · waiting for your playtest</span>
+<h1>Forgiving taps, embers, the cold open as a film, and the story played in both levels</h1>
+<p class="lede">Built as approved, with your four changes: mashing still fails (and the spam bots prove it), no tap during the play, Emberwick's switchback after a bar of your own dashes, and Unbroken in place of the Daredevil star. The three recordings are in this folder, with their sound. Everything is committed on the galaxy branch; nothing is pushed.</p>
+
+<h2>1. Forgiving taps, and mashing still fails</h2>
+<ul>
+<li><b>The buffer.</b> A tap up to 150 ms before an opening, a jump orb, a jump pad or a Meteor wall is held and performed exactly on the beat. It counts as early (no flow for it, but the combo is kept) and never kills.</li>
+<li><b>Way too early</b> in the Drifting Edge and Emberwick: ignored; the opening still waits for its tap. Later planets narrow it as in the approved table (Cirra 130 ms, Glassmere 120, Verdance and the ambush 100, the guardian 90).</li>
+<li><b>The anti-mash rule</b> (your change 1): when the taps of the last second outnumber the chart's marks within a second either side (more than twice the chart's rate) and there are at least three, no buffer applies, the press is judged by the old rules, and a stray tap in the two beats before an opening hits the ring. Tapping along with the count-in is never punished.</li>
+</ul>
+<div class="scroll"><table>
+<tr><th>Test</th><th>The Drifting Edge</th><th>Emberwick</th></tr>
+<tr><td>Bot on time, and 50, 100, 150 ms early on every press</td><td>clears ({{FORGIVE_EDGE}})</td><td>clears ({{FORGIVE_EMBER}})</td></tr>
+<tr><td>The same from every ember and section start, after the run-in</td><td>clears</td><td>clears</td></tr>
+<tr><td>An extra tap 200 or 300 ms early before any press</td><td>ignored, clears</td><td>ignored, clears</td></tr>
+<tr><td>Spam bots at 3, 4, 5, 6, 8, 10 and 12 taps a second, four phases each</td><td>{{SPAM_EDGE}}</td><td>{{SPAM_EMBER}}</td></tr>
+<tr><td>Doing nothing; every tap 300 ms late</td><td>fails</td><td>fails</td></tr>
+</table></div>
+<p>The whole suite: {{TESTS}}.</p>
+
+<h2>2. Embers</h2>
+<ul>
+<li>A dark coal on the course at each section line; it catches as Orbin passes (a ring of warm light, two soft notes), and stays lit behind him. Deep orange, never the tap's gold.</li>
+<li>A fall goes straight back to the last lit ember: the music a bar before it, that bar played for you, the planet as it was there. It is the same attempt (the counter does not go up).</li>
+<li>The Drifting Edge: 12.8, 19.2, 32.0, 44.8, 57.6 s. Emberwick: 12.0, 19.2, 28.8, 38.4, 48.0 s. Cirra and Glassmere: one, at the drop. Verdance, the ambush and the guardian: none. Practice: one at every section, everywhere.</li>
+<li><b>Unbroken</b> replaces the Daredevil star: clear it without a fall (a Daredevil clear counts too). Still 26 stars. Daredevil stays as a way to play.</li>
+</ul>
+
+<h2>3. The cold open, as a film (40 s in the recording)</h2>
+<div class="scroll"><img src="{{img:film}}" alt="The cold open: play, the strike, the reach, the pull, the loss, the lines" style="max-width:none;height:340px"></div>
+<p>As storyboarded, with your change 2: the play and the omen are pure film, and the first thing the player ever does is reach for Helion. Hold, and Orbin drives into the headwind of ash (embers torn off him, his light hotter, the gap closing, a heartbeat and a swell rising with it); let go, and the tide takes him back. When their fingers touch, one clear note. Then <i>Pull!</i>: each tap a heave and a note of their song; three ring out, the hope chord swells, the fourth tap is a dead click. His fingers slip, "Orbin!", the shockwave, black, the three lines. Left alone four seconds, Orbin goes on by himself, so nobody can get stuck. In the recording, the scripted player lets go once during the reach, so you can see the gap open again: touch at 24.6 s, the slip at 28.7 s, the end at 40.</p>
+<p class="note"><b>About the sound in the recording:</b> the film's scored parts are the game's own file. The live sounds (heartbeat, swell, heaves, notes) are made in the browser as you play. The headless recorder can't capture those, so for the video I synthesised them at the exact moments the scripted player acted, the same way the game makes them. On your device, the game plays them itself.</p>
+
+<h2>4. The set pieces, with their times</h2>
+<h3>The Drifting Edge</h3>
+<div class="scroll"><table>
+<tr><th>When</th><th>Set piece</th><th>What you see and do</th></tr>
+<tr><td class="n">0:09.6</td><td>The first orb</td><td>A pickup, then a jump orb, alone</td></tr>
+<tr><td class="n">0:17.6</td><td>Helion's moment</td><td>His motif far off, his light on the horizon</td></tr>
+<tr><td class="n">0:19.2–0:32.0</td><td>Chase his light</td><td>His light on the course a few beats ahead (orange, with his small figure in it); it flares on each good tap. Jumps and jump orbs</td></tr>
+<tr><td class="n">0:32.0–0:44.8</td><td>The light climbs</td><td>It lifts off the surface; four teal jump pads, each a long high hop of two beats with nothing to tap in the air</td></tr>
+<tr><td class="n">0:44.8–0:51.2</td><td>The Sleeper's hand</td><td>The light slips away into the dark; the stone hand rises out of the planetoid (a dip first), the world slows (the slow portal at 48.0); at 49.6 its palm is the pad: one tap throws you a whole bar, the camera pulling back, onto the second drop</td></tr>
+<tr><td class="n">0:51.2–1:10.4</td><td>The residue chases you</td><td>At speed, a smear of ink creeping along the course behind you, gaining toward each phrase's end, pushed back by each good landing; pressure only. It falls away at 1:10.4</td></tr>
+</table></div>
+<h3>Emberwick</h3>
+<div class="scroll"><table>
+<tr><th>When</th><th>Set piece</th><th>What you see and do</th></tr>
+<tr><td class="n">0:12.0</td><td>The Meteor</td><td>The Kindling gives it; the first walls are played for you, then a bar of your own dashes</td></tr>
+<tr><td class="n">0:16.8</td><td>The switchback (moved)</td><td>On the riser, after that bar of dashes: the orbit turns round. Outside the drop, as you asked; the level's other turn is in the verse</td></tr>
+<tr><td class="n">0:19.2–0:36.0</td><td>Ossa's hammer</td><td>The great node is her first strike; at 24.0, 28.8 and 33.6 a ring of fire closes on a pad and bursts as you tap it, launching you two beats high over the walls. Never a wall in those two beats</td></tr>
+<tr><td class="n">0:37.6–0:38.4</td><td>Into the core</td><td>The camera dives through the forge's mouth (a white-hot flash)</td></tr>
+<tr><td class="n">0:38.4–0:56.7</td><td>Inside the heart</td><td>A new place: molten walls flowing outward, a white-gold heart turning at the centre, pulsing with Ossa's strikes. The forge sprint at 45.6</td></tr>
+<tr><td class="n">0:56.7</td><td>The seal</td><td>The last wall is the Stillness's seal, a ring of ink round the star; the dash on the song's last stab shatters it. (It sits on the song's real last stab, 56.7 s, not 55.2 as the plan said.)</td></tr>
+</table></div>
+<div class="scroll"><img src="{{img:sets}}" alt="Frames of the set pieces in both levels" style="max-width:none;height:340px"></div>
+
+<h2>5. The variety audit</h2>
+<p><b>The Drifting Edge: 30 unique bar patterns out of 43 played (70%, up from 60%).</b> Longest identical run 1 bar; inside the table (calm 0.55 taps/s; the chase 1.48, the climb 1.48, the second drop 1.41, against 1.5; no turns, spins, inverts, weaving or gravity; one slow and one fast portal; nothing stacked). <b>Emberwick: 23 of 23 (100%)</b>; calm 0.67, drops 1.41 and 1.61 against 2; two turns (bars 2 and 7), none in the drop; nothing stacked. The full audit is in the text file in this folder.</p>
+
+<h2>6. To play it</h2>
+<p>The cold open: <code>?cold</code> (or <code>?fresh</code> to play as a new player; your own save is untouched). The levels: from the map as usual.</p>
+</main></body></html>

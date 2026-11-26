@@ -62,7 +62,7 @@ export interface Press {
    */
   orb: '' | 'jump' | 'dash' | 'grav';
   /** a pad on the ring, tapped like any mark: a spring pad throws the ball to the next planet, a tide pad turns gravity over */
-  pad: '' | 'spring' | 'tide';
+  pad: '' | 'spring' | 'tide' | 'jump';
   /** part of a form's safe introduction: the game plays it, to show the move */
   intro: boolean;
   /** the first press after a lens or a gate: a wider opening, and tapping early for it is never punished */
@@ -116,7 +116,7 @@ export interface Layers { survival: number[]; flow: number[] }
 /** Things a level can ask of the player; the first time each appears it gets a hint. */
 export type Feature = 'smash' | 'charge' | 'flip' | 'weave' | 'spin' | 'sling' | 'reverse' | 'faster' | 'slower' | 'twin' | 'rail' | 'line' | 'tether' | 'meteor' | 'sat' | 'pulsar' | 'comet' | 'spring' | 'tide' | 'chime' | 'slip' | 'grav' | 'combo' | 'mirror' | 'invert' | 'dual';
 /** How one bar plays. */
-export interface BarCfg { token: string; mode: 'up' | 'down' | 'weave'; spin: boolean; twin: boolean; dual: boolean; echo: Form; sling: boolean; spring: boolean; tide: boolean; turn: boolean; mirror: boolean; invert: boolean; long: boolean; tether: boolean; chime: boolean; slip: boolean; grav: boolean; combo: string; sparse: boolean; strong: boolean; beats: boolean; every: boolean; hold: boolean; sync: boolean; speed: number; form: Form }
+export interface BarCfg { token: string; mode: 'up' | 'down' | 'weave'; pad: boolean; throw: boolean; spin: boolean; twin: boolean; dual: boolean; echo: Form; sling: boolean; spring: boolean; tide: boolean; turn: boolean; mirror: boolean; invert: boolean; long: boolean; tether: boolean; chime: boolean; slip: boolean; grav: boolean; combo: string; sparse: boolean; strong: boolean; beats: boolean; every: boolean; hold: boolean; sync: boolean; speed: number; form: Form }
 
 export interface Course {
   spb: number;
@@ -285,7 +285,7 @@ export function barPlan(level: Level): BarCfg[] {
       const twin = w.includes('twin') || dual;
       const combo = (w.find((s) => s.startsWith('c=')) ?? '').slice(2);
       // a planet hop only ever starts a phrase or its second half (every other bar), and never in a twin orbit
-      out.push({ token, mode: w.includes('weave') ? 'weave' : w.includes('down') ? 'down' : 'up', spin: w.includes('spin'), twin, dual, echo, sling: w.includes('sling') && !twin && k % 2 === 0, spring: w.includes('spring') && !twin && k % 2 === 0, tide: w.includes('tide') && !twin, turn: w.includes('turn'), mirror: w.includes('mirror'), invert: w.includes('invert'), long: w.includes('long'), tether: w.includes('tether'), chime: w.includes('chime'), slip: w.includes('slip'), grav: w.includes('grav'), combo, sparse: w.includes('sparse'), strong: w.includes('strong'), beats: w.includes('beats') || w.includes('every'), every: w.includes('every'), hold: w.includes('hold'), sync: w.includes('sync'), speed, form });
+      out.push({ token, mode: w.includes('weave') ? 'weave' : w.includes('down') ? 'down' : 'up', pad: w.includes('pad'), throw: w.includes('throw'), spin: w.includes('spin'), twin, dual, echo, sling: w.includes('sling') && !twin && k % 2 === 0, spring: w.includes('spring') && !twin && k % 2 === 0, tide: w.includes('tide') && !twin, turn: w.includes('turn'), mirror: w.includes('mirror'), invert: w.includes('invert'), long: w.includes('long'), tether: w.includes('tether'), chime: w.includes('chime'), slip: w.includes('slip'), grav: w.includes('grav'), combo, sparse: w.includes('sparse'), strong: w.includes('strong'), beats: w.includes('beats') || w.includes('every'), every: w.includes('every'), hold: w.includes('hold'), sync: w.includes('sync'), speed, form });
     }
   }
   return out;
@@ -511,8 +511,12 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
     const grav = chained && !slip && (ask === 'g' || (!cfg.combo && cfg.grav));
     const kindOf: Press['orb'] = !chained ? '' : slip && ask === 'd' ? 'dash' : grav ? 'grav' : ask === 'j' || (!cfg.combo && cfg.chime && !slip) ? 'jump' : '';
     const chime = kindOf !== '';
+    // a jump pad (the bar's first press, on its downbeat): a long high hop on the same planet, two beats in the air (the
+    // Drifting Edge's flowers, Ossa's hammer); a throw: the same, a whole bar in the air (the Sleeper's hand)
+    const padK = !plain && !sling && !cfg.twin && (cfg.pad || cfg.throw) && nth === 0 && Math.abs(beat - barOf(beat) * 4) < 0.01;
+    const padTo = padK ? Math.min(i + 1 < ground.length ? ground[i + 1] : end, beat + (cfg.throw ? 4 : 2)) : 0;
     const quick = form === 'meteor' || form === 'pulsar' || (form === 'comet' && act === 'tap') ? Math.min(QUICK, next) : form === 'comet' ? Math.min(QUICK, next * 0.5) : 0;
-    const land = sling ? beat + SLING_FLIGHT : quick ? beat + quick : slip ? beat + SLIP_FLIGHT : i + 1 < ground.length ? Math.min(ground[i + 1], beat + CAP) : Math.min(beat + 1, end);
+    const land = padK ? padTo : sling ? beat + SLING_FLIGHT : quick ? beat + quick : slip ? beat + SLIP_FLIGHT : i + 1 < ground.length ? Math.min(ground[i + 1], beat + CAP) : Math.min(beat + 1, end);
     const dur = land - beat;
     // gravity: a weave flips on every press (so do the Satellite and the Comet, which travel between two rings);
     // a Pulsar flips on its own ring; otherwise flip only when the bar wants the other side of the ring
@@ -550,8 +554,8 @@ export function buildCourse(level: Level, layers: Layers, pitchAt: (beat: number
       i, beat, tol, kind: flip ? 'flip' : 'hop', auto: auto.has(beat) || given === 'intro', smash: isSmash, accent, sling, after, weave, spin, twin,
       from: lv, to, side, planet, planetTo: sling ? planet + 1 : planet, camLv: weave ? lv + side * 0.5 : to,
       land, bounce: i + 1 < ground.length && ground[i + 1] === land,
-      bulge: form === 'meteor' ? 0.28 : form === 'comet' && act === 'tap' ? 0.45 : flip || slip ? 0 : sling ? 0.5 : clamp(0.35 * dur - 0.1, 0.06, 0.7), pitch: pitchAt(beat), seg: seg.index,
-      form, act, line: form === 'sat' || slip, chime, slip, orb: kindOf, pad: given === 'spring' || given === 'tide' ? given : '', intro: given === 'intro', wide: isWide || easy.has(beat)
+      bulge: padK ? (cfg.throw ? 1.0 : 0.75) : form === 'meteor' ? 0.28 : form === 'comet' && act === 'tap' ? 0.45 : flip || slip ? 0 : sling ? 0.5 : clamp(0.35 * dur - 0.1, 0.06, 0.7), pitch: pitchAt(beat), seg: seg.index,
+      form, act, line: form === 'sat' || slip, chime, slip, orb: kindOf, pad: padK ? 'jump' : given === 'spring' || given === 'tide' ? given : '', intro: given === 'intro', wide: isWide || easy.has(beat)
     });
     lv = to;
     if (flip) side = side === 1 ? -1 : 1;
