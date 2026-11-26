@@ -506,7 +506,7 @@ function skyInfo(): SkyInfo {
   // the next world along the road stirs: the hook to go on
   const next = nodes.find((n) => n.kind === 'planet' && n.state === 'open' && n.best === 0 && n.id !== PACKS[0].level.id);
   if (next) next.hook = 'is waking\u2026';
-  return { nodes, lens: `${starCount()} of ${maxStars} star shards`, lit: rooms.stars ? `${starsLit(starProgress).length} of ${STAR_TOTAL} stars lit` : '', rooms };
+  return { nodes, lens: `${starCount()} of ${maxStars} star shards`, lit: rooms.stars ? `${starsLit(starProgress).length} of ${STAR_TOTAL} stars lit` : '', rooms, ambush: save.story.ambush ? 'home' : 'hidden' };
 }
 /** The Landing grows with every star awake: Ossa's fire (the glows) with the first, the rim's star chart with the second. (The crater and the still pool are always there.) */
 function hubRooms(): { glows: boolean; stars: boolean } {
@@ -522,9 +522,23 @@ function leaveRoom(): void {
   viaLantern = false;
 }
 // Taps on the map go to whatever is painted there: a world, the Lantern and its rooms, the stars, or the open sky.
+// drag to look round the sky, pinch (or the wheel) to come closer (the map pass, 2026-11-26); a drag is never a tap
+const drag = { pts: new Map<number, [number, number]>(), moved: 0, pinchD: 0, suppress: false };
+$('levels').addEventListener('pointerdown', (e) => { if (screen !== 'levels') return; drag.pts.set(e.pointerId, [e.clientX, e.clientY]); drag.moved = 0; drag.suppress = false; if (drag.pts.size === 2) { const [a, b] = [...drag.pts.values()]; drag.pinchD = Math.hypot(a[0] - b[0], a[1] - b[1]); } });
+$('levels').addEventListener('pointermove', (e) => {
+  const p = drag.pts.get(e.pointerId); if (!p || screen !== 'levels') return;
+  const dx = e.clientX - p[0], dy = e.clientY - p[1]; drag.pts.set(e.pointerId, [e.clientX, e.clientY]);
+  if (drag.pts.size === 1) { drag.moved += Math.hypot(dx, dy); if (drag.moved > 8) { sky.dragBy(dx, dy); drag.suppress = true; } }
+  else if (drag.pts.size === 2) { const [a, b] = [...drag.pts.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (drag.pinchD > 0) sky.pinch(d / drag.pinchD); drag.pinchD = d; drag.suppress = true; }
+});
+for (const type of ['pointerup', 'pointercancel'] as const) $('levels').addEventListener(type, (e) => { drag.pts.delete(e.pointerId); if (drag.pts.size < 2) drag.pinchD = 0; });
+$('levels').addEventListener('wheel', (e) => { if (screen !== 'levels') return; e.preventDefault(); sky.pinch(Math.exp(-e.deltaY * 0.0015)); }, { passive: false });
 $('levels').addEventListener('click', (e) => {
   if (screen !== 'levels' || $('levels').classList.contains('launch')) return;
+  if (drag.suppress) { drag.suppress = false; return; }
   const hit = sky.hit(e.clientX, e.clientY);
+  if (hit.kind === 'node' && hit.id === 'ambush') { startAmbush(); return; }
+  if (hit.kind === 'play') { if (canPlay()) begin(false); return; }
   if (hit.kind === 'node') {
     if (hit.id === 'landing') {
       sky.chosen = sky.chosen === 'landing' ? null : 'landing';

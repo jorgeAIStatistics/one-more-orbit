@@ -7,6 +7,9 @@ import { DUSK, K } from '../art/painter.js';
 import { CANON } from '../art/canonpaint.js';
 import { UI } from '../art/uipaint.js';
 import { Actor } from './actor';
+import { WORLDS as WP } from '../art/worldpaint.js';
+import { WORLDS2 as W2 } from '../art/world2paint.js';
+import { rings } from '../art/stillness.js';
 
 type RGB = [number, number, number];
 export interface SkyNode {
@@ -25,6 +28,8 @@ export interface SkyInfo {
   lit: string;
   /** the Lantern relights room by room: the hearth (Eko's glows) with the first song home, the gallery (the star chart) with the second */
   rooms: { glows: boolean; stars: boolean };
+  /** the ambush (2026-11-26), on the road between Cirra and Glassmere: not yet met, met (it can be flown again) */
+  ambush?: 'hidden' | 'home';
 }
 /**
  * A scene played in this sky instead of the map (the prologue): it says where the camera looks and how much of its
@@ -37,10 +42,12 @@ export interface SkyStage {
   /** drawn over the worlds, in the painting's own coordinates (the camera is already applied) */
   paint: (c: CanvasRenderingContext2D) => void;
 }
-export type SkyHit = { kind: 'node'; id: string } | { kind: 'practise' | 'dare' | 'glows' | 'settings' | 'stars' | 'pool' | 'title' | 'sky' };
+export type SkyHit = { kind: 'node'; id: string } | { kind: 'play' | 'practise' | 'dare' | 'glows' | 'settings' | 'stars' | 'pool' | 'title' | 'sky' };
 
 const T = DUSK.tools;
 const SERIF = '"Cormorant Garamond", "Hoefler Text", Baskerville, Palatino, Georgia, serif';
+/** buttons: one clean upright face (the menus pass, 2026-11-26: italics only for titles and story) */
+const PLAIN = '"Source Sans 3", system-ui, -apple-system, "Segoe UI", sans-serif';
 const CREAM = '#fff1d8', SAND = '#e6cfae';
 const PAL: Record<string, { base: RGB; lit: RGB; dark: RGB; bands: unknown[] }> = {
   heroes: { base: [214, 96, 60], lit: [255, 190, 120], dark: [70, 26, 50], bands: [[-0.2, 0.22, [255, 200, 140], 0.14], [0.3, 0.25, [150, 50, 50], 0.16]] },
@@ -201,6 +208,44 @@ export class SkyMap {
     c.shadowBlur = 0; c.globalAlpha = 1;
     return c.measureText(s).width;
   }
+  /** A button (the menus pass, 2026-11-26): a capsule with its word in the clean face, at least 44 points tall on the
+   * screen whatever the zoom; gold for the way in, cream for the others. Returns its box (in the painting). */
+  private button(s: string, x: number, y: number, align: CanvasTextAlign, a: number, main: boolean): { x: number; y: number; w: number; h: number } {
+    const c = this.ctx, z = this.z, px = 16.5 / z * 1.16, hgt = 44 / z, padX = 18 / z;
+    c.font = `600 ${px}px ${PLAIN}`; const tw = c.measureText(s).width, bw = tw + padX * 2;
+    const bx = align === 'right' ? x - bw : align === 'center' ? x - bw / 2 : x, by = y - hgt / 2, r = hgt / 2;
+    c.save(); c.globalAlpha = a;
+    c.fillStyle = main ? 'rgba(255,208,106,0.2)' : 'rgba(255,241,216,0.07)'; c.strokeStyle = main ? 'rgba(255,208,106,0.95)' : 'rgba(255,241,216,0.6)'; c.lineWidth = 1.4 / z;
+    c.beginPath(); c.roundRect(bx, by, bw, hgt, r); c.fill(); c.stroke();
+    c.fillStyle = main ? '#ffe2a0' : CREAM; c.textAlign = 'center'; c.textBaseline = 'middle'; c.shadowColor = 'rgba(8,6,24,0.75)'; c.shadowBlur = 6 / z;
+    c.fillText(s, bx + bw / 2, y + 0.5 / z); c.restore();
+    return { x: bx, y: by, w: bw, h: hgt };
+  }
+  /** A world's small system on the map, and its inhabitant once its song is home (the map pass, 2026-11-26). */
+  private system(id: string, x: number, y: number, R: number, state: string, side: Side, t: number): void {
+    const c = this.ctx, P = PAL[id]; if (!P || state === 'dark') return;
+    const k = state === 'home' ? 1 : 0.45;
+    c.save(); c.strokeStyle = K.rgba(P.lit, 0.16 * k); c.lineWidth = 1;
+    for (const [rr, sp, sz, ph] of [[1.75, 0.35, 0.16, 0], [2.25, -0.22, 0.12, 2]] as Array<[number, number, number, number]>) {
+      c.beginPath(); c.ellipse(x, y, R * rr, R * rr * 0.36, -0.2, 0, Math.PI * 2); c.stroke();
+      const a = t * sp + ph, mx = x + Math.cos(a) * R * rr * Math.cos(-0.2) - Math.sin(a) * R * rr * 0.36 * Math.sin(-0.2), my = y + Math.cos(a) * R * rr * Math.sin(-0.2) + Math.sin(a) * R * rr * 0.36 * Math.cos(-0.2);
+      K.glow(c, mx, my, R * sz * 2.5, P.lit, 0.25 * k); c.fillStyle = K.rgba(K.mix(P.base, [20, 18, 40], 0.3), 0.95); c.beginPath(); c.arc(mx, my, R * sz, 0, Math.PI * 2); c.fill();
+    }
+    c.restore();
+    if (state !== 'home') return;
+    // its inhabitant, small, beside it (on the side away from its words)
+    const dir = side === 'left' ? 1 : -1, ix = x + dir * R * 1.6, iy = y + R * 1.25, s = R * 0.0045, br = (t * 0.25) % 1;
+    c.save(); c.globalAlpha = 0.92;
+    if (id === 'heroes') WP.ossa(c, ix, iy, s * 0.9, { rise: 0.6, rear: 0, head: 0.2, antler: 0, tail: 0, breath: br, lit: 1, flicker: 0.6, face: -dir } as never);
+    else if (id === 'skyhigh') W2.seo(c, ix, iy, s, { wake: 1, fly: 1, sway: 0.2 * Math.sin(t), flap: Math.sin(t * 3) * 0.5, lit: 1, t, face: -dir });
+    else if (id === 'blank') W2.vell(c, ix, iy - R * 0.9, s, { wake: 1, mirror: 0, bow: 0, ripple: 0.2, lit: 1, t });
+    else if (id === 'invincible') W2.morrow(c, ix, iy, s, { climb: 0.3, reach: 0.5 + 0.5 * Math.sin(t * 0.6), lights: 1, breath: br, lit: 1, t });
+    c.restore();
+  }
+  /** Drag and pinch (the map pass): how far the reader has moved the sky, and zoomed it */
+  private userX = 0; private userY = 0; private userZ = 1;
+  dragBy(dx: number, dy: number): void { this.userX -= dx / this.z; this.userY -= dy / this.z; }
+  pinch(f: number): void { this.userZ = Math.max(0.8, Math.min(2.4, this.userZ * f)); }
   /** A shard as a small star of paint: lit, or only the place where one will be. */
   private dab(x: number, y: number, s: number, on: boolean, a = 1): void {
     const c = this.ctx;
@@ -229,10 +274,11 @@ export class SkyMap {
     const wantZ = fly > 0 ? 1.16 + fly * fly * 3.2 : focus ? 1.16 : 1;
     const k = Math.min(1, dt * (fly > 0 ? 14 : 7));
     const tx = focus ? lerp(w / 2, focus.x, fly > 0 ? 1 : 0.5) : w / 2, ty = focus ? lerp(h / 2, focus.y, fly > 0 ? 1 : 0.5) : h / 2;
-    this.z += (wantZ - this.z) * k; this.fx += (tx - this.fx) * k; this.fy += (ty - this.fy) * k;
+    if ((this.chosen ?? '') !== this.shown) { this.userX = this.userY = 0; this.userZ = 1; } // (choosing a place takes the camera back to it)
+    this.z += (wantZ * (fly > 0 ? 1 : this.userZ) - this.z) * k; this.fx += (tx + this.userX - this.fx) * k; this.fy += (ty + this.userY - this.fy) * k;
     // the camera never looks past the edge of the painting
-    const hw = w / (2 * this.z), hh = h / (2 * this.z);
-    this.fx = Math.max(hw, Math.min(w - hw, this.fx)); this.fy = Math.max(hh, Math.min(h - hh, this.fy));
+    const hw = w / (2 * Math.max(1, this.z)), hh = h / (2 * Math.max(1, this.z));
+    this.fx = Math.max(Math.min(hw, w / 2), Math.min(Math.max(w - hw, w / 2), this.fx)); this.fy = Math.max(Math.min(hh, h / 2), Math.min(Math.max(h - hh, h / 2), this.fy));
     if ((this.chosen ?? '') !== this.shown) { this.shown = this.chosen ?? ''; this.fade = 0; }
     this.fade = Math.min(1, this.fade + dt / 0.28);
     c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
@@ -282,9 +328,9 @@ export class SkyMap {
       });
       this.text(this.info.lens, wx, wy + 56, 15, this.fade * 0.86, wa, SAND);
     } else {
-      this.text('the Landing', wx, wy, 18, quiet + 0.1, wa, CREAM, 600);
-      this.text(['the still pool', this.info.rooms.glows ? 'Ossa’s fire' : '', 'the crater', this.info.rooms.stars ? 'the rim' : ''].filter(Boolean).join('  ·  '), wx, wy + 19, 14.5, quiet * 0.95, wa, SAND);
-      this.text(this.info.lens, wx, wy + 37, 14.5, quiet * 0.95, wa, SAND);
+      if (!(at && L === LAYS.tall && at.y > h * 0.6)) this.text('the Landing', wx, wy, 18, quiet + 0.1, wa, CREAM, 600); // (it steps aside for a low world's buttons; it can still be tapped)
+      if (!(at && L === LAYS.tall && at.y > h * 0.6)) this.text(['the still pool', this.info.rooms.glows ? 'Ossa’s fire' : '', 'the crater', this.info.rooms.stars ? 'the rim' : ''].filter(Boolean).join('  ·  '), wx, wy + 19, 14.5, quiet * 0.95, wa, SAND);
+      if (!(at && L === LAYS.tall && at.y > h * 0.6)) this.text(this.info.lens, wx, wy + 37, 14.5, quiet * 0.95, wa, SAND);
     }
     // what the hub says, once, on coming home
     if (this.said.text) {
@@ -293,6 +339,15 @@ export class SkyMap {
       if (age > 8.5) this.said.text = ''; else this.text(this.said.text, L === LAYS.tall ? w / 2 : wx, wy - (L === LAYS.tall ? 52 : 44), 20, a, L === LAYS.tall ? 'center' : wa, CREAM);
     }
 
+    // each world's small system (and its inhabitant once it is awake)
+    for (const n of planets) { const p = this.pos.get(n.id); if (p) this.system(n.id, p.x, p.y, p.r, n.state, p.side, t); }
+    // the ambush, on the road between Cirra and Glassmere, once it has happened: a knot of the dark, flown again on a tap
+    if (this.info.ambush === 'home') {
+      const a = this.pos.get('skyhigh')!, b = this.pos.get('blank')!, x = lerp(a.x, b.x, 0.5) + 30 * u, y = lerp(a.y, b.y, 0.5);
+      rings(c, x, y, 16 * u, 6 * u, 0.8, t); K.glow(c, x, y, 10 * u, [255, 200, 140], 0.5);
+      this.text('the ambush', x + 26 * u, y + 5, 15.5, 0.85, 'left', SAND);
+      this.hits.push({ x: x - 30 * u, y: y - 24 * u, w: 130 * u, h: 48 * u, hit: { kind: 'node', id: 'ambush' } });
+    }
     // the worlds: far ones first, the chosen one last and larger, each with what is written beside it
     const order = [...this.info.nodes].sort((a, b) => Number(a.id === this.chosen) - Number(b.id === this.chosen) || (this.place(a)?.r ?? 0) - (this.place(b)?.r ?? 0));
     for (const n of order) {
@@ -322,7 +377,8 @@ export class SkyMap {
         continue;
       }
       // the chosen one: its few soft lines, fading in beside it
-      const a = this.fade, y0 = below ? p.y + R + 40 * u + 20 : p.y - 26;
+      const low = !below && p.y > h * 0.6 ? 58 : 0; // (a low world's lines and buttons sit higher: clear of the Landing's words)
+      const a = this.fade, y0 = below ? p.y + R + 40 * u + 20 : p.y - 26 - low;
       this.text(n.name, x0, y0, 34, a, al, CREAM, 600);
       this.text(n.song, x0, y0 + 25, 18, a * 0.92, al);
       this.text(`by ${n.by}`, x0, y0 + 43, 15, a * 0.88, al, SAND);
@@ -330,20 +386,21 @@ export class SkyMap {
       const bw = this.text(n.best >= 100 ? 'awake' : n.best > 0 ? `best ${n.best}%` : 'not yet played', x0, y0 + 74, 19, a * 0.95, al);
       if (n.kind !== 'moon') for (let i = 0; i < 3; i++) this.dab(below ? p.x - 16 + i * 16 : x0 + dir * (bw + 16 + i * 16), below ? y0 + 92 : y0 + 68, 4, n.shards[i], a);
       const y1 = y0 + (below ? 118 : 104);
-      this.text('tap again to fly in', x0, y1, 16.5, a * 0.9, al);
-      if (!n.dare) {
-        this.text('or practise', x0, y1 + 30, 15.5, a * 0.88, al, SAND);
-        this.hits.push({ x: below ? x0 - 70 : left ? x0 - 130 : x0 - 10, y: y1 + 8, w: 140, h: 40, hit: { kind: 'practise' } });
+      // the way in: a clear Play, and Practice (and Dare, once its song is home) beside it, each a button
+      const al2: CanvasTextAlign = below ? 'center' : left ? 'right' : 'left', gap = 10 / this.z;
+      const playB = this.button(n.best >= 100 ? 'Play again' : 'Play', x0, y1 + 6, al2, a, true);
+      this.hits.push({ ...playB, hit: { kind: 'play' } });
+      // (Practice and Dare under it, in a column: one style, never off the edge of the picture)
+      if (low && al2 === 'left') { // (a low world: two rows; each button goes beside the one before it if it fits, else on the next row)
+        const right = this.fx + w / (2 * this.z) - 8 / this.z; let cx = playB.x + playB.w + gap, row = 0;
+        const put = (label: string, kind: 'practise' | 'dare', est: number) => { if (cx + est / this.z > right) { row++; cx = x0; } const b = this.button(label, cx, y1 + 6 + row * 50 / this.z, 'left', a, false); this.hits.push({ ...b, hit: { kind } }); cx = b.x + b.w + gap; };
+        put('Practice', 'practise', 100);
+        if (n.dare) put(n.dare === 'done' ? 'Dare again' : 'Dare', 'dare', n.dare === 'done' ? 110 : 70);
       } else {
-        // a world whose song is home can also be dared: one attempt, and a fall sends you back here (its Daredevil star).
-        // The two quiet ways in share a line, each word its own place to tap.
-        const dareIt = n.dare === 'done' ? 'or dare it again' : 'or dare it', gap = 26;
-        c.font = `italic 500 15.5px ${SERIF}`;
-        const pw = c.measureText('or practise').width, dw = c.measureText(dareIt).width, xs = below ? x0 - (pw + gap + dw) / 2 : left ? x0 - (pw + gap + dw) : x0;
-        this.text('or practise', xs, y1 + 30, 15.5, a * 0.88, 'left', SAND);
-        this.text(dareIt, xs + pw + gap, y1 + 30, 15.5, a * 0.88, 'left', SAND);
-        this.hits.push({ x: xs - 12, y: y1 + 8, w: pw + 12 + gap / 2, h: 40, hit: { kind: 'practise' } }, { x: xs + pw + gap / 2, y: y1 + 8, w: dw + gap / 2 + 12, h: 40, hit: { kind: 'dare' } });
+        const pr = this.button('Practice', x0, y1 + 6 + 52 / this.z, al2, a, false); this.hits.push({ ...pr, hit: { kind: 'practise' } });
+        if (n.dare) { const dr = this.button(n.dare === 'done' ? 'Dare again' : 'Dare', x0, y1 + 6 + 104 / this.z, al2, a, false); this.hits.push({ ...dr, hit: { kind: 'dare' } }); }
       }
+      void gap;
     }
     // Eko waits by the place chosen (or the furthest world reached), and drifts
     const base = at ?? this.pos.get([...planets].reverse().find((n) => n.state !== 'dark')?.id ?? 'heroes')!;

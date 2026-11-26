@@ -247,3 +247,15 @@ body.boot .screen { transition: none; } /* the first screen is simply there when
 .rec-cell.fresh { box-shadow: 0 0 10px #fff; }
 .rec-cell.now { box-shadow: 0 0 0 2px #fff; }
 #recExport { width: 100%; border: 1px solid #5a5b66; border-radius: 4px; background: rgba(0, 0, 0, 0.35); color: #cfe; font: 11px ui-monospace, monospace; }
+
+/* ---------- the menus pass (2026-11-26, Part 4B §4): italics only for titles and story; every button in one clean
+   upright face, one style (words with a hairline, the way in brighter), and at least 44 points tall ---------- */
+button, .act, .row, .way, .step button { font-family: var(--plain); font-style: normal; font-weight: 600; letter-spacing: 0.01em; }
+.act { font-size: 19px; min-height: 44px; padding: 8px 0; }
+.act.first { font-size: 34px; min-height: 56px; }
+.act.small { font-size: 15px; min-height: 44px; }
+.row { font-size: 17px; min-height: 48px; }
+.row small, .row > small { font-family: var(--plain); font-style: normal; font-weight: 600; font-size: 13px; letter-spacing: 0.01em; opacity: 0.8; }
+.way { font-size: 15px; }
+@media (min-aspect-ratio: 115/100) and (min-height: 700px) { .act { font-size: 20px; } .act.first { font-size: 38px; min-height: 60px; } .row { font-size: 18px; } }
+@media (max-height: 520px) { .act { min-height: 44px; font-size: 17px; } .act.first { min-height: 48px; font-size: 28px; } .row { min-height: 44px; font-size: 16px; } }
