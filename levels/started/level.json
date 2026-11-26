@@ -9,6 +9,7 @@
   "difficulty": "The first flight",
   "adds": "Star-Nodes, and the ribbon: keep your finger down along it",
   "holds": false,
+  "embers": [32, 48, 80, 112, 144],
   "rules": {"tol": 0.16, "ahead": 4, "intro": false, "buffer": 0.15, "early": 0},
   "setpieces": [{"bar": 6, "kind": "orb", "name": "The first orb", "what": "in the calm, a pickup, then a jump orb on the downbeat: tapped in mid-air, alone"}, {"bar": 12, "kind": "drop", "name": "The Sleeper stirs", "what": "the drop's great node: the planetoid wakes under him, its seam opening, flowers running out from every landing"}, {"bar": 32, "kind": "speed", "name": "The rush", "what": "the second drop at speed: a fast portal, announced a bar ahead, the stars streaking"}],
   "segments": [

@@ -88,6 +88,11 @@ export interface LevelFile {
    * tol = half-width of the openings in seconds, ahead = beats of course shown ahead of the ball, mirror = the orbit
    * runs the other way, speed = how much faster it turns.
    */
+  /**
+   * Embers: the level's checkpoints, in beats (the owner's rule of 2026-11-25: one every section in the first two levels,
+   * one at the drop in Cirra and Glassmere, none after). A fall goes back to the last one passed, with a one-bar run-in.
+   */
+  embers?: number[];
   side?: { of: string; tol?: number; ahead?: number; mirror?: boolean; speed?: number };
   /** a harder level's own rules: tol = half-width of the openings in seconds (default 0.12), ahead = beats of course shown (default 3) */
   /**

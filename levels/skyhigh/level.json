@@ -16,6 +16,7 @@
   "hitsoundNote": 72,
   "scale": [0, 2, 3, 5, 7, 8, 10],
   "holds": true,
+  "embers": [100],
   "rules": {"tol": 0.12, "ahead": 3, "branch": 0.08, "known": ["meteor"], "buffer": 0.13, "early": 0.25},
   "shards": [[38.5, 42.5], [114.25, 118.25], [159.25, 163.25]],
   "segments": [

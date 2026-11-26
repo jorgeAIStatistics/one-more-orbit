@@ -35,10 +35,10 @@ export const ORBS: Orb[] = [
   { id: 'rose', name: 'Rose', rgb: [255, 90, 160], needs: 'in_flow', says: 'what keeping time looks like', how: 'wake a star with 85 taps in 100 on the beat' },
   { id: 'singular', name: 'Singular', rgb: [255, 255, 255], needs: 'clear_royalty', says: 'the guardian\u2019s own star', how: 'reignite the guardian' },
   // a planet dared: its Daredevil star (these were the quests' glows, and whoever did both of a level's quests keeps its)
-  { id: 'coral', name: 'Coral', rgb: [255, 120, 110], needs: 'dare:heroes', says: 'Emberwick, dared', how: 'the Daredevil star on Emberwick' },
-  { id: 'magenta', name: 'Magenta', rgb: [255, 90, 240], needs: 'dare:skyhigh', says: 'Cirra, dared', how: 'the Daredevil star on Cirra' },
-  { id: 'azure', name: 'Azure', rgb: [90, 160, 255], needs: 'dare:blank', says: 'Glassmere, dared', how: 'the Daredevil star on Glassmere' },
-  { id: 'mint', name: 'Mint', rgb: [90, 255, 190], needs: 'dare:invincible', says: 'Verdance, dared', how: 'the Daredevil star on Verdance' },
+  { id: 'coral', name: 'Coral', rgb: [255, 120, 110], needs: 'dare:heroes', says: 'Emberwick, dared', how: 'a Daredevil clear of Emberwick' },
+  { id: 'magenta', name: 'Magenta', rgb: [255, 90, 240], needs: 'dare:skyhigh', says: 'Cirra, dared', how: 'a Daredevil clear of Cirra' },
+  { id: 'azure', name: 'Azure', rgb: [90, 160, 255], needs: 'dare:blank', says: 'Glassmere, dared', how: 'a Daredevil clear of Glassmere' },
+  { id: 'mint', name: 'Mint', rgb: [90, 255, 190], needs: 'dare:invincible', says: 'Verdance, dared', how: 'a Daredevil clear of Verdance' },
   // a night side cleared
   { id: 'halo', name: 'Halo', rgb: [255, 176, 40], needs: 'moon:heroes', says: 'from the night side of Emberwick', how: 'the Night side star on Emberwick' },
   { id: 'eclipse', name: 'Eclipse', rgb: [130, 110, 255], needs: 'moon:skyhigh', says: 'from the night side of Cirra', how: 'the Night side star on Cirra' },

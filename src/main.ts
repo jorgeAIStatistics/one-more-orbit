@@ -108,6 +108,11 @@ const botStar = /[?&#]botstar\b/.test(location.search + location.hash);
 let practice = false;
 /** a daredevil flight: one attempt, and a fall sends you home */
 let dare = false;
+/** falls taken back to an ember since this attempt began from the start (none, on a clear: the Unbroken star) */
+let emberFalls = 0;
+/** the embers of the level being played, in beats (practice: every section; a daredevil, a chamber or autoplay: none) */
+let emberBeats: number[] = [];
+let emberLit = -1;
 /** how far the pause has come down over the scene, 0..1 */
 let held = 0;
 let lastFrame = performance.now();
@@ -530,7 +535,7 @@ function go(): void {
 }
 
 /** Starts an attempt. `from` is a song time (practice restarts from a checkpoint); `quick` is the instant restart after a crash. */
-function startRun(from = -1, quick = false, made: Run | null = null): void {
+function startRun(from = -1, quick = false, made: Run | null = null, ember = false): void {
   if (!chamber && !canPlay()) return;
   audio.ensure();
   audio.setVolumes(save.music, save.sfx);
@@ -538,7 +543,8 @@ function startRun(from = -1, quick = false, made: Run | null = null): void {
   if (practice && !botMode && !save.practiced[pack.level.id]) { save.practiced[pack.level.id] = true; persist(); }
   run?.stop();
   if (practice || botMode || chamber) dare = false;
-  const counted = !botMode && !practice && !chamber; // (a test chamber keeps no record)
+  const counted = !botMode && !practice && !chamber && !ember; // (a test chamber keeps no record; a fall back to an ember is the same attempt)
+  if (!ember) emberFalls = 0;
   if (counted) {
     save.bests[pack.level.id] = { ...bestFor(pack.level.id), attempts: bestFor(pack.level.id).attempts + 1 };
     persist();
@@ -547,7 +553,8 @@ function startRun(from = -1, quick = false, made: Run | null = null): void {
   renderer.reset();
   renderer.backdrop = chamber ? null : sceneFor(pack);
   renderer.planet = chamber ? null : worldFor(pack);
-  renderer.planet?.reset(); // (every attempt starts from how the Stillness left it)
+  if (ember) renderer.planet?.rewind(from); // back to an ember: the planet as it was there
+  else renderer.planet?.reset(); // (every attempt starts from how the Stillness left it)
   const hm = chamber || practice ? null : HELION[pack.level.id];
   helionCue = null;
   if (hm && audio.ctx) { const cue = (helionCue = { run: null as unknown as Run, track: null as Awaited<ReturnType<typeof audio.loadTrack>> | null, at: hm.at, meta: hm.meta, played: false }); void audio.loadTrack(hm.meta).then((t) => { cue.track = t; }, () => undefined); }
@@ -563,11 +570,15 @@ function startRun(from = -1, quick = false, made: Run | null = null): void {
   if (before) { const ps = sc as PlanetScene; ps.says = [...BEFORE[baseOf(pack)], ...ps.says]; }
   // the scene before a first attempt is also where the world's companion comes to him (the Kindling that gives the gift)
   renderer.meet = before ? COMPANIONS.KINDLE[baseOf(pack)] ?? null : null;
-  const opts = from >= 0 ? { startAt: from, leadIn: 1.5 } : quick ? { startAt: 2 * spb, leadIn: 0.3 } : { leadIn: before ? 9.2 : 2.4 };
+  const opts = ember ? { startAt: from, leadIn: 4 * spb } : from >= 0 ? { startAt: from, leadIn: 1.5 } : quick ? { startAt: 2 * spb, leadIn: 0.3 } : { leadIn: before ? 9.2 : 2.4 };
   const r = (run = made ?? new Run(pack, { bot: botMode, practice: practice && !botMode, ...opts, lights: carryLights ?? undefined }, onRunEnd));
   // what the star will need, painted during the scene before (a still picture), never while the course is moving
   if (before) { const n = starsHome(); landing.prepare([n, n + 1], () => run === r && r.time < -1.2); }
   carryLights = null;
+  // the embers on the course: a coal at each, catching as he passes (the ones behind a respawn are already lit)
+  emberBeats = chamber || botMode || dare ? [] : practice ? r.level.segments.map((s) => s.t0 / spb).filter((b) => b > r.t0 / spb + 0.01) : pack.level.embers ?? [];
+  renderer.embers = emberBeats;
+  emberLit = emberBeats.filter((b) => b * spb <= r.startAt + 1e-6).length - 1;
   const b = bestFor(pack.level.id);
   // the song's thread: a tick at the drop, a ring at your best; in practice, a tick where each section begins and a dab where this run set off
   const along = (t: number) => `${(Math.max(0, Math.min(1, (t - r.t0) / (r.t1 - r.t0))) * 100).toFixed(2)}%`;
@@ -769,6 +780,9 @@ function onRunEnd(r: Run): void {
     if (counted && pct > prev.pct) { save.bests[id] = { ...prev, pct }; persist(); session.newBest = true; if (PACKS.includes(r.pack)) gameCenter.best(id, pct); }
     if (dare && counted) { r.stop(); showResults(r, false, pct); return; } // a daredevil has one attempt: a fall sends him home
     nudgeAfter(r);
+    // an ember passed on this attempt: straight back to it, the music a bar before it, the planet as it was there
+    const spb = r.level.spb, em = r.opts.bot ? -1 : [...emberBeats].reverse().find((b) => b * spb >= r.startAt - 1e-6 && b * spb < r.crashTime) ?? -1;
+    if (em >= 0) { emberFalls++; startRun(em * spb, true, null, true); return; }
     startRun(-1, true);
     return;
   }
@@ -831,6 +845,7 @@ function showResults(r: Run, cleared: boolean, reached = r.pct, silent = false):
       // the two feats that are done once: every shard on this one flight, and a clear on a daredevil's single attempt
       if (r.course.stars.length > 0 && r.course.stars.every((st) => r.sim.stars[st.i] === 1)) save.feats[`shards:${id}`] = true;
       if (dare) save.feats[`dare:${id}`] = true;
+      if (emberFalls === 0 && r.startAt <= r.t0 + 1e-6 && !r.opts.bot) save.feats[`clean:${id}`] = true; // Unbroken: no fall on the way
       // what the shards have just done to the map
       if (!moonWas && nodeState(nodeOf(`${id}-b`), progress) !== 'hidden') said.push(`${planetName(id)} has a moon now.`);
       if (!gateWas && nodeState(nodeOf('gate'), progress) === 'open') said.push('All four stars are awake: the guardian is in reach.');
@@ -1576,6 +1591,8 @@ function tick(now: number): void {
       audio.playPart(helionCue.track, helionCue.meta, audio.ctx.currentTime + Math.max(0, helionCue.at - run.time), 0, { gain: 0.9 });
     }
     if (helionCue && run.time < helionCue.at - 1 && helionCue.played) helionCue.played = false; // (an instant restart begins before it again)
+    // an ember catches as he passes: a soft chime, two notes
+    if (run.state === 'playing' && emberLit + 1 < emberBeats.length && run.time >= emberBeats[emberLit + 1] * run.level.spb) { emberLit++; audio.pluck(76, 0.32); window.setTimeout(() => audio.pluck(83, 0.22), 90); }
     renderer.draw(run, now, dt);
     if (renderer.meet && run.time < 0.4) renderer.drawMeet(run.time, now);
     if (skyStar.on) { skyStar.draw(now, dt); if (!run || screen !== 'play') return; } // (its end hands the picture on to the Landing, this frame)

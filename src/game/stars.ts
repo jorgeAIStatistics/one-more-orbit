@@ -19,7 +19,7 @@ export interface StarProgress {
   cleared: (level: string) => boolean;
   /** the best share of a level's gold collected on a clear, percent */
   gold: (level: string) => number;
-  /** a feat done once: "shards:<level>" (all three shards in one flight), "dare:<level>" (cleared on a daredevil flight) */
+  /** a feat done once: "shards:<level>" (all three shards in one flight), "dare:<level>" (cleared on a daredevil flight), "clean:<level>" (cleared without a fall: the Unbroken star) */
   feat: (key: string) => boolean;
 }
 
@@ -28,7 +28,7 @@ const star = (place: string, kind: StarKind, name: string, what: string, tag: st
 const five = (id: string): Star[] => [
   star(id, 'restore', 'Reignite', 'wake its star'),
   star(id, 'shards', 'Shard run', 'all three shards in one flight'),
-  star(id, 'dare', 'Daredevil', 'one attempt: a fall sends you home'),
+  star(id, 'dare', 'Unbroken', 'clear it without a fall'),
   star(id, 'master', 'Rhythm master', 'touch every gold note'),
   star(id, 'night', 'Night side', 'clear its far side')
 ];
@@ -38,7 +38,7 @@ export const STARS: Star[] = [
   star('ambush', 'soon', 'Stand', 'come through it', 'stand'),
   star('ambush', 'soon', 'Every window', 'lose none of the four', 'windows'),
   star(FINAL_ID, 'restore', 'Reignite', 'light the guardian\u2019s star'),
-  star(FINAL_ID, 'dare', 'Daredevil', 'one attempt: a fall sends you home'),
+  star(FINAL_ID, 'dare', 'Unbroken', 'clear it without a fall'),
   star(FINAL_ID, 'master', 'Rhythm master', 'touch every gold note')
 ];
 /** All there are to light in World 1: the ones above, and one more that a hidden moon keeps. */
@@ -50,7 +50,7 @@ export function starLit(s: Star, p: StarProgress): boolean {
   switch (s.kind) {
     case 'restore': return p.cleared(s.place);
     case 'shards': return p.feat(`shards:${s.place}`);
-    case 'dare': return p.feat(`dare:${s.place}`);
+    case 'dare': return p.feat(`clean:${s.place}`) || p.feat(`dare:${s.place}`); // Unbroken (a Daredevil clear is one too)
     case 'master': return p.cleared(s.place) && p.gold(s.place) >= 100;
     case 'night': return p.cleared(`${s.place}-b`);
     default: return false;

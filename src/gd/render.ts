@@ -156,6 +156,8 @@ export class GdRenderer {
   cues: Array<{ x: number; y: number; beat: number }> = [];
   /** the world in the middle of the ring (the level is the place): drawn in place of the core, under the course */
   planet: World | null = null;
+  /** the level's embers (checkpoints), in beats: a coal on the course that catches as he passes */
+  embers: number[] = [];
   private worldR = 0;
   /** where the middle of the ring is on the screen (css px): the star rises from there */
   coreAt: [number, number] = [0, 0];
@@ -1277,6 +1279,30 @@ export class GdRenderer {
         // a tempo gate says how fast: 0.5x ... 2x
         const ga = ang(sp.beat);
         this.tag(`${sp.speed}\u00d7`, bx0 + Math.cos(ga) * (rr + rb * 5.2), by0 + Math.sin(ga) * (rr + rb * 5.2), clamp(rb * 1.9, 11, 18), CYAN, clamp((this.ahead - d) / 0.6, 0, 1) * clamp(1 + d / 0.4, 0, 1));
+      }
+      // embers: a small dark coal lying on the ring at a section line; it catches as he passes (a ring of warm light, then a
+      // small steady flame), and the lit ones stay lit behind him. Deep orange, never the gold of the tap signal.
+      for (const eb of this.embers) {
+        const d = eb - beat;
+        if (d > this.ahead || d < -8) continue;
+        const ea = ang(eb), here = course.at(eb), er = this.rad(here.rho) - here.side * rb * 0.9;
+        const ex = bx0 + Math.cos(ea) * er, ey = by0 + Math.sin(ea) * er;
+        const al = clamp((this.ahead - d) / 0.6, 0, 1);
+        c.globalAlpha = al;
+        if (d > 0) {
+          // unlit: a coal, a dull core
+          c.fillStyle = 'rgba(34,20,18,0.95)'; c.beginPath(); c.ellipse(ex, ey, rb * 0.62, rb * 0.42, ea, 0, TWO_PI); c.fill();
+          c.fillStyle = 'rgba(150,52,30,0.55)'; c.beginPath(); c.arc(ex, ey, rb * 0.18, 0, TWO_PI); c.fill();
+        } else {
+          const age = -d * course.spb, burst = clamp(age / 0.5, 0, 1), flick = 0.85 + 0.15 * Math.sin(time * 11 + eb) * Math.sin(time * 4.3);
+          if (burst < 1) { c.strokeStyle = `rgba(255,150,80,${0.7 * (1 - burst)})`; c.lineWidth = 2.5; c.beginPath(); c.arc(ex, ey, rb * (0.8 + 3.2 * burst), 0, TWO_PI); c.stroke(); }
+          const g = c.createRadialGradient(ex, ey, 0, ex, ey, rb * 1.8);
+          g.addColorStop(0, `rgba(255,190,120,${0.85 * flick})`); g.addColorStop(0.35, `rgba(240,110,50,${0.5 * flick})`); g.addColorStop(1, 'rgba(240,90,40,0)');
+          c.fillStyle = g; c.beginPath(); c.arc(ex, ey, rb * 1.8, 0, TWO_PI); c.fill();
+          c.fillStyle = 'rgba(60,30,22,0.9)'; c.beginPath(); c.ellipse(ex, ey + rb * 0.1, rb * 0.58, rb * 0.36, ea, 0, TWO_PI); c.fill();
+          c.fillStyle = `rgba(255,214,150,${flick})`; c.beginPath(); c.arc(ex, ey, rb * 0.22, 0, TWO_PI); c.fill();
+        }
+        c.globalAlpha = 1;
       }
       // lenses: a tall lens standing across the path, in the colour of the form it gives
       for (const ln of course.lenses) {

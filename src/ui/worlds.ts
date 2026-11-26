@@ -34,6 +34,8 @@ export interface World {
   spark(a: number, song: number): void;
   /** a new attempt: everything goes back to how the Stillness left it */
   reset(): void;
+  /** back to an ember: what was relit after this song time goes dark again; what was relit before it stays */
+  rewind(to: number): void;
 }
 /** The backdrop a world brings (the renderer's `backdrop`): it also carries the lines the inhabitant speaks. */
 export interface WorldSky { says: Said[]; prepare(): void; draw(c: CanvasRenderingContext2D, w: number, h: number, st: SceneState): void }
@@ -99,11 +101,13 @@ export class EmberWorld {
     this.skyCold = sky(false); this.skyHot = sky(true);
   }
   reset(): void { this.lit.fill(-1); this.sparks = 0; this.lastT = -1; this.impact = -9; this.embers = []; this.rise.x = 0; this.head.x = 0.62; this.litS.x = 0.05; }
+  rewind(to: number): void { for (let z = 0; z < ZONES; z++) if (this.lit[z] > to) this.lit[z] = -1; this.embers = []; this.lastT = -1; }
   spark(a: number, song: number): void { const z = zoneOf(a); if (this.lit[z] < 0) this.lit[z] = song; this.sparks++; if (this.sparks === 3) this.stirAt = song; }
 
   /** the planet, under the course */
   readonly world: World = {
     reset: () => this.reset(),
+    rewind: (to) => this.rewind(to),
     spark: (a, song) => this.spark(a, song),
     draw: (c, R, st) => {
       if (!this.cold || !this.hot) return;
@@ -188,6 +192,7 @@ export class EdgeWorld {
     const cv = document.createElement('canvas'); cv.width = w; cv.height = h; LANDING.sky(cv.getContext('2d')!, w, h, 0); this.skyLayer = cv;
   }
   reset(): void { this.lit.fill(-1); this.sparks = 0; this.blooms = []; this.lastT = -1; this.wake.x = 0; this.curl.x = 0.7; }
+  rewind(to: number): void { for (let z = 0; z < ZONES; z++) if (this.lit[z] > to) this.lit[z] = -1; this.blooms = this.blooms.filter((b) => b.at <= to); this.lastT = -1; }
   spark(a: number, song: number): void {
     const z = zoneOf(a); if (this.lit[z] < 0) this.lit[z] = song; this.sparks++;
     const r = K.RNG(this.seed++ * 7919);
@@ -196,6 +201,7 @@ export class EdgeWorld {
 
   readonly world: World = {
     reset: () => this.reset(),
+    rewind: (to) => this.rewind(to),
     spark: (a, song) => this.spark(a, song),
     draw: (c, R, st) => {
       if (!this.cold || !this.hot) return;

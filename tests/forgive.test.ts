@@ -46,10 +46,17 @@ for (const [name, pack] of [['the Drifting Edge', FIRST], ['Emberwick', EMBER]] 
       console.log(`FORGIVE ${name}: ${taps.length} presses (${kinds.orbs} orbs, ${kinds.pads} pads, ${kinds.walls} Meteor walls) clear on time and 50/100/150 ms early`);
     });
     it('...and from every checkpoint, after the run-in', () => {
-      for (const cp of c.checkpoints.filter((b) => b > c.start + 1)) for (const off of [50, 100, 150]) {
+      for (const cp of [...new Set([...c.checkpoints, ...(pack.level.embers ?? [])])].filter((b) => b > c.start + 1)) for (const off of [50, 100, 150]) {
         const s = tapRun(c, taps.filter((b) => b >= cp).map((b) => b - ms(off)), cp - 4, cp);
         expect(s.crashed, `from beat ${cp}, ${off} ms early: ${s.crashKind} at beat ${s.crashBeat.toFixed(2)}`).toBe(false);
       }
+    });
+    it('has an ember every section, never more than 13 s apart, the first at the build', () => {
+      const e = pack.level.embers ?? [];
+      expect(e.length).toBe(5);
+      const last = taps[taps.length - 1];
+      const gaps = [e[0], ...e.slice(1).map((b, i) => b - e[i]), last - e[e.length - 1]].map((g) => g * c.spb);
+      expect(Math.max(...gaps)).toBeLessThanOrEqual(13);
     });
     it('a held tap goes exactly on the beat and counts as early, not on the beat', () => {
       const p = c.presses.find((q, i) => !q.auto && q.act !== 'up' && q.beat > c.start + 4 && i > 0 && q.beat - c.presses[i - 1].beat >= 1)!;
