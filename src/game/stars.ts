@@ -34,9 +34,9 @@ const five = (id: string): Star[] => [
 ];
 export const STARS: Star[] = [
   ...PACKS.flatMap((p) => five(p.level.id)),
-  // the ambush is not in the sky yet: its two stars are shown, faint, and cannot be lit
-  star('ambush', 'soon', 'Stand', 'come through it', 'stand'),
-  star('ambush', 'soon', 'Every window', 'lose none of the four', 'windows'),
+  // the ambush (on the road since 2026-11-26): come through it, and come through it without a fall
+  star('ambush', 'restore', 'Stand', 'come through it', 'stand'),
+  star('ambush', 'dare', 'Unbroken', 'come through it without a fall', 'clean'),
   star(FINAL_ID, 'restore', 'Reignite', 'light the guardian\u2019s star'),
   star(FINAL_ID, 'dare', 'Unbroken', 'clear it without a fall'),
   star(FINAL_ID, 'master', 'Rhythm master', 'touch every gold note')

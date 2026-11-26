@@ -16,7 +16,7 @@ const SIZES = [
   ['Android, Pixel 7 (Chrome)', devices['Pixel 7'], ['chrome']],
   ['Android, Galaxy S9+ (Chrome)', devices['Galaxy S9+'], ['chrome']],
 ];
-const save = { story: { cold: true, prologue: true, open: true, started: true, heroes: true }, tutorialDone: true, calibrated: true, music: 0, sfx: 0, hitVol: 0, bests: { started: { pct: 100, cleared: true, attempts: 1 }, heroes: { pct: 100, cleared: true, attempts: 1 } } };
+const save = { story: { cold: true, prologue: true, open: true, started: true, heroes: true }, tutorialDone: true, calibrated: true, music: 0, sfx: 0, hitVol: 0, core: 4, bests: { started: { pct: 100, cleared: true, attempts: 1 }, heroes: { pct: 100, cleared: true, attempts: 1 } } };
 const rows = [];
 for (const [engine, [bt, opts]] of Object.entries(ENGINES)) {
   let b;

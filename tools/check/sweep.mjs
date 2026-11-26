@@ -34,7 +34,7 @@ const omo = (page, f, arg) => page.evaluate(f, arg);
 const screen = (page) => omo(page, () => window.__omo.screen);
 const until = (page, cond, arg, timeout = 120000) => page.waitForFunction(cond, arg, { timeout, polling: 200 });
 /** a save as a player has it after clearing these worlds (and their scenes) */
-const after = (ids, extra = {}) => ({ story: { cold: true, prologue: true, open: true, started: true, ...Object.fromEntries(ids.map((i) => [i, true])), ...extra }, tutorialDone: true, calibrated: true, music: 0, sfx: 0, hitVol: 0,
+const after = (ids, extra = {}) => ({ story: { cold: true, prologue: true, open: true, started: true, ...Object.fromEntries(ids.map((i) => [i, true])), ...extra }, tutorialDone: true, calibrated: true, music: 0, sfx: 0, hitVol: 0, core: 4,
   bests: Object.fromEntries(['started', ...ids].map((i) => [i, { pct: 100, cleared: true, attempts: 2, score: 0, accuracy: 0, grade: '' }])) });
 
 // 1. a new save: the cold open (held and tapped through), the opening, the first flight begins

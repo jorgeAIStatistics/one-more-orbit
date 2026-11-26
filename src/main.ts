@@ -25,7 +25,7 @@ import { BEFORE2, CirraWorld, GlassWorld, VerdWorld, WRITTEN2 } from './ui/world
 import { canHaptics, feel, fullScreen, gameCenter, isNative, watchBackground } from './native';
 import { initRecord } from './record';
 import { askToKeep, bestFor, persist, save, starCount, starsFor, storageWorks } from './save';
-import { SkyMap, type SkyInfo, type SkyNode } from './ui/skymap';
+import { RoadMap, type Beat, type RoadInfo, type StopInfo } from './ui/skyroad';
 import { SkyTitle } from './ui/skytitle';
 import { SkyOpening } from './ui/skyopening';
 import { SkyLanding } from './ui/skylanding';
@@ -72,7 +72,9 @@ const starProgress: StarProgress = { cleared: (id) => bestFor(id).cleared, gold:
 let at: MapNode = nodeOf(save.at || PACKS[Math.max(0, Math.min(PACKS.length - 1, save.level || 0))].level.id);
 let levelIdx = Math.min(PACKS.length - 1, at.index);
 let pack = packOf(at.id) ?? PACKS[levelIdx];
-const canPlay = () => playable(at, progress);
+/** the stop Orbin is at on the map's road: the Landing, the Drifting Edge, a world or its moon, the ambush, the gate */
+let road: string = at.id;
+const canPlay = () => (road === 'started' ? true : road === 'ambush' ? bestFor('skyhigh').cleared || progress.unlockAll : road === 'landing' ? false : playable(at, progress));
 /** "Emberwick", or "Emberwick's moon" for a B-side. */
 const placeName = (p: LevelPack) => (p.level.side ? `${planetName(p.level.id)}’s moon` : planetName(p.level.id));
 /** A glow is Orbin's from the start, or for a badge, or for daring a planet (in an older save: for both of its quests), or for clearing its night side. */
@@ -85,8 +87,8 @@ const owned = (o: Orb): boolean => {
 const renderer = new Renderer($<HTMLCanvasElement>('stage'));
 // (the one-signal look is the game's look now; the one before it is kept behind ?look=1, to compare)
 renderer.look = TOOLS && /[?&#]look=1\b/.test(location.search + location.hash) ? 1 : 2;
-/** the galaxy map: one painted sky you tap things in */
-const sky = new SkyMap($<HTMLCanvasElement>('stage'));
+/** the map (redesigned 2026-11-26): one road from the Landing to the guardian's gate, a floating miniature at each stop */
+const sky = new RoadMap($<HTMLCanvasElement>('stage'));
 /** the title: the horizon under that sky */
 const skyTitle = new SkyTitle($<HTMLCanvasElement>('stage'));
 /** the story: painted scenes with the words written into them */
@@ -171,9 +173,9 @@ function show(s: Screen): void {
   if (s === 'levels') {
     sky.settle();
     renderMap(); queuePreview();
+    if (!sky.travelling && !sky.playing) sky.place(road);
     if (arrived) { // home, with a star newly awake: the Landing is where the picture rests, and it says so once
       const n = starsHome(); // (the planetoid's own star counts: it is in the fire)
-      sky.chosen = null;
       sky.say(`${['No', 'One', 'Two', 'Three', 'Four'][n] ?? n} star${n === 1 ? '' : 's'} awake. He\u2019s a little clearer.`);
       arrived = '';
     }
@@ -345,6 +347,28 @@ function beginStar(r: Run): void {
     then: (at) => afterStar(r, first, homeWas, at)
   });
 }
+/**
+ * A story beat on the map (5-15 s, once, a tap skips it): after a world's first clear, the map answers it. `must`: it
+ * plays even if it was seen (the ambush follows it, so it has to lead there).
+ */
+function storyBeat(kind: Beat, then: () => void = () => undefined, must = false): void {
+  const key = `map:${kind}`;
+  if ((save.story[key] && !must) || screen !== 'levels') { afterBeat(kind, then); return; }
+  save.story[key] = true; persist();
+  if (kind === 'ambush') { road = 'ambush'; pack = AMBUSH; sky.place('ambush'); } // (he came through it: he is there)
+  sky.playBeat(kind, () => afterBeat(kind, then));
+}
+function afterBeat(kind: Beat, then: () => void): void {
+  if (kind === 'heroes') select('skyhigh', true); // (he flew the new road to Cirra)
+  // after Verdance: the gate cracks, and the last memory plays there
+  if (kind === 'invincible' && !save.story.lastmemory) {
+    save.story.lastmemory = true; persist();
+    select('gate', true); audio.stopPreview(0.8); show('title');
+    memoryFilm.play('royalty', () => { renderMap(); show('levels'); then(); });
+    return;
+  }
+  renderMap(); queuePreview(); then();
+}
 /** the map is drawn once, hidden under the Landing, before the camera rises into it (its colours may just have changed) */
 let warmMap = false;
 /** The star is his. A first one is carried home to the fire (the first stage's is already there); a replay goes straight back to the map. */
@@ -356,8 +380,8 @@ function afterStar(r: Run, first: boolean, homeWas: number, at: { orbin: [number
   run = null;
   $('hud').classList.remove('veiled');
   const rise = (secs: number, then: () => void) => { renderMap(); landing.ascend(() => { show('levels'); then(); }, secs); };
-  // the next stretch of road lights as the camera arrives over the map (the old "road" moment, folded in here)
-  const opened = () => { const i = PACKS.findIndex((p) => p.level.id === world); if (i >= 0) sky.reveal(i + 1); };
+  // over the map, the story's beat for this world (once): the road lights on, the dark comes, the guardian stirs
+  const opened = () => { if (world !== 'skyhigh') storyBeat(world as Beat); };
   // (a replay: from the caught star straight up into the sky, one continuous camera move, no cut to the Landing)
   if (!first) { renderMap(); sky.arrive(world); show('levels'); return; }
   landing.tilt = isFirst ? 0.26 : 0;
@@ -372,7 +396,8 @@ function afterStar(r: Run, first: boolean, homeWas: number, at: { orbin: [number
       // film, the chapter this world's star gives back); it goes back into the fire, the camera pulls back, and rises
       arrived = world;
       // after the second star, the Stillness notices the Landing's light: the ambush (once, as the story goes)
-      const next = () => (world === 'skyhigh' && !save.story.ambush && (!r.opts.bot || botStar) ? window.setTimeout(() => startAmbush(() => rise(3.2, opened)), 900) : rise(3.2, opened));
+      // (after Cirra: up to the map, where the Stillness sweeps down the road, straight into the ambush; after it, the dark recedes)
+      const next = () => (world === 'skyhigh' && !save.story.ambush && (!r.opts.bot || botStar) ? rise(3.2, () => storyBeat('skyhigh', () => startAmbush(() => rise(3.2, () => storyBeat('ambush'))), true)) : rise(3.2, opened));
       if (SkyMemory.has(world) && (!r.opts.bot || botStar)) {
         save.story[world] = true; persist();
         window.setTimeout(() => {
@@ -489,49 +514,58 @@ opening.onDone = () => { if (screen === 'prologue') { renderSettings(); show('se
 $('prologue').addEventListener('pointerdown', (e) => { if (screen !== 'prologue') return; e.preventDefault(); audioReady = true; opening.tap(stamp(e), e.clientX, e.clientY); });
 
 // ------------------------------------------------------------------ the galaxy map
-/** Hands the painted map what it shows now, and where the player is. */
+/** Hands the painted map what it shows now: every stop on the road and how it stands, the memories, the stars awake. */
 function renderMap(): void {
-  sky.info = skyInfo();
-  sky.chosen = at.id;
+  sky.info = roadInfo();
+  // the road is gold as far as the furthest stop that can be reached
+  const order = ['landing', 'started', 'heroes', 'skyhigh', 'ambush', 'blank', 'invincible', 'gate'];
+  let lit = 1;
+  order.forEach((id, i) => { const st = sky.info.stops[id]; if (st && st.state !== 'dark') lit = Math.max(lit, i); });
+  sky.lightTo(lit);
 }
-/** What the painted map shows: every place that can be seen, how it stands, and the two quiet counts. */
-function skyInfo(): SkyInfo {
-  const nodes: SkyNode[] = [];
+/** the first two lines of a world, when Orbin first arrives there (its name, and who is waiting) */
+const ARRIVE: Record<string, [string, string]> = {
+  heroes: ['Emberwick, the forge-world.', 'Ossa, stopped mid-strike.'],
+  skyhigh: ['Cirra, the windless sky.', 'Seo, tangled in its own lines.'],
+  blank: ['Glassmere, the still lake.', 'Vell, waiting under the water.'],
+  invincible: ['Verdance, under the great tree.', 'Morrow, holding on in the dark.'],
+  gate: ['The gate.', 'The guardian kneels under the rings.']
+};
+function roadInfo(): RoadInfo {
+  const stops: Record<string, StopInfo> = {};
+  const lights = (place: string) => starsOf(place).map((s) => starLit(s, starProgress));
+  const card = (p: LevelPack, id: string, state: StopInfo['state'], why: string, more: Partial<StopInfo> = {}): StopInfo => {
+    const b = bestFor(id);
+    return { name: id === 'gate' || id === FINAL_ID ? 'The guardian' : id === 'ambush' ? 'The ambush' : placeName(p), song: shortTitle(p), by: p.level.artist, state, best: b.cleared ? 100 : b.pct, lights: [], why, ...more };
+  };
+  stops.started = card(FIRST, FIRST_ID, bestFor(FIRST_ID).cleared ? 'home' : 'open', '');
   for (const n of NODES) {
     const st = nodeState(n, progress);
-    if (st === 'hidden') continue; // a moon nobody has found is not in the sky yet
-    const p = n.kind === 'gate' ? FINAL : packOf(n.id) ?? PACKS[0];
-    const lid = n.kind === 'gate' ? FINAL_ID : n.id;
-    const b = bestFor(lid);
-    nodes.push({
-      id: n.id, kind: n.kind === 'gate' ? 'hollow' : n.kind, of: n.planet, name: n.kind === 'moon' ? `${planetName(n.planet)}’s moon` : planetName(lid), song: shortTitle(p), by: p.level.artist,
-      state: st === 'cleared' ? 'home' : st === 'open' ? 'open' : 'dark', best: b.cleared ? 100 : b.pct, shards: starsFor(n.kind === 'moon' ? n.planet : lid),
-      why: n.kind === 'gate' ? 'wake the four worlds first' : n.index > 0 ? `wake ${planetName(PACKS[n.index - 1].level.id)} first` : '',
-      // a world whose song is home can be dared (a moon has no such star)
-      dare: n.kind !== 'moon' && st === 'cleared' ? (feat(`dare:${lid}`) ? 'done' : 'open') : undefined
-    });
+    if (st === 'hidden') continue; // (a moon nobody has found is not on the map yet)
+    const lid = n.kind === 'gate' ? FINAL_ID : n.id, p = n.kind === 'gate' ? FINAL : packOf(n.id) ?? PACKS[0];
+    stops[n.id] = card(p, lid, st === 'cleared' ? 'home' : st === 'open' ? 'open' : 'dark',
+      n.kind === 'gate' ? 'Wake the four worlds first.' : n.index > 0 ? `Wake ${planetName(PACKS[n.index - 1].level.id)} first.` : '',
+      { lights: n.kind === 'moon' ? [] : lights(lid), of: n.kind === 'moon' ? n.planet : undefined, dare: n.kind !== 'moon' && st === 'cleared' ? (feat(`dare:${lid}`) ? 'done' : 'open') : undefined });
   }
-  const rooms = hubRooms();
-  // the next world along the road stirs: the hook to go on
-  const next = nodes.find((n) => n.kind === 'planet' && n.state === 'open' && n.best === 0 && n.id !== PACKS[0].level.id);
-  if (next) next.hook = 'is waking\u2026';
-  return { nodes, lens: `${starCount()} of ${maxStars} star shards`, lit: rooms.stars ? `${starsLit(starProgress).length} of ${STAR_TOTAL} stars lit` : '', rooms, ambush: save.story.ambush ? 'home' : 'hidden' };
+  stops.ambush = card(AMBUSH, 'ambush', save.story.ambush ? 'home' : bestFor('skyhigh').cleared || progress.unlockAll ? 'open' : 'dark', 'Wake Cirra first.', { lights: lights('ambush'), practise: false });
+  const memories = ['heroes', 'skyhigh', 'blank', 'invincible', 'royalty'].map((id) => ({ id, seen: id === 'royalty' ? !!save.story.lastmemory : !!save.story[id] }));
+  return { stops, awake: PACKS.filter((p) => bestFor(p.level.id).cleared).length, memories, rooms: hubRooms() };
 }
 /** The Landing grows with every star awake: Ossa's fire (the glows) with the first, the rim's star chart with the second. (The crater and the still pool are always there.) */
 function hubRooms(): { glows: boolean; stars: boolean } {
   const home = PACKS.filter((p) => bestFor(p.level.id).cleared).length;
   return { glows: home >= 1 || progress.unlockAll, stars: home >= 2 || progress.unlockAll };
 }
-/** the Landing was the place chosen when one of its places was entered: coming back out, it still is */
+/** the Landing's card was open when one of its places was entered: coming back out, it still is */
 let viaLantern = false;
-/** Out of one of the Landing's places, back to the galaxy. */
+/** Out of one of the Landing's places, back to the map. */
 function leaveRoom(): void {
   show('levels');
-  if (viaLantern) sky.chosen = 'landing';
+  if (viaLantern) sky.openCard('landing');
   viaLantern = false;
 }
-// Taps on the map go to whatever is painted there: a world, the Lantern and its rooms, the stars, or the open sky.
-// drag to look round the sky, pinch (or the wheel) to come closer (the map pass, 2026-11-26); a drag is never a tap
+// Taps on the map go to what is painted there: a stop (Orbin flies there; on his own stop, its card), the card's
+// buttons, Menu and Stars, a memory by the fire. Drag looks round, pinch (or the wheel) comes closer; a drag is never a tap.
 const drag = { pts: new Map<number, [number, number]>(), moved: 0, pinchD: 0, suppress: false };
 $('levels').addEventListener('pointerdown', (e) => { if (screen !== 'levels') return; drag.pts.set(e.pointerId, [e.clientX, e.clientY]); drag.moved = 0; drag.suppress = false; if (drag.pts.size === 2) { const [a, b] = [...drag.pts.values()]; drag.pinchD = Math.hypot(a[0] - b[0], a[1] - b[1]); } });
 $('levels').addEventListener('pointermove', (e) => {
@@ -545,36 +579,54 @@ $('levels').addEventListener('wheel', (e) => { if (screen !== 'levels') return; 
 $('levels').addEventListener('click', (e) => {
   if (screen !== 'levels' || $('levels').classList.contains('launch')) return;
   if (drag.suppress) { drag.suppress = false; return; }
+  if (sky.playing) { sky.skip(); return; } // (a story beat, or an arrival: a tap moves it on)
   const hit = sky.hit(e.clientX, e.clientY);
-  if (hit.kind === 'node' && hit.id === 'ambush') { startAmbush(); return; }
-  if (hit.kind === 'play') { if (canPlay()) begin(false); return; }
-  if (hit.kind === 'node') {
-    if (hit.id === 'landing') {
-      sky.chosen = sky.chosen === 'landing' ? null : 'landing';
-      queuePreview();
-      if (sky.chosen) rooms.prepare(['hearth', 'desk', 'gallery'], () => screen === 'levels'); // (its rooms are painted while the galaxy is at rest)
-      return;
-    }
-    if (hit.id === at.id && sky.chosen === hit.id) { if (canPlay()) begin(false); } // a second tap on the chosen world flies in
-    else { select(hit.id); queuePreview(); const p = packOf(hit.id); if (p) { skyResult.prepare(baseOf(p), () => screen === 'levels' && !$('levels').classList.contains('launch')); paintAhead(p); } } // (its results' skies are painted while the galaxy is at rest)
-  } else if (hit.kind === 'practise') { if (canPlay()) begin(true); }
+  if (hit.kind === 'stop') {
+    if (hit.id === road && !sky.travelling) openCard(hit.id);
+    else { goTo(hit.id); if (hit.id === 'landing') rooms.prepare(['hearth', 'desk', 'gallery'], () => screen === 'levels'); } // (its rooms are painted while the map is at rest)
+  }
+  else if (hit.kind === 'open') openCard(road);
+  else if (hit.kind === 'play') { if (road === 'ambush') { if (canPlay()) startAmbush(); } else if (canPlay()) begin(false); }
+  else if (hit.kind === 'practise') { if (canPlay() && road !== 'ambush') begin(true); }
   else if (hit.kind === 'dare') { if (canPlay()) begin(false, true); }
+  else if (hit.kind === 'memory') filmAgain(hit.id, () => show('levels'));
   else if (hit.kind === 'pool') openLogbook();
   else if (hit.kind === 'glows') openGlows();
-  else if (hit.kind === 'settings') openSettings('levels');
+  else if (hit.kind === 'settings' || hit.kind === 'menu') openSettings('levels');
   else if (hit.kind === 'stars') openStars();
   else if (hit.kind === 'title') toLanding();
-  else { sky.chosen = null; queuePreview(); } // the open sky: step back and see all of it
+  else if (hit.kind === 'close' || sky.card) sky.closeCard();
 });
-/** Moves to a place on the map. */
+/** A stop's card: the first time at a world, its short arrival comes first. */
+function openCard(id: string): void {
+  const key = `map:arrive:${id}`, first = ARRIVE[id] && !save.story[key] && sky.info.stops[id]?.state === 'open';
+  if (first) { save.story[key] = true; persist(); }
+  sky.openCard(id, first ? ARRIVE[id] : undefined);
+}
+/** Orbin flies the road to a stop: a world, its moon, the Drifting Edge, the ambush, the gate, or home. */
+function goTo(id: string): void {
+  if (id === 'landing' || id === 'started' || id === 'ambush') {
+    road = id;
+    if (id !== 'landing') pack = id === 'started' ? FIRST : AMBUSH;
+    sky.go(id); renderMap(); queuePreview();
+    const p = id === 'started' ? FIRST : id === 'ambush' ? AMBUSH : null;
+    if (p) paintAhead(p);
+    return;
+  }
+  select(id);
+  const p = packOf(id);
+  if (p) { skyResult.prepare(baseOf(p), () => screen === 'levels' && !$('levels').classList.contains('launch')); paintAhead(p); } // (its results' skies are painted while the map is at rest)
+}
+/** Moves to a place on the map (a world, its moon, or the gate). */
 function select(id: string, quiet = false): void {
   const n = nodeOf(id);
-  const changed = n.id !== at.id;
-  at = n;
+  const changed = n.id !== at.id || road !== n.id;
+  at = n; road = n.id;
   levelIdx = Math.min(PACKS.length - 1, n.index);
   pack = packOf(n.id) ?? PACKS[levelIdx];
   if (changed) { save.at = n.id; save.level = levelIdx; persist(); }
   renderMap();
+  if (screen === 'levels' && !quiet) sky.go(n.id); else sky.place(n.id);
   if (changed && !quiet) queuePreview();
 }
 /** Moves to a planet by its place on the route (0 = the first level). */
@@ -589,7 +641,7 @@ function queuePreview(): void {
   if (!audioReady || screen !== 'levels') return;
   // With no world chosen (the whole sky, or the Lantern), or at one with nothing to hear yet (dark, a locked gate, a
   // moon nobody has found), what plays is the Lantern's own theme. A world that can be flown plays its song.
-  const home = sky.chosen === null || sky.chosen === 'landing' || !canPlay() || nodeState(at, progress) === 'hidden';
+  const home = road === 'landing' || !canPlay();
   previewTimer = window.setTimeout(() => {
     if (screen !== 'levels') return;
     audio.setVolumes(save.music, save.sfx);
@@ -1421,7 +1473,7 @@ function showVolumes(): void {
 }
 function openSettings(from: Screen): void {
   settingsFrom = from;
-  if (from === 'levels') viaLantern = sky.chosen === 'landing';
+  if (from === 'levels') viaLantern = sky.card === 'landing';
   audio.ensure();
   renderSettings();
   show('settings');
@@ -1540,7 +1592,7 @@ function openCalib(then: 'begin' | 'back' = 'back'): void {
   cal.from = screen === 'calib' ? cal.from : screen;
   cal.done = false;
   cal.mode = 'ear';
-  if (cal.from === 'levels') viaLantern = sky.chosen === 'landing';
+  if (cal.from === 'levels') viaLantern = sky.card === 'landing';
   show('calib');
   calStart();
 }
@@ -1580,7 +1632,7 @@ $('calib').addEventListener('click', (e) => { if (screen !== 'calib') return; co
 const glowsView = (): GlowsInfo => ({ glows: ORBS.map((o) => ({ id: o.id, name: o.name, rgb: o.rgb, lit: owned(o), says: o.says, how: o.how })), worn: save.skin });
 function openGlows(): void {
   if (!hubRooms().glows) return; // (there is no fire until Emberwick is awake)
-  viaLantern = sky.chosen === 'landing';
+  viaLantern = sky.card === 'landing';
   rooms.glows = glowsView();
   rooms.look = save.skin;
   $('orbsSaid').textContent = `Ossa’s fire: Orbin’s glows. ${ORBS.map((o) => `${o.name}: ${owned(o) ? (o.id === save.skin ? 'worn now' : 'lit') : `still dark; what lights it: ${o.how}`}`).join('. ')}.`;
@@ -1599,14 +1651,14 @@ $('orbs').addEventListener('click', (e) => {
 });
 const starsView = (): StarsInfo => ({
   groups: STAR_PLACES.map((id) => ({
-    id, name: id === 'ambush' ? 'the ambush' : planetName(id), note: id === 'ambush' ? 'not in the sky yet' : '',
+    id, name: id === 'ambush' ? 'the ambush' : planetName(id), note: '',
     rows: starsOf(id).map((s) => ({ name: s.name, what: s.what, lit: starLit(s, starProgress) }))
   })),
   lit: starsLit(starProgress).length, total: STAR_TOTAL
 });
 function openStars(): void {
   if (!hubRooms().stars) return; // (the rim's chart is dark until two stars are awake)
-  viaLantern = sky.chosen === 'landing';
+  viaLantern = sky.card === 'landing';
   const v = (rooms.stars = starsView());
   rooms.place = at.kind === 'gate' ? FINAL_ID : at.planet; // the chart opens on the world you are at
   $('starsSaid').textContent = `The star chart: ${v.lit} of ${v.total} lit. ${v.groups.map((g) => `${g.name}: ${g.rows.map((r) => `${r.name} (${r.what}), ${r.lit ? 'lit' : 'not yet'}`).join('; ')}`).join('. ')}.`;
@@ -1644,7 +1696,7 @@ function openLogbook(ch = -1): void {
   const open = chaptersOpen();
   if (!open.length) return;
   logAt = ch >= 0 ? Math.min(ch, open.length - 1) : open.length - 1; // it opens at the newest chapter
-  if (screen !== 'logbook' && screen !== 'credits') { poolFrom = screen === 'settings' ? 'settings' : 'levels'; if (screen === 'levels') viaLantern = sky.chosen === 'landing'; }
+  if (screen !== 'logbook' && screen !== 'credits') { poolFrom = screen === 'settings' ? 'settings' : 'levels'; if (screen === 'levels') viaLantern = sky.card === 'landing'; }
   rooms.bookBack = poolFrom === 'settings' ? 'back to the crater' : 'out to the galaxy';
   turnLog(0, true);
   show('logbook');

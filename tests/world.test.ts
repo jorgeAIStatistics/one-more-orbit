@@ -57,9 +57,9 @@ describe('world 1: the map', () => {
     expect(totalStars(progress([], { ...eight, [FINAL.level.id]: all3 }))).toBe(11);
   });
 
-  it('the playtest switch opens the planets and shows the moons, but not the gate', () => {
+  it('the playtest switch opens every planet, every moon and the gate (to try every level)', () => {
     const p = progress([], {}, true);
-    for (const n of NODES) expect(nodeState(n, p)).toBe(n.kind === 'gate' ? 'locked' : 'open');
+    for (const n of NODES) expect(nodeState(n, p)).toBe('open');
   });
 });
 
@@ -74,9 +74,10 @@ describe('stars (they took the place of quests and the badges screen)', () => {
     expect(new Set(STARS.map((s) => s.id)).size).toBe(STARS.length); // (each can be a Game Center achievement later)
     for (const s of STARS) { expect(s.id).toMatch(/^star_[a-z]+_[a-z]+$/); expect(s.name.length).toBeGreaterThan(2); expect(s.what.length).toBeGreaterThan(8); }
   });
-  it('nothing is lit on a new save, and the ambush cannot be lit yet', () => {
+  it('nothing is lit on a new save; the ambush lights Stand when come through, Unbroken without a fall', () => {
     expect(starsLit(sp())).toEqual([]);
-    expect(starsOf('ambush').some((s) => starLit(s, sp({ cleared: ['ambush'], feats: ['dare:ambush', 'shards:ambush'], gold: { ambush: 100 } })))).toBe(false);
+    expect(starsOf('ambush').map((s) => starLit(s, sp({ cleared: ['ambush'] })))).toEqual([true, false]);
+    expect(starsOf('ambush').map((s) => starLit(s, sp({ cleared: ['ambush'], feats: ['clean:ambush'] })))).toEqual([true, true]);
   });
   it('each star has its own condition', () => {
     const lit = (o: Parameters<typeof sp>[0]) => starsLit(sp(o)).map((s) => s.id);

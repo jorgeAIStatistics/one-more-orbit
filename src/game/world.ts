@@ -41,7 +41,7 @@ export const maxStars = (ids.length + 1) * 3;
  * open") opens the planets and shows the moons; the gate always needs the four clears.
  */
 export function nodeState(n: MapNode, p: Progress): NodeState {
-  if (n.kind === 'gate') return !ids.every((id) => p.cleared(id)) ? 'locked' : p.cleared(FINAL_ID) ? 'cleared' : 'open';
+  if (n.kind === 'gate') return p.cleared(FINAL_ID) ? 'cleared' : p.unlockAll || ids.every((id) => p.cleared(id)) ? 'open' : 'locked';
   if (p.cleared(n.id)) return 'cleared';
   if (n.kind === 'moon') return p.unlockAll || p.stars(n.planet).every(Boolean) ? 'open' : 'hidden';
   return n.index === 0 || p.unlockAll || p.cleared(ids[n.index - 1]) ? 'open' : 'locked';
