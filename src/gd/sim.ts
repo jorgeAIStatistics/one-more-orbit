@@ -48,6 +48,8 @@ export class Sim {
   private pendingBuf = false;
   /** the taps of the last second, for the anti-mash rule */
   private lately: number[] = [];
+  /** the last few wasted taps (beats) */
+  private wasted: number[] = [];
   private lastTap = -99;
   private doneUntil = -99;
   private doneBeat = 0;
@@ -228,6 +230,8 @@ export class Sim {
     this.lately.push(t);
     while (this.lately.length && this.lately[0] < t - w) this.lately.shift();
     const n = this.lately.length;
+    const ws = this.wasted, w2 = 2 / this.c.spb;
+    if (ws.length >= 2 && t - ws[ws.length - 2] <= w2) return true;
     if (n < 3) return false;
     const m = this.c.marks;
     let lo = 0, hi = m.length;
@@ -302,6 +306,17 @@ export class Sim {
 
   /** A tap at beat-time t. */
   press(t: number): TapResult {
+    const pend = this.pending, ni = this.ni, last = this.lastTap;
+    const r = this.pressAt(t);
+    // a wasted tap: taken (not the run-in, not a bounce), but it opened nothing, was not held for an opening, touched
+    // no note and picked up no hold. Two of them within two seconds is mashing too (the second half of the anti-mash
+    // rule, 2026-11-26: a steady 3 a second through a stretch charted at 2 a second hid under the first half)
+    const taken = this.lastTap !== last;
+    const used = (r.kind !== 'none' && r.kind !== 'skip') || r.err !== undefined || this.ni !== ni || !Object.is(this.pending, pend) || this.holdAt(t) || this.c.inCharge(t);
+    if (taken && !used && t >= this.c.start) { this.wasted.push(t); if (this.wasted.length > 4) this.wasted.shift(); }
+    return r;
+  }
+  private pressAt(t: number): TapResult {
     this.advance(t);
     const spb = this.c.spb;
     if (!this.down) { this.down = true; this.downAt = t; }

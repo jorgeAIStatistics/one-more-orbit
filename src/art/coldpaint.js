@@ -47,16 +47,19 @@ function music(c, ax, ay, bx, by, u, t = 0, broken = 0, fade = 1) {
 const DREAD = new Map();
 function dread(c, x, y, rx, ry, seed, near) {
   const t = c.getTransform(), k = Math.min(3, Math.hypot(t.a, t.b)) || 1;
-  const RX = Math.max(32, Math.round(rx / 32) * 32), RY = Math.max(8, Math.round((ry / rx) * RX)), N = Math.round(near * 40) / 40;
-  const key = `${seed}|${RX}|${RY}|${N}|${k.toFixed(2)}`;
+  // (one image per shape, painted at the largest size asked for and drawn scaled: a new size used to mean a new
+  // picture, and its paint and upload were a 30-50 ms frame as it swelled during the loss; 2026-11-26)
+  const N = Math.round(near * 40) / 40, key = `${seed}|${N}|${k.toFixed(2)}`;
   let e = DREAD.get(key);
+  if (e && (rx > e.RX * 1.05 || Math.abs(ry / rx - e.RY / e.RX) > 0.06)) e = null;
+  const RX = e ? e.RX : Math.max(32, Math.ceil(rx / 32) * 32), RY = e ? e.RY : Math.max(8, Math.round((ry / rx) * RX));
   if (!e) {
     const pad = Math.max(RX, RY) * 0.6 + 70, W = (RX + pad) * 2, H = (RY + pad) * 2;
     const cv = document.createElement('canvas'); cv.width = Math.min(4096, Math.ceil(W * k)); cv.height = Math.min(4096, Math.ceil(H * k));
     const g = cv.getContext('2d'); g.setTransform(cv.width / W, 0, 0, cv.height / H, 0, 0);
     g.save(); g.shadowColor = 'rgba(176,168,196,0.55)'; g.shadowBlur = 26 * (cv.width / W) / k; P.stillness(g, W / 2, H / 2, RX, RY, K.RNG(seed), { near: N }); g.restore();
     P.stillness(g, W / 2, H / 2, RX, RY, K.RNG(seed), { near: N });
-    e = { cv, W, H }; DREAD.set(key, e);
+    e = { cv, W, H, RX, RY }; DREAD.set(key, e);
     if (DREAD.size > 10) DREAD.delete(DREAD.keys().next().value);
   }
   const sx = rx / RX, sy = ry / RY;

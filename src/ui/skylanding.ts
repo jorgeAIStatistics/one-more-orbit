@@ -5,6 +5,7 @@
 // The camera rises out of it into the galaxy map in one move: the land sinks and falls away through mist, and the
 // map is already there above it. Painted once per size and per number of stars, in five layers that slide past each
 // other; the fire, its sparks, the motes, the signal and Orbin are live.
+import { askLandingSky, landingSky } from '../art/paintcache';
 import { LANDING } from '../art/landingpaint.js';
 import { COMPANIONS } from '../art/companions.js';
 import { K } from '../art/painter.js';
@@ -94,7 +95,9 @@ export class SkyLanding {
     const { w, h, q } = this, wide = name !== 'sky';
     const cv = document.createElement('canvas'); cv.width = Math.round((wide ? w * (1 + 2 * MX) : w) * q); cv.height = Math.round((wide ? h * (1 + MY) : h) * q);
     const c = cv.getContext('2d')!; c.scale(q, q); if (wide) c.translate(w * MX, 0);
-    LANDING[name](c, w, h, stars);
+    // (the sky is the heavy one: if the paint worker has it ready at this size, it is only copied)
+    const pre = name === 'sky' ? landingSky(w, h, q, stars) : null;
+    if (pre) c.drawImage(pre, 0, 0, w, h); else LANDING[name](c, w, h, stars);
     return cv;
   }
   private set(stars: number): LayerSet {
@@ -103,6 +106,8 @@ export class SkyLanding {
     if (!s) { s = {} as LayerSet; for (const n of ORDER) s[n] = this.paintLayer(stars, n); this.sets.set(stars, s); if (this.sets.size > 3) this.sets.delete([...this.sets.keys()][0]); }
     return s;
   }
+  /** Asks the paint worker for the heaviest layers (the sky) at these star counts, well ahead (during the cold open). */
+  askAhead(stars: number[]): void { this.layout(); for (const n of stars) askLandingSky(this.w, this.h, this.q, n); }
   /** Paints what will be needed, a layer at a time, between frames (call it while something else holds the eye). */
   prepare(stars: number[], idle: () => boolean = () => true): void {
     this.layout();

@@ -32,7 +32,7 @@ import { SkyLanding } from './ui/skylanding';
 import { SkyStar } from './ui/skystar';
 import { SkyCold } from './ui/skycold';
 import { SkyMemory } from './ui/skymemory';
-import { EdgeWorld, EmberWorld, type World, type WorldSky } from './ui/worlds';
+import { askEmber, EdgeWorld, EmberWorld, type World, type WorldSky } from './ui/worlds';
 import { LANDING } from './art/landingpaint.js';
 import { K as PK } from './art/painter.js';
 import { CANON as PCANON } from './art/canonpaint.js';
@@ -109,6 +109,8 @@ const emberWorld = new EmberWorld();
 const edgeWorld = new EdgeWorld();
 /** the worlds after Emberwick, built as places (2026-11-25) */
 const WORLDS2: Record<string, CirraWorld | GlassWorld | VerdWorld> = { skyhigh: new CirraWorld(), blank: new GlassWorld(), invincible: new VerdWorld() };
+// (every planet and level sky is painted by the paint worker soon after the page opens, so no level opens with a hitch)
+window.setTimeout(() => { edgeWorld.askAhead(); askEmber(); for (const w of Object.values(WORLDS2)) w.askAhead(); }, 400);
 /** stars home in the Landing's fire: the planetoid's own, and one for every world woken */
 const starsHome = () => (bestFor(FIRST_ID).cleared ? 1 : 0) + PACKS.filter((p) => bestFor(p.level.id).cleared).length;
 let screen: Screen = 'title';
@@ -289,6 +291,8 @@ function startCold(): void {
   coldScene.onQuiet = () => { if (!openingPainted) { opening.reset(false); openingPainted = true; } }; // (painted in the black, while the three lines stand still)
   coldScene.start(!!save.story.cold);
   show('cold');
+  // the heaviest pictures after it (the Landing's sky, the first stage's), painted off the main thread while the film plays
+  landing.askAhead([0, 1]); edgeWorld.askAhead();
 }
 $('cold').addEventListener('pointerdown', (e) => { if (screen !== 'cold') return; e.preventDefault(); audioReady = true; coldScene.press(true, e.clientX, e.clientY); });
 for (const type of ['pointerup', 'pointercancel'] as const) $('cold').addEventListener(type, () => { if (screen === 'cold') coldScene.press(false); });
@@ -988,6 +992,7 @@ const BEFORE: Record<string, Said[]> = { heroes: [
 ], ...BEFORE2 };
 /** A chosen world's sky is painted while the galaxy is at rest, so flying in is not held up by it. */
 function paintAhead(p: LevelPack): void {
+  if (p === FIRST) edgeWorld.askAhead(); else if (p.level.id === 'heroes') askEmber(); else WORLDS2[p.level.id]?.askAhead();
   window.setTimeout(() => { if (screen === 'levels' && !$('levels').classList.contains('launch')) sceneFor(p)?.prepare(); }, 900);
   // and the Landing as it will be when this world's star comes home (painted a layer at a time while the galaxy is still)
   if (!bestFor(baseOf(p)).cleared) { const n = starsHome(); window.setTimeout(() => landing.prepare([n, n + 1], () => screen === 'levels' && !$('levels').classList.contains('launch')), 1400); }

@@ -250,7 +250,7 @@ export class SkyCold {
       if (this.touched && !this.touchAt) this.touchAt = now;
       // while it waits (a dark screen), the Stillness is painted at every size the film will ask for, so its first
       // appearance and its surge never stop the picture (the performance pass of 2026-11-25)
-      if (!this.warm) { this.warm = true; for (const s of [0, 0.5, 1]) { C.dread(c, -1e5, -1e5, (300 + 60 * s) * u, (460 + 80 * s) * u, 48, 1); } C.dread(c, -1e5, -1e5, 190 * u, 170 * u, 78, 0.9); }
+      if (!this.warm) { this.warm = true; for (const s of [1]) { C.dread(c, -1e5, -1e5, (300 + 60 * s) * u, (460 + 80 * s) * u, 48, 1); } C.dread(c, -1e5, -1e5, 190 * u, 170 * u, 78, 0.9); }
       const sound = !!audio.ctx && audio.running && !!this.track;
       if (sound || !audio.ctx || (this.touched && now - this.touchAt > 2000)) { this.begin(now); return; }
       if (!this.touched && now - this.waitFrom > 500) this.write('touch to begin', cx, h * 0.56, 20 * u, 0.45 + 0.25 * Math.sin(now / 520));

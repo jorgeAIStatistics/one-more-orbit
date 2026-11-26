@@ -12,7 +12,8 @@ import { DUSK, K } from '../art/painter.js';
 import { WORLDS2 as W2 } from '../art/world2paint.js';
 import { writeSays, type Said, type SceneState } from './skyplanet';
 import { save } from '../save';
-import { horizon, zoneOf, zones, ZONES, type CourseView, type World, type WorldSky, type WorldState } from './worlds';
+import { horizon, skyOf, zoneOf, zones, ZONES, type CourseView, type Pic, type World, type WorldSky, type WorldState } from './worlds';
+import { askLevelSky, askPlanet, planetLayer, type LayerName, type SkySpec } from '../art/paintcache';
 
 const TAU = Math.PI * 2;
 const sm = (x: number) => { const t = x < 0 ? 0 : x > 1 ? 1 : x; return t * t * (3 - 2 * t); };
@@ -31,6 +32,8 @@ interface Cfg {
   key: string;
   T: Timeline;
   layer: (hot: boolean) => HTMLCanvasElement;
+  /** the layer's name, for the paint worker */
+  layerName: LayerName;
   /** the sky's gradient, cold and relit */
   sky: [Array<[number, number[]]>, Array<[number, number[]]>];
   /** the world's element colour (its bursts, its ribbons) */
@@ -43,17 +46,18 @@ interface Cfg {
 
 /** The machinery every world after Emberwick shares; each world adds its inhabitant, its set pieces and its camera. */
 abstract class PlanetWorld {
-  protected cold: HTMLCanvasElement | null = null; protected hot: HTMLCanvasElement | null = null;
-  protected skyCold: HTMLCanvasElement | null = null; protected skyHot: HTMLCanvasElement | null = null; private key = '';
+  protected cold: Pic | null = null; protected hot: Pic | null = null;
+  protected skyCold: Pic | null = null; protected skyHot: Pic | null = null; private key = '';
+  private skySpec(hot: boolean): SkySpec { return { stops: this.cfg.sky[hot ? 1 : 0], seed: 19 + this.cfg.key.length, fin: 43 }; }
+  /** Ask the paint worker for this planet and its sky ahead of the level. */
+  askAhead(): void { askPlanet(this.cfg.layerName); for (const hot of [false, true]) askLevelSky(window.innerWidth, window.innerHeight, this.skySpec(hot)); }
   protected lit: number[] = new Array(ZONES).fill(-1); protected sparks = 0;
   protected lastT = -1; protected dt = 0;
   constructor(protected cfg: Cfg) {}
   private paint(w: number, h: number): void {
     const key = `${w}x${h}`; if (key === this.key) return; this.key = key;
-    if (!this.cold) { this.cold = this.cfg.layer(false); this.hot = this.cfg.layer(true); }
-    const sky = (hot: boolean) => { const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const c = cv.getContext('2d')!, r = K.RNG(19 + this.cfg.key.length);
-      DUSK.tools.sky(c, w, h, this.cfg.sky[hot ? 1 : 0] as never, r, 70); DUSK.tools.stars(c, w, h, r, Math.round((w * h) / 1500), 3); DUSK.tools.finish(c, w, h, 43, 0.3); return cv; };
-    this.skyCold = sky(false); this.skyHot = sky(true);
+    if (!this.cold) { const n = this.cfg.layerName; this.cold = planetLayer(n, false) ?? this.cfg.layer(false); this.hot = planetLayer(n, true) ?? this.cfg.layer(true); }
+    this.skyCold = skyOf(w, h, this.skySpec(false)); this.skyHot = skyOf(w, h, this.skySpec(true));
     // the far Stillness is painted now too (its image, at the screen's resolution), not on the level's first frame
     const S = this.cfg.stillness, u = Math.min(w / 390, h / 844), dpr = window.devicePixelRatio || 1;
     if (S > 0) { const warm = document.createElement('canvas').getContext('2d')!; warm.setTransform(dpr, 0, 0, dpr, 0, 0); C.dread(warm, -1e5, -1e5, (90 + 220 * S) * u, (70 + 160 * S) * u, 61, 0.4 + 0.6 * S); }
@@ -159,7 +163,7 @@ const CT = { gift: 7.5, helion: 13.125, drop: 15.0, mini: 24.375, strings: 28.12
 export class CirraWorld extends PlanetWorld {
   private wake = new Spring(0, 3); private fly = new Spring(0, 2.5); private sway = new Spring(0, 2); private flap = new Spring(0, 1.8);
   constructor() {
-    super({ key: 'skyhigh', T: CT, layer: W2.cirraLayer, col: [255, 200, 240], stillness: 0.3, signal: 0.45,
+    super({ key: 'skyhigh', T: CT, layer: W2.cirraLayer, layerName: 'cirraLayer', col: [255, 200, 240], stillness: 0.3, signal: 0.45,
       sky: [[[0, [14, 12, 26]], [0.55, [34, 28, 48]], [1, [50, 40, 60]]], [[0, [36, 24, 70]], [0.5, [150, 90, 170]], [1, [255, 190, 210]]]] });
     this.world.relit = 20;
   }
@@ -191,7 +195,7 @@ const GT = { gift: 7.5, helion: 13.125, drop: 15.0, vell: 26.25, riser: 37.5, mi
 export class GlassWorld extends PlanetWorld {
   private wake = new Spring(0, 2.5); private side = new Spring(0, 5); private bow = new Spring(0, 3); private flips = 0; private flipAt = -9;
   constructor() {
-    super({ key: 'blank', T: GT, layer: W2.glassLayer, col: [170, 220, 255], stillness: 0.55, signal: 0.65,
+    super({ key: 'blank', T: GT, layer: W2.glassLayer, layerName: 'glassLayer', col: [170, 220, 255], stillness: 0.55, signal: 0.65,
       sky: [[[0, [8, 10, 22]], [0.55, [18, 24, 40]], [1, [26, 32, 50]]], [[0, [10, 24, 60]], [0.55, [40, 90, 150]], [1, [140, 200, 240]]]] });
     this.world.relit = 20;
   }
@@ -225,7 +229,7 @@ const VT = { gift: 9.6, helion: 14.4, drop: 19.2, chase: 31.2, lift: 45.6, dark:
 export class VerdWorld extends PlanetWorld {
   private climb = new Spring(0, 1.6); private reach = new Spring(0, 2.2); private lights = new Spring(0, 2); private pushAt = -9;
   constructor() {
-    super({ key: 'invincible', T: VT, layer: W2.verdLayer, col: [160, 240, 160], stillness: 0.85, signal: 0.9,
+    super({ key: 'invincible', T: VT, layer: W2.verdLayer, layerName: 'verdLayer', col: [160, 240, 160], stillness: 0.85, signal: 0.9,
       sky: [[[0, [6, 8, 10]], [0.55, [14, 18, 18]], [1, [20, 24, 22]]], [[0, [8, 20, 16]], [0.55, [30, 70, 50]], [1, [90, 150, 100]]]] });
     this.world.relit = 25;
   }

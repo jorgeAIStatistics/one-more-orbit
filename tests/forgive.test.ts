@@ -106,6 +106,16 @@ for (const [name, pack] of W1) {
         }
       }
       console.log(`SPAMBOT ${name}: from the first tap ${out.join('; ')}; from a checkpoint, the longest any spam bot lasted: ${longest.toFixed(1)} s`);
+      expect(longest, 'a spam bot lasts only a few seconds from any checkpoint (2026-11-26: Emberwick had a 16.3 s stretch)').toBeLessThanOrEqual(5);
+    });
+    it('a sloppy player is not a masher: one stray tap every three seconds, between presses, still clears', () => {
+      const strays: number[] = [];
+      for (let t = c.start + 2; t < taps[taps.length - 1]; t += 3 / c.spb) {
+        const i = taps.findIndex((b) => b > t); if (i < 1) continue;
+        const mid = (taps[i - 1] + taps[i]) / 2; if (taps[i] - taps[i - 1] >= 0.75 && taps[i] - mid > c.buffer / c.spb + c.early + 0.15) strays.push(mid); // (clear of the table's stretch where a tap too early still hits the ring)
+      }
+      const s = tapRun(c, [...taps, ...strays].sort((x, y) => x - y));
+      expect(s.crashed, `${strays.length} strays: ${s.crashKind} at beat ${s.crashBeat.toFixed(2)}`).toBe(false);
     });
     it('tapping along with the count-in is never punished', () => {
       const along = [1, 2, 3, 4].map((k) => c.start - 4 + k - 1).filter((b) => b < c.start);

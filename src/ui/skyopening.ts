@@ -16,6 +16,10 @@ import { DUSK, K } from '../art/painter.js';
 import type { AudioMeta } from '../game/types';
 import { save } from '../save';
 import { Actor } from './actor';
+import { OPENING_PICS, paintOpening, type OpeningPic } from '../art/openingpaint';
+import { paintWorker } from '../art/paintcache';
+
+
 
 const META = openingAudio as AudioMeta;
 /** the first stage's own song, from its first second to where its drums come in: what the scene is played over */
@@ -53,8 +57,8 @@ export class SkyOpening {
   onTap: (perfMs: number, when: number) => void = () => undefined;
   onDone: () => void = () => undefined;
   private ctx: CanvasRenderingContext2D;
-  private bg: Partial<Record<Bg, HTMLCanvasElement>> = {};
-  private mist: HTMLCanvasElement | null = null;
+  private bg: Partial<Record<Bg, CanvasImageSource>> = {};
+  private mist: CanvasImageSource | null = null;
   private key = '';
   private W = 780; private k = 1; private q = 1;
   private track: LoadedTrack | null = null;
@@ -119,39 +123,25 @@ export class SkyOpening {
     this.size();
     const W = this.W, key = `${W}@${this.q.toFixed(3)}`;
     this.key = key; this.bg = {}; this.mist = null;
-    const { VOID, DRIFT, WOKEN } = CANON.pal, R = K.RNG, mix = K.mix;
-    const jobs: Array<() => void> = [
-      () => { const [cv, c] = this.sheet(); T.sky(c, W, H, VOID, R(11), 30); c.fillStyle = 'rgba(2,2,8,0.6)'; c.fillRect(0, 0, W, H); P.ground(c, W, H, H * 0.8, R(12), 0); T.finish(c, W, H, 21, 0.7); this.bg.fall = cv; },
-      () => { const [cv, c] = this.sheet(); T.sky(c, W, H, VOID, R(13), 30); c.fillStyle = 'rgba(2,2,8,0.6)'; c.fillRect(0, 0, W, H); P.ground(c, W, H, H * 0.62, R(12), 0.03); T.finish(c, W, H, 22, 0.72); this.bg.close = cv; },
-      () => {
-        const [cv, c] = this.sheet(), hy = H * 0.74;
-        T.sky(c, W, H, VOID.map(([t, col]) => [t, mix(col, [14, 16, 40], 0.5)] as [number, number[]]), R(15), 60);
-        P.trials(c, W * 0.55, 540, 1.5, R(41)); P.guardian(c, W * 0.565, hy + 4, 0.36, R(42), 0); P.ground(c, W, H, hy, R(12), 0.04);
-        T.finish(c, W, H, 24, 0.6); this.bg.far = cv;
-        // the dark mist that closes over his brother's light
-        const [mv, mc] = this.sheet(620), r = R(77);
-        for (let i = 0; i < 16; i++) { const x = W * 0.6 + (r() - 0.5) * 420, y = 300 + (r() - 0.5) * 260; K.brush(mc, [[x - 150 - r() * 80, y + (r() - 0.5) * 60], [x, y + (r() - 0.5) * 40], [x + 150 + r() * 80, y + (r() - 0.5) * 60]], 70 + r() * 50, [6, 7, 18], r, { passes: 4, alpha: 0.22 }); }
-        this.mist = mv;
-      },
-      () => {
-        const [cv, c] = this.sheet(), hy = H * 0.42, L = this.lane;
-        T.sky(c, W, H, DRIFT, R(16), 70);
-        P.trials(c, W * 0.667, hy - 150, 0.6, R(41), 0.8); P.guardian(c, W * 0.72, hy + 2, 0.13, R(42), 0);
-        P.ground(c, W, H, hy, R(17), 0.04); P.tiles(c, W, H, hy, R(18), 0, L);
-        T.finish(c, W, H, 25, 0.55); this.bg.path = cv;
-      },
-      () => {
-        const [cv, c] = this.sheet(), hy = H * 0.42, L = this.lane, r = R(20);
-        T.sky(c, W, H, WOKEN, r, 150); T.stars(c, W, H * 0.4, r, Math.round(500 * W / 780), 3);
-        P.trials(c, W * 0.667, hy - 150, 0.6, R(41), 0.7); P.guardian(c, W * 0.72, hy + 2, 0.13, R(42), 0);
-        K.glow(c, W * 0.5, hy, 700, [255, 170, 110], 0.4, 'screen');
-        P.ground(c, W, H, hy, R(17), 1); P.tiles(c, W, H, hy, R(18), 1, L);
-        T.finish(c, W, H, 27, 0.35); this.bg.woke = cv;
-      }
-    ];
-    // one picture a turn of the page, so nothing stalls; the scene begins when the last is done
-    const next = (): void => { if (token !== this.token) return; const j = jobs.shift(); if (!j) { if (this.state === 'paint') this.state = 'wait'; return; } j(); window.setTimeout(next, 0); };
-    window.setTimeout(next, 0);
+    const R = K.RNG;
+    const pics: OpeningPic[] = [...OPENING_PICS];
+    const put = (name: OpeningPic, img: CanvasImageSource): void => { if (name === 'mist') this.mist = img; else this.bg[name] = img; };
+    const done = (): void => { if (this.state === 'paint') this.state = 'wait'; };
+    // in a worker (off the main thread: nothing stalls), each picture as it is finished; else on the page, one a turn
+    const wk = paintWorker();
+    if (wk) {
+      let left = pics.length;
+      const on = (e: MessageEvent<{ id: number; name: OpeningPic; bmp: ImageBitmap }>): void => {
+        if (e.data.id !== token) return;
+        put(e.data.name, e.data.bmp);
+        if (--left === 0) { wk.removeEventListener('message', on); done(); }
+      };
+      wk.addEventListener('message', on);
+      for (const name of pics) wk.postMessage({ id: token, kind: 'opening', name, W, q: this.q });
+    } else {
+      const next = (): void => { if (token !== this.token) return; const name = pics.shift(); if (!name) { done(); return; } put(name, paintOpening(name, W, this.q, (w, h) => { const cv = document.createElement('canvas'); cv.width = w; cv.height = h; return cv; }) as HTMLCanvasElement); window.setTimeout(next, 0); };
+      window.setTimeout(next, 0);
+    }
     // the first tap's stardust: where each mote goes
     const r = R(91); this.dust = [];
     for (let i = 0; i < 120; i++) this.dust.push({ a: r() * Math.PI * 2, v: 160 + r() * r() * 760, r: 1.4 + r() * 4.2, up: 60 + r() * 260, blue: r() < 0.3 });

@@ -9,6 +9,7 @@
 import { COMPANIONS } from '../art/companions.js';
 import { K } from '../art/painter.js';
 import { LANDING } from '../art/landingpaint.js';
+import { askLandingSky, askLevelSky, askPlanet, landingSky, levelSky, planetLayer, type SkySpec } from '../art/paintcache';
 import { WORLDS as W } from '../art/worldpaint.js';
 import { CANON } from '../art/canonpaint.js';
 import { DUSK } from '../art/painter.js';
@@ -64,13 +65,28 @@ export interface CourseView {
 export interface WorldSky { says: Said[]; prepare(): void; draw(c: CanvasRenderingContext2D, w: number, h: number, st: SceneState): void }
 
 const ZONES = 12;
+/** a picture painted once: on the page, or by the paint worker */
+export type Pic = HTMLCanvasElement | ImageBitmap;
+/** Emberwick's sky, cold and relit */
+const EMBER_SKY: [SkySpec, SkySpec] = [
+  { stops: [[0, [10, 10, 22]], [0.55, [26, 22, 40]], [1, [34, 26, 40]]], seed: 11, fin: 41 },
+  { stops: [[0, [24, 10, 26]], [0.55, [92, 40, 54]], [1, [150, 74, 60]]], seed: 11, fin: 41 },
+];
+/** A level's sky at this size: the worker's, when it has painted it, else painted here. */
+export function skyOf(w: number, h: number, s: SkySpec): Pic {
+  const pre = levelSky(w, h, s); if (pre) return pre;
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const c = cv.getContext('2d')!, r = K.RNG(s.seed);
+  DUSK.tools.sky(c, w, h, s.stops as never, r, 70); DUSK.tools.stars(c, w, h, r, Math.round((w * h) / 1500), 3); DUSK.tools.finish(c, w, h, s.fin, 0.3); return cv;
+}
+/** Ask the paint worker for Emberwick's planet and sky ahead of the level. */
+export function askEmber(): void { askPlanet('emberLayer'); for (const s of EMBER_SKY) askLevelSky(window.innerWidth, window.innerHeight, s); }
 const zoneOf = (a: number) => ((Math.floor((((a % TAU) + TAU) % TAU) / (TAU / ZONES)) % ZONES) + ZONES) % ZONES;
 /** draw the hot layer over the cold one where the zones are lit: soft overlapping patches, never hard wedges */
 let mask: HTMLCanvasElement | null = null;
 // (the composite is kept: it is only made again while a zone is still fading in, or the whole planet's light changes;
 // the performance pass of 2026-11-25)
-let lastKey = '', lastCold: HTMLCanvasElement | null = null, comp: HTMLCanvasElement | null = null, compAny = false;
-function zones(c: CanvasRenderingContext2D, cold: HTMLCanvasElement, hot: HTMLCanvasElement, R: number, lit: number[], time: number, all: number): void {
+let lastKey = '', lastCold: Pic | null = null, comp: HTMLCanvasElement | null = null, compAny = false;
+function zones(c: CanvasRenderingContext2D, cold: Pic, hot: Pic, R: number, lit: number[], time: number, all: number): void {
   const S = cold.width, k = R / W.R0, half = (S * k) / 2;
   if (all >= 0.995) { c.drawImage(hot, -half, -half, S * k, S * k); return; }
   const key = `${Math.round(all * 200)}|${lit.map((t0) => (t0 < 0 ? -1 : Math.round(sm((time - t0) / 0.5) * 100))).join(',')}`;
@@ -82,7 +98,7 @@ function zones(c: CanvasRenderingContext2D, cold: HTMLCanvasElement, hot: HTMLCa
   compAny = zonesInto(cc, hot, S, lit, time, all);
   c.drawImage(compAny ? comp : cold, -half, -half, S * k, S * k);
 }
-function zonesInto(cc: CanvasRenderingContext2D, hot: HTMLCanvasElement, S: number, lit: number[], time: number, all: number): boolean {
+function zonesInto(cc: CanvasRenderingContext2D, hot: Pic, S: number, lit: number[], time: number, all: number): boolean {
   if (!mask || mask.width !== S) { mask = document.createElement('canvas'); mask.width = mask.height = S; }
   const m = mask.getContext('2d')!;
   m.globalCompositeOperation = 'source-over'; m.clearRect(0, 0, S, S);
@@ -120,8 +136,8 @@ function horizon(c: CanvasRenderingContext2D, w: number, h: number, helion: numb
 const ET = { held: 9.6, stabs: 12, riser: 16.8, drop: 19.2, breath: 36, breathEnd: 38.4, dive: 37.6, core: 38.4, end: 57.6, spb: 0.6 };
 
 export class EmberWorld {
-  private cold: HTMLCanvasElement | null = null; private hot: HTMLCanvasElement | null = null;
-  private skyCold: HTMLCanvasElement | null = null; private skyHot: HTMLCanvasElement | null = null; private key = '';
+  private cold: Pic | null = null; private hot: Pic | null = null;
+  private skyCold: Pic | null = null; private skyHot: Pic | null = null; private key = '';
   private lit: number[] = new Array(ZONES).fill(-1); private sparks = 0;
   private rise = new Spring(0, 5); private head = new Spring(0.62, 6); private antler = new Spring(0, 3.5); private tail = new Spring(0, 3); private litS = new Spring(0.05, 3);
   private lastT = -1; private lastPhase = 0; private impact = -9; private stirAt = -9;
@@ -130,11 +146,8 @@ export class EmberWorld {
 
   private paint(w: number, h: number): void {
     const key = `${w}x${h}`; if (key === this.key) return; this.key = key;
-    if (!this.cold) { this.cold = W.emberLayer(false); this.hot = W.emberLayer(true); }
-    const sky = (hot: boolean) => { const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const c = cv.getContext('2d')!, r = K.RNG(11);
-      DUSK.tools.sky(c, w, h, hot ? [[0, [24, 10, 26]], [0.55, [92, 40, 54]], [1, [150, 74, 60]]] : [[0, [10, 10, 22]], [0.55, [26, 22, 40]], [1, [34, 26, 40]]], r, 70);
-      DUSK.tools.stars(c, w, h, r, Math.round((w * h) / 1500), 3); DUSK.tools.finish(c, w, h, 41, 0.3); return cv; };
-    this.skyCold = sky(false); this.skyHot = sky(true);
+    if (!this.cold) { this.cold = planetLayer('emberLayer', false) ?? W.emberLayer(false); this.hot = planetLayer('emberLayer', true) ?? W.emberLayer(true); }
+    this.skyCold = skyOf(w, h, EMBER_SKY[0]); this.skyHot = skyOf(w, h, EMBER_SKY[1]);
   }
   reset(): void { this.lit.fill(-1); this.sparks = 0; this.lastT = -1; this.impact = -9; this.embers = []; this.rise.x = 0; this.head.x = 0.62; this.litS.x = 0.05; }
   rewind(to: number): void { for (let z = 0; z < ZONES; z++) if (this.lit[z] > to) this.lit[z] = -1; this.embers = []; this.lastT = -1; }
@@ -348,16 +361,18 @@ export class EmberWorld {
 const DT = { helion: 17.6, drop: 19.2, climb: 32.0, slip: 44.8, rise: 45.6, toss: 49.6, drop2: 51.2, end: 70.4, spb: 0.4 };
 
 export class EdgeWorld {
-  private cold: HTMLCanvasElement | null = null; private hot: HTMLCanvasElement | null = null;
+  private cold: Pic | null = null; private hot: Pic | null = null;
   private skyLayer: HTMLCanvasElement | null = null; private key = '';
   private lit: number[] = new Array(ZONES).fill(-1); private sparks = 0;
   private blooms: Array<{ a: number; d: number; at: number; hue: number }> = [];
   private wake = new Spring(0, 3); private curl = new Spring(0.7, 2.5); private lastT = -1; private seed = 1;
 
+  /** Asks the paint worker for this world's sky ahead (the Landing's own, at one to one). */
+  askAhead(): void { askLandingSky(window.innerWidth, window.innerHeight, 1, 0); askPlanet('edgeLayer'); }
   private paint(w: number, h: number): void {
     const key = `${w}x${h}`; if (key === this.key) return; this.key = key;
-    if (!this.cold) { this.cold = W.edgeLayer(false); this.hot = W.edgeLayer(true); }
-    const cv = document.createElement('canvas'); cv.width = w; cv.height = h; LANDING.sky(cv.getContext('2d')!, w, h, 0); this.skyLayer = cv;
+    if (!this.cold) { this.cold = planetLayer('edgeLayer', false) ?? W.edgeLayer(false); this.hot = planetLayer('edgeLayer', true) ?? W.edgeLayer(true); }
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const pre = landingSky(w, h, 1, 0); if (pre) cv.getContext('2d')!.drawImage(pre, 0, 0, w, h); else LANDING.sky(cv.getContext('2d')!, w, h, 0); this.skyLayer = cv; // (from the paint worker when it is ready)
   }
   reset(): void { this.lit.fill(-1); this.sparks = 0; this.blooms = []; this.lastT = -1; this.wake.x = 0; this.curl.x = 0.7; }
   rewind(to: number): void { for (let z = 0; z < ZONES; z++) if (this.lit[z] > to) this.lit[z] = -1; this.blooms = this.blooms.filter((b) => b.at <= to); this.lastT = -1; }
