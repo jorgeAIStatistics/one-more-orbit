@@ -14,7 +14,7 @@ await page.addInitScript((w) => { window.__W = w; }, which);
 await page.goto(`http://localhost:${process.env.OMO_PORT || 5199}/?look=2`, { waitUntil: 'load' }); await page.waitForTimeout(1500);
 await page.evaluate(() => {
   const o = window.__omo, r = o.renderer; Object.assign(o.save, { music: 0, sfx: 0, hitVol: 0, tutorialDone: true, calibrated: true, unlockAll: true }); o.save.story.open = o.save.story.prologue = o.save.story.cold = true; o.opening.stop(); o.coldScene.stop(); o.show('levels');
-  const w = window.__W; if (w === 'first') o.first(true); else if (w === 'ambush') o.ambush(true); else { o.level(Number(w)); o.start(true); }
+  const w = window.__W; if (w === 'first') o.first(true); else if (w === 'ambush') o.ambush(true); else if (w === 'guardian') o.guardian(true); else { o.level(Number(w)); o.start(true); }
   window.__S = [];
   const f = (t) => { const run = o.run; if (run && run.state === 'playing') { const U = r.rad(r.cam); window.__S.push([+t.toFixed(2), +run.time.toFixed(4), +r.camX.toFixed(2), +r.camY.toFixed(2), +U.toFixed(3), +r.ballXY[0].toFixed(2), +r.ballXY[1].toFixed(2), +(r.pf ?? 0).toFixed(4), +r.cam.toFixed(4), +r.camScale.toFixed(4), +r.punchS.toFixed(4), +r.zoomS.toFixed(4), +r.speedK.toFixed(4), +r.baseR.toFixed(4)]); } window.__raf = requestAnimationFrame(f); };
   window.__raf = requestAnimationFrame(f);

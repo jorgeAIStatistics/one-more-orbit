@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { BSIDES, FINAL, PACKS, SLICE } from '../src/game/packs';
+import { BSIDES, FINAL as FINAL_NEW, PACKS, SLICE } from '../src/game/packs';
+import royOldLevel from '../levels/royalty/level.json';
+import royOldAudio from '../levels/royalty/audio.json';
+import royOldChart from '../levels/royalty/chart.json';
+import royOldPresses from '../levels/royalty/presses.json';
+import royOldAudit from '../levels/royalty/audit.json';
+// (the engine's mechanics are checked on the final level's old chart, Royalty, kept for that since the guardian moved
+// to Throne as a journey on 2026-11-26; the guardian itself: tests/forgive.test.ts)
+const FINAL = { level: royOldLevel, audio: royOldAudio, chart: royOldChart, presses: royOldPresses, audit: royOldAudit } as unknown as typeof FINAL_NEW;
 import { Level } from '../src/game/level';
 import { SmoothClock } from '../src/gd/clock';
 import { autoLayers, buildCourse, HOLD_MAX, HOLD_MIN, landingGrace, LINE_TIGHT, SLING_FLIGHT, TETHER_LET_S, TOL_S } from '../src/gd/course';

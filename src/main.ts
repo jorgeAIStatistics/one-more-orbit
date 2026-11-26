@@ -34,6 +34,7 @@ import { SkyCold } from './ui/skycold';
 import { SkyMemory } from './ui/skymemory';
 import { askEmber, EdgeWorld, EmberWorld, type World, type WorldSky } from './ui/worlds';
 import { AmbushWorld, AMBUSH_SAYS } from './ui/worldamb';
+import { GuardianWorld, GUARDIAN_SAYS } from './ui/worldguard';
 import { LANDING } from './art/landingpaint.js';
 import { K as PK } from './art/painter.js';
 import { CANON as PCANON } from './art/canonpaint.js';
@@ -110,6 +111,8 @@ const emberWorld = new EmberWorld();
 const edgeWorld = new EdgeWorld();
 /** the ambush, after the second star (2026-11-26) */
 const ambushWorld = new AmbushWorld();
+/** the guardian, on Throne (2026-11-26) */
+const guardianWorld = new GuardianWorld();
 /** the worlds after Emberwick, built as places (2026-11-25) */
 const WORLDS2: Record<string, CirraWorld | GlassWorld | VerdWorld> = { skyhigh: new CirraWorld(), blank: new GlassWorld(), invincible: new VerdWorld() };
 // (every planet and level sky is painted by the paint worker soon after the page opens, so no level opens with a hitch)
@@ -384,6 +387,8 @@ function afterStar(r: Run, first: boolean, homeWas: number, at: { orbin: [number
 /** what comes after the ambush is cleared (the story's way on; a replay goes back to the map) */
 let ambushThen: (() => void) | null = null;
 const skips = { run: null as Run | null, done: new Set<number>() };
+/** a run started by the test hooks (the checks): it may start a level the map would not open yet */
+let hookRun = false;
 /** The ambush, from the Landing: the Stillness has noticed its light. */
 function startAmbush(then: (() => void) | null = null): void {
   ambushThen = then;
@@ -613,7 +618,7 @@ function go(): void {
 
 /** Starts an attempt. `from` is a song time (practice restarts from a checkpoint); `quick` is the instant restart after a crash. */
 function startRun(from = -1, quick = false, made: Run | null = null, ember = false): void {
-  if (!chamber && pack !== AMBUSH && !canPlay()) return;
+  if (!chamber && pack !== AMBUSH && !hookRun && !canPlay()) return;
   audio.ensure();
   audio.setVolumes(save.music, save.sfx);
   audio.stopPreview(0.6);
@@ -635,7 +640,7 @@ function startRun(from = -1, quick = false, made: Run | null = null, ember = fal
   const hm = chamber || practice ? null : HELION[pack.level.id];
   helionCue = null;
   if (hm && audio.ctx) { const cue = (helionCue = { run: null as unknown as Run, track: null as Awaited<ReturnType<typeof audio.loadTrack>> | null, at: hm.at, meta: hm.meta, played: false }); void audio.loadTrack(hm.meta).then((t) => { cue.track = t; }, () => undefined); }
-  renderer.twinIs = 'orbin';
+  renderer.twinIs = pack === FINAL ? 'helion' : 'orbin'; // (the guardian's dual: Helion's signal is the second spark)
   // the way in: out of the planet's own light (from the map), back to an ember (a fall), or a quick cool dissolve (a restart)
   if (!made && !chamber) { if (ember) renderer.beginIntro([255, 178, 110], 0.45, 0.12); else if (quick) renderer.beginIntro([12, 14, 30], 0.3, 0.06); else if (from < 0) renderer.beginIntro((COMPANIONS.KINDLE as Record<string, RGB3>)[baseOf(pack)] ?? [255, 226, 170], 1.1, 0.9); }
   const sc = chamber ? null : sceneFor(pack);
@@ -998,6 +1003,7 @@ function sceneFor(p: LevelPack): PlanetScene | WorldSky | null {
   // the worlds you play on: the level is the place (the planet in the middle of the ring, its inhabitant beside it)
   if (p === FIRST) return edgeWorld.sky;
   if (p === AMBUSH) return ambushWorld.sky;
+  if (p === FINAL) return guardianWorld.sky;
   if (p.level.id === 'heroes') return emberWorld.sky;
   if (WORLDS2[p.level.id]) return WORLDS2[p.level.id].sky;
   const world = baseOf(p);
@@ -1013,7 +1019,7 @@ function sceneFor(p: LevelPack): PlanetScene | WorldSky | null {
 const HELION: Record<string, { meta: AudioMeta; at: number }> = { started: { meta: helion1Audio as AudioMeta, at: 17.6 }, heroes: { meta: helion2Audio as AudioMeta, at: 16.8 }, skyhigh: { meta: helion3Audio as AudioMeta, at: 13.125 }, blank: { meta: helion4Audio as AudioMeta, at: 13.125 }, invincible: { meta: helion5Audio as AudioMeta, at: 14.4 } };
 let helionCue: { run: Run; track: Awaited<ReturnType<typeof audio.loadTrack>> | null; at: number; meta: AudioMeta; played: boolean } | null = null;
 /** The planet in the middle of the ring, for the worlds that are built as places. */
-function worldFor(p: LevelPack): World | null { return p === FIRST ? edgeWorld.world : p === AMBUSH ? ambushWorld.world : p.level.id === 'heroes' ? emberWorld.world : WORLDS2[p.level.id]?.world ?? null; }
+function worldFor(p: LevelPack): World | null { return p === FIRST ? edgeWorld.world : p === AMBUSH ? ambushWorld.world : p === FINAL ? guardianWorld.world : p.level.id === 'heroes' ? emberWorld.world : WORLDS2[p.level.id]?.world ?? null; }
 /** What is written into a sleeping world's sky, once, on the way to its drop. */
 // (the inhabitant speaks at most three times, in calm moments, low on the screen, never over the course)
 // (in the clear band between the top of the screen and the ring: never over the course, Ossa or the thread)
@@ -1022,6 +1028,7 @@ const WRITTEN: Record<string, Said[]> = {
   heroes: [LOW(0.3, 4.6, 'Cold. Since the music stopped.'), LOW(9.6, 12.2, 'There. A spark.'), LOW(36.0, 38.6, 'Strike with me.')],
   started: [LOW(1.6, 6.4, 'Something here is listening.')],
   ambush: AMBUSH_SAYS,
+  royalty: GUARDIAN_SAYS,
   ...WRITTEN2
 };
 /** the scene before a world's first attempt: written into its sky during the long lead-in (song seconds, below zero) */
@@ -1035,7 +1042,7 @@ const BEFORE: Record<string, Said[]> = { heroes: [
 ], ...BEFORE2 };
 /** A chosen world's sky is painted while the galaxy is at rest, so flying in is not held up by it. */
 function paintAhead(p: LevelPack): void {
-  if (p === FIRST) edgeWorld.askAhead(); else if (p === AMBUSH) ambushWorld.askAhead(); else if (p.level.id === 'heroes') askEmber(); else WORLDS2[p.level.id]?.askAhead();
+  if (p === FIRST) edgeWorld.askAhead(); else if (p === AMBUSH) ambushWorld.askAhead(); else if (p === FINAL) guardianWorld.askAhead(); else if (p.level.id === 'heroes') askEmber(); else WORLDS2[p.level.id]?.askAhead();
   window.setTimeout(() => { if (screen === 'levels' && !$('levels').classList.contains('launch')) sceneFor(p)?.prepare(); }, 900);
   // and the Landing as it will be when this world's star comes home (painted a layer at a time while the galaxy is still)
   if (!bestFor(baseOf(p)).cleared) { const n = starsHome(); window.setTimeout(() => landing.prepare([n, n + 1], () => screen === 'levels' && !$('levels').classList.contains('launch')), 1400); }
@@ -1814,6 +1821,6 @@ Object.assign(window, {
     story: (k: string) => playStory(k, () => show('levels'), true),
     chambers: () => openChambers(), chamber: (id: string, bot = false) => { const c = CHAMBERS.find((x) => x.id === id); if (c) startChamber(c, bot); }, get room() { return chamber; },
     tutorial: startTutorial, results: (cleared: boolean) => { if (run) showResults(run, cleared, run.pct); }, pause,
-    opening, startOpening, startCold, coldScene, landing, skyStar, toTitle, toLanding, ambush: (bot = false, from = -1) => { ambushThen = null; pack = AMBUSH; practice = dare = false; chamber = null; botMode = bot; ambushWorld.askAhead(); startRun(from); }, first: (bot = false, from = -1) => { botMode = bot; practice = false; pack = FIRST; startRun(from); }, moment: (k: 'gift' | 'road', stars = 1) => { moment.play(k, 'heroes', stars, () => show('levels')); show('moment'); }, memory: (w = 'heroes') => filmAgain(w, () => show('levels')), memoryFilm, firstClear: (w = 'heroes') => firstClear(w, () => show('levels')), logbook: openLogbook, orbs: openGlows, stars: openStars, credits: openCredits, sync10: () => openCalib(), calTap, settings: () => openSettings('levels')
+    opening, startOpening, startCold, coldScene, landing, skyStar, toTitle, toLanding, guardian: (bot = false, from = -1) => { hookRun = true; pack = FINAL; practice = dare = false; chamber = null; botMode = bot; guardianWorld.askAhead(); startRun(from); }, ambush: (bot = false, from = -1) => { ambushThen = null; pack = AMBUSH; practice = dare = false; chamber = null; botMode = bot; ambushWorld.askAhead(); startRun(from); }, first: (bot = false, from = -1) => { botMode = bot; practice = false; pack = FIRST; startRun(from); }, moment: (k: 'gift' | 'road', stars = 1) => { moment.play(k, 'heroes', stars, () => show('levels')); show('moment'); }, memory: (w = 'heroes') => filmAgain(w, () => show('levels')), memoryFilm, firstClear: (w = 'heroes') => firstClear(w, () => show('levels')), logbook: openLogbook, orbs: openGlows, stars: openStars, credits: openCredits, sync10: () => openCalib(), calTap, settings: () => openSettings('levels')
   }
 });

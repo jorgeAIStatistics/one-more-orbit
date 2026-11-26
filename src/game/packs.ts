@@ -35,11 +35,11 @@ import ambLevel from '../../levels/darkness/level.json';
 import ambAudio from '../../levels/darkness/audio.json';
 import ambChart from '../../levels/darkness/chart.json';
 import ambPresses from '../../levels/darkness/presses.json';
-import royLevel from '../../levels/royalty/level.json';
-import royAudio from '../../levels/royalty/audio.json';
-import royChart from '../../levels/royalty/chart.json';
-import royPresses from '../../levels/royalty/presses.json';
-import royAudit from '../../levels/royalty/audit.json';
+// the guardian (2026-11-26): on Throne, as a journey on its own body (its slot's id stays 'royalty')
+import royLevel from '../../levels/throne/level.json';
+import royAudio from '../../levels/throne/audio.json';
+import royChart from '../../levels/throne/chart.json';
+import royPresses from '../../levels/throne/presses.json';
 import heroesB from '../../levels/heroes/bside.json';
 import skyB from '../../levels/flutter/bside.json';
 import blankB from '../../levels/luna/bside.json';
@@ -101,7 +101,7 @@ export const BSIDES: LevelPack[] = [bside(PACKS[0], heroesB), bside(PACKS[1], sk
 export const AMBUSH: LevelPack = pack(ambLevel, ambAudio, ambChart, ambPresses);
 
 /** The level behind the gate at the end of the world. Not on the route: it opens on stars, not on a clear. */
-export const FINAL: LevelPack = pack(royLevel, royAudio, royChart, royPresses, royAudit);
+export const FINAL: LevelPack = pack(royLevel, royAudio, royChart, royPresses);
 
 /**
  * Memories of Helion: one after each world's first clear, played as a twin orbit in the Harmonic Nebula. They cannot

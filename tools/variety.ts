@@ -6,7 +6,7 @@
 // Usage: npx vite-node tools/variety.ts [ids...]      (default: the first stage and Emberwick)
 // Writes tools/cache/variety.json too.
 import { writeFileSync } from 'node:fs';
-import { AMBUSH, FIRST, PACKS, type LevelPack } from '../src/game/packs';
+import { AMBUSH, FINAL, FIRST, PACKS, type LevelPack } from '../src/game/packs';
 import { Level } from '../src/game/level';
 import { buildCourse } from '../src/gd/course';
 import { accentBeats, layers, pitchLookup } from '../src/gd/presses';
@@ -185,7 +185,7 @@ export const QUICK_S = 0.45;
 /** each level's local limits (the owner's table of 2026-11-26): the shortest gap, and the longest run of quick taps */
 export const LOCAL: Record<string, { floor: number; dbl: number; run: number }> = {
   started: { floor: 0.39, dbl: 0.45, run: 2 }, heroes: { floor: 0.29, dbl: 0.45, run: 2 }, skyhigh: { floor: 0.23, dbl: 0.35, run: 3 },
-  ambush: { floor: 0.33, dbl: 0.33, run: 3 }, blank: { floor: 0.29, dbl: 0.29, run: 4 }, invincible: { floor: 0.25, dbl: 0.25, run: 4 }, throne: { floor: 0.19, dbl: 0.19, run: 6 }
+  ambush: { floor: 0.33, dbl: 0.33, run: 3 }, blank: { floor: 0.29, dbl: 0.29, run: 4 }, invincible: { floor: 0.25, dbl: 0.25, run: 4 }, throne: { floor: 0.19, dbl: 0.19, run: 6 }, royalty: { floor: 0.19, dbl: 0.19, run: 6 }
 };
 const OBJECT = new Set<string>(['leap (the signal, the hand)', 'leap', 'a light in the air (in a leap)', 'stone flower (pad)', 'mote of light (jump orb)', 'anvil (Meteor wall)', 'bellows (pad)', 'lava vent', 'ember in the air', 'launch (a strike, a fling)', 'great node', 'jump pad', 'spring']);
 export function journey(pack: LevelPack): Journey {
@@ -195,11 +195,12 @@ export function journey(pack: LevelPack): Journey {
   const holdAt = new Set(c.holds.map((h) => Math.round(h.a * 100)));
   const ember = pack.level.id === 'heroes';
   // each world's own objects (2026-11-26): what its pads, launches, mid-air taps and form moves are in that world
-  const NAMES: Record<string, Partial<Record<'pad' | 'leap' | 'ember' | 'sat' | 'pulsar' | 'meteor' | 'orb' | 'vent', string>>> = {
+  const NAMES: Record<string, Partial<Record<'pad' | 'leap' | 'ember' | 'sat' | 'pulsar' | 'meteor' | 'orb' | 'vent' | 'dual', string>>> = {
+    royalty: { dual: 'two sparks, his and Helion’s (dual)', pad: 'its hand, sweeping (pad)', leap: 'a throw (launch)', ember: 'a light (in the air)', meteor: 'a seal (Meteor wall)', sat: 'a seal-knot (wave turn)', pulsar: 'a shard of its stone (flip)', orb: 'a light' },
     ambush: { pad: 'a slab of debris (pad)', leap: 'a throw into the dark (launch)', ember: 'a light to catch (in the air)', sat: 'a wreck’s edge (wave turn)', meteor: 'a dead fragment (Meteor wall)', vent: 'the skip (vent)', orb: 'a light to catch' },
     skyhigh: { pad: 'kite (pad)', leap: 'gust (launch)', ember: 'wind chime (in the air)', sat: 'knot of residue (wave turn)', orb: 'wind chime' },
     blank: { pad: 'ripple (pad)', leap: 'mirror portal (launch)', ember: 'droplet of light (in the air)', pulsar: 'ice shard (ball flip)', orb: 'droplet of light' },
-    invincible: { pad: 'seed pod (pad)', leap: 'vine (launch)', ember: 'seed-light (in the air)', pulsar: 'thorn knot (snap)', orb: 'seed-light' },
+    invincible: { dual: 'two sparks (dual)', pad: 'seed pod (pad)', leap: 'vine (launch)', ember: 'seed-light (in the air)', pulsar: 'thorn knot (snap)', orb: 'seed-light' },
   };
   const nm = NAMES[pack.level.id] ?? {};
   for (const v of Object.values(nm)) OBJECT.add(v);
@@ -208,6 +209,7 @@ export function journey(pack: LevelPack): Journey {
     if (p.leap?.ember && nm.ember) return nm.ember;
     if (p.pad === 'jump' && nm.pad) return nm.pad;
     if (p.pad === 'vent' && nm.vent) return nm.vent;
+    if (c.bars[barOf(p.beat)]?.dual && nm.dual && !p.leap) return nm.dual;
     if (p.orb === 'jump' && !p.leap && nm.orb) return nm.orb;
     if (holdAt.has(Math.round(p.beat * 100))) return 'hold';
     if (c.bars[barOf(p.beat)]?.mini && !p.leap && !p.pad) return 'mini (tight gust)';
@@ -278,7 +280,7 @@ export function journey(pack: LevelPack): Journey {
 const isMain = typeof process !== 'undefined' && !process.env.VITEST;
 if (isMain) {
   const ids = process.argv.slice(2).filter((x) => !x.startsWith('-'));
-  const packs = (ids.length ? ids : [FIRST.level.id, 'heroes']).map((id) => (id === FIRST.level.id ? FIRST : id === 'ambush' ? AMBUSH : PACKS.find((p) => p.level.id === id)!));
+  const packs = (ids.length ? ids : [FIRST.level.id, 'heroes']).map((id) => (id === FIRST.level.id ? FIRST : id === 'ambush' ? AMBUSH : id === 'royalty' ? FINAL : PACKS.find((p) => p.level.id === id)!));
   const out = packs.map(audit);
   for (const a of out) {
     console.log(`\n${a.id} (${a.title}): ${a.bars} bars, ${a.played} played; ${a.unique} unique patterns (${a.uniquePct}%); longest run of identical bars ${a.longestRun} (from bar ${a.longestAt}); longest stretch with no tap ${a.rest.longestGapBeats} beats (from beat ${a.rest.at})`);

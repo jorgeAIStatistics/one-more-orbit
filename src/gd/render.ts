@@ -302,7 +302,7 @@ export class GdRenderer {
     const GIFT: Record<string, Partial<Record<Feature, string>>> = { skyhigh: { sat: 'the wave: each tap turns the zig-zag' }, blank: { pulsar: 'the ball: each tap turns gravity over' }, invincible: { pulsar: 'the snap: each tap jumps you across the branch at once' } };
     const named = (w: Feature) => GIFT[level.file.side?.of ?? level.id]?.[w] ?? said(w);
     // (the ambush brings nothing new: everything so far, under pressure; nothing is named)
-    for (const f of c.firsts) if (!taught(f.what) && level.id !== 'ambush') this.hints.push(f.what === 'charge' ? [f.beat - 2.5, f.beat + 4, HINT.charge] : f.what === 'smash' ? [f.beat - 5, f.beat, HINT.smash] : [f.beat - 4.5, f.beat + 1.5, named(f.what)]);
+    for (const f of c.firsts) if (!taught(f.what) && level.id !== 'ambush' && level.id !== 'royalty') this.hints.push(f.what === 'charge' ? [f.beat - 2.5, f.beat + 4, HINT.charge] : f.what === 'smash' ? [f.beat - 5, f.beat, HINT.smash] : [f.beat - 4.5, f.beat + 1.5, named(f.what)]);
     this.hints.sort((a, b) => a[0] - b[0]);
     this.energy = barEnergy(level);
     this.particles = [];
@@ -2247,8 +2247,8 @@ export class GdRenderer {
       c.translate(2 * this.coreX, 0);
       c.scale(-1, 1);
       // (in dual mode the second spark is a Pulsar on a ring of its own: it flips sides on every tap)
-      if (course.duals.some(([a, z]) => beat >= a - 1 && beat < z + 0.25)) this.drawEcho(run, beat, mix(skin, VIOLET, 0.6));
-      else this.drawSide(run, true, beat, pal, kick, dropStyle, now / 1000, mix(skin, VIOLET, 0.6), dt);
+      if (course.duals.some(([a, z]) => beat >= a - 1 && beat < z + 0.25)) this.drawEcho(run, beat, this.twinIs === 'helion' ? [255, 200, 120] : [150, 190, 240]); // (Helion's gold, or soft blue: no violet; 2026-11-26)
+      else this.drawSide(run, true, beat, pal, kick, dropStyle, now / 1000, this.twinIs === 'helion' ? [255, 200, 120] : [150, 190, 240], dt);
       c.restore();
     }
 

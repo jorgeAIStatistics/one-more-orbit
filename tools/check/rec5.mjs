@@ -22,7 +22,7 @@ const clock = which === 'cold' ? '(window.__omo.coldScene.state === "scene" ? wi
 await page.evaluate(([w, from, clock]) => {
   const o = window.__omo;
   if (w === 'cold') { o.coldScene.press(true, 10, 400); o.coldScene.press(false); }
-  else { Object.assign(o.save, { music: 0, sfx: 0, hitVol: 0, tutorialDone: true, calibrated: true, unlockAll: true }); o.save.story.open = o.save.story.prologue = o.save.story.cold = true; o.opening.stop(); o.coldScene.stop(); o.show('levels'); if (w === 'first') o.first(true); else if (w === 'ambush') o.ambush(true); else { o.level(w === 'heroes' ? 0 : Number(w.slice(1))); o.start(true); } }
+  else { Object.assign(o.save, { music: 0, sfx: 0, hitVol: 0, tutorialDone: true, calibrated: true, unlockAll: true }); o.save.story.open = o.save.story.prologue = o.save.story.cold = true; o.opening.stop(); o.coldScene.stop(); o.show('levels'); if (w === 'first') o.first(true); else if (w === 'ambush') o.ambush(true); else if (w === 'guardian') o.guardian(true); else { o.level(w === 'heroes' ? 0 : Number(w.slice(1))); o.start(true); } }
   const S = (window.__sync = []);
   const f = () => { const t = eval(clock); if (t > -50) S.push([Date.now() / 1000, t]); requestAnimationFrame(f); }; requestAnimationFrame(f);
 }, [which, from, clock]);

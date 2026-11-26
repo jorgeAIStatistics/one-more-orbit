@@ -48,6 +48,45 @@ SPECS = {
                 ('orb+down', 3), ('down', 3), ('vent+down', 3), ('down', 3), ('down', 3), ('leap4', 1, {'e': 2, 'clear': 12}), ('up', 2), ('up', 1, {'fixed': [0]})]),
         ],
     ),
+    # ------------------------------------------------------------------ the guardian, on Throne (154 BPM, a bar 1.558 s; bar k at 1.558k s)
+    'throne': dict(
+        bpm=154, follow='snare', looks=LOOK,
+        table=dict(floor=0.2, dbl=0.2, run=5, step=3),
+        doc="The guardian, on Throne (Rival, Neoni; song bars 80-136). Three phases on the guardian's own body. The waking (bars 0-15): at its feet, it stirs, its head comes up, its hand sweeps across the ring (each sweep telegraphed a bar ahead in vermilion; you hop it on the beat); Helion's signal from inside its chest (8). The climb (16-31): at 16 the heavy bars throw you onto its raised arm (17-19, the Meteor through its seals), at 20 a throw to its helm, and you wind round it and in toward the slit (24-29, the seals breaking); 30-31 near silence: its heart opens. The heart (32-55): the drop throws you onto the great Star-Node in its chest; the four Kindlings come one by one and each gives its mode back (Emberwick's Meteor 33, Cirra's wave 37, Glassmere's ball 41, Verdance's snap 45); at 49 Helion's signal joins as the second spark (dual) and the camera pulls back over the whole guardian; the last tap lights its star (55).",
+        head={"id": "royalty", "title": "Throne", "artist": "Rival, Neoni", "release": "NCS Release", "hitsoundNote": 64, "scale": [4, 6, 7, 9, 11, 0, 2], "swing": False,
+              "difficulty": "Singularity", "adds": "Everything the four worlds gave, in turn, on the guardian's own body; and two sparks on one tap", "holds": False, "embers": [],
+              "rules": {"tol": 0.09, "ahead": 2.5, "branch": 0.055, "known": ["meteor", "sat", "pulsar"], "buffer": 0.09, "early": 0.45}, "shards": [[24, 31.5], [72, 79.5], [180, 187.5]]},
+        places=[
+            {"id": "feet", "at": [0, 0], "shape": "circle"},
+            {"id": "arm", "at": [2.3, -2.6], "shape": "line", "dir": -1.1, "len": 0.45},
+            {"id": "crown", "at": [0.1, -5.3], "shape": "circle", "spiral": [106, 130], "grow": 0.45, "to": [0, 0]},
+            {"id": "heart", "at": [0.15, -2.4], "shape": "circle", "size": 1.15},
+        ],
+        setpieces=[
+            {"bar": 1, "kind": "story", "time": 1.56, "name": "It wakes", "what": "the guardian kneeling at the edge of the galaxy stirs; its head comes up and the slit in its helm lights cold"},
+            {"bar": 4, "kind": "pad", "time": 6.23, "name": "The first sweep", "what": "a bar ahead a vermilion line crosses the ring; on the beat its hand sweeps through, and you hop it"},
+            {"bar": 8, "kind": "story", "time": 12.47, "name": "Helion's moment", "what": "his signal, from inside the guardian's chest: the nearest it has ever been"},
+            {"bar": 16, "kind": "leap", "time": 25.71, "name": "The climb", "what": "the heavy bars throw you onto its raised arm; the Meteor through its seals"},
+            {"bar": 20, "kind": "leap", "time": 31.17, "name": "The helm", "what": "a throw to its helm; you wind round it and in toward the slit, the seals breaking"},
+            {"bar": 30, "kind": "story", "time": 46.75, "name": "Its heart opens", "what": "near silence; the Stillness pours out of the slit and the Star-Node in its chest shows"},
+            {"bar": 32, "kind": "leap", "time": 50.65, "name": "The heart", "what": "the drop: the great node, a beat of stillness, the impact; thrown onto the Star-Node in its chest"},
+            {"bar": 37, "kind": "story", "time": 57.66, "name": "The Kindlings", "what": "one by one the four Kindlings come and each gives its mode back: the Meteor (33), the wave (37), the ball (41), the snap (45)"},
+            {"bar": 49, "kind": "story", "time": 76.36, "name": "Two sparks", "what": "Helion's signal joins as the second spark (dual); the camera pulls back over the whole guardian"},
+            {"bar": 55, "kind": "story", "time": 85.71, "name": "Its star", "what": "the last tap lights the guardian's star; it bows its head, this time by choice"},
+        ],
+        sections=[
+            ('waking', 'BUILD', 16, 'build', {}, None, [('up', 2), ('up', 2), ('up', 3), ('hold+up', 2, {'fixed': [0, 12]}), ('up+pad', 3), ('up', 3), ('up+pad', 3), ('turn+up', 2),
+                                                       ('up', 2), ('up', 3), ('up+pad', 3), ('up', 3), ('up+pad', 3), ('up', 3), ('up+pad', 4), ('up', 4)]),
+            ('climb', 'BUILD', 8, 'ready', {}, None, [('x1.25+up+leap2@2', 2, {'e': 1}), ('meteor', 3), ('up', 4), ('up', 3), ('leap2', 2, {'e': 1}), ('up+pad', 3), ('hold+up', 2, {'fixed': [0, 12]}), ('up', 3),
+                                                      ('up', 4), ('up', 3), ('up+pad', 4), ('up', 4), ('hold+up', 2, {'fixed': [0, 12]}), ('up', 4), ('up', 3), ('up', 4)]),
+            ('heart', 'DROP', 8, 'drop', {"smash": True, "record": True}, 'drop', [
+                ('x1.5+up+leap2@2', 2, {'e': 1, 'down': True}), ('up', 4), ('up', 5), ('up+pad', 4), ('up', 5),
+                ('sat', 4), ('hold+up', 2, {'fixed': [0, 12]}), ('up+pad', 4), ('up', 5),
+                ('pulsar', 4), ('up', 4), ('up+pad', 5), ('hold+up', 2, {'fixed': [0, 12]}),
+                ('pulsar+snap', 4), ('snap', 5), ('snap+pad', 4), ('turn+snap', 4),
+                ('dual', 4), ('dual', 5), ('hold+dual', 2, {'fixed': [0, 12]}), ('x1.75+dual', 5), ('turn+dual', 5), ('dual', 4), ('dual', 1, {'fixed': [0]})]),
+        ],
+    ),
     # ------------------------------------------------------------------ Verdance, on Willow Tree (100 BPM, a bar 2.4 s)
     'willow': dict(
         bpm=100, follow='snare', looks=LOOK,

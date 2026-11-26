@@ -65,7 +65,7 @@ export interface World {
 export interface CourseView {
   beat: number; song: number; time: number; spb: number; rb: number;
   /** the course: its presses (the last is the level's last wall) */
-  presses: Array<{ beat: number; pad: string; land: number; leap?: { b0: number; b1: number; p0: number; ember: boolean } }>;
+  presses: Array<{ beat: number; pad: string; land: number; form?: string; auto?: boolean; smash?: boolean; leap?: { b0: number; b1: number; p0: number; ember: boolean } }>;
   /** the course's holds (beats): the ambush freezes them */
   holds?: ReadonlyArray<{ a: number; b: number }>;
   /** the journey: where place k's centre is (in this frame), one base-ring radius, the place he is at */

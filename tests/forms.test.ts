@@ -1,7 +1,15 @@
 // The galaxy's mechanics: Eko's forms and their lenses, gates, pads, chimes, slipstreams, dual mode, and the
 // escalation from planet to planet (windows, warning, density).
 import { describe, expect, it } from 'vitest';
-import { FINAL, PACKS, type LevelPack } from '../src/game/packs';
+import { FINAL as FINAL_NEW, PACKS, type LevelPack } from '../src/game/packs';
+import royOldLevel from '../levels/royalty/level.json';
+import royOldAudio from '../levels/royalty/audio.json';
+import royOldChart from '../levels/royalty/chart.json';
+import royOldPresses from '../levels/royalty/presses.json';
+import royOldAudit from '../levels/royalty/audit.json';
+// (the engine's mechanics are checked on the final level's old chart, Royalty, kept for that since the guardian moved
+// to Throne as a journey on 2026-11-26; the guardian itself: tests/forgive.test.ts)
+const FINAL = { level: royOldLevel, audio: royOldAudio, chart: royOldChart, presses: royOldPresses, audit: royOldAudit } as unknown as typeof FINAL_NEW;
 import { Level } from '../src/game/level';
 import { buildCourse, SLIP_FLIGHT, type Form } from '../src/gd/course';
 import { accentBeats, layers, pitchLookup } from '../src/gd/presses';

@@ -23,6 +23,6 @@ const R = [];
 const lv = async (name, start, end) => { await go('?look=2'); await prep(); await rec('window.__omo.run ? window.__omo.run.time : -1'); await page.evaluate(start); await page.waitForFunction((e) => window.__omo.run && (window.__omo.run.time > e || window.__omo.screen !== 'play'), end, { timeout: 200000, polling: 200 }).catch(() => {}); R.push(await stop(name)); };
 const which = process.argv[5] || '0', endAt = Number(process.argv[6] || 60);
 await page.addInitScript((w) => { window.__W = w; }, which);
-await lv(process.argv[4] || 'level', () => { const o = window.__omo, w = window.__W; if (w === 'first') o.first(true); else if (w === 'ambush') o.ambush(true); else { o.level(Number(w)); o.start(true); } }, endAt);
+await lv(process.argv[4] || 'level', () => { const o = window.__omo, w = window.__W; if (w === 'first') o.first(true); else if (w === 'ambush') o.ambush(true); else if (w === 'guardian') o.guardian(true); else { o.level(Number(w)); o.start(true); } }, endAt);
 
 await b.close();
