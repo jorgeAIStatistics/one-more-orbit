@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ONE MORE ORBIT · Emberwick as a journey (plan)</title>
+<link rel="stylesheet" href="plan.css">
+</head><body><main>
+<span class="tag">Plan · waiting for your OK</span>
+<h1>Emberwick as a journey, interactions with weight, and the audit fixes</h1>
+<p class="lede">Section 4 is fixed and committed (bbaab9c on galaxy, nothing pushed). Below: what the engine can do today and what each part would cost, then Emberwick storyboarded as a journey through four places. Nothing in sections 1 to 3 is built yet. I'm waiting for your OK before I prototype it on Emberwick.</p>
+
+<h2>1. The audit fixes (done)</h2>
+<h3>The cold open's freeze, and the hitches when a level opens</h3>
+<p>The heavy pictures are now painted in a background worker, off the main thread, before they are needed. That covers the opening's six pictures, the Landing's sky, all five planets (cold and relit) and every level's sky. The page paints a picture itself only if the browser has no worker. A second cause turned up while measuring: the Stillness's picture was repainted every time it changed size as it swelled during the loss, which cost a 30–50 ms frame at 29.8 s. It is now painted once at its largest and drawn scaled.</p>
+<div class="scroll"><table>
+<tr><th>On this Mac (Chrome, 120 Hz)</th><th>Before</th><th>Now</th></tr>
+<tr><td>Cold open, the whole film</td><td>worst 316–392 ms (around 40.5 s)</td><td>worst 10–16.7 ms in four runs; one 25.7 ms frame in a fifth run, which didn't come back when I profiled it</td></tr>
+<tr><td>The opening, its first 8 s</td><td>the paint stall</td><td>worst 16.3–17.0 ms</td></tr>
+<tr><td>Opening a level (−2.4 s)</td><td>up to 34 ms</td><td>Drifting Edge 17.5 ms (one frame), Glassmere 16.7, others under 11</td></tr>
+<tr><td>Each whole level</td><td></td><td>Emberwick and Cirra worst 10.9 ms; Glassmere 16.7; Verdance 16.6</td></tr>
+<tr><td>The production build (the address below)</td><td></td><td>film and opening worst 16.7 ms</td></tr>
+</table></div>
+<h3>Emberwick's spam bot</h3>
+<p>The stretch was <b>Ossa's hammer, from the 19.2 s checkpoint to 35.5 s</b>. The chart there asks for about two taps a second. A bot tapping steadily three times a second never counted as mashing, because the rule needed more than twice the chart's rate. With the buffer, one of its taps almost always landed in each wall's window. I added a second half to the rule: <b>two wasted taps within two seconds is also mashing</b> (a wasted tap is one that opens nothing, isn't held for an opening, touches no note and isn't part of a hold). When the rule triggers, the buffer is off and stray taps near an opening hit the ring, as before.</p>
+<div class="scroll"><table>
+<tr><th>Longest any spam bot survives from a checkpoint</th><th>Before</th><th>Now</th></tr>
+<tr><td>Emberwick</td><td>16.3 s</td><td>4.2 s</td></tr>
+<tr><td>Drifting Edge / Cirra / Glassmere / Verdance</td><td>3.1 / 3.8 / 3.8 / 1.1 s</td><td>1.8 / 3.8 / 3.8 / 1.1 s</td></tr>
+</table></div>
+<p>Two new tests guard it: every spam bot (3 to 12 taps a second, four phases) falls within 5 s of any checkpoint in all five levels, and a sloppy player who adds a stray tap every three seconds still clears. Whole suite: 279 passed, 55 skipped, 0 failed.</p>
+<h3>Your iPhone frame times</h3>
+<p>The Mac is serving the fixed production build. With the iPhone on the same Wi-Fi, open this in Safari:</p>
+<p class="q">http://10.0.0.166:4173/?phonecheck</p>
+<p>It plays every drop, the cold open and the Landing by itself (a few minutes; keep the screen on), then sends the frame times back to the Mac. It uses a guest save, so your own game data isn't touched.</p>
+
+<h2>2. Honest assessment: what the engine can do today</h2>
+<div class="scroll"><table>
+<tr><th>Thing</th><th>Today</th><th>What it takes</th><th>Size</th></tr>
+<tr><td><b>Planet hops</b></td><td>They exist: a <i>sling</i> bar (one tap) or <i>spring</i> bar (no tap) throws Orbin to the next planet in a 2-beat flight. A target marks the landing two beats ahead, and the camera glides with him. <b>None of World 1's five levels uses them yet.</b> Three limits: every flight is exactly 2 beats with nothing to tap in the air; the next planet always sits on a fixed zig-zag; and every planet looks the same, because the level's world paints one planet and that planet follows Orbin.</td><td>Places: each hop lands on its own painted body (a moon, the twins, a bridge) with its own size and position. Flights from 2 to 8 beats, with taps in the air (embers to catch). The next place is visible before each launch.</td><td>Medium. The timing model already handles flights; the new parts are taps in the air (simulation and bots) and the places' art (painted in the worker, so no hitches).</td></tr>
+<tr><td><b>Path shapes</b></td><td><b>Circles only.</b> The older engine had ellipses and squares, but the current one (look 2) draws every ring as a circle round a core, in about 85 places in the renderer.</td><td>Timing doesn't change: the simulation already works in beats and heights, not in screen positions. What changes is the drawing. Each path becomes a curve with its own centre line and "up" direction: an ellipse, a figure-eight, a spiral, a straight bridge, or a path round an odd-shaped body. Distance along the curve is set by beats, so speed always matches the music.</td><td>Large. This is the biggest part: the renderer's ring drawing is rebuilt around a general path. Bridges and figure-eights also need a camera that follows the path instead of one that sits on a planet.</td></tr>
+<tr><td><b>Camera reframing at arrivals</b></td><td>It glides between planets during a hop and zooms out for set pieces (the Sleeper's throw, the dive into the core).</td><td>A framing for each place (how much of the place, where Orbin sits, how far ahead you see), eased in over the landing. A floor: at least 1.5 s of path always on screen.</td><td>Medium.</td></tr>
+<tr><td><b>Interactions with weight</b></td><td>Partly: a scale punch on big hits, particles, rim light, shake on the drop. No anticipation, no squash and stretch, no landing dust.</td><td>Anticipation (the object reacts a beat ahead), contact (squash, flash, scale punch; shake only on walls, the great node and the seal), follow-through (stretch in the air, a ring of embers on landing, the object settling). Orbin's bob on the beat, his lean into curves, his tail and sparks. All visual: the music and the timing never stop.</td><td>Medium, low risk.</td></tr>
+<tr><td><b>Objects of each world</b></td><td>Generic shapes: pads, orbs, walls and vents, coloured per world.</td><td>Each object drawn as its world's own thing, on the same timing underneath. Emberwick: bellows (pads), Ossa's anvils (Meteor walls), lava vents, embers in the air (orbs).</td><td>Medium per world, mostly art.</td></tr>
+<tr><td><b>New audit measures</b></td><td>The audit counts unique bars, rates, stacking.</td><td>Distinct action types per 8-bar phrase (at least 4, including an object), interactive objects per minute, hops and places per level, longest plain-tap stretch (at most 4 bars outside calm intros).</td><td>Small.</td></tr>
+</table></div>
+<h3>Risks</h3>
+<ul>
+<li><b>Timing:</b> low for shapes, because they only change the drawing. The real risk is taps in the air during flights, which is new simulation code. It gets the same bot tests as everything else: on time, early, from every checkpoint, spam bots, the sloppy player.</li>
+<li><b>Readability:</b> the main risk. A figure-eight crosses itself, so only the lane Orbin is on can be lit; the other stays dark stone. A bridge needs the camera ahead of him, not centred on a planet. Each launch has to show its landing first. If any frame shows less than 1.5 s of path ahead, the audit fails it.</li>
+<li><b>Motion:</b> more camera moves. The reduce-flash setting will also calm the reframing and the shakes.</li>
+<li><b>Performance:</b> places are painted in the worker, so no hitches. Curved paths cost a bit more to draw than arcs. The iPhone is still the unknown, so your ?phonecheck numbers matter before this lands.</li>
+<li><b>Scope:</b> Emberwick first, as you said. Applying it to the other four worlds is the same work again, mostly art and charting, since the engine part is done once.</li>
+</ul>
+
+<h2>3. Emberwick, storyboarded as a journey</h2>
+<p>Volcano, 100 BPM (a bar is 2.4 s). Four places: the Ash Moon, the forge ring, the lava moons (a chain of three bodies), and the dive into the heart. Five launches. The heart and the seal are already built and stay as they are.</p>
+<figure><img src="{{img:route}}" alt="The route: the Ash Moon, the fling, the forge ring, the lava moons, the dive, the heart"></figure>
+<div class="scroll"><table>
+<tr><th>When</th><th>Place or launch</th><th>Path</th><th>What you do, and the objects</th></tr>
+<tr><td class="n">0:00–0:09.6</td><td>1. The Ash Moon, cold and grey</td><td>A wide, calm ellipse</td><td>Plain taps on the beat, then the first bellows (a pad) wakes, then the first ember in the air. Emberwick hangs dark in the sky, its forge a faint coal.</td></tr>
+<tr><td class="n">0:09.6–0:12.0</td><td><b>Launch: the Kindling's fling</b></td><td>A 4-beat flight</td><td>The Kindling curls into a ring of sparks at the moon's rim. Tap on the beat and it flings Orbin across. Two embers drift on the arc; tap them in the air. The landing on the forge ring is shown from two beats before the launch.</td></tr>
+<tr><td class="n">0:12.0–0:19.2</td><td>2. The forge ring round Emberwick</td><td>A circle (as now)</td><td>The Kindling gives the Meteor on landing. Ossa's anvils stand across the path and you dash through them. The switchback at 16.8, as before.</td></tr>
+<tr><td class="n">0:19.2</td><td><b>Launch: the great node</b></td><td>2-beat hop</td><td>Ossa's first strike throws Orbin off the ring, out to the lava moons.</td></tr>
+<tr><td class="n">0:20.4–0:24.0</td><td>3a. The Crucible, a lava moonlet</td><td>An ellipse</td><td>A lava vent lifts him at 21.6. Anvils.</td></tr>
+<tr><td class="n">0:24.0</td><td><b>Launch: the hammer</b></td><td>2-beat hop</td><td>The ring of fire closes on the pad. Tap as it bursts and you're on the Twins.</td></tr>
+<tr><td class="n">0:24.0–0:28.8</td><td>3b. The Twins, two moonlets</td><td>A figure-eight round both</td><td>The path crosses itself between them, on a bar line; only your lane is lit. Ember (checkpoint) at 28.8.</td></tr>
+<tr><td class="n">0:28.8</td><td><b>Launch: the hammer</b></td><td>2-beat hop</td><td>Onto the bridge.</td></tr>
+<tr><td class="n">0:28.8–0:33.6</td><td>3c. The Slag Bridge</td><td>Straight, toward Emberwick</td><td>A causeway of cooled crust over the dark, lava in its cracks, Emberwick growing ahead. Crust slabs to dash and a vent at 31.2. The camera runs ahead of him.</td></tr>
+<tr><td class="n">0:33.6</td><td><b>Launch: the hammer</b></td><td>2-beat hop</td><td>Back onto Emberwick, at the forge.</td></tr>
+<tr><td class="n">0:34.8–0:38.4</td><td>4. The dive</td><td>A spiral, inward</td><td>Round and round, down into the forge's mouth, the taps closing in with the riser. The camera tips in after him at 37.6.</td></tr>
+<tr><td class="n">0:38.4–0:56.7</td><td>The heart (built)</td><td>A circle</td><td>As now: the molten walls, the forge sprint at 45.6, the seal at 56.7.</td></tr>
+</table></div>
+<p>The embers (checkpoints) stay where they are: 12.0, 19.2, 28.8, 38.4, 48.0. Speeds and tap rates stay inside your table (calm at most 1 tap a second, peak at most 2, ±140 ms). A launch is never stacked with a speed, form or turn change within two beats.</p>
+<h3>The places, phone-sized</h3>
+<div class="scroll"><img src="{{img:places}}" alt="Six panels: the Ash Moon, the fling, the forge ring, the Twins, the Slag Bridge, the dive" style="max-width:none;height:420px"></div>
+<p class="note">Left to right: the Ash Moon (the bellows ahead, Emberwick dark in the sky) · the fling (the Kindling's ring of sparks, an ember in the air with its gold ring, the landing already marked) · the forge ring (Meteor, Ossa's anvils, one already split behind him) · the Twins (the crossing, the hammer's ring of fire ahead, the next landing marked top left) · the Slag Bridge (straight at Emberwick, a slab to dash, a vent) · the dive (the spiral into the forge's mouth).</p>
+<h3>Three interactions, three beats each</h3>
+<figure><img src="{{img:beats}}" alt="Pad, orb and wall, each in anticipation, contact and follow-through"></figure>
+<ul>
+<li><b>Pad: the bellows.</b> <i>Anticipation:</i> as you come, the bellows breathe in (the leather draws up, ash is pulled toward the nozzle, the iron glows) and the gold ring closes on it. Orbin crouches. <i>Contact:</i> the bellows slam shut, a blast of air and sparks, a flash; for one frame Orbin is squashed flat on the boards. <i>Follow-through:</i> he's high in the air and stretched along the arc, tail streaming, while the bellows wheeze open and puffs of ash drift. He lands with a squash and a ring of embers where the soft target was.</li>
+<li><b>Orb: an ember in the air.</b> <i>Anticipation:</i> the coal brightens and its rim turns faster as the beat comes. <i>Contact:</i> he snaps up through it and it bursts into a ring of sparks. <i>Follow-through:</i> the dark husk falls and his sparks trail with him down the far side.</li>
+<li><b>Wall: Ossa's anvil.</b> <i>Anticipation:</i> the anvil's face heats white and sparks rise off it, and the Meteor leans in, flattened. <i>Contact:</i> a scale punch (the anvil a size bigger for a frame), a flash, a short shake (visual only; the music never stops). <i>Follow-through:</i> the halves tumble outward, molten drips fall, and his streak runs on beyond.</li>
+</ul>
+<p>Moving between objects, Orbin bobs on the beat, leans into curves, streams his tail and sheds sparks. The anticipation never adds a second gold signal: objects warm in their own colours, and the gold stays on the one tap that's next.</p>
+<h3>The new measures, as planned for Emberwick</h3>
+<div class="scroll"><table>
+<tr><th>Measure</th><th>Target</th><th>The plan above</th></tr>
+<tr><td>Distinct action types per 8-bar phrase</td><td>at least 4, including an object</td><td>Bars 1–8: taps, bellows, ember, launch. Bars 9–16: embers in the air, landing, anvils, switchback, great node. Bars 17–24: hops, vents, crossing, anvils, bridge, spiral. Bars 25–32: the heart's walls, vents, sprint, seal.</td></tr>
+<tr><td>Places visited / hops</td><td></td><td>4 places (6 bodies) / 5 launches</td></tr>
+<tr><td>Interactive objects per minute</td><td></td><td>to be measured on the prototype</td></tr>
+<tr><td>Longest plain-tap stretch</td><td>at most 4 bars outside calm intros</td><td>at most 2 bars</td></tr>
+</table></div>
+
+<h2>4. What I need from you</h2>
+<ol>
+<li><b>Your OK on the journey</b>, or changes: the places and their order, the path shapes, the launches.</li>
+<li><b>The objects:</b> bellows as pads, Ossa's anvils as walls, embers in the air as orbs, vents as vents. Or other choices.</li>
+<li><b>Taps in the air:</b> only during the Kindling's 4-beat fling for now (two embers), with the hammer hops staying 2 beats with nothing to tap?</li>
+</ol>
+<p>On your OK I'll build it on Emberwick only and send a recording of the whole level, then wait for your playtest before touching the other four worlds.</p>
+</main></body></html>
