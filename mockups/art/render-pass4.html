@@ -1,0 +1,8 @@
+<!doctype html><meta charset="utf-8"><title>Emberwick in play: stills</title>
+<style>body{margin:0;background:#07060f;display:flex;flex-wrap:wrap;gap:12px;padding:12px}canvas{display:block}</style>
+<script type="module">
+import { emberPlay } from './pass4-stills.js';
+await document.fonts.ready;
+for (const p of ['cold', 'half', 'drop']) { const w = 390, h = 844, cv = document.createElement('canvas'); cv.width = w * 2; cv.height = h * 2; cv.style.width = w + 'px'; cv.dataset.name = `ember-${p}`; const c = cv.getContext('2d'); c.scale(2, 2); emberPlay(c, w, h, p); document.body.append(cv); }
+document.title = 'ready';
+</script>
