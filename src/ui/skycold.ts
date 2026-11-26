@@ -1,121 +1,174 @@
-// The cold open: the Harmonic Nebula, before. The brothers on one orbit, in step, to Helion's theme (a twin orbit that
-// cannot be failed: the game flies it as a memory). Then the Stillness: colour drains inward from the edge, the tune
-// comes apart, and Orbin's taps still land, each a little lonelier. Then the picture closes in on the two of them:
-// the dark takes Helion, Orbin reaches, their hands brush; the shockwave; white; black. The storyboard begins in that
-// black. The owner's own words are written into the sky; the brothers speak only in the memories.
-//
-// Two pieces: the sky behind the orbit (a backdrop for the level's renderer), and the close of it, drawn over the
-// level once the dark has come (the level is still running underneath: its sound is the scene's sound).
+// The cold open, as a scene (the owner's brief of 2026-11-25): emotion, not gameplay. Calm, then wrongness, then the
+// taking, then black and three plain lines; then the crash and the storyboard. About 46 seconds, on its own sound
+// (tools/pass2.py, coldopen), its clock the sound's clock. The one interaction is a press-and-hold, "Reach for him",
+// while the dark takes Helion: the ring fills as you hold, Orbin strains toward him, and however long you hold, his
+// hand slips (at 35.5 s, where the music breaks).
+import coldAudio from '../../levels/coldopen/audio.json';
+import { audio, type LoadedTrack } from '../audio/audio';
 import { CANON } from '../art/canonpaint.js';
+import { COLDPAINT as C } from '../art/coldpaint.js';
 import { K } from '../art/painter.js';
-import { Actor } from './actor';
-import { NebulaScene, type Said, type SceneState } from './skyplanet';
+import type { AudioMeta } from '../game/types';
+import { save } from '../save';
 
-const smooth = (x: number) => { const t = x < 0 ? 0 : x > 1 ? 1 : x; return t * t * (3 - 2 * t); };
-const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-const P = CANON.parts;
-/** seconds into the cold open's music (tools/pass2.py: bars of 3 s) */
-export const COLD = { still: 27, dark: 37.5, close: 39, reach: 43.5, taken: 44.4, wave: 48, black: 49.2, end: 51 };
-const INK = '#2c1206', SHADE = 'rgba(255,238,196,0.85)';
-/** the owner's words, in the sky (dark ink on the gold) */
-export const COLD_SAYS: Said[] = [
-  { from: 0.8, to: 8.2, text: 'Long before the stars fell silent,', x: 0.5, y: 0.14, align: 'center', size: 21, color: INK, shade: SHADE },
-  { from: 2.2, to: 8.2, text: 'the Harmonic Nebula spun', x: 0.5, y: 0.175, align: 'center', size: 21, color: INK, shade: SHADE },
-  { from: 2.9, to: 8.2, text: 'to a single, golden pulse.', x: 0.5, y: 0.21, align: 'center', size: 21, color: INK, shade: SHADE },
-  { from: 9.6, to: 17.5, text: 'Two twin sparks of starlight:', x: 0.5, y: 0.14, align: 'center', size: 21, color: INK, shade: SHADE },
-  { from: 11.2, to: 17.5, text: 'Orbin and his brother Helion.', x: 0.5, y: 0.175, align: 'center', size: 21, color: INK, shade: SHADE },
-  { from: 29.5, to: 37, text: 'Then came the Stillness.', x: 0.5, y: 0.14, align: 'center', size: 22, color: '#fff1d8' }
-];
-
-/** The nebula behind the orbit: all gold, until the Stillness comes in from the edge and the colour goes. */
-export class ColdSky {
-  private neb = new NebulaScene();
-  says: Said[] = COLD_SAYS;
-  prepare(): void { this.neb.prepare(); }
-  draw(c: CanvasRenderingContext2D, w: number, h: number, st: SceneState): void {
-    const t = st.song ?? 0, still = smooth((t - COLD.still) / (COLD.dark - COLD.still));
-    this.neb.says = [];
-    this.neb.draw(c, w, h, { ...st, kick: st.kick * (1 - still) });
-    if (still > 0.002) {
-      // the colour drains inward from the edge: what was gold is ash, then nothing
-      const R = Math.hypot(w, h) * 0.6, r0 = R * (1.05 - 0.9 * still), g = c.createRadialGradient(w / 2, h * 0.52, Math.max(1, r0 * 0.55), w / 2, h * 0.52, Math.max(2, r0));
-      g.addColorStop(0, `rgba(40,34,52,${0.5 * still})`); g.addColorStop(1, `rgba(8,7,18,${Math.min(0.97, 0.55 + 0.5 * still)})`);
-      c.fillStyle = g; c.fillRect(0, 0, w, h);
-      // and it has a shape that is no shape: it comes in from the corners
-      const r = K.RNG(91), u = Math.min(w, h) / 390;
-      for (const [x, y, k] of [[1.02, 0.18, 1], [-0.04, 0.8, 0.8], [0.96, 0.9, 0.65]] as Array<[number, number, number]>) { const a = smooth((still - (1 - k) * 0.5) / 0.6); if (a > 0.01) P.stillness(c, w * lerp(x, 0.5 + (x - 0.5) * 0.7, a), h * y, (120 + 240 * a) * u, (90 + 200 * a) * u, r, { near: a }); }
-    }
-    // the words go over everything (the last line is written on the dark)
-    writeSays(c, w, h, this.says, st.song);
-  }
-}
+const META = coldAudio as AudioMeta;
+const P = CANON.parts, TAU = Math.PI * 2;
 const SERIF = '"Cormorant Garamond", "Hoefler Text", Baskerville, Palatino, Georgia, serif';
-function writeSays(c: CanvasRenderingContext2D, w: number, h: number, says: Said[], song: number | undefined): void {
-  if (song === undefined) return;
-  const u = w > h * 1.15 ? Math.min(w / 1440, h / 900) * 1.5 : Math.min(w / 390, h / 844);
-  for (const l of says) {
-    const a = smooth((song - l.from) / 0.9) * (1 - smooth((song - l.to + 1) / 1));
-    if (a <= 0.004) continue;
-    const px = Math.max(16, (l.size ?? 20) * u);
-    c.save(); c.font = `italic 500 ${px}px ${SERIF}`; c.textAlign = l.align ?? 'center'; c.textBaseline = 'alphabetic';
-    c.shadowColor = l.shade ?? 'rgba(6,5,18,0.95)'; c.shadowBlur = px * 0.55; c.globalAlpha = a * 0.96; c.fillStyle = l.color ?? '#fff1d8';
-    c.fillText(l.text, w * l.x, h * l.y); c.fillText(l.text, w * l.x, h * l.y); c.restore();
-  }
-}
+const sm = (x: number) => { const t = x < 0 ? 0 : x > 1 ? 1 : x; return t * t * (3 - 2 * t); };
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+/** when things happen, in seconds of the scene */
+export const COLD_T = { wrong: 12, close: 16, dark: 22, taking: 24, reach: 27, slip: 35.5, wave: 38, black: 38.6, lines: [39.2, 40.8, 42.4], end: 46.4 };
+/** the three lines (the owner approved the draft on 2026-11-25) */
+export const COLD_LINES = [['Orbin and Helion were the twin sparks', 'of the Harmonic Nebula.'], ['The Stillness took Helion, and the music with him.'], ['Wake the fallen stars. Bring your brother home.']];
 
-/** The close of the cold open, over the level: the two of them, the dark between, the reach, the shockwave. */
-export class ColdClose {
+export class SkyCold {
   private ctx: CanvasRenderingContext2D;
-  private orbin = new Actor('orbin');
-  private helion = new Actor('helion');
-  private set = false;
-  /** the moment a tap landed in the reach (page clock), or -1 */
-  private reached = -1;
-  constructor(private canvas: HTMLCanvasElement) { this.ctx = canvas.getContext('2d')!; }
-  reset(): void { this.set = false; this.reached = -1; }
-  /** A tap while the two of them are close: the reach. */
-  tap(now: number): void { if (this.reached < 0) this.reached = now; }
+  private key = ''; private w = 0; private h = 0; private dpr = 1;
+  private gold: HTMLCanvasElement | null = null; private ash: HTMLCanvasElement | null = null;
+  private track: LoadedTrack | null = null;
+  private part: { stop: (fade?: number, at?: number) => void } | null = null;
+  state: 'wait' | 'scene' | 'done' = 'wait';
+  private touched = false; private touchAt = 0; private waitFrom = 0;
+  private own = false; private perf0 = 0; private t0 = 0;
+  /** the hold: is it down, and how full the ring is (0..1) */
+  private down = false; private fill = 0; private last = 0; private slipped = false;
+  onDone: (() => void) | null = null;
+  /** a returning player may skip (one quiet word in the corner); a first launch cannot */
+  canSkip = false;
+  /** called once, the moment his hand slips (for the haptic) */
+  onSlip: (() => void) | null = null;
 
-  /** t: seconds into the cold open's music. Draws nothing before the dark has closed. */
-  draw(t: number, now: number, dt: number): void {
-    if (t < COLD.dark) return;
-    const c = this.ctx, w = window.innerWidth, h = window.innerHeight, dpr = this.canvas.width / Math.max(1, w), tall = h > w, u = tall ? Math.min(w / 390, h / 844) : Math.min(w / 1440, h / 900) * 1.9;
-    const o = this.orbin, he = this.helion, cy = h * 0.5;
-    if (!this.set) { this.set = true; o.set({ x: w * 0.3, y: cy + 20 * u, s: 0.62 * u, eyes: 'worried', arms: 'rest', crest: 0.8, glow: 0.9, face: 1, look: [1, 0] }, true); he.set({ x: w * 0.7, y: cy - 10 * u, s: 0.62 * u, eyes: 'worried', arms: 'rest', crest: 0.8, glow: 0.8, face: -1, look: [-1, 0] }, true); o.rate = he.rate = 2.6; }
-    c.setTransform(dpr, 0, 0, dpr, 0, 0);
-    c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.shadowBlur = 0;
-    const cover = smooth((t - COLD.dark) / (COLD.close - COLD.dark));
-    c.fillStyle = `rgba(7,6,16,${cover})`; c.fillRect(0, 0, w, h);
-    if (t >= COLD.close - 0.6) {
-      const a = smooth((t - (COLD.close - 0.6)) / 0.9), taken = smooth((t - COLD.taken) / (COLD.wave - COLD.taken - 0.4));
-      // what little gold is left is round the two of them; the dark stands behind Helion and closes
-      K.glow(c, w * 0.5, cy, Math.min(w, h) * 0.7, [255, 214, 140], 0.22 * a * (1 - taken), 'screen');
-      const r = K.RNG(47), near = smooth((t - COLD.close) / 5);
-      c.globalAlpha = a; P.stillness(c, w * lerp(1.1, 0.86, near), cy - 20 * u, (190 + 150 * near) * u, (260 + 160 * near) * u, r, { near: 0.5 + 0.5 * near }); c.globalAlpha = 1;
-      // the reach: they come together until their hands brush; then he is drawn away into it, still reaching
-      const close = smooth((t - 41.6) / (COLD.reach - 41.6)), gap = lerp(0.2, 0.062, close) * w * (tall ? 1 : 0.6);
-      if (t < COLD.taken) {
-        o.set({ x: w * 0.5 - gap, y: cy + 14 * u, arms: t > 41.2 ? 'reach' : 'rest', eyes: t > 41.2 ? 'wide' : 'worried', lean: 0.25 * close });
-        he.set({ x: w * 0.5 + gap, y: cy - 6 * u, arms: t > 41.6 ? 'reach' : 'rest', eyes: 'worried', glow: 0.8 - 0.2 * near, lean: -0.2 * close });
-      } else {
-        o.set({ x: w * 0.5 - gap - 10 * u, arms: 'reach', eyes: 'wide', lean: 0.3 });
-        he.set({ x: lerp(w * 0.5 + gap, w * 0.93, taken), y: cy - 6 * u - 30 * u * taken, s: lerp(0.62, 0.34, taken) * u, glow: lerp(0.6, 0.1, taken), arms: 'reach', eyes: 'wide', lean: -0.1 });
-      }
-      o.step(dt); he.step(dt);
-      c.globalAlpha = a * (1 - 0.85 * taken); he.draw(c);
-      c.globalAlpha = a; o.draw(c); c.globalAlpha = 1;
-      // where their hands meet: one small light, brighter if the tap was there to meet it
-      const brush = Math.exp(-Math.pow((t - COLD.reach - 0.25) / 0.5, 2)), tapped = this.reached >= 0 ? Math.exp(-(now - this.reached) / 500) : 0;
-      if (brush > 0.02) { K.glow(c, w * 0.5, cy + 2 * u, (26 + 60 * tapped) * u, [255, 240, 200], 0.75 * brush + 0.25 * tapped); }
-      // the dark closes over him
-      if (taken > 0.01) { c.globalAlpha = taken; P.stillness(c, lerp(w * 0.86, w * 0.74, taken), cy - 20 * u, (300 + 200 * taken) * u, (380 + 200 * taken) * u, K.RNG(48), { near: 1 }); c.globalAlpha = 1; }
+  constructor(private canvas: HTMLCanvasElement) { this.ctx = canvas.getContext('2d')!; }
+
+  start(canSkip: boolean): void {
+    Object.assign(this, { state: 'wait', touched: false, touchAt: 0, waitFrom: 0, own: false, down: false, fill: 0, last: 0, slipped: false, canSkip });
+    this.part?.stop(0.05); this.part = null;
+    if (audio.prime()) void audio.loadTrack(META).then((t) => { this.track = t; }, () => undefined);
+    this.layout();
+  }
+  stop(): void { this.part?.stop(0.3); this.part = null; this.state = 'done'; }
+
+  private layout(): void {
+    const w = window.innerWidth, h = window.innerHeight, key = `${w}x${h}`;
+    this.dpr = this.canvas.width / Math.max(1, w);
+    if (key === this.key) return;
+    this.key = key; this.w = w; this.h = h;
+    const paint = (ash: boolean) => { const cv = document.createElement('canvas'); cv.width = w; cv.height = h; C.nebula(cv.getContext('2d')!, w, h, ash); return cv; };
+    this.gold = paint(false); this.ash = paint(true);
+  }
+
+  /** seconds into the scene, as heard */
+  time(now = performance.now()): number {
+    if (this.state === 'wait') return -1;
+    if (this.own || !audio.ctx) return (now - this.perf0) / 1000;
+    return audio.ctxTimeAt(now) - this.t0 - audio.latency() - save.audioOffset / 1000;
+  }
+  private begin(now: number): void {
+    this.state = 'scene';
+    const c = audio.ctx;
+    audio.setVolumes(save.music, save.sfx);
+    if (!c || !audio.running || !this.track) { this.own = true; this.perf0 = now + 150; return; }
+    this.t0 = c.currentTime + 0.15;
+    this.part = audio.playPart(this.track, META, this.t0, 0, { dur: 46.2 });
+  }
+  /** For tests and stills: be at second `t` (its sound does not follow). */
+  seek(t: number): void { this.part?.stop(0.05); this.part = null; this.state = 'scene'; this.own = true; this.perf0 = performance.now() - t * 1000; this.slipped = t > COLD_T.slip; }
+
+  /** The finger: down and up. Before the scene starts a touch only wakes the sound. */
+  press(down: boolean, x = -1, y = -1): void {
+    if (this.state === 'done') return;
+    if (down && this.canSkip && x > window.innerWidth - 96 && y >= 0 && y < 70) { this.finish(); return; }
+    if (this.state === 'wait') { if (down) { this.touched = true; audio.ensure(); } return; }
+    this.down = down;
+  }
+  private finish(): void { if (this.state === 'done') return; this.stop(); const f = this.onDone; f?.(); }
+
+  private write(s: string, x: number, y: number, px: number, a: number, color = '#fff1d8'): void {
+    if (a <= 0.004) return;
+    const c = this.ctx;
+    c.save(); c.font = `italic 500 ${px}px ${SERIF}`; c.textAlign = 'center'; c.textBaseline = 'alphabetic';
+    c.shadowColor = 'rgba(6,5,18,0.9)'; c.shadowBlur = px * 0.5; c.globalAlpha = a; c.fillStyle = color; c.fillText(s, x, y); c.restore();
+  }
+
+  draw(now: number): void {
+    this.layout();
+    const c = this.ctx, { w, h } = this, u = Math.min(w / 390, h / 844), cx = w / 2, cy = h * 0.5;
+    c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.shadowBlur = 0;
+    if (this.state === 'wait') {
+      c.fillStyle = 'rgb(6,5,12)'; c.fillRect(0, 0, w, h);
+      if (!this.waitFrom) this.waitFrom = now;
+      if (this.touched && !this.touchAt) this.touchAt = now;
+      const sound = !!audio.ctx && audio.running && !!this.track;
+      if (sound || !audio.ctx || (this.touched && now - this.touchAt > 2000)) { this.begin(now); return; }
+      if (!this.touched && now - this.waitFrom > 500) this.write('touch to begin', cx, h * 0.56, 20 * u, 0.45 + 0.25 * Math.sin(now / 520));
+      return;
     }
-    // the shockwave: one ring, white; then nothing at all
-    if (t >= COLD.wave) {
-      const s = t - COLD.wave, R = Math.hypot(w, h);
-      c.strokeStyle = `rgba(255,250,236,${Math.max(0, 1 - s / 0.5)})`; c.lineWidth = 30 * u; c.beginPath(); c.arc(w * 0.74, cy, s * R * 2.4, 0, Math.PI * 2); c.stroke();
-      c.fillStyle = `rgba(255,250,236,${smooth(s / 0.22) * (1 - smooth((s - 0.5) / (COLD.black - COLD.wave - 0.5)))})`; c.fillRect(0, 0, w, h);
-      c.fillStyle = `rgba(4,4,10,${smooth((s - 0.5) / (COLD.black - COLD.wave - 0.5))})`; c.fillRect(0, 0, w, h);
+    if (this.state === 'done') return;
+    const t = this.time(now), dt = this.last ? Math.min(0.05, (now - this.last) / 1000) : 0; this.last = now;
+    const T = COLD_T;
+    // the sky: gold, draining to ash from the wrong note on, then the dark comes over it
+    const drain = sm((t - T.wrong) / 10), dark = sm((t - T.dark) / 4);
+    if (this.gold) c.drawImage(this.gold, 0, 0, w, h);
+    if (this.ash && drain > 0) { c.globalAlpha = drain; c.drawImage(this.ash, 0, 0, w, h); c.globalAlpha = 1; }
+    if (dark > 0) { c.fillStyle = `rgba(9,8,18,${0.94 * dark})`; c.fillRect(0, 0, w, h); K.glow(c, cx, cy, Math.min(w, h) * 0.75, [255, 214, 140], 0.16 * dark, 'screen'); }
+    // comets, humming past, in the calm only
+    if (drain < 1) for (let i = 0; i < 5; i++) { const sp = 0.035 + i * 0.012, ph = (now / 1000 * sp + i * 0.37) % 1.5, x = (ph - 0.25) * w * 1.1, y = h * (0.1 + i * 0.07 + (i % 2) * 0.6) + x * 0.12; c.strokeStyle = `rgba(255,244,210,${0.45 * (1 - drain)})`; c.lineWidth = 1.6 * u; c.beginPath(); c.moveTo(x - 70 * u, y - 8 * u); c.lineTo(x, y); c.stroke(); K.glow(c, x, y, 6 * u, [255, 250, 232], 0.9 * (1 - drain)); }
+    // the camera: wide in the calm, a close shot from the wrong note, wide again (darker) for the taking
+    const close = sm((t - T.wrong - 0.6) / 3.4) * (1 - sm((t - T.taking + 2) / 3));
+    const s = lerp(0.62, 1.05, close), ox = lerp(110, 150, close), oy = lerp(40, 150, close);
+    // the Stillness: far and small in the corner from 13 s, near and huge from the right for the taking
+    if (t > 13) {
+      const far = sm((t - 13) / 8) * (1 - dark);
+      if (far > 0.01) { c.globalAlpha = far; C.dread(c, w * 0.9, h * 0.1, (80 + 50 * far) * u, (60 + 40 * far) * u, 91, 0.3); if (t > 17) C.tendrils(c, w * 0.9, h * 0.12, w * 0.62, h * 0.24, u, 4, 7, sm((t - 17) / 5)); c.globalAlpha = 1; }
+      if (dark > 0.01) { const near = sm((t - T.taking + 1) / 6); c.globalAlpha = dark; C.dread(c, lerp(w * 1.25, w * 1.02, near), cy - 60 * u, (200 + 100 * near) * u, (280 + 120 * near) * u, 48, 0.6 + 0.4 * near); c.globalAlpha = 1; }
     }
+    // the brothers
+    const holdK = this.fill, slip = sm((t - T.slip) / 1.1);
+    const reachOn = t > T.reach - 1;
+    const strain = reachOn ? holdK : 0;
+    let ax = cx - ox * u, ay = cy + oy * u, bx = cx + ox * u, by = cy + (oy - 14) * u, hs = s, ha = 1;
+    if (dark > 0) {
+      // the taking: Helion drawn back into the dark (slowly, then all at once where his hand slips); Orbin straining after him
+      const pull = sm((t - (T.taking + 3)) / 8) * 0.55 + 0.45 * slip;
+      ax = lerp(ax, w * (0.3 + 0.06 * strain), dark); ay = lerp(ay, cy + 10 * u, dark);
+      bx = lerp(bx, lerp(w * 0.6, w * 0.95, pull), dark); by = lerp(by, cy - 30 * u - 50 * u * slip, dark);
+      hs = lerp(s, lerp(0.56, 0.3, pull), dark); ha = 1 - 0.85 * slip;
+    }
+    if (dark < 1) C.music(c, ax + 18 * u * s, ay - 32 * u * s, bx - 18 * u * s, by - 32 * u * s, u * (0.9 + 0.5 * close), t, sm((t - T.wrong - 0.4) / 1.2), (1 - 0.6 * drain) * (1 - dark));
+    const worried = t > T.wrong + 1.5;
+    c.globalAlpha = ha;
+    P.spark(c, bx, by, hs * u, { who: 'helion', eyes: t > T.wrong + 1 ? 'wide' : 'soft', arms: dark > 0.3 ? 'reach' : 'up', glow: lerp(1, 0.4, dark), face: dark > 0.3 ? -1 : -1, look: worried ? [1, -0.6] : [0, 0], crest: lerp(1, 0.5, dark), ring: true, beat: 1, lean: dark > 0.3 ? -0.15 : 0 });
+    c.globalAlpha = 1;
+    if (dark > 0.01 && t > T.reach - 2) C.tendrils(c, w * 1.0, cy - 80 * u, bx, by - 10 * u, u, 7, 13, sm((t - (T.reach - 2)) / 5));
+    P.spark(c, ax, ay, lerp(s, 0.64, dark) * u, { who: 'orbin', eyes: worried ? (dark > 0.3 ? 'wide' : 'worried') : 'soft', arms: dark > 0.3 ? 'reach' : 'up', glow: 1, face: 1, look: worried && dark < 0.3 ? [0.6, -0.8] : [1, 0], crest: 1, ring: true, beat: 1, lean: 0.35 * dark + 0.15 * strain });
+    // where their hands nearly meet
+    if (dark > 0.3 && t < T.slip + 0.6) K.glow(c, (ax + bx) / 2, (ay + by) / 2, (18 + 22 * holdK) * u, [255, 240, 200], (0.35 + 0.45 * holdK) * (1 - slip));
+    // the one interaction: hold to reach. The ring fills while held and ebbs when let go; it breaks where his hand slips
+    if (t > T.reach && t < T.slip + 1.4) {
+      if (t < T.slip) this.fill = Math.max(0, Math.min(0.92, this.fill + (this.down ? dt / 6 : -dt / 2.5)));
+      else if (!this.slipped) { this.slipped = true; this.onSlip?.(); }
+      const a = sm((t - T.reach) / 0.8) * (1 - sm((t - T.slip) / 1.2)), hx = cx, hy = h * 0.84;
+      c.globalAlpha = a;
+      c.strokeStyle = 'rgba(255,204,72,0.25)'; c.lineWidth = 3 * u; c.beginPath(); c.arc(hx, hy, 30 * u, 0, TAU); c.stroke();
+      c.strokeStyle = 'rgba(255,204,72,0.95)'; c.lineWidth = 3.4 * u; c.beginPath(); c.arc(hx, hy, 30 * u, -Math.PI / 2, -Math.PI / 2 + TAU * this.fill * (1 - slip)); c.stroke();
+      if (this.down && t < T.slip) K.glow(c, hx, hy, 14 * u, [255, 220, 150], 0.8);
+      c.globalAlpha = 1;
+      this.write('Reach for him', hx, hy + 62 * u, 22 * u, a, '#ffe6b8');
+      this.write('hold', hx, hy + 86 * u, 15 * u, a * 0.7);
+    }
+    // the shockwave, white; then black, and the three lines
+    if (t >= T.wave - 0.1) {
+      const k = t - T.wave, R = Math.hypot(w, h);
+      c.strokeStyle = `rgba(255,250,236,${Math.max(0, 1 - k / 0.5)})`; c.lineWidth = 30 * u; c.beginPath(); c.arc(w * 0.74, cy, Math.max(1, k * R * 2.4), 0, TAU); c.stroke();
+      c.fillStyle = `rgba(255,250,236,${sm(k / 0.22) * (1 - sm((k - 0.5) / 0.6))})`; c.fillRect(0, 0, w, h);
+      c.fillStyle = `rgba(4,4,10,${sm((k - 0.45) / 0.6)})`; c.fillRect(0, 0, w, h);
+      const out = 1 - sm((t - (T.end - 1)) / 0.9);
+      T.lines.forEach((at, i) => {
+        const a = sm((t - at) / 1.0) * out, L = COLD_LINES[i], y0 = h * [0.42, 0.53, 0.63][i];
+        L.forEach((line, j) => this.write(line, cx, y0 + j * 30 * u, (i === 1 ? 19 : 21) * u, a, i === 2 ? '#ffe6b8' : '#fff1d8'));
+      });
+    }
+    if (this.canSkip && t < T.black) this.write('skip', w - 44, 64, 16, 0.55);
+    if (t >= T.end) this.finish();
   }
 }

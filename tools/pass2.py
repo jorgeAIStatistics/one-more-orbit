@@ -121,6 +121,78 @@ def nebula():
     return np.clip(out, -0.97, 0.97)
 
 
+def coldopen():
+    """The cold open as a scene (the owner's brief of 2026-11-25), 46 s, no beat to tap to:
+       0-12   calm: Helion's theme on the music box in two voices that answer each other, a warm hum
+      12-24   wrongness: one note bends flat; the theme slows, detunes, thins to one voice; a low drone; a slow heartbeat
+      24-38   the taking: the heartbeat quickens, the drone swells, the motif once more, breaking on its last note (35.5)
+      38      the shockwave: air rushing in, one low blow; then silence to the end (the three lines are read in it)"""
+    total = 46.0
+    dry = np.zeros((int(total * SR), 2))
+    # calm: four bars of the theme; the second voice answers each phrase a beat later, an octave up, from the other side
+    for b in range(4):
+        theme_bar(dry, b * BAR, b, vel=0.95)
+        at = 0.0
+        for name, beats in L.TUNE[b]:
+            if at in (0.0, 2.0): L.place(dry, b * BAR + (at + 1) * BEAT, L.tine(L.hz(name) * UP * 2, beats * BEAT, 0.42), pan=-0.45)
+            at += beats
+    # wrongness: the theme again, slower each bar, flatter, and one voice only; the first wrong note bends down
+    slow = [1.0, 1.12, 1.28, 1.45]; cents = [0, -35, -60, -95]; cut = [3000, 2000, 1300, 800]; vel = [0.85, 0.7, 0.55, 0.42]
+    for k in range(4):
+        b = 4 + k; t0 = 12.0 + sum(BAR * x for x in slow[:k]); part = np.zeros((int((BAR * 2 + 4) * SR), 2))
+        chord = L.CH[L.CHORDS[b]]
+        L.place(part, 0, hum(chord, BAR * slow[k]) * (0.8 - 0.2 * k))
+        at = 0.0
+        for i, (name, beats) in enumerate(L.TUNE[b]):
+            if k >= 2 and i == len(L.TUNE[b]) - 1: break  # it starts to lose its last notes
+            f = L.hz(name) * UP * 2 ** (cents[k] / 1200)
+            sig = L.tine(f, beats * BEAT * slow[k], vel[k])
+            if k == 0 and i == 1:  # the wrong note: it bends flat as it rings
+                n = len(sig); bend = 2 ** (-np.linspace(0, 1.4, n) ** 2 / 12)
+                ph = np.cumsum(bend) / n
+                idx = np.clip((np.arange(n) * bend).astype(int), 0, n - 1); sig = sig[idx]
+            L.place(part, at * BEAT * slow[k], sig, pan=0.18)
+            at += beats
+        part = lowpass(part, cut[k])
+        a = int(t0 * SR); dry[a:a + len(part)] += part[:len(dry) - a]
+    # the drone: low, felt more than heard, from 14 s, swelling to the shockwave
+    n = int(24.5 * SR); t = np.arange(n) / SR
+    env = np.clip(t / 8.0, 0, 1) ** 1.6 * (0.6 + 0.4 * np.clip((t - 10) / 12, 0, 1)) * np.clip((24.5 - t) / 0.3, 0, 1)
+    drone = (np.sin(2 * np.pi * 41.2 * t) + 0.6 * np.sin(2 * np.pi * 43.6 * t) + 0.3 * np.sin(2 * np.pi * 82.4 * t + 1)) * env * 0.07
+    noise = bandpass(rng.standard_normal((n, 2)), 50, 190) * (env * 0.09)[:, None]
+    a = int(14.0 * SR); dry[a:a + n, 0] += drone; dry[a:a + n, 1] += drone; dry[a:a + n] += noise
+    # the heartbeat: slow at first (1.1 s), quickening through the taking (to 0.55 s), stopping before the blow
+    at = 16.0; gap = 1.1
+    while at < 37.2:
+        L.place(dry, at, O.thump(0.34 + 0.2 * min(1, (at - 16) / 20))); L.place(dry, at + 0.3 * min(1, gap), O.thump(0.24 + 0.15 * min(1, (at - 16) / 20)))
+        at += gap; gap = max(0.55, gap * (0.97 if at < 24 else 0.94))
+    # the taking: the motif once more, alone, and it breaks on its last note (at 35.5): the note stops dead, and a
+    # cluster a semitone apart rings in its place
+    motif = [('A4', 1), ('B4', 1), ('D5', 2), ('C#5', 2)]; at = 29.0
+    for i, (name, beats) in enumerate(motif):
+        f = L.hz(name) * UP * 2 ** (-40 / 1200)
+        if i < len(motif) - 1:
+            L.place(dry, at, L.tine(f, beats * BEAT * 1.3, 0.62), pan=0.1)
+        else:
+            sig = L.tine(f, 2.6, 0.62); cutn = int(0.5 * SR); sig[cutn:] *= np.exp(-np.arange(len(sig) - cutn) / (0.012 * SR))[:, None] if sig.ndim == 2 else np.exp(-np.arange(len(sig) - cutn) / (0.012 * SR))
+            L.place(dry, 35.0, sig, pan=0.1)
+            for c in (1.0, 2 ** (1 / 12), 2 ** (-1 / 12)): L.place(dry, 35.5, L.tine(f * c * 0.5, 2.2, 0.32), pan=-0.2)
+        at += beats * BEAT * 1.3
+    out = room(dry, 0.5, 0.03)
+    out /= np.abs(out).max() / 0.6
+    # the shockwave at 38: air rushing in, one great blow, low, and its dust; then nothing at all
+    t16 = 38.0
+    n = int(1.4 * SR); t = np.arange(n) / SR
+    rush = bandpass(rng.standard_normal((n, 2)), 300, 5000) * ((t / 1.4) ** 3)[:, None] * 0.16
+    a = int((t16 - 1.4) * SR); out[a:a + n] += rush
+    n = int(2.6 * SR); t = np.arange(n) / SR
+    boom = np.sin(2 * np.pi * (34 * t + 60 * (1 - np.exp(-t * 9)) / 9)) * np.exp(-t / 0.55) * 0.8
+    dust = lowpass(rng.standard_normal((n, 2)), 2600) * np.exp(-t / 0.3)[:, None] * 0.3
+    a = int(t16 * SR); out[a:a + n, 0] += boom; out[a:a + n, 1] += boom; out[a:a + n] += dust
+    out[int((t16 + 2.3) * SR):] = 0
+    return np.clip(out, -0.97, 0.97)
+
+
 def opening_parts():
     """See the top of the file. The same shapes as before; only the notes and the pulse's pace are the new song's."""
     out = np.zeros((int(44 * SR), 2))
@@ -234,7 +306,7 @@ def fire(big):
 
 if __name__ == '__main__':
     (ROOT / 'tools/cache').mkdir(exist_ok=True)
-    made = {'nebula': nebula(), 'opening': opening_parts(), 'startedbed': started_bed(),
+    made = {'coldopen': coldopen(), 'nebula': nebula(), 'opening': opening_parts(), 'startedbed': started_bed(),
             'sting1': sting(['F#3', 'A#3', 'C#4', 'F#4'], ['A#5', 'C#6', 'F#6'], 'A#6', 'B1'),
             'sting2': sting(['A2', 'E3', 'A3', 'C#4', 'E4'], ['C#6', 'E6', 'A6'], 'C#7', 'A1'),
             'fire0': fire(False), 'fire1': fire(True)}

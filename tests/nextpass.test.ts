@@ -4,7 +4,7 @@
 // bar pattern more than twice running and something changing every four bars; every phrase mixes its actions;
 // verses 2-4 taps a bar, drops 4-8; three set pieces a planet; the first stage gentle for 20-30 s only.
 import { describe, expect, it } from 'vitest';
-import { COLD, FIRST, MEMORIES, PACKS, type LevelPack } from '../src/game/packs';
+import { FIRST, MEMORIES, PACKS, type LevelPack } from '../src/game/packs';
 import { Level } from '../src/game/level';
 import { buildCourse } from '../src/gd/course';
 import { accentBeats, layers, pitchLookup } from '../src/gd/presses';
@@ -89,8 +89,9 @@ describe('the first stage: the Drifting Edge, on Where We Started', () => {
   });
 });
 
-describe('the cold open and the first memory: twin orbits, one tap moves both, nothing can fail', () => {
-  for (const [name, p] of [['the cold open', COLD], ['the first memory', MEMORIES.heroes]] as const) {
+describe('the first memory: a twin orbit, one tap moves both, nothing can fail', () => {
+  // (the cold open is a scene now, not a level: only the memory is still a twin orbit)
+  for (const [name, p] of [['the first memory', MEMORIES.heroes]] as const) {
     it(name, () => {
       const { course } = build(p);
       expect(course.presses.length).toBeGreaterThan(8);

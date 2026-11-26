@@ -8,6 +8,7 @@ import { PALETTES, type Palette, type RGB } from '../render/palettes';
 import { PLANETS } from '../ui/galaxy';
 import { INK as ATLAS_INK, globe, rng, stamp, tooth } from '../art/atlas';
 import { CANON } from '../art/canonpaint.js';
+import { COMPANIONS } from '../art/companions.js';
 import { bestFor, save, starsFor } from '../save';
 import { LIFT, flightRho, smoothstep, type Course, type Feature, type Form, type Star } from './course';
 import type { GdRun } from './run';
@@ -152,6 +153,22 @@ export class GdRenderer {
   private cueFrom = -Infinity;
   /** where the lit nodes were drawn in the last frame, in screen points, soonest first (for the freeze-frame test's answer sheet) */
   cues: Array<{ x: number; y: number; beat: number }> = [];
+  /** a companion met in the scene before a world's first attempt: its colour, or null */
+  meet: number[] | null = null;
+  /**
+   * The meeting (the scene before a first attempt, while the song has not begun): a Kindling drifts in beside Orbin,
+   * circles him once, then flies ahead to where its form will be given. t: the run's song time (below zero).
+   */
+  drawMeet(t: number, now: number): void {
+    if (!this.meet || t > 0.4) return;
+    const c = this.ctx, k = this.canvas.width / Math.max(1, this.w);
+    c.setTransform(k, 0, 0, k, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
+    const [hx, hy] = this.heroAt[0] ? this.heroAt : [this.w * 0.5, this.h * 0.45];
+    const come = smooth((t + 8.2) / 2.2), go = smooth((t + 1.6) / 1.8), ph = now / 1000;
+    const x = lerp(this.w * 1.1, hx + Math.cos(ph * 0.9) * 46, come) + go * (this.w * 0.5 - hx) * 0.6, y = lerp(this.h * 0.2, hy - 40 + Math.sin(ph * 1.3) * 14, come) - go * this.h * 0.25;
+    const s = Math.min(this.w / 390, this.h / 844) * 0.55;
+    COMPANIONS.kindling(c, x, y, s, this.meet, { flap: 0.5 + 0.5 * Math.sin(ph * 4), alpha: come * (1 - go), rot: Math.sin(ph) * 0.2 });
+  }
   /** where Orbin was drawn last, on the screen (css px): the star sequence starts from him */
   heroAt: [number, number] = [0, 0];
   private globeCv: HTMLCanvasElement | null = null;
@@ -238,7 +255,7 @@ export class GdRenderer {
     // (in the one-signal look a thing is explained once, in the level that first has it: the first stage teaches the tap,
     // the ribbon, the spike, the spin gate, the planet hop and the speed gate; after it, only a world's own gift is told)
     const first = level.id === 'started', quiet = this.look === 2;
-    const taught = (w: Feature) => quiet && (w === 'rail' || w === 'line' || w === 'twin' || w === 'charge' || w === 'smash' || (!first && (w === 'reverse' || w === 'spin' || w === 'sling' || w === 'faster' || w === 'slower')));
+    const taught = (w: Feature) => quiet && (w === 'rail' || w === 'line' || w === 'twin' || w === 'charge' || w === 'smash' || (!first && (w === 'reverse' || w === 'spin' || w === 'sling' || w === 'faster' || w === 'slower' || w === 'chime' || w === 'combo' || w === 'spring')));
     const said = (w: Feature) => (!quiet ? HINT[w] : w === 'reverse' ? 'a spike: tap it, and he turns round' : w === 'sling' && !level.file.holds ? 'a planet hop: tap, and he leaps to the next world' : w === 'spin' ? 'spin gate: tap as the gap comes round' : HINT[w]);
     if (firstPress && !quiet) this.hints.push([c.start - 9, firstPress.beat + 1.5, 'tap as he reaches each Star-Node']);
     const gold = c.flow.find((f) => !f.charge);
@@ -334,7 +351,7 @@ export class GdRenderer {
 
   /** Screen radius of a ring level. The camera bumps on big hits and pulls right back as the drop goes off. */
   private rad(lv: number): number {
-    return (this.r0 * this.baseR + (lv - this.cam) * this.gap) * (1 + this.punchS * 0.05) * (1 - this.zoomS * 0.2);
+    return (this.r0 * this.baseR + (lv - this.cam) * this.gap) * (1 + this.punchS * 0.05) * (1 - this.zoomS * 0.2) * (1 - 0.12 * clamp(this.speedK, 0, 1));
   }
 
   private burst(x: number, y: number, n: number, col: RGB, speed: number, size = 1, back = false): void {
@@ -345,6 +362,22 @@ export class GdRenderer {
       const v = speed * (0.3 + Math.random() * 0.7);
       this.particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0, max: 0.3 + Math.random() * 0.35, col, size: (1.2 + Math.random() * 2.2) * size, back });
     }
+  }
+
+  /** how much faster than normal the course is going (eased), 0 at the normal pace */
+  private speedK = 0;
+  /** stars stretched into streaks, behind the course, when the pace goes up */
+  private streaks(time: number): void {
+    const k = clamp(this.speedK / 0.5, 0, 1);
+    if (k < 0.02 || save.reducedMotion) return;
+    const c = this.ctx, cx = this.w / 2, cy = this.h * 0.52, R = Math.hypot(this.w, this.h) * 0.6;
+    c.save(); c.globalCompositeOperation = 'screen'; c.lineCap = 'round';
+    for (let i = 0; i < 46; i++) {
+      const a = i * 2.399, ph = (time * (0.35 + 0.5 * k) + i * 0.137) % 1, r0 = R * (0.25 + 0.75 * ph), len = R * 0.18 * k * (0.4 + ph);
+      c.strokeStyle = `rgba(220,232,255,${0.22 * k * ph})`; c.lineWidth = 1 + ph;
+      c.beginPath(); c.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0); c.lineTo(cx + Math.cos(a) * (r0 + len), cy + Math.sin(a) * (r0 + len)); c.stroke();
+    }
+    c.restore();
   }
 
   private wave(r: number, col: RGB, speed: number, width: number, alpha: number, life = 0.45): void {
@@ -377,7 +410,7 @@ export class GdRenderer {
     const span = Math.max(this.w, this.h) * 0.75;
     if (this.plain) { c.fillStyle = '#0d0e17'; c.fillRect(0, 0, this.w, this.h); return; }
     const calm = save.reducedMotion;
-    if (this.backdrop) { this.backdrop.draw(c, this.w, this.h, { time, song: this.songT, colour: this.colour, drive, kick, woke: this.woke, strike: this.strike, dark, calm }); return; }
+    if (this.backdrop) { this.backdrop.draw(c, this.w, this.h, { time, song: this.songT, colour: this.colour, drive, kick, woke: this.woke, strike: this.strike, dark, calm }); this.streaks(time); return; }
     const k = 0.4 + inten * 0.95 + groove * 0.7 + drive * kick * 0.5;
     // the bass warps the backdrop: its bright centre swells on every kick
     const g = c.createRadialGradient(cx, cy, 0, cx, cy, span * (1 + (calm ? 0 : drive * kick * 0.18)));
@@ -825,6 +858,21 @@ export class GdRenderer {
       const tick = Math.exp(-(((beat % 1) + 1) % 1) * 5);
       const col = pl.orb === 'dash' ? CYAN : pl.orb === 'grav' ? VIOLET : GOLD;
       c.globalAlpha = alpha;
+      if (this.look === 2) {
+        // the one signal: an orb is a tap, so it is an unlit stone until it is one of the next two taps; then the gold
+        // ring closes on it like on any node. Its four ticks say what it is: a mark in mid-air.
+        const cue = pl.note <= this.cueUntil + 1e-6 && pl.note >= this.cueFrom - 1e-6, ahead = pl.note - beat;
+        c.fillStyle = HALO; c.beginPath(); c.arc(x, y, rb * 1.9, 0, TWO_PI); c.fill();
+        c.strokeStyle = cue ? rgba(TAP, 0.9) : rgba(STONE, 0.9); c.lineWidth = Math.max(1.5, rb * 0.3); c.lineCap = 'round';
+        for (let k = 0; k < 4; k++) { const q = a + Math.PI / 4 + (k * Math.PI) / 2; c.beginPath(); c.moveTo(x + Math.cos(q) * rb * 1.5, y + Math.sin(q) * rb * 1.5); c.lineTo(x + Math.cos(q) * rb * 2.05, y + Math.sin(q) * rb * 2.05); c.stroke(); }
+        c.fillStyle = cue ? rgba(TAP) : rgba(STONE, 0.9); c.beginPath(); c.arc(x, y, rb * (cue ? 0.8 : 0.6), 0, TWO_PI); c.fill();
+        if (cue) {
+          const t2 = c.getTransform(), k2 = this.canvas.width / Math.max(1, this.w); this.cues.push({ x: (t2.a * x + t2.c * y + t2.e) / k2, y: (t2.b * x + t2.d * y + t2.f) / k2, beat: pl.note });
+          if (ahead > -pl.tol && ahead < 2.4) { const far = Math.max(0, ahead), rr = rb * (1.3 + far * 3.2), wd = 3.2 - far * 0.5; c.globalAlpha = alpha * clamp(1.15 - far * 0.42, 0, 1); c.strokeStyle = HALO; c.lineWidth = wd + 3; c.beginPath(); c.arc(x, y, rr, 0, TWO_PI); c.stroke(); c.strokeStyle = rgba(TAP); c.lineWidth = wd; c.beginPath(); c.arc(x, y, rr, 0, TWO_PI); c.stroke(); }
+        }
+        c.lineCap = 'butt'; c.globalAlpha = 1;
+        return;
+      }
       c.lineCap = 'round'; c.lineJoin = 'round';
       c.fillStyle = HALO; c.beginPath(); c.arc(x, y, rb * 2.1, 0, TWO_PI); c.fill();
       c.strokeStyle = rgba(col); c.lineWidth = Math.max(2, rb * 0.42);
@@ -1230,6 +1278,14 @@ export class GdRenderer {
         if (d > this.ahead || d < -0.4) continue;
         const al = clamp((this.ahead - d) / 0.6, 0, 1) * clamp(1 + d / 0.4, 0, 1);
         const col = this.look === 2 ? WOKEN : FORM_COL[ln.form];
+        if (this.look === 2) {
+          // the companion IS the mode portal: a Kindling hovering over the path, its wings opening across it as he
+          // comes, and closing round him as he passes (he takes its shape)
+          const la = ang(ln.beat), px = bx0 + Math.cos(la) * rr, py = by0 + Math.sin(la) * rr;
+          const open = clamp(1 - d / 1.5, 0, 1), passK = clamp(-d / 0.4, 0, 1);
+          COMPANIONS.kindling(c, px, py, rb * (0.11 + 0.05 * open), COMPANIONS.KINDLE[run.level.file.side?.of ?? run.level.id] ?? COMPANIONS.KINDLE.heroes, { flap: 0.5 + 0.5 * Math.sin(time * 3), open: open * (1 - passK), alpha: al * (1 - passK), rot: la + Math.PI / 2 });
+          continue;
+        }
         const H = rb * 4.2;
         const W = rb * 1.7;
         c.save();
@@ -1241,11 +1297,11 @@ export class GdRenderer {
         c.strokeStyle = HALO; c.lineWidth = 8; c.stroke();
         c.fillStyle = rgba(col, 0.22); c.fill();
         c.strokeStyle = rgba(col); c.lineWidth = 3; c.stroke();
-        c.strokeStyle = this.look === 2 ? rgba(WOKEN, 0.6) : 'rgba(255,255,255,0.8)'; c.lineWidth = 1.5;
+        c.strokeStyle = 'rgba(255,255,255,0.8)'; c.lineWidth = 1.5;
         c.beginPath(); c.moveTo(-W * 0.18, -H * 0.55); c.quadraticCurveTo(-W * 0.42, -H * 0.1, -W * 0.2, H * 0.3); c.stroke();
         c.restore();
         const la = ang(ln.beat);
-        if (this.look !== 2) this.tag(FORM_NAME[ln.form], bx0 + Math.cos(la) * (rr + rb * 6.4), by0 + Math.sin(la) * (rr + rb * 6.4), clamp(rb * 1.5, 13, 16), col, al); // (a form is named once, where it is given; after that its shape speaks)
+        this.tag(FORM_NAME[ln.form], bx0 + Math.cos(la) * (rr + rb * 6.4), by0 + Math.sin(la) * (rr + rb * 6.4), clamp(rb * 1.5, 13, 16), col, al); // (a form is named once, where it is given; after that its shape speaks)
       }
       // mirror and upside-down gates: a cyan line across the path, with an arrow each way along the orbit (mirror) or
       // toward and away from the core (upside-down), and its name. In its last two beats the sign beats with the music.
@@ -1368,7 +1424,11 @@ export class GdRenderer {
     }
     // the ball: its place round the core is a pure function of the clock, so it moves exactly as smoothly as the clock does
     if (run.state === 'failed') return;
-    const rho = this.ballRho(sim, beat);
+    // the Meteor is a dash, not a hop: he drives forward low along the ring (a flattened flight), stretched along the
+    // way he goes, through the wall
+    const dashing = !twin && sim.mode === 'flight' && course.formAt(beat) === 'meteor' && !!sim.fl;
+    const dashK = dashing && sim.fl ? Math.sin(Math.PI * clamp((beat - sim.fl.t0) / Math.max(0.05, sim.fl.t1 - sim.fl.t0), 0, 1)) : 0;
+    const rho0 = this.ballRho(sim, beat), rho = dashing ? sim.lv + (rho0 - sim.lv) * 0.22 : rho0;
     // a landing presses him down and lets him up again; and on the ground, as the ring closes on the node he is about to
     // leave from, he gathers himself a little (the anticipation before the hop)
     const cue = this.cues.reduce((m, q) => (q.beat >= beat - 0.02 && q.beat < m ? q.beat : m), Infinity);
@@ -1408,7 +1468,7 @@ export class GdRenderer {
     c.fillStyle = 'rgba(3,5,14,0.5)';
     c.beginPath(); c.arc(x, y, rb * 2.1, 0, TWO_PI); c.fill();
     const dir = course.angle(beat + 0.05) >= course.angle(beat) ? 1 : -1;
-    this.drawHero(x, y, rb, skin, a, dir, heroForm, 1 + stretch - 0.3 * squash, 1 - stretch * 0.5 + 0.22 * squash, sim.down ? 1 : 0);
+    this.drawHero(x, y, rb, skin, a, dir, heroForm, 1 + stretch - 0.3 * squash - 0.18 * dashK, 1 - stretch * 0.5 + 0.22 * squash + 0.45 * dashK, sim.down ? 1 : 0);
     if (!twin) {
       this.ball.x = x;
       this.ball.y = y;
@@ -1523,6 +1583,14 @@ export class GdRenderer {
     const t = run.viewTime;
     this.songT = t;
     const beat = t / level.spb;
+    // speed is felt: from a bar before a fast portal the stars stretch into streaks, and at speed the camera eases out
+    // (so there is always at least as much course in view, in seconds, as at the normal pace)
+    {
+      const barNow = course.bars[Math.max(0, Math.min(course.bars.length - 1, Math.floor(beat / 4)))];
+      const ahead = course.portals.find((g) => g.beat > beat - 0.01 && g.beat - beat <= 4);
+      const want = Math.max(0, Math.max(barNow?.speed ?? 1, ahead && ahead.faster ? 1 + (ahead.speed - 1) * clamp(1 - (ahead.beat - beat) / 4, 0, 1) : 0) - 1);
+      this.speedK += (want - this.speedK) * Math.min(1, dt * 2.5);
+    }
     const m = this.sizes();
     const span = Math.max(this.w, this.h) * 0.75;
     const { r0, rb } = this;
@@ -1602,7 +1670,7 @@ export class GdRenderer {
         if (ev.flow) this.burst(this.ball.x, this.ball.y, ev.kind === 'spark' ? 7 : 5, GOLD, r0 * 0.7, 0.8); // small sparkles: on the note
         if (ev.charge) this.punch = Math.max(this.punch, 0.2); // each roll note you catch winds the picture a little tighter
         if (ev.kind === 'flip') this.burst(this.ball.x, this.ball.y, 12, VIOLET, r0 * 0.9);
-        if (ev.kind === 'hop' && formEv === 'meteor') this.strike = 1; // (the planet's soul strikes with it)
+        if (ev.kind === 'hop' && (formEv === 'meteor' || this.look === 2)) this.strike = 1; // (the planet's soul strikes with it; in the new look every good tap touches the world)
         if (ev.kind === 'hop' && formEv === 'meteor') { this.burst(this.ball.x, this.ball.y, 16, INK_RIM, r0 * 1.4); this.burst(this.ball.x, this.ball.y, 8, FORM_COL.meteor, r0 * 0.9); } // the wall goes to pieces
         if (ev.flow && loud) {
           // in the loud parts an on-beat tap drives the picture: a shockwave off the ball's ring, the rings light up, a burst

@@ -6,6 +6,7 @@
 // map is already there above it. Painted once per size and per number of stars, in five layers that slide past each
 // other; the fire, its sparks, the motes, the signal and Orbin are live.
 import { LANDING } from '../art/landingpaint.js';
+import { COMPANIONS } from '../art/companions.js';
 import { K } from '../art/painter.js';
 import { Actor } from './actor';
 import type { SceneState } from './skyplanet';
@@ -136,7 +137,16 @@ export class SkyLanding {
     };
     wide('far');
     wide('sleeper', () => LANDING.seam(c, w, h, stars, fire.breath));
-    wide('ground', () => { LANDING.flames(c, w, h, stars, t, fire.grow, fire.lift); if (who) this.orbin.draw(c); });
+    wide('ground', () => {
+      LANDING.flames(c, w, h, stars, t, fire.grow, fire.lift);
+      // the companions live here: a Kindling for each world woken, circling the fire slowly
+      const worlds = ['heroes', 'skyhigh', 'blank', 'invincible', 'royalty'];
+      for (let i = 0; i < Math.min(worlds.length, stars - 1); i++) {
+        const a = t * (0.35 + 0.05 * i) + i * 2.3, R = (60 + 22 * i) * g.u;
+        COMPANIONS.kindling(c, g.fx + Math.cos(a) * R, g.fy - 70 * g.u + Math.sin(a) * R * 0.35 - 20 * g.u * Math.sin(t * 0.7 + i), 0.32 * g.u, COMPANIONS.KINDLE[worlds[i]], { flap: 0.5 + 0.5 * Math.sin(t * 3.2 + i), alpha: Math.sin(a) > -0.2 ? 1 : 0.7 });
+      }
+      if (who) this.orbin.draw(c);
+    });
     wide('front', () => LANDING.motes(c, w, h, stars, t));
     c.globalAlpha = 1;
   }
@@ -202,14 +212,16 @@ export class SkyLanding {
       if (s > 0.1) this.pose('rest');
       // the star: beside him, then into the heart of the fire
       const o = this.orbin, sx0 = arr.star ? arr.star[0] : o.x + 34 * u, sy0 = arr.star ? arr.star[1] - this.tilt * h : o.y - 30 * u, ss0 = arr.star ? arr.star[2] : 0.5 * u;
-      const k = smooth((s - 1.3) / 0.8), hx = g.fx, hy = g.fy - 14 * u;
+      // (the star goes home into the vessel: its own socket on the Sleeper's back, which sits back a layer, PAR.sleeper)
+      const slot = Math.max(0, Math.min(LANDING.SOCKETS - 1, arr.to - 1)), sock = LANDING.sockets(w, h, arr.to)[slot];
+      const k = smooth((s - 1.3) / 0.8), hx = sock[0], hy = sock[1] + tilt * h * (PAR.sleeper - 1);
       const fx0 = arr.star && s < 1.3 ? lerp(sx0, o.x + 40 * u, smooth(s / 1.3)) : o.x + 40 * u, fy0 = arr.star && s < 1.3 ? lerp(sy0, o.y - 34 * u, smooth(s / 1.3)) : o.y - 34 * u;
       if (s < 2.1) starAt = [lerp(fx0, hx, k), lerp(fy0, hy, k) - Math.sin(k * Math.PI) * 60 * u, lerp(ss0, 0.22 * u, k)];
       if (s >= 2.1 && !arr.home) { arr.home = true; arr.onHome?.(); this.said = { text: arr.said, at: t + 0.5 }; }
       // the fire answers: the picture of one star fewer gives way to this one
       a = this.set(arr.from); b = this.set(arr.to); mix = smooth((s - 2.1) / 1.4);
       const f0 = LANDING.geo(w, h, arr.from).fire, f1 = g.fire;
-      lift = f1 > 0 ? lerp(f0 / f1, 1, mix) : 1; grow = s > 2.1 ? Math.exp(-(s - 2.1) * 1.6) : 0;
+      lift = f1 > 0 ? lerp(f0 / f1, 1, mix) : 1; grow = s > 3.0 ? Math.exp(-(s - 3.0) * 1.6) : 0; // (the fire answers when the light has run down to it)
       if (s > 5.4) this.finish();
     }
     if (e < 1 || this.dir <= 0) {
@@ -217,6 +229,16 @@ export class SkyLanding {
       const breath = 0.5 + 0.5 * Math.sin(t * 0.8);
       this.scene(c, a, b, mix, this.stars, e, tilt, { lift, grow, breath }, true);
       if (starAt) { const y = starAt[1] + tilt * h; LANDING.star(c, starAt[0], y, starAt[2], LANDING.STAR_COLS[(this.stars - 1 + 6) % 6], 1, t * 2); }
+      // the power-up: once the star is in its socket, light runs down the old channel in the stone to the fire
+      if (arr && !arr.done && arr.t0 >= 0) {
+        const s2 = t - arr.t0 - 2.1;
+        if (s2 > 0 && s2 < 1.1) {
+          const slot = Math.max(0, Math.min(LANDING.SOCKETS - 1, arr.to - 1)), [x0, y0, a1, b1, a2, b2, x1, y1] = LANDING.channel(w, h, arr.to, slot), q = smooth(s2 / 0.9), m = 1 - q;
+          const x = m * m * m * x0 + 3 * m * m * q * a1 + 3 * m * q * q * a2 + q * q * q * x1, y = m * m * m * y0 + 3 * m * m * q * b1 + 3 * m * q * q * b2 + q * q * q * y1;
+          K.glow(c, x, y + tilt * h * PAR.sleeper, 26 * u, [180, 250, 240], 0.9 * (1 - smooth((s2 - 0.9) / 0.2)));
+          K.glow(c, x0, y0 + tilt * h * PAR.sleeper, 40 * u, [200, 255, 245], 0.6 * Math.exp(-s2 * 3));
+        }
+      }
     }
     // rising: the land falls away through mist, and the galaxy is above it
     if (e > 0.003) { c.fillStyle = `rgba(20,44,60,${Math.sin(Math.PI * e) * 0.5})`; c.fillRect(0, 0, w, h); }
@@ -230,8 +252,11 @@ export class SkyLanding {
   /** how far the Sleeper has stirred while the first stage plays (the game does not set this: the song does) */
   private woke = 0;
   /** The same picture as a level's sky: no fire yet, the Sleeper asleep. The first stage is flown over it. */
+  /** flowers that bloomed on the planetoid where good taps landed (the first stage): position and when (s) */
+  private blooms: Array<{ x: number; y: number; at: number; hue: number }> = [];
+  private strikeWas = 0; private bloomSeed = 1;
   readonly backdrop = {
-    prepare: (): void => { this.set(0); },
+    prepare: (): void => { this.set(0); this.blooms = []; this.bloomSeed = 1; },
     draw: (c: CanvasRenderingContext2D, w: number, h: number, st: SceneState): void => {
       this.layout();
       if (w !== this.w || h !== this.h) return;
@@ -243,6 +268,20 @@ export class SkyLanding {
       const g = LANDING.geo(w, h, 0), hy = g.hy + STAGE_TILT * h * PAR.far, k = smooth(Math.min(1, st.colour * 1.3));
       K.glow(c, w * 0.5, hy, Math.max(w, h) * 0.7, [70, 190, 190], 0.1 * k + 0.2 * up * (0.7 + 0.3 * st.drive) + (st.calm ? 0 : 0.05 * st.kick * up), 'screen');
       if (up > 0) K.glow(c, g.seam[0], g.seam[1] + STAGE_TILT * h * PAR.sleeper, 200 * g.u, [120, 235, 215], 0.3 * up * (0.7 + 0.3 * st.kick), 'screen');
+      // the world answers the player: every good tap blooms a flower on the planetoid below (they stay)
+      if (st.strike > 0.9 && this.strikeWas <= 0.9 && this.blooms.length < 90) {
+        const r = K.RNG(this.bloomSeed++ * 7919);
+        this.blooms.push({ x: w * (0.06 + 0.88 * r()), y: h * (0.8 + 0.17 * r()), at: st.time, hue: r() });
+      }
+      this.strikeWas = st.strike;
+      for (const b of this.blooms) {
+        const age = st.time - b.at, k = smooth(age / 0.45), s = (2.2 + 2.6 * k) * g.u * 1.6;
+        if (k <= 0) continue;
+        K.glow(c, b.x, b.y, s * 5, b.hue < 0.5 ? [150, 235, 220] : [255, 226, 170], 0.25 * k * (1 + 1.5 * Math.exp(-age * 3)), 'screen');
+        c.fillStyle = `rgba(240,250,245,${0.85 * k})`;
+        for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2 + b.hue * 3; c.beginPath(); c.arc(b.x + Math.cos(a) * s, b.y + Math.sin(a) * s * 0.7, s * 0.55, 0, Math.PI * 2); c.fill(); }
+        c.fillStyle = b.hue < 0.5 ? 'rgba(150,235,220,0.9)' : 'rgba(255,214,140,0.9)'; c.beginPath(); c.arc(b.x, b.y, s * 0.4, 0, Math.PI * 2); c.fill();
+      }
       // the air round the course is kept dark, so the path and its nodes are the clearest things there are
       if (this.veil > 0.003) {
         const cx = w / 2, cy = h * 0.52, span = Math.min(w, h) * 0.74, gr = c.createRadialGradient(cx, cy, 0, cx, cy, span), a = 0.5 * this.veil;

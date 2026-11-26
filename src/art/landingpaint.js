@@ -54,6 +54,9 @@ function far(c, w, h, stars) {
 }
 
 function sleeper(c, w, h, stars) {
+  sleeperBody(c, w, h, stars); vessel(c, w, h, stars);
+}
+function sleeperBody(c, w, h, stars) {
   const { u, k, hy, sx, top } = geo(w, h, stars), r = K.RNG(305);
   const head = () => { c.beginPath(); c.moveTo(sx - 430 * u, hy + 150 * u); c.bezierCurveTo(sx - 360 * u, hy - 60 * u, sx - 250 * u, top + 70 * u, sx - 90 * u, top); c.bezierCurveTo(sx + 60 * u, top - 50 * u, sx + 220 * u, top + 40 * u, sx + 300 * u, hy - 30 * u); c.lineTo(w * 2, hy + 20 * u); c.lineTo(w * 2, h * 2); c.lineTo(sx - 430 * u, h * 2); c.closePath(); };
   head(); const hg = c.createLinearGradient(0, top, 0, hy + 200 * u); hg.addColorStop(0, 'rgb(10,34,44)'); hg.addColorStop(1, 'rgb(5,16,24)'); c.fillStyle = hg; c.fill();
@@ -61,6 +64,43 @@ function sleeper(c, w, h, stars) {
   c.strokeStyle = 'rgba(150,225,235,0.5)'; c.lineWidth = 5 * u; c.beginPath(); c.moveTo(sx - 430 * u, hy + 150 * u); c.bezierCurveTo(sx - 360 * u, hy - 60 * u, sx - 250 * u, top + 70 * u, sx - 90 * u, top); c.stroke(); // the cool light on its near edge
   for (let i = 0; i < 70 * k; i++) { const x = sx - 380 * u + r() * 620 * u, y = top + 20 * u + r() * 300 * u; c.strokeStyle = `rgba(70,150,120,${0.25 + 0.3 * r()})`; c.lineWidth = 1.6 * u; c.beginPath(); c.moveTo(x, y); c.lineTo(x + (r() - 0.5) * 8 * u, y - (8 + r() * 12) * u); c.stroke(); } // moss and grass come back on it
   c.restore();
+}
+
+/**
+ * The vessel (the owner's idea, 2026-11-25): the Sleeper is an ancient vessel, and the Landing is its deck. Six sockets
+ * along its back, one for each of World 1's great stars; a star home is set into its socket, and light runs from it
+ * down the old channels in the stone to the hand that holds the fire. Positions on its back, in the layer's own space.
+ */
+const SOCKETS = 6;
+function sockets(w, h, stars) {
+  const { u, hy, sx, top } = geo(w, h, stars);
+  const p0 = [sx - 430 * u, hy + 150 * u], p1 = [sx - 360 * u, hy - 60 * u], p2 = [sx - 250 * u, top + 70 * u], p3 = [sx - 90 * u, top];
+  return Array.from({ length: SOCKETS }, (_, i) => {
+    const t = 0.32 + i * 0.12, m = 1 - t, b = (j) => m * m * m * p0[j] + 3 * m * m * t * p1[j] + 3 * m * t * t * p2[j] + t * t * t * p3[j];
+    return [b(0) + 10 * u, b(1) + 16 * u];
+  });
+}
+/** the channel from socket i down to the fire: a bezier, as [x0, y0, c1x, c1y, c2x, c2y, x1, y1] */
+function channel(w, h, stars, i) {
+  const g = geo(w, h, stars), [x, y] = sockets(w, h, stars)[i], ex = g.fx + (i - 2.5) * 30 * g.u, ey = g.fy - 60 * g.u;
+  return [x, y, x - 30 * g.u, y + 120 * g.u, ex + 60 * g.u, ey - 140 * g.u, ex, ey];
+}
+function vessel(c, w, h, stars) {
+  const g = geo(w, h, stars), u = g.u, S = sockets(w, h, stars), lit = Math.min(SOCKETS, stars);
+  c.save(); c.globalCompositeOperation = 'lighter'; c.lineCap = 'round';
+  for (let i = 0; i < lit; i++) {
+    const [x0, y0, a, b, d, e, x1, y1] = channel(w, h, stars, i);
+    c.strokeStyle = K.rgba([140, 230, 220], 0.32); c.lineWidth = 2.2 * u; c.beginPath(); c.moveTo(x0, y0); c.bezierCurveTo(a, b, d, e, x1, y1); c.stroke();
+    c.strokeStyle = K.rgba([180, 250, 240], 0.5); c.lineWidth = 1 * u; c.stroke();
+    if (i > 0) { const [px, py] = S[i - 1]; c.strokeStyle = K.rgba([170, 240, 230], 0.45); c.lineWidth = 1.6 * u; c.beginPath(); c.moveTo(px, py); c.lineTo(x0, y0); c.stroke(); }
+  }
+  c.restore();
+  for (let i = 0; i < SOCKETS; i++) {
+    const [x, y] = S[i];
+    c.fillStyle = 'rgba(2,10,14,0.85)'; c.beginPath(); c.ellipse(x, y, 13 * u, 9 * u, -0.5, 0, TAU); c.fill();
+    c.strokeStyle = i < lit ? 'rgba(170,240,230,0.7)' : 'rgba(90,140,150,0.35)'; c.lineWidth = 1.4 * u; c.beginPath(); c.ellipse(x, y, 13 * u, 9 * u, -0.5, 0, TAU); c.stroke();
+    if (i < lit) star(c, x, y, 0.2 * u, STAR_COLS[i % STAR_COLS.length], 1, 1 + i);
+  }
 }
 
 /** Its one sign of life: a long closed seam where an eye would be, a little open once stars are home (never a face). breath: 0..1, live. */
@@ -175,4 +215,4 @@ function paint(c, w, h, stars, t = 2) {
   front(c, w, h, stars); motes(c, w, h, stars, t);
 }
 
-export const LANDING = { STAR_COLS, star, geo, sky, far, sleeper, seam, ground, front, flames, motes, signal, paint };
+export const LANDING = { STAR_COLS, star, geo, sky, far, sleeper, seam, ground, front, flames, motes, signal, paint, sockets, channel, SOCKETS };

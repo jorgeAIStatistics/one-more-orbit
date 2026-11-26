@@ -1,0 +1,15 @@
+{
+  "file": "audio/coldopen.mp3",
+  "frames": 2028600,
+  "firstSig": 61,
+  "bpm": 80,
+  "offset": 0.0,
+  "length": 46.0,
+  "dropTime": 36.0,
+  "source": [
+    [
+      0.0,
+      46.0
+    ]
+  ]
+}
