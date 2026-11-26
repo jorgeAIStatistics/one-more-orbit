@@ -21,21 +21,21 @@
       "title": "Flutter",
       "artist": "Diamond Eyes",
       "release": "NCS Release",
-      "playable": false
+      "playable": true
     },
     {
       "id": "luna",
       "title": "Luna",
       "artist": "Abandoned, GalaxyTones, DNAKM",
       "release": "NCS Release",
-      "playable": false
+      "playable": true
     },
     {
       "id": "willow",
       "title": "Willow Tree (feat. Rosendale)",
       "artist": "Rival, CADMIUM",
       "release": "NCS Release",
-      "playable": false
+      "playable": true
     },
     {
       "id": "memorybox",
