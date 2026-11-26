@@ -52,16 +52,16 @@ SPECS = {
     'willow': dict(
         bpm=100, follow='snare', looks=LOOK,
         table=dict(floor=0.25, dbl=0.25, run=4, step=3),
-        doc="Verdance, on Willow Tree (Rival & CADMIUM ft. Rosendale). The journey (2026-11-26) climbs the great tree: the roots (bars 0-7, a ring round Verdance among its roots; the Kindling gives the snap at 4; Helion's moment at 6); the drop (8) throws you up a vine into the trunk spiral (9-12, winding outward round the trunk at 1.25x); at 13 a vine flings you onto the branches (13-18, a long bough), the residue rising after you along it, pushed back by every good tap; the lift (19-21) at 1.5x, the camera pushing in, the dark closing to one light; the last drop (22) throws you into the canopy (23-26, a wide ring of leaves, every seed-light alight); at 27 the tree throws you to the crown, the camera pulls back over the whole relit tree, and on the crown you are two sparks at once (dual, 28-32), a sprint at 2x (30); the seal on the last stab (32).",
+        doc="Verdance, on Willow Tree (Rival & CADMIUM ft. Rosendale). The journey (2026-11-26) climbs the great tree: the roots (bars 0-7, a ring round Verdance among its roots; the Kindling gives the snap at 4; Helion's moment at 6); the drop (8) throws you up a vine into the trunk spiral (9-12, winding outward round the trunk at 1.25x); at 13 a vine flings you onto the branches (13-21, two boughs crossing, a figure-eight), the residue rising after you along it, pushed back by every good tap; the lift (19-21) at 1.5x, the camera pushing in, the dark closing to one light; the last drop (22) throws you into the canopy (23-26, a wide ring of leaves, every seed-light alight); at 27 the tree throws you to the crown, the camera pulls back over the whole relit tree, and on the crown you are two sparks at once (dual, 28-32), a sprint at 2x (30); the seal on the last stab (32).",
         head={"id": "invincible", "title": "Willow Tree (feat. Rosendale)", "artist": "Rival & CADMIUM", "release": "NCS Release", "hitsoundNote": 71, "scale": [11, 1, 3, 4, 6, 8, 10], "swing": False,
               "difficulty": "Hard", "adds": "The snap: each tap jumps you to the other side of the branch at once; dual at the crown", "holds": False, "embers": [],
               "rules": {"tol": 0.1, "ahead": 3, "branch": 0.06, "known": ["meteor", "sat", "pulsar"], "buffer": 0.1, "early": 0.45}, "shards": [[16, 23.5], [56, 63.5], [100, 107.5]]},
         places=[
             {"id": "roots", "at": [0, 0], "shape": "circle"},
-            {"id": "trunk", "at": [0.2, -3.4], "shape": "circle", "spiral": [36, 52], "grow": 1.45, "to": [0, 0]},
-            {"id": "branches", "at": [1.3, -7.0], "shape": "line", "dir": -0.55, "len": 0.6},
-            {"id": "canopy", "at": [-0.6, -10.4], "shape": "ellipse", "size": 1.2, "rot": 0.12},
-            {"id": "crown", "at": [0.3, -13.9], "shape": "circle", "size": 1.05},
+            {"id": "trunk", "at": [0.2, -3.4], "shape": "circle", "spiral": [36, 52], "grow": 1.25, "to": [0, 0]},
+            {"id": "branches", "at": [1.3, -7.0], "shape": "eight", "size": 1.15, "cross": 60},
+            {"id": "canopy", "at": [1.5, -10.4], "shape": "ellipse", "size": 1.15, "rot": 0.12},
+            {"id": "crown", "at": [0.2, -13.9], "shape": "circle", "size": 1.05},
         ],
         setpieces=[
             {"bar": 4, "kind": "story", "time": 9.6, "name": "The snap", "what": "Verdance's Kindling rises from the roots and gives the snap: each tap jumps you across the branch at once"},

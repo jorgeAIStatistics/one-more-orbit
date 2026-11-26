@@ -72,9 +72,13 @@ beat later.
   Vell under the waterline between the lake and its reflection; ripples, mirror portals, droplets, ice shards. Worlds
   with `lead: true` (PlanetWorld) have the camera lead each flight; a world's own pull-back wins over it.
 
+- (2026-11-26) 5. Verdance climbs the great tree (roots -> trunk spiral -> branches, an eight -> canopy -> crown, dual);
+  Morrow climbs beside him; seed pods, vines, seed-lights, thorn knots. Lesson: a line place ridden for many bars grows
+  very long (its span is the time spent on it) and throws launches off screen; keep lines to a few bars.
+
 ## In progress / next
-- 5. Verdance: spec 'willow' in tools/journeys.py (roots -> trunk spiral -> branches -> canopy -> crown, dual at the
-  crown); world drafted (the great tree through every place, Morrow climbing beside him).
+- 6. The last memory (memory 5: a fifth chapter in src/ui/skymemory.ts and tools/pass2.py memfilms), then the guardian
+  on Throne (three phases; tracks.json 'throne').
 - Tools: tools/journey.py now takes 'clear' (ticks kept free of embers before a landing). The dev server must be
   restarted after new level folders are added (it served a stale levels/darkness once).
 

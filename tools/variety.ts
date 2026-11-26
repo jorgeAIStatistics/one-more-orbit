@@ -199,7 +199,7 @@ export function journey(pack: LevelPack): Journey {
     ambush: { pad: 'a slab of debris (pad)', leap: 'a throw into the dark (launch)', ember: 'a light to catch (in the air)', sat: 'a wreck’s edge (wave turn)', meteor: 'a dead fragment (Meteor wall)', vent: 'the skip (vent)', orb: 'a light to catch' },
     skyhigh: { pad: 'kite (pad)', leap: 'gust (launch)', ember: 'wind chime (in the air)', sat: 'knot of residue (wave turn)', orb: 'wind chime' },
     blank: { pad: 'ripple (pad)', leap: 'mirror portal (launch)', ember: 'droplet of light (in the air)', pulsar: 'ice shard (ball flip)', orb: 'droplet of light' },
-    invincible: { pad: 'seed pod (pad)', leap: 'vine (launch)', ember: 'seed-light (in the air)', pulsar: 'vine anchor (snap)', orb: 'seed-light' },
+    invincible: { pad: 'seed pod (pad)', leap: 'vine (launch)', ember: 'seed-light (in the air)', pulsar: 'thorn knot (snap)', orb: 'seed-light' },
   };
   const nm = NAMES[pack.level.id] ?? {};
   for (const v of Object.values(nm)) OBJECT.add(v);

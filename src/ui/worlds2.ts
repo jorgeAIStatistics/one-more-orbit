@@ -87,20 +87,21 @@ abstract class PlanetWorld {
   /** over the planet, under the course: the other places' bodies and the world's objects */
   protected journeyMore(_c: CanvasRenderingContext2D, _st: WorldState, _U: number): void { /* (per world) */ }
   /** the flights the camera leads: launch and landing (song s) and the middle of the flight (place units, portrait) */
-  private leads: Array<[number, number, number, number]> | null = null;
+  private leads: Array<[number, number, number, number, number]> | null = null;
   private findLeads(st: WorldState): void {
-    if (this.leads || !st.presses || !st.rel) return;
-    const U = st.unit ?? 100, [ox, oy] = st.rel(0), wide = !!st.wide, spb = this.cfg.T.spb;
+    if (this.leads || !st.presses || !st.rel || !st.at) return;
+    const U = st.unit ?? 100, [ox, oy] = st.rel(0), wide = !!st.wide, spb = this.cfg.T.spb, at = st.at;
     const unturn = (x: number, y: number): [number, number] => (wide ? [y, -x] : [x, y]);
+    // (from where he really launches to where he really lands: the middle of the flight, and how far apart they are)
     this.leads = st.presses.filter((p) => p.leap && !p.leap.ember).map((p) => {
-      const k = Math.round(p.leap!.p0), [ax, ay] = st.rel!(k), [bx, by] = st.rel!(k + 1), [mx, my] = unturn(((ax + bx) / 2 - ox) / U, ((ay + by) / 2 - oy) / U);
-      return [p.beat * spb, p.leap!.b1 * spb, mx, my];
+      const [ax, ay] = at(p.beat), [bx, by] = at(p.leap!.b1 + 1.5 / spb * 0.5), [mx, my] = unturn(((ax + bx) / 2 - ox) / U, ((ay + by) / 2 - oy) / U), d = Math.hypot(bx - ax, by - ay) / U;
+      return [p.beat * spb, p.leap!.b1 * spb, mx, my, Math.max(0.15, Math.min(0.5, (d - 1.8) * 0.13))];
     });
   }
-  /** how far the camera is leading a flight now (0..1), and where to */
-  protected leadAt(s: number): { x: number; y: number; k: number } | null {
+  /** how far the camera is leading a flight now (0..1), where to, and how far it eases out for it */
+  protected leadAt(s: number): { x: number; y: number; k: number; out: number } | null {
     if (!this.cfg.lead || !this.leads) return null;
-    for (const [l0, l1, x, y] of this.leads) if (s > l0 - 1.6 && s < l1 + 0.6) return { x, y, k: sm((s - l0 + 1.6) / 1.2) * (1 - sm((s - l1 + 0.1) / 0.6)) };
+    for (const [l0, l1, x, y, out] of this.leads) if (s > l0 - 1.6 && s < l1 + 0.6) return { x, y, k: sm((s - l0 + 1.6) / 1.2) * (1 - sm((s - l1 + 0.1) / 0.6)), out };
     return null;
   }
   private journey(c: CanvasRenderingContext2D, st: WorldState): void {
@@ -130,8 +131,8 @@ abstract class PlanetWorld {
     rewind: (to) => this.rewind(to),
     spark: (a, song, pf) => this.spark(a, song, pf),
     onCourse: (c, v) => this.onCourse(c, v),
-    cam: (s) => Math.max(0.32, this.camAt(s) - (this.pullAt(s) ? 0 : 0.4 * (this.leadAt(s)?.k ?? 0))), // (a world's own pull-back wins over the lead)
-    pull: (s) => this.pullAt(s) ?? (() => { const l = this.leadAt(s); return l ? { x: l.x, y: l.y, k: 0.4 * l.k } : null; })(),
+    cam: (s) => { const l = this.pullAt(s) ? null : this.leadAt(s); return Math.max(0.32, this.camAt(s) - (l ? l.out * l.k : 0)); }, // (a world's own pull-back wins over the lead)
+    pull: (s) => this.pullAt(s) ?? (() => { const l = this.leadAt(s); return l ? { x: l.x, y: l.y, k: 0.55 * l.k } : null; })(),
     relit: 0,
     draw: (c, R, st) => {
       this.ensurePlanet();
@@ -501,39 +502,137 @@ export class GlassWorld extends PlanetWorld {
 }
 
 // ================================================================ Verdance, on Willow Tree (100 BPM, a bar 2.4 s)
-const VT = { gift: 9.6, helion: 14.4, drop: 19.2, chase: 31.2, lift: 45.6, dark: 50.4, dual: 52.8, end: 79.2, spb: 0.6 };
+// The journey (2026-11-26) climbs the great tree: the roots (0-7) → the trunk spiral (the drop, 9-12) → the branches (the
+// residue chase, 13-21) → the canopy (the last drop, 23-26) → the crown (dual, 28-32).
+const VT = { gift: 9.6, helion: 14.4, drop: 19.2, trunk: 20.4, chase: 31.2, lift: 45.6, dark: 50.4, dual: 52.8, canopy: 54.0, crown: 64.8, two: 67.2, sprint: 72.0, end: 79.2, spb: 0.6 };
+/** the tree in place units (portrait): its root under Verdance, its top above the crown; Morrow climbs it on the left */
+const TREE: Array<[number, number]> = [[0, -0.75], [0.15, -3.4], [0.1, -6.9], [0.55, -10.4], [0.2, -13.9], [0.2, -15.8]];
 export class VerdWorld extends PlanetWorld {
-  private climb = new Spring(0, 1.6); private reach = new Spring(0, 2.2); private lights = new Spring(0, 2); private pushAt = -9;
+  private climb = new Spring(0, 1.6); private reach = new Spring(0, 2.2); private lights = new Spring(0, 2); private pushAt = -9; private mY = new Spring(0, 1.4);
   constructor() {
-    super({ key: 'invincible', T: VT, layer: W2.verdLayer, layerName: 'verdLayer', col: [160, 240, 160], stillness: 0.85, signal: 0.9,
+    super({ key: 'invincible', T: VT, layer: W2.verdLayer, layerName: 'verdLayer', col: [160, 240, 160], stillness: 0.85, signal: 0.9, lead: true,
       sky: [[[0, [6, 8, 10]], [0.55, [14, 18, 18]], [1, [20, 24, 22]]], [[0, [8, 20, 16]], [0.55, [30, 70, 50]], [1, [90, 150, 100]]]] });
     this.world.relit = 25;
+    this.planetAt = [0];
   }
-  protected resetMore(): void { this.climb.x = 0; this.lights.x = 0; }
+  protected resetMore(): void { this.climb.x = 0; this.lights.x = 0; this.mY.x = 0; }
+  private darkAt(t: number): number { return t > VT.dark - 0.2 && t < VT.dual ? sm((t - VT.dark + 0.2) / 0.4) * (1 - sm((t - VT.dual + 0.15) / 0.15)) : 0; }
+  /** the great tree, through every place, and Morrow climbing it beside him */
+  protected journeyBack(c: CanvasRenderingContext2D, st: WorldState, U: number): void {
+    const t = st.song, dt = this.dt, rel = st.rel!, wide = !!st.wide, [ox, oy] = rel(0);
+    const P = (x: number, y: number): [number, number] => (wide ? [ox - y * U, oy + x * U] : [ox + x * U, oy + y * U]);
+    const lit = Math.max(sm((t - VT.drop) / 1.2) * 0.8, Math.min(0.2, this.sparks * 0.01)), h = this.heat;
+    const bark = K.rgba(K.mix([16, 18, 18], [58, 46, 36], lit)), rim = `rgba(170,240,170,${0.1 + 0.3 * lit})`;
+    // the trunk: a tapered ribbon up the tree's line, smooth (curves through the midpoints), its edges lit faintly
+    const pts = TREE.map(([x, y]) => P(x, y)), side: Array<[number, number]> = [], other: Array<[number, number]> = [];
+    for (let i = 0; i < pts.length; i++) {
+      const [x, y] = pts[i], [px, py] = pts[Math.max(0, i - 1)], [nx, ny] = pts[Math.min(pts.length - 1, i + 1)], dx = nx - px, dy = ny - py, d = Math.hypot(dx, dy) || 1, wv = U * (0.5 - 0.07 * i) * (i === 0 ? 1.3 : 1);
+      side.push([x - (dy / d) * wv, y + (dx / d) * wv]); other.push([x + (dy / d) * wv, y - (dx / d) * wv]);
+    }
+    const smooth = (q: Array<[number, number]>, first: boolean) => { if (first) c.moveTo(q[0][0], q[0][1]); else c.lineTo(q[0][0], q[0][1]); for (let i = 1; i < q.length - 1; i++) c.quadraticCurveTo(q[i][0], q[i][1], (q[i][0] + q[i + 1][0]) / 2, (q[i][1] + q[i + 1][1]) / 2); c.lineTo(q[q.length - 1][0], q[q.length - 1][1]); };
+    c.save(); c.globalAlpha = 0.55 + 0.45 * sm((t - VT.drop + 1) / 2); c.beginPath(); smooth(side, true); smooth([...other].reverse(), false); c.closePath();
+    const tg = c.createLinearGradient(side[2][0], side[2][1], other[2][0], other[2][1]); tg.addColorStop(0, K.rgba(K.mix([8, 10, 10], [30, 24, 20], lit))); tg.addColorStop(0.45, bark); tg.addColorStop(1, K.rgba(K.mix([6, 8, 8], [24, 20, 16], lit)));
+    c.fillStyle = tg; c.fill(); c.strokeStyle = rim; c.lineWidth = Math.max(1, U * 0.015); c.stroke();
+    // bark grain, and moss that greens with the taps played on each stretch
+    c.clip(); c.lineWidth = Math.max(1, U * 0.012);
+    for (let i = 0; i < 18; i++) { const r = K.RNG(i * 7 + 2), x0 = (r() - 0.5) * 1.0, k = Math.min(4, Math.floor(r() * 5)), [ax, ay] = P(TREE[k][0] + x0, TREE[k][1]), [bx, by] = P(TREE[k + 1][0] + x0 * 0.8, TREE[k + 1][1]); c.strokeStyle = `rgba(${90 + 60 * h[k]},${80 + 120 * h[k]},${60 + 50 * h[k]},0.25)`; c.beginPath(); c.moveTo(ax, ay); c.lineTo(bx, by); c.stroke(); }
+    c.restore();
+    // the bough out to the branches (place 2), and the canopy's leaf masses (place 3), the crown's (place 4)
+    // the two boughs of the branches (place 2), crossing: out from the trunk and curling back
+    for (const [x0, y0, x1, y1, bw] of [[0.1, -5.9, 2.4, -8.2, 0.3], [0.1, -8.0, 2.3, -5.9, 0.24]] as Array<[number, number, number, number, number]>) {
+      const [a0, a1] = [P(x0, y0), P(x1, y1)]; c.strokeStyle = bark; c.lineCap = 'round'; c.lineWidth = U * bw; c.beginPath(); c.moveTo(a0[0], a0[1]); c.quadraticCurveTo((a0[0] + a1[0]) / 2 + U * 0.5, (a0[1] + a1[1]) / 2, a1[0], a1[1]); c.stroke(); c.strokeStyle = rim; c.lineWidth = Math.max(1, U * 0.02); c.stroke();
+    }
+    const leaves = (k: number, cx: number, cy: number, n: number, rr: number) => {
+      const [x0, y0] = P(cx, cy), hk = h[k], g = Math.min(1, hk * 1.2 + lit * 0.3);
+      // many small leaves in three tones (dark under, lit on top), each swaying on its own
+      for (const [tone, frac] of [[0, 1], [0.5, 0.75], [1, 0.5]] as Array<[number, number]>) {
+        c.fillStyle = K.rgba(K.mix(K.mix([10, 18, 14], [14, 30, 20], tone), K.mix([40, 100, 50], [120, 200, 110], tone), g), 0.92);
+        for (let i = 0; i < n; i++) { const r = K.RNG(k * 97 + i * 3 + Math.round(tone * 7)), a = r() * TAU, d = rr * Math.sqrt(r()) * frac, x = x0 + Math.cos(a) * d * U * 1.3, y = y0 + Math.sin(a) * d * U * 0.75 - tone * U * 0.12, L = U * (0.09 + 0.06 * r()), rot = r() * TAU + 0.25 * Math.sin(st.time * (0.7 + r()) + i);
+          c.beginPath(); c.ellipse(x, y, L, L * 0.42, rot, 0, TAU); c.fill(); }
+      }
+      if (hk > 0.05) for (let i = 0; i < 12; i++) { const r = K.RNG(k * 13 + i), a = r() * TAU, d = rr * Math.sqrt(r()); K.glow(c, x0 + Math.cos(a) * d * U * 1.3, y0 + Math.sin(a) * d * U * 0.75, U * 0.05, [220, 255, 170], 0.8 * hk * (0.6 + 0.4 * Math.sin(st.time * 2 + i))); }
+    };
+    leaves(3, 1.5, -11.5, 70, 1.7); leaves(4, 0.2, -15.0, 60, 1.5);
+    // Morrow: climbing the tree on its left, keeping level with him a little below; reaching up the trunk on the drops
+    const pf = st.pf ?? 0, k0 = Math.min(4, Math.floor(pf)), f = pf - k0, ty = lerp(TREE[Math.min(5, k0)][1], TREE[Math.min(5, k0 + 1)][1], f) + 1.2;
+    const my = this.mY.step(ty, dt), mx = lerp(-1.9, -2.2, sm(-my / 15));
+    const climb = this.climb.step(t >= VT.drop ? 0.4 + 0.6 * Math.abs(Math.sin(st.time * 0.9)) * 0.3 : 0, dt), reach = this.reach.step(t >= VT.drop ? 0.5 + 0.5 * Math.sin(st.time * 0.8) : 0.2, dt);
+    const lights = this.lights.step(t >= VT.dual ? 1 : t >= VT.drop ? 0.4 : Math.min(0.15, this.sparks * 0.01), dt);
+    const [x, y] = P(mx, my);
+    W2.morrow(c, x, y, U * 0.0095, { climb, reach, lights, breath: (st.time * 0.18) % 1, lit, t: st.time });
+  }
+  protected journeyMore(c: CanvasRenderingContext2D, st: WorldState, U: number): void { this.objects(c, st, U); }
+  private objects(c: CanvasRenderingContext2D, st: WorldState, U: number): void {
+    const t = st.song, beat = st.beat ?? t / VT.spb, at = st.at!, up = st.up!, rb = st.rb ?? U * 0.066;
+    const SEED: [number, number, number] = [220, 255, 170];
+    for (const p of st.presses ?? []) {
+      const d = p.beat - beat;
+      if (d > 3 || d < -1.6) continue;
+      const [x, y] = at(p.beat), a = up(p.beat), ux = Math.cos(a), uy = Math.sin(a);
+      if (p.pad === 'jump') {
+        // a seed pod on the bark: it swells as he comes (pulsing on the beat), bursts under him and throws him, its husk
+        // curls open and drops away
+        const pre = Math.max(0, Math.min(1, 1 - d / 2.5)), after = beat < p.beat ? 0 : (beat - p.beat) / 1.4, bp = Math.exp(-(((beat % 1) + 1) % 1) * 5);
+        c.save(); c.translate(x - ux * rb * 0.9, y - uy * rb * 0.9 + (after > 0 ? after * after * rb * 4 : 0)); c.rotate(a + Math.PI / 2);
+        const R = rb * (0.7 + 0.5 * pre + 0.12 * bp * pre);
+        if (after === 0) { c.fillStyle = K.rgba(K.mix([50, 70, 40], [140, 200, 90], pre)); c.beginPath(); c.ellipse(0, 0, R * 0.8, R, 0, 0, TAU); c.fill(); c.strokeStyle = 'rgba(210,255,170,0.6)'; c.lineWidth = 1; c.stroke(); K.glow(c, 0, 0, R * 1.6, SEED, 0.3 * pre, 'screen'); }
+        else if (after < 1) { c.globalAlpha = 1 - after; c.strokeStyle = 'rgba(140,190,90,0.9)'; c.lineWidth = rb * 0.2; for (const sg of [-1, 1]) { c.beginPath(); c.arc(sg * R * 0.5 * (1 + after), 0, R, sg < 0 ? Math.PI * 0.4 : -Math.PI * 0.6, sg < 0 ? Math.PI * 1.6 : Math.PI * 0.6); c.stroke(); } for (let i = 0; i < 8; i++) { const aa = (i / 8) * TAU; K.glow(c, Math.cos(aa) * rb * 4 * after, Math.sin(aa) * rb * 4 * after, rb * 0.2, SEED, 0.9 * (1 - after)); } }
+        c.restore();
+      } else if (p.leap && !p.leap.ember) {
+        // a vine: it uncoils down from the next place toward him over the beats before, catches him on the beat and
+        // whips him up; it trails after him through the flight
+        const pre = Math.max(0, Math.min(1, 1 - d / 2.2)), [lx, ly] = at(p.leap.b1), after = beat < p.beat ? 0 : (beat - p.beat) / Math.max(0.5, p.leap.b1 - p.beat);
+        if (after < 1.2) {
+          const reachK = after > 0 ? 1 : sm(pre), tx = lerp(lx, x, reachK), ty = lerp(ly, y, reachK), [hx, hy] = after > 0 ? at(Math.min(p.leap.b1, beat)) : [tx, ty];
+          const mx = (lx + hx) / 2 + (hy - ly) * 0.2 + Math.sin(st.time * 3) * rb, my2 = (ly + hy) / 2 - (hx - lx) * 0.2;
+          c.save(); c.globalAlpha = after > 1 ? 1 - (after - 1) / 0.2 : 1; c.lineCap = 'round';
+          c.strokeStyle = 'rgba(30,50,28,0.95)'; c.lineWidth = rb * 0.45; c.beginPath(); c.moveTo(lx, ly); c.quadraticCurveTo(mx, my2, hx, hy); c.stroke();
+          c.strokeStyle = `rgba(150,230,140,${0.35 + 0.4 * pre})`; c.lineWidth = Math.max(1, rb * 0.12); c.stroke();
+          for (let i = 1; i < 6; i++) { const q = i / 6, qq = 1 - q, vx = qq * qq * lx + 2 * qq * q * mx + q * q * hx, vy = qq * qq * ly + 2 * qq * q * my2 + q * q * hy; c.fillStyle = 'rgba(80,150,70,0.9)'; c.beginPath(); c.ellipse(vx + rb * 0.3, vy, rb * 0.35, rb * 0.16, q * 5 + st.time, 0, TAU); c.fill(); }
+          c.restore();
+          if (after > 0 && after < 0.25) K.glow(c, x, y, rb * (3 + 10 * after), SEED, 0.6 * (1 - after / 0.25), 'screen');
+        }
+      } else if (p.leap?.ember) {
+        // a seed-light drifting in the air: it brightens as its beat comes; caught, it bursts into a ring of pollen
+        const pre = Math.max(0, Math.min(1, 1 - d / 1.6)), after = beat < p.beat ? 0 : (beat - p.beat) / 1.1;
+        if (after < 1) {
+          if (after === 0) { K.glow(c, x, y + Math.sin(st.time * 3) * rb * 0.2, rb * (0.9 + 0.6 * pre), SEED, 0.5 + 0.4 * pre, 'screen'); c.fillStyle = 'rgba(240,255,210,0.95)'; c.beginPath(); c.arc(x, y, rb * 0.22, 0, TAU); c.fill(); }
+          else for (let i = 0; i < 10; i++) { const aa = (i / 10) * TAU; K.glow(c, x + Math.cos(aa) * rb * 5 * after, y + Math.sin(aa) * rb * 5 * after - after * rb * 2, rb * 0.18, SEED, 0.9 * (1 - after)); }
+        }
+      } else if (p.form === 'pulsar' && !p.auto && !p.smash && !p.pad) {
+        // a thorn knot on the side he would meet: it tightens as he comes, he snaps across past it, it splits and falls
+        const pre = Math.max(0, Math.min(1, 1 - d / 1.8)), after = beat < p.beat ? 0 : (beat - p.beat) / 1.2;
+        if (pre <= 0 || after >= 1) continue;
+        const sd = Math.round(p.beat * 4) % 2 ? 1 : -1, bx = x + ux * rb * 1.9 * sd, by = y + uy * rb * 1.9 * sd + (after > 0 ? after * after * rb * 4 : 0), R = rb * 0.7 * sm(pre * 1.5);
+        c.save(); c.translate(bx, by); c.rotate(st.time * 0.5 + p.beat); c.globalAlpha = 1 - after; c.strokeStyle = 'rgba(40,30,28,0.95)'; c.lineWidth = rb * 0.16; c.lineCap = 'round';
+        for (let i = 0; i < 6; i++) { const aa = (i / 6) * TAU, sp = after > 0 ? 1 + after * 2 : 1; c.beginPath(); c.moveTo(Math.cos(aa) * R * 0.3 * sp, Math.sin(aa) * R * 0.3 * sp); c.lineTo(Math.cos(aa + 0.3) * R * sp, Math.sin(aa + 0.3) * R * sp); c.stroke(); }
+        c.strokeStyle = 'rgba(190,140,120,0.5)'; c.lineWidth = 1; c.beginPath(); c.arc(0, 0, R * 0.4, 0, TAU); c.stroke();
+        c.restore();
+      }
+    }
+  }
+  protected pullAt(s: number): { x: number; y: number; k: number } | null { return s > VT.crown - 0.6 && s < VT.two + 0.8 ? { x: 0.1, y: -7.5, k: 0.55 * sm((s - VT.crown + 0.6) / 1.2) * (1 - sm((s - VT.two) / 0.8)) } : null; }
   protected planetMore(c: CanvasRenderingContext2D, R: number, st: WorldState): void {
-    // the dark (one bar of near stillness before the last drop): everything but his brother's signal goes out
-    const t = st.song, dark = t > VT.dark - 0.2 && t < VT.dual ? sm((t - VT.dark + 0.2) / 0.4) * (1 - sm((t - VT.dual + 0.15) / 0.15)) : 0;
+    const dark = this.darkAt(st.song);
     if (dark > 0.01) { c.fillStyle = `rgba(2,3,4,${0.7 * dark})`; c.beginPath(); c.arc(0, 0, R * 1.02, 0, TAU); c.fill(); }
   }
   protected skyMore(c: CanvasRenderingContext2D, w: number, h: number, u: number, st: SceneState, t: number, dt: number): void {
     const lit = sm((t - VT.drop) / 1.2) * 0.9;
-    // the great tree behind the ring, its branches growing out as the world relights
-    W2.greatTree(c, w * 0.5, h * 0.62, 0.55 * u, Math.min(1, 0.2 + this.sparks * 0.01 + lit * 0.8), lit, st.time);
-    // Morrow, gripping the trunk at the edge: it climbs on the drop (the climb), reaches through the chase, the seed-lights on its back alight
-    const climb = this.climb.step(t >= VT.drop ? Math.min(1, (t - VT.drop) / 26) : 0, dt), reach = this.reach.step(t >= VT.drop ? 0.5 + 0.5 * Math.sin(st.time * 0.8) : 0.2, dt), lights = this.lights.step(t >= VT.dual ? 1 : t >= VT.drop ? 0.4 : Math.min(0.15, this.sparks * 0.01), dt);
-    W2.morrow(c, w * 0.92, h * 1.02, 0.55 * u, { climb, reach, lights, breath: (st.time * 0.18) % 1, lit, t: st.time });
-    // leaves and pollen in the air, once it breathes again
+    if (!this.journeyOn) {
+      W2.greatTree(c, w * 0.5, h * 0.62, 0.55 * u, Math.min(1, 0.2 + this.sparks * 0.01 + lit * 0.8), lit, st.time);
+      const climb = this.climb.step(t >= VT.drop ? Math.min(1, (t - VT.drop) / 26) : 0, dt), reach = this.reach.step(t >= VT.drop ? 0.5 + 0.5 * Math.sin(st.time * 0.8) : 0.2, dt), lights = this.lights.step(t >= VT.dual ? 1 : t >= VT.drop ? 0.4 : Math.min(0.15, this.sparks * 0.01), dt);
+      W2.morrow(c, w * 0.92, h * 1.02, 0.55 * u, { climb, reach, lights, breath: (st.time * 0.18) % 1, lit, t: st.time });
+    }
     W2.leaves(c, w, h, st.time, sm((t - VT.drop) / 1.5) * (t > VT.dark - 0.2 && t < VT.dual ? 0.1 : 1));
-    // the dark: everything but his brother's signal goes out for a bar
-    const dark = t > VT.dark - 0.2 && t < VT.dual ? sm((t - VT.dark + 0.2) / 0.4) * (1 - sm((t - VT.dual + 0.15) / 0.15)) : 0;
+    const dark = this.darkAt(t);
     if (dark > 0.01) { c.fillStyle = `rgba(2,3,4,${0.75 * dark})`; c.fillRect(0, 0, w, h); horizon(c, w, h, dark, st.time); }
   }
-  /** chased up the tree: the residue rises from below along the course, pushed back by good landings (pressure only) */
+  /** chased along the branches: the residue rises after him along the course, pushed back by good taps (pressure only) */
   protected courseMore(c: CanvasRenderingContext2D, v: CourseView): void {
     if (v.hit && v.song > VT.chase) this.pushAt = v.time;
     const s = v.song;
     if (s < VT.chase - 0.2 || s > VT.lift + 1.4) return;
-    const enter = sm((s - VT.chase) / 1.5), leave = sm((s - VT.lift) / 1.2), push = Math.exp(-(v.time - this.pushAt) / 0.5);
+    const enter = sm((s - VT.chase - 1.2) / 1.5), leave = sm((s - VT.lift) / 1.2), push = Math.exp(-(v.time - this.pushAt) / 0.5);
     const gap = 3.2 + 1.0 * push + leave * 10 + (1 - enter) * 4, a = enter * (1 - leave);
     if (a <= 0.01) return;
     const rb = v.rb, ref = v.beat, front = v.beat - gap;
@@ -544,7 +643,14 @@ export class VerdWorld extends PlanetWorld {
     }
     c.globalAlpha = 1;
   }
-  protected camAt(s: number): number { return s >= VT.lift && s < VT.dark ? 1 + 0.1 * sm((s - VT.lift) / 4) : s >= VT.dark && s < VT.dual ? 1.14 : s >= VT.dual ? 0.8 + 0.12 * sm((s - VT.dual - 0.6) / 3) : super.camAt(s); }
+  protected camAt(s: number): number {
+    if (!this.journeyOn) return s >= VT.lift && s < VT.dark ? 1 + 0.1 * sm((s - VT.lift) / 4) : s >= VT.dark && s < VT.dual ? 1.14 : s >= VT.dual ? 0.8 + 0.12 * sm((s - VT.dual - 0.6) / 3) : super.camAt(s);
+    // the roots calm; the build pushes in; the drop pulls back up the trunk; the lift pushes in and the dark closes in;
+    // the canopy wide; the crown pulls far back over the whole tree, then settles
+    const back = s > VT.crown - 0.6 && s < VT.two + 0.8 ? sm((s - VT.crown + 0.6) / 1.2) * (1 - sm((s - VT.two) / 0.8)) : 0;
+    const base = s < VT.gift ? 0.92 : s < VT.drop ? 0.92 + 0.1 * sm((s - VT.gift) / 9) : s < VT.lift ? 0.8 : s < VT.dual ? 0.8 + 0.2 * sm((s - VT.lift) / 6) : s < VT.crown ? 0.78 : 0.82;
+    return base - 0.4 * back;
+  }
 }
 
 /** The lines each inhabitant speaks (2-3, in calm moments only, low on the screen, never over the course). */
