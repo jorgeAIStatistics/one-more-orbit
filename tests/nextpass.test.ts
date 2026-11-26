@@ -26,22 +26,23 @@ const EMBER = PACKS.find((p) => p.level.id === 'heroes')!;
 
 describe('Emberwick on Volcano: the Meteor, and nothing the song is not playing', () => {
   const { level, course } = build(EMBER);
-  it('is Volcano, about eighty seconds, swung', () => {
+  it('is Volcano, about a minute (re-cut 2026-11-25: the drop 19.2 s after the first tap), swung', () => {
     expect(EMBER.level.title).toMatch(/^Volcano/);
     expect(EMBER.audio.bpm).toBe(100);
-    expect((course.end - course.start) * course.spb).toBeGreaterThan(70);
-    expect((course.end - course.start) * course.spb).toBeLessThan(90);
+    expect((course.end - course.start) * course.spb).toBeGreaterThanOrEqual(55);
+    expect((course.end - course.start) * course.spb).toBeLessThanOrEqual(80);
+    expect(course.dropBeat * course.spb - course.start * course.spb).toBeLessThanOrEqual(20);
     expect(level.file.swing).toBe(true);
   });
-  it('has one form change in the whole level, where the stabs begin (bar 9), and the Meteor then lasts to the end', () => {
-    expect(course.lenses.map((l) => [l.form, bar(l.beat)])).toEqual([['meteor', 9]]);
+  it('has one form change in the whole level, where the stabs begin (bar 5, 12 s in), and the Meteor then lasts to the end', () => {
+    expect(course.lenses.map((l) => [l.form, bar(l.beat)])).toEqual([['meteor', 5]]);
     expect(course.lenses[0].intro).toBe(true); // named once, where it is given
     // (the drop's great node is struck, not dashed: it has no wall; Orbin stays the Meteor through it)
-    for (const p of course.presses) if (!p.smash && !p.sling) expect(p.form, `press at ${p.beat}`).toBe(bar(p.beat) < 9 ? 'orb' : 'meteor'); // (a planet hop and the great node are struck as the Orb)
-    for (let b = 36; b < course.end; b += 0.5) expect(course.formAt(b), `form at ${b}`).toBe('meteor');
+    for (const p of course.presses) if (!p.smash && !p.sling) expect(p.form, `press at ${p.beat}`).toBe(bar(p.beat) < 5 ? 'orb' : 'meteor'); // (a planet hop and the great node are struck as the Orb)
+    for (let b = 20; b < course.end; b += 0.5) expect(course.formAt(b), `form at ${b}`).toBe('meteor');
   });
   it('the Meteor is given safely: its first walls are played for him, and the drums are not there yet', () => {
-    const given = course.presses.filter((p) => bar(p.beat) === 9);
+    const given = course.presses.filter((p) => bar(p.beat) === 5);
     expect(given.length).toBeGreaterThan(0);
     expect(given.every((p) => p.auto)).toBe(true);
   });
@@ -56,8 +57,9 @@ describe('Emberwick on Volcano: the Meteor, and nothing the song is not playing'
     expect(course.inverts.length + course.mirrors.length).toBe(0);
     expect(course.holds.some((h) => h.tether)).toBe(false);
     expect(course.presses.every((p) => p.orb === '' || p.orb === 'jump')).toBe(true);
-    expect(course.presses.some((p) => p.sling)).toBe(true);
     expect(course.portals.some((g) => g.faster)).toBe(true);
+    // (no planet hops since 2026-11-25: the course circles the planet that is being relit)
+    expect(course.presses.some((p) => p.sling)).toBe(false);
   });
   it('a clean run clears with a full drop; doing nothing, or tapping 180 ms late everywhere, does not', () => {
     const s = play(course, course.script);
@@ -77,7 +79,8 @@ describe('the first stage: the Drifting Edge, on Where We Started', () => {
     expect(course.turns.length + course.inverts.length + course.mirrors.length).toBe(0);
     expect(course.presses.some((p) => p.spin || p.weave || p.kind === 'flip' || p.twin)).toBe(false);
     expect(course.presses.some((p) => p.orb === 'jump')).toBe(true);
-    expect(course.presses.some((p) => p.pad === 'spring')).toBe(true);
+    expect(course.presses.some((p) => p.sling)).toBe(false); // (the course circles the planetoid: no planet hops)
+    expect(course.dropBeat * course.spb - course.start * course.spb).toBeLessThanOrEqual(20);
     expect(course.portals.filter((g) => !g.faster).length).toBe(1);
     expect(course.portals.filter((g) => g.faster).length).toBe(1);
     expect(course.holds.some((h) => h.tether)).toBe(false);
