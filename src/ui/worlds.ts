@@ -52,6 +52,8 @@ export interface World {
   rewind(to: number): void;
   /** the level's set pieces that live on the course itself (drawn over the course, in its own frame) */
   onCourse?(c: CanvasRenderingContext2D, v: CourseView): void;
+  /** the same, drawn under the course (the owner's rule of 2026-11-26: nothing ever covers the course or the path ahead) */
+  underCourse?(c: CanvasRenderingContext2D, v: CourseView): void;
   /** a song time at which the planet is drawn whole and relit (the flight home looks down on it) */
   relit?: number;
   /** the camera's scale at a song time (1: as the course sets it; less: pulled back to show the world whole) */
@@ -95,6 +97,22 @@ export function skyOf(w: number, h: number, s: SkySpec): Pic {
   const pre = levelSky(w, h, s); if (pre) return pre;
   const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const c = cv.getContext('2d')!, r = K.RNG(s.seed);
   DUSK.tools.sky(c, w, h, s.stops as never, r, 70); DUSK.tools.stars(c, w, h, r, Math.round((w * h) / 1500), 3); DUSK.tools.finish(c, w, h, s.fin, 0.3); return cv;
+}
+/** A sky picture with parallax (the Ufotable pass, 2026-11-26): drawn a little larger than the screen and moved with the
+ * camera at a small share of its motion (k), so every camera move reads in depth: the far sky least. */
+export function skyDraw(c: CanvasRenderingContext2D, pic: Pic, w: number, h: number, cam: [number, number, number] | undefined, k = 0.035): void {
+  const o = 0.06, ox = cam ? Math.max(-1, Math.min(1, -cam[0] * k / (w * o))) * w * o : 0, oy = cam ? Math.max(-1, Math.min(1, -cam[1] * k / (h * o))) * h * o : 0;
+  c.drawImage(pic, -w * o + ox, -h * o + oy, w * (1 + 2 * o), h * (1 + 2 * o));
+}
+/** A layer between the sky and the world (the Ufotable pass): soft, out-of-focus motes at a middle depth, moving with
+ * the camera at a third of its pace (the sky moves least, the world fully), so the space between reads as space. */
+export function depthDust(c: CanvasRenderingContext2D, w: number, h: number, cam: [number, number, number] | undefined, time: number, col: number[], a = 0.22): void {
+  const k = 0.32, cx = cam ? cam[0] * k : 0, cy = cam ? cam[1] * k : 0, u = Math.min(w / 390, h / 844), W0 = w * 1.6, H0 = h * 1.6;
+  for (let i = 0; i < 26; i++) {
+    const r = K.RNG(i * 53 + 7), x = ((r() * W0 - cx + time * (3 + 4 * r()) * u) % W0 + W0) % W0 - w * 0.3, y = ((r() * H0 - cy) % H0 + H0) % H0 - h * 0.3;
+    if (x < -40 || x > w + 40 || y < -40 || y > h + 40) continue;
+    K.glow(c, x, y, (6 + 14 * r()) * u, col as [number, number, number], a * (0.4 + 0.6 * r()) * (0.7 + 0.3 * Math.sin(time * 0.7 + i)));
+  }
 }
 /** Ask the paint worker for Emberwick's planet and sky ahead of the level. */
 export function askEmber(): void { askPlanet('emberLayer'); for (const n of BODIES) askPlanet(n); for (const s of EMBER_SKY) askLevelSky(window.innerWidth, window.innerHeight, s); }
@@ -195,7 +213,7 @@ export class EmberWorld {
     reset: () => this.reset(),
     rewind: (to) => this.rewind(to),
     spark: (a, song, pf) => this.spark(a, song, pf),
-    onCourse: (c, v) => this.onCourse(c, v),
+    underCourse: (c, v) => this.onCourse(c, v), // (under the course: nothing covers it; 2026-11-26)
     relit: 30,
     // the journey's camera: on the lava moons it is pulled back toward Emberwick, so Ossa and her strikes stay in view;
     // as the dive begins it pulls right back to show the whole system relit, then tips into the forge
@@ -526,8 +544,9 @@ export class EmberWorld {
       const t = st.song ?? -10, time = st.time, dt = this.lastT < 0 ? 0 : Math.min(0.05, Math.max(0, time - this.lastT)); this.lastT = time;
       if (t >= ET.core) { this.inside(c, w, h, st); writeSays(c, w, h, Math.min(w / 390, h / 844), this.sky.says, st.song); return; }
       const warm = sm((t - ET.drop) / 1.2);
-      if (this.skyCold) c.drawImage(this.skyCold, 0, 0, w, h);
-      if (this.skyHot && warm > 0) { c.globalAlpha = warm * (0.85 + 0.15 * st.kick); c.drawImage(this.skyHot, 0, 0, w, h); c.globalAlpha = 1; }
+      if (this.skyCold) skyDraw(c, this.skyCold, w, h, st.cam);
+      if (this.skyHot && warm > 0) { c.globalAlpha = warm * (0.85 + 0.15 * st.kick); skyDraw(c, this.skyHot, w, h, st.cam); c.globalAlpha = 1; }
+      depthDust(c, w, h, st.cam, st.time, [255, 190, 140]);
       horizon(c, w, h, t > ET.riser && t < ET.drop ? sm((t - ET.riser) / 0.6) * (1 - sm((t - ET.drop + 0.3) / 0.3)) : 0, time);
       // Ossa: her state from the song, every change a spring, her hammering on the beat (on the journey she stands in
       // the world beside Emberwick, drawn with it)
@@ -633,7 +652,7 @@ export class EdgeWorld {
     reset: () => this.reset(),
     rewind: (to) => this.rewind(to),
     spark: (a, song, pf) => this.spark(a, song, pf),
-    onCourse: (c, v) => this.onCourse(c, v),
+    underCourse: (c, v) => this.onCourse(c, v), // (under the course: nothing covers it; 2026-11-26)
     // the Sleeper's throw: the camera pulls back to show the planetoid, its arm across space, and the Rocks
     cam: (song) => (song > DT.rise && song < DT.drop2 + 0.4 ? 0.92 - 0.36 * sm((song - DT.rise) / 1.6) + 0.36 * sm((song - DT.drop2 + 0.2) / 0.6) : 0.92),
     pull: (song) => (song > DT.rise && song < DT.drop2 + 0.4 ? { x: 0.35, y: -3.4, k: 0.55 * sm((song - DT.rise) / 1.6) * (1 - sm((song - DT.drop2 + 0.2) / 0.6)) } : null),
@@ -779,7 +798,8 @@ export class EdgeWorld {
     prepare: () => this.paint(window.innerWidth, window.innerHeight),
     draw: (c, w, h, st) => {
       this.paint(w, h);
-      if (this.skyLayer) c.drawImage(this.skyLayer, 0, 0, w, h);
+      if (this.skyLayer) skyDraw(c, this.skyLayer, w, h, st.cam);
+      depthDust(c, w, h, st.cam, st.time, [180, 230, 220]);
       const t = st.song ?? -10;
       horizon(c, w, h, t > DT.helion - 0.2 ? sm((t - DT.helion + 0.2) / 0.5) * (t < DT.drop ? 1 : 0.45) : 0, st.time);
       writeSays(c, w, h, Math.min(w / 390, h / 844), [...this.sky.says, ...EDGE_SAYS], st.song);

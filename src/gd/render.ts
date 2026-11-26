@@ -107,8 +107,8 @@ export class GdRenderer {
   private camVY = 0;
   // The camera's bumps as the course feels them. `punch` and `zoomKick` jump the moment a hit lands (the backdrop uses
   // them like that); these follow within a few frames, so the rings and the ball swell and settle instead of jumping.
-  private punchS = 0;
-  private zoomS = 0;
+  private punchS = 0; private punchV = 0;
+  private zoomS = 0; private zoomV = 0;
   // how far the ball has lifted off its ring, 0..1: it floats while the button is held and settles when it is let go
   /** beats of course drawn ahead of the ball (a B-side shows less) */
   private ahead = 3;
@@ -121,11 +121,12 @@ export class GdRenderer {
   /** the picture's left-to-right scale: -1 past a mirror gate; and its top-to-bottom scale: -1 past an upside-down gate */
   private mx = 1;
   private my = 1;
+  private mxS = 1; private myS = 1; private mxV = 0; private myV = 0;
   private gatesPassed = 0;
   /** test chambers: no backdrop at all, only the course on a flat ground */
   plain = false;
   /** a painted sky for this level (its planet's own, with its soul in it), in place of the atlas's plate */
-  backdrop: { draw: (c: CanvasRenderingContext2D, w: number, h: number, st: { time: number; song?: number; colour: number; drive: number; kick: number; woke: number; strike: number; dark: number; calm: boolean }) => void } | null = null;
+  backdrop: { draw: (c: CanvasRenderingContext2D, w: number, h: number, st: { time: number; song?: number; colour: number; drive: number; kick: number; woke: number; strike: number; dark: number; calm: boolean; cam?: [number, number, number] }) => void } | null = null;
   private songT = 0;
   private woke = -1;
   private strike = 0;
@@ -267,6 +268,19 @@ export class GdRenderer {
       this.geo = { defs: placed, span: span.map(([a, b]) => [-Math.PI / 2 + a, -Math.PI / 2 + b]), win };
       // each leap's flight: from its launch on one place to its landing on the next (drawn as one arc between them)
       this.leapArcs = c.presses.filter((q) => q.leap && !q.leap.ember).map((q) => ({ p0: q.leap!.p0, a0: -Math.PI / 2 + c.angle(q.leap!.b0), a1: -Math.PI / 2 + c.angle(q.leap!.b1) }));
+      // each flight keeps his speed through its launch and its landing (the Ufotable pass, 2026-11-26): the pace he
+      // rides the ring at, as a share of the flight arc's own pace at each end (its tangents), for leapAt's timing
+      for (const q of c.presses) {
+        if (!q.leap || q.leap.ember) continue;
+        const L = q.leap, k = Math.round(L.p0), R = this.rad(this.cam), T = L.b1 - L.b0, e = 0.05;
+        const pt = (kk: number, b: number): [number, number] => { const [ox, oy] = this.planetXY(kk), p = this.locK(kk, -Math.PI / 2 + c.angle(b), R); return [ox + p[0], oy + p[1]]; };
+        const P0 = pt(k, L.b0), P1 = pt(k + 1, L.b1), v0 = Math.hypot(...([0, 1].map((i) => P0[i] - pt(k, L.b0 - e)[i]) as [number, number])) / e, v1 = Math.hypot(...([0, 1].map((i) => pt(k + 1, L.b1 + e)[i] - P1[i]) as [number, number])) / e;
+        const d = Math.hypot(P1[0] - P0[0], P1[1] - P0[1]) || 1, lift = Math.min(d * 0.32, R * 2.2), M: [number, number] = [(P0[0] + P1[0]) / 2, (P0[1] + P1[1]) / 2];
+        const t0 = 2 * Math.hypot(M[0] - P0[0], M[1] - P0[1] - lift * 0) || 1, t1 = 2 * Math.hypot(P1[0] - M[0], P1[1] - M[1]) || 1, arc = Math.hypot(d, 2 * lift);
+        L.s0 = clamp((v0 * T) / Math.max(t0, arc * 0.8), 0.25, 2.2); L.s1 = clamp((v1 * T) / Math.max(t1, arc * 0.8), 0.25, 2.2);
+      }
+      // (the taps in the air ride the same flight: the same timing, or he would jump as each is tapped)
+      for (const q of c.presses) if (q.leap?.ember) { const L = c.presses.find((o) => o.leap && !o.leap.ember && Math.abs(o.leap.b0 - q.leap!.b0) < 1e-6)?.leap; if (L) { q.leap.s0 = L.s0; q.leap.s1 = L.s1; } }
     }
     if (!this.globeCv) this.globeCv = stamp(160, 160, (g) => globe(g, 80, 80, 74, 225, rng(5)), 2);
     this.colour = 0;
@@ -296,11 +310,12 @@ export class GdRenderer {
     this.waves = [];
     this.trail = [];
     this.flash = this.strobe = this.punch = this.zoomKick = this.ringFlash = this.landPulse = this.shake = this.dark = this.drain = this.glitch = this.flipK = this.burstK = this.coreFlare = 0;
-    this.punchS = this.zoomS = 0;
+    this.punchS = this.zoomS = this.punchV = this.zoomV = 0; this.tgOn = false; this.plume = []; this.camSV = this.csTV = 0; this.camTOn = false; this.baseT = 1; this.baseTV = 0;
     this.lift = this.liftV = 0;
     this.branchV = this.branchK = 0;
     this.mx = 1;
     this.my = 1;
+    this.mxS = this.myS = 1; this.mxV = this.myV = 0;
     this.gatesPassed = 99;
     this.formWas = c.formAt(run.viewTime / level.spb);
     this.dropAge = 99;
@@ -411,7 +426,7 @@ export class GdRenderer {
     const last = run.course.presses[sim.ni - 1];
     if (!last) return 0;
     if (last.sling && sim.mode === 'flight' && sim.fl) return last.planet + smoothstep((beat - sim.fl.t0) / (sim.fl.t1 - sim.fl.t0));
-    if (last.leap && beat < last.leap.b1) return leapAt(last.leap, Math.min(beat, last.land)); // (an ember not yet tapped: he waits at it)
+    if (last.leap && beat < last.leap.b1) return leapAt(last.leap, beat); // (the flight never waits at an ember not yet tapped: that held him a frame and then jumped him on; 2026-11-26)
     return last.planetTo;
   }
 
@@ -447,7 +462,12 @@ export class GdRenderer {
   /** how much faster than normal the course is going (eased), 0 at the normal pace */
   private speedK = 0;
   /** the world's own camera (eased): pulled back for a set piece that shows the planet whole (the Sleeper's throw) */
-  private camScale = 1;
+  private baseRV = 0; private baseT = 1; private baseTV = 0; private camTS = 0; private camTV = 0; private camTOn = false; private speedV = 0; private miniV = 0;
+  /** Orbin's plume: a rope of springs, in the world's frame */
+  private plume: Array<{ x: number; y: number; px: number; py: number }> = [];
+  private camScale = 1; private camSV = 0; private csT = 1; private csTV = 0;
+  /** the camera's eased target (the Ufotable pass) */
+  private tgX = 0; private tgY = 0; private tgVX = 0; private tgVY = 0; private tgOn = false;
   /** mini (Cirra's tight gusts): how small Orbin is drawn, eased */
   private miniK = 0;
   private orbitK = 0; private whipAt = -1e9; private lensSeen = -1;
@@ -518,7 +538,7 @@ export class GdRenderer {
     const span = Math.max(this.w, this.h) * 0.75;
     if (this.plain) { c.fillStyle = '#0d0e17'; c.fillRect(0, 0, this.w, this.h); return; }
     const calm = save.reducedMotion;
-    if (this.backdrop) { this.backdrop.draw(c, this.w, this.h, { time, song: this.songT, colour: this.colour, drive, kick, woke: this.woke, strike: this.strike, dark, calm }); this.streaks(time); return; }
+    if (this.backdrop) { this.backdrop.draw(c, this.w, this.h, { time, song: this.songT, colour: this.colour, drive, kick, woke: this.woke, strike: this.strike, dark, calm, cam: this.geo ? [this.camX, this.camY, this.rad(this.cam)] : undefined }); this.streaks(time); return; }
     const k = 0.4 + inten * 0.95 + groove * 0.7 + drive * kick * 0.5;
     // the bass warps the backdrop: its bright centre swells on every kick
     const g = c.createRadialGradient(cx, cy, 0, cx, cy, span * (1 + (calm ? 0 : drive * kick * 0.18)));
@@ -832,7 +852,7 @@ export class GdRenderer {
     const c = this.ctx;
     c.save();
     c.translate(x, y);
-    c.scale(this.mx < 0 ? -1 : 1, this.my < 0 ? -1 : 1);
+    c.scale(this.mxS, this.myS); // (a mirror gate turns the picture over in a third of a second, eased: never a cut)
     c.font = `800 ${Math.round(size)}px ui-rounded, "SF Pro Rounded", system-ui, sans-serif`;
     c.textAlign = 'center';
     c.textBaseline = 'middle';
@@ -1108,8 +1128,9 @@ export class GdRenderer {
             else { c.strokeStyle = rgba(INK_RIM); c.lineWidth = rb * 1.25; c.stroke(); c.strokeStyle = rgba(INK); c.lineWidth = rb * 0.85; c.stroke(); }
           } else {
             const [bx, by] = this.loc(this.lk, e, r + pl.side * rb * 1.5);
-            c.fillStyle = rgba(INK_RIM); c.beginPath(); c.arc(bx, by, rb * 1.55, 0, TWO_PI); c.fill();
-            c.fillStyle = rgba(INK); c.beginPath(); c.arc(bx, by, rb * 1.2, 0, TWO_PI); c.fill();
+            // (the visual language, 2026-11-26: what is in the way is danger, so its rim is vermilion; no purple)
+            if (this.look === 2) { c.fillStyle = rgba(DANGER, 0.9); c.beginPath(); c.arc(bx, by, rb * 1.18, 0, TWO_PI); c.fill(); c.fillStyle = 'rgba(16,10,22,0.96)'; c.beginPath(); c.arc(bx, by, rb * 0.92, 0, TWO_PI); c.fill(); }
+            else { c.fillStyle = rgba(INK_RIM); c.beginPath(); c.arc(bx, by, rb * 1.55, 0, TWO_PI); c.fill(); c.fillStyle = rgba(INK); c.beginPath(); c.arc(bx, by, rb * 1.2, 0, TWO_PI); c.fill(); }
           }
           c.globalAlpha = alpha;
           c.lineCap = 'round';
@@ -1211,6 +1232,14 @@ export class GdRenderer {
     const origin = (pf: number): [number, number] => { const [x, y] = this.planetXY(pf); return [x - this.camX, y - this.camY]; };
     // the star trail in view: still whole, and close enough to see
     const trail = run.finale ? undefined : course.stars.find((st) => sim.stars[st.i] === 0 && st.a - beat <= this.ahead && beat <= st.b + 0.15);
+    // the world's own pieces on the course, drawn first, under it: nothing ever covers the course or the path ahead
+    if (this.planet?.underCourse && !twin) {
+      const hit = run.events.some((e) => (e.kind === 'hop' || e.kind === 'flip') && e.flow !== false);
+      const pos = (b: number, dl = 0, ref?: number): [number, number] => { const h = course.at(ref ?? b), r = this.rad(h.rho + dl) + h.side * rb; return this.wxy(course.at(b).planet, ang(b), r); };
+      c.save();
+      this.planet.underCourse(c, { beat, song: beat * course.spb, time, spb: course.spb, rb, presses: course.presses, holds: course.holds, pos, place: (k: number) => origin(k), unit: this.rad(this.cam), pf: this.pf, ring: (b) => this.rad(course.at(b).rho), ang, center: [hx - this.camX, hy - this.camY], planetR: this.worldR, hit });
+      c.restore();
+    }
     // Holds: gold rails through long hops and gold lines above the ring. They are drawn first, under the rings and
     // their marks, and kept slim: a hold is a path to follow, and it must never hide a white mark or look like one.
     // What is left of each is drawn from the ball onward; it brightens while you are holding on it; a gold ring marks
@@ -1634,6 +1663,22 @@ export class GdRenderer {
     const sv = dt > 0 && !twin ? Math.hypot(x - this.ballXY[0], y - this.ballXY[1]) / dt : 0;
     const fly = this.geo && !twin && this.pf !== Math.round(this.pf) ? clamp(sv / (r0 * 12), 0, 0.28) : 0;
     this.ballXY = [x, y];
+    // his plume (the Ufotable pass, 2026-11-26): a rope of springs off his back in his mode's element (pale gold in no
+    // mode), in the world's frame: each link lags the one before, swings as he turns and settles when he lands; fire
+    // rises off it, water and leaves sink a little, wind streams
+    if (!twin && this.look === 2 && run.state === 'playing') {
+      const hx = x + this.camX, hy = y + this.camY, N = 9, seg = rb * 0.62, sdt = Math.min(dt, 0.034);
+      if (this.plume.length !== N || Math.hypot(this.plume[0].x - hx, this.plume[0].y - hy) > rb * 30) this.plume = Array.from({ length: N }, () => ({ x: hx, y: hy, px: hx, py: hy }));
+      const ua = this.upA(this.pf, a), el = heroForm === 'meteor' ? 1.6 : heroForm === 'sat' || heroForm === 'comet' ? 0.2 : heroForm === 'pulsar' ? -0.5 : 0.6;
+      const gx = Math.cos(ua) * el * rb * 60, gy = Math.sin(ua) * el * rb * 60;
+      this.plume[0] = { x: hx, y: hy, px: hx, py: hy };
+      for (let i = 1; i < N; i++) { const q = this.plume[i], vx = (q.x - q.px) * 0.9, vy = (q.y - q.py) * 0.9; q.px = q.x; q.py = q.y; q.x += vx + gx * sdt * sdt; q.y += vy + gy * sdt * sdt; }
+      for (let it = 0; it < 3; it++) for (let i = 1; i < N; i++) { const p0 = this.plume[i - 1], q = this.plume[i], dx = q.x - p0.x, dy = q.y - p0.y, d = Math.hypot(dx, dy) || 1, k = (d - seg) / d; q.x -= dx * k; q.y -= dy * k; }
+      const col: RGB = heroForm === 'meteor' ? [255, 160, 80] : heroForm === 'sat' || heroForm === 'comet' ? [255, 220, 245] : heroForm === 'pulsar' ? ((run.level.file.side?.of ?? run.level.id) === 'invincible' ? [170, 240, 160] : [180, 225, 255]) : [255, 226, 170];
+      c.save(); c.globalCompositeOperation = 'lighter'; c.lineCap = 'round';
+      for (let i = 1; i < N; i++) { const u = 1 - i / N, p0 = this.plume[i - 1], q = this.plume[i]; c.strokeStyle = rgba(col, 0.42 * u); c.lineWidth = rb * (0.2 + 1.1 * u); c.beginPath(); c.moveTo(p0.x - this.camX, p0.y - this.camY); c.lineTo(q.x - this.camX, q.y - this.camY); c.stroke(); }
+      c.restore();
+    }
     // a dark halo, so the ball reads against anything
     c.fillStyle = 'rgba(3,5,14,0.5)';
     c.beginPath(); c.arc(x, y, rb * 2.1, 0, TWO_PI); c.fill();
@@ -1759,11 +1804,13 @@ export class GdRenderer {
       const barNow = course.bars[Math.max(0, Math.min(course.bars.length - 1, Math.floor(beat / 4)))];
       const ahead = course.portals.find((g) => g.beat > beat - 0.01 && g.beat - beat <= 4);
       const want = Math.max(0, Math.max(barNow?.speed ?? 1, ahead && ahead.faster ? 1 + (ahead.speed - 1) * clamp(1 - (ahead.beat - beat) / 4, 0, 1) : 0) - 1);
-      this.speedK += (want - this.speedK) * Math.min(1, dt * 2.5);
+      { const w = 3.2, sdt = Math.min(dt, 0.034); this.speedV += (w * w * (want - this.speedK) - 2 * w * this.speedV) * sdt; this.speedK += this.speedV * sdt; }
       const mini = course.bars[Math.max(0, Math.min(course.bars.length - 1, Math.floor(beat / 4)))]?.mini ? 1 : 0;
-      this.miniK += (mini - this.miniK) * Math.min(1, dt * 8);
-      const cs = this.planet?.cam?.(t) ?? 1;
-      this.camScale += (cs - this.camScale) * Math.min(1, dt * 2.2);
+      { const w = 7, sdt = Math.min(dt, 0.034); this.miniV += (w * w * (mini - this.miniK) - 2 * w * this.miniV) * sdt; this.miniK += this.miniV * sdt; }
+      const cs = this.planet?.cam?.(t) ?? 1, zk = 3.2, zdt = Math.min(dt, 0.034);
+      // (two springs in a row: a change of framing eases in and out, never starts at full speed; 2026-11-26)
+      this.csTV += (zk * zk * (cs - this.csT) - 2 * zk * this.csTV) * zdt; this.csT += this.csTV * zdt;
+      this.camSV += (16 * (this.csT - this.camScale) - 8 * this.camSV) * zdt; this.camScale += this.camSV * zdt;
     }
     const m = this.sizes();
     const span = Math.max(this.w, this.h) * 0.75;
@@ -1958,9 +2005,12 @@ export class GdRenderer {
     // in a weave the ball bounces between two rings on every press: the camera holds still between them
     const weaving = sim.mode === 'flight' ? !!lastP?.weave : !!nextP?.weave && (!!lastP?.weave || nextP.beat - beat < 1.5);
     const camT = weaving ? (sim.mode === 'flight' ? lastP!.camLv : nextP!.camLv) : rho;
-    const om = 9;
-    this.camVel += (om * om * (camT - this.cam) - 2 * om * this.camVel) * dt;
-    this.cam += this.camVel * dt;
+    const om = 9, cdt = Math.min(dt, 0.034);
+    // (its target eased first, so it never starts moving at full acceleration: 2026-11-26)
+    if (!this.camTOn) { this.camTS = camT; this.camTV = 0; this.camTOn = true; }
+    this.camTV += (14 * 14 * (camT - this.camTS) - 28 * this.camTV) * cdt; this.camTS += this.camTV * cdt;
+    this.camVel += (om * om * (this.camTS - this.cam) - 2 * om * this.camVel) * cdt;
+    this.cam += this.camVel * cdt;
     const inward = !weaving && (sim.sideAt(beat) < 0 || (!!nextP && nextP.kind === 'flip' && !nextP.weave && nextP.side > 0 && nextP.beat - beat < 2.5));
     // the camera follows the ball from planet to planet, and leans toward the next one before a planet hop
     this.pf = this.planetOf(run, beat);
@@ -2009,10 +2059,18 @@ export class GdRenderer {
       const [bx, by] = this.planetXY(this.pf), [lx, ly] = this.loc(this.pf, -Math.PI / 2 + course.angle(beat), this.rad(this.ballRho(sim, beat)));
       keep([bx + lx, by + ly], this.w * 0.2, this.h * 0.16);
     }
-    // a spring, like the zoom: the camera picks up speed and settles, it never changes pace in a single frame
-    const ok = 11;
-    this.camVX += (ok * ok * (tx - this.camX) - 2 * ok * this.camVX) * dt;
-    this.camVY += (ok * ok * (ty - this.camY) - 2 * ok * this.camVY) * dt;
+    // a spring, like the zoom: the camera picks up speed and settles, it never changes pace in a single frame. (The
+    // Ufotable pass, 2026-11-26: the target itself is eased first, by a spring of its own, so when what the camera
+    // follows changes (a launch, a landing, a new place) it blends there over about half a second: two springs in a
+    // row, so even its acceleration never jumps.)
+    const tk = 9, sdt = Math.min(dt, 0.034);
+    if (!this.tgOn) { this.tgX = tx; this.tgY = ty; this.tgVX = this.tgVY = 0; this.tgOn = true; }
+    this.tgVX += (tk * tk * (tx - this.tgX) - 2 * tk * this.tgVX) * sdt; this.tgVY += (tk * tk * (ty - this.tgY) - 2 * tk * this.tgVY) * sdt;
+    this.tgX += this.tgVX * sdt; this.tgY += this.tgVY * sdt;
+    tx = this.tgX; ty = this.tgY;
+    const ok = 12;
+    this.camVX += (ok * ok * (tx - this.camX) - 2 * ok * this.camVX) * sdt;
+    this.camVY += (ok * ok * (ty - this.camY) - 2 * ok * this.camVY) * sdt;
     this.camX += this.camVX * dt;
     this.camY += this.camVY * dt;
     if (this.geo) {
@@ -2025,16 +2083,17 @@ export class GdRenderer {
         const ex = dx < L ? dx - L : dx > Rr ? dx - Rr : 0, ey = dy < T ? dy - T : dy > B ? dy - B : 0;
         this.camX += ex * k; this.camY += ey * k; if (ex) this.camVX *= 0.5; if (ey) this.camVY *= 0.5;
       };
-      fix(pt(beat + 1.5 / course.spb), 24, 50, Math.min(1, dt * 14));
-      fix([qx + lx, qy + ly], this.w * 0.13, this.h * 0.1, Math.min(1, dt * 18));
-      fix([qx + lx, qy + ly], this.w * 0.06, this.h * 0.05, 1);
+      // (only as a safety net now, gently, and at the very edge: the framing is the eased target's job)
+      fix([qx + lx, qy + ly], this.w * 0.08, this.h * 0.06, Math.min(1, dt * 6));
+      fix([qx + lx, qy + ly], 4, 4, 1);
+      void pt;
     }
     const [wx, wy] = this.planetXY(this.pf);
     this.coreX = wx - this.camX;
     this.coreY = wy - this.camY;
-    this.baseR += ((inward ? 1.5 : 1) - wound * 0.1 - this.baseR) * Math.min(1, dt * 3.5);
+    { const w = 4.5, sdt = Math.min(dt, 0.034), want = (inward ? 1.5 : 1) - wound * 0.1; this.baseTV += (81 * (want - this.baseT) - 18 * this.baseTV) * sdt; this.baseT += this.baseTV * sdt; this.baseRV += (w * w * (this.baseT - this.baseR) - 2 * w * this.baseRV) * sdt; this.baseR += this.baseRV * sdt; } // (springs in a row: 2026-11-26)
     this.punch = Math.max(0, this.punch - dt / 0.45);
-    this.punchS += (this.punch - this.punchS) * Math.min(1, dt / 0.06);
+    { const w = 34, sdt = Math.min(dt, 0.02); this.punchV += (w * w * (this.punch - this.punchS) - 2 * w * this.punchV) * sdt; this.punchS += this.punchV * sdt; }
     const up = sim.down && sim.mode !== 'flight' && run.state === 'playing' && !run.finale ? 1 : 0;
     this.liftV += (18 * 18 * (up - this.lift) - 2 * 18 * this.liftV) * Math.min(dt, 0.03);
     this.lift = clamp(this.lift + this.liftV * Math.min(dt, 0.03), 0, 1.05);
@@ -2052,6 +2111,7 @@ export class GdRenderer {
     if ((mx !== this.mx || my !== this.my) && run.state === 'playing' && beat > course.start + 0.5) { this.wave(this.ball.r || r0, CYAN, r0 * 3.4, 5, 0.7, 0.4); if (!calm) this.flash = Math.max(this.flash, 0.5); }
     this.mx = mx;
     this.my = my;
+    { const w = 13, sdt = Math.min(dt, 0.02); this.mxV += (w * w * (mx - this.mxS) - 2 * w * this.mxV) * sdt; this.mxS += this.mxV * sdt; this.myV += (w * w * (my - this.myS) - 2 * w * this.myV) * sdt; this.myS += this.myV * sdt; }
     // the orbit turning round or changing speed snaps on its bar line too: the same ring of light, smaller
     let passed = 0;
     for (const t of course.turns) if (beat >= t) passed++;
@@ -2064,7 +2124,7 @@ export class GdRenderer {
       if (run.state === 'playing') { this.burst(this.ball.x, this.ball.y, 26, FORM_COL[formNow], r0 * 1.6); this.wave(this.ball.r || r0, FORM_COL[formNow], r0 * 3, 4, 0.6, 0.5); }
       this.formWas = formNow;
     }
-    this.zoomS += (this.zoomKick - this.zoomS) * Math.min(1, dt / 0.09);
+    { const w = 24, sdt = Math.min(dt, 0.02); this.zoomV += (w * w * (this.zoomKick - this.zoomS) - 2 * w * this.zoomV) * sdt; this.zoomS += this.zoomV * sdt; }
     this.zoomKick = Math.max(0, this.zoomKick - dt / 0.9) * (1 - Math.min(1, dt * 1.5));
     this.flash = Math.max(0, this.flash - dt / 0.18);
     this.flipK = Math.max(0, this.flipK - dt / 0.11);

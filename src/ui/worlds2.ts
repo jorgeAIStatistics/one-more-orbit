@@ -12,7 +12,7 @@ import { DUSK, K } from '../art/painter.js';
 import { WORLDS2 as W2 } from '../art/world2paint.js';
 import { writeSays, type Said, type SceneState } from './skyplanet';
 import { save } from '../save';
-import { horizon, skyOf, zoneOf, zones, ZONES, type CourseView, type Pic, type World, type WorldSky, type WorldState } from './worlds';
+import { depthDust, horizon, skyDraw, skyOf, zoneOf, zones, ZONES, type CourseView, type Pic, type World, type WorldSky, type WorldState } from './worlds';
 import { askLevelSky, askPlanet, pairNow, planetLayer, type LayerName, type SkySpec } from '../art/paintcache';
 
 const TAU = Math.PI * 2;
@@ -130,7 +130,7 @@ abstract class PlanetWorld {
     reset: () => this.reset(),
     rewind: (to) => this.rewind(to),
     spark: (a, song, pf) => this.spark(a, song, pf),
-    onCourse: (c, v) => this.onCourse(c, v),
+    underCourse: (c, v) => this.onCourse(c, v), // (under the course: nothing covers it; 2026-11-26)
     cam: (s) => { const l = this.pullAt(s) ? null : this.leadAt(s); return Math.max(0.32, this.camAt(s) - (l ? l.out * l.k : 0)); }, // (a world's own pull-back wins over the lead)
     pull: (s) => this.pullAt(s) ?? (() => { const l = this.leadAt(s); return l ? { x: l.x, y: l.y, k: 0.55 * l.k } : null; })(),
     relit: 0,
@@ -164,8 +164,9 @@ abstract class PlanetWorld {
       this.dt = this.lastT < 0 ? 0 : Math.min(0.05, Math.max(0, time - this.lastT)); this.lastT = time;
       // the sky: cold, warming a little with every good tap, and relit on the drop
       const warm = Math.max(Math.min(0.35, this.sparks * 0.012), sm((t - T.drop) / 1.2));
-      if (this.skyCold) c.drawImage(this.skyCold, 0, 0, w, h);
-      if (this.skyHot && warm > 0) { c.globalAlpha = warm * (0.85 + 0.15 * (st.kick ?? 0)); c.drawImage(this.skyHot, 0, 0, w, h); c.globalAlpha = 1; }
+      if (this.skyCold) skyDraw(c, this.skyCold, w, h, st.cam);
+      if (this.skyHot && warm > 0) { c.globalAlpha = warm * (0.85 + 0.15 * (st.kick ?? 0)); skyDraw(c, this.skyHot, w, h, st.cam); c.globalAlpha = 1; }
+      depthDust(c, w, h, st.cam, time, this.cfg.col);
       // the Stillness, far off and growing world by world: a mass of it on the edge of the sky
       const S = this.cfg.stillness;
       if (S > 0) { c.save(); c.globalAlpha = 0.5 + 0.5 * S; C.dread(c, w * (1.02 - 0.08 * S), h * 0.08, (90 + 220 * S) * u, (70 + 160 * S) * u, 61, 0.4 + 0.6 * S); c.restore(); }
@@ -530,7 +531,7 @@ export class VerdWorld extends PlanetWorld {
       side.push([x - (dy / d) * wv, y + (dx / d) * wv]); other.push([x + (dy / d) * wv, y - (dx / d) * wv]);
     }
     const smooth = (q: Array<[number, number]>, first: boolean) => { if (first) c.moveTo(q[0][0], q[0][1]); else c.lineTo(q[0][0], q[0][1]); for (let i = 1; i < q.length - 1; i++) c.quadraticCurveTo(q[i][0], q[i][1], (q[i][0] + q[i + 1][0]) / 2, (q[i][1] + q[i + 1][1]) / 2); c.lineTo(q[q.length - 1][0], q[q.length - 1][1]); };
-    c.save(); c.globalAlpha = 0.55 + 0.45 * sm((t - VT.drop + 1) / 2); c.beginPath(); smooth(side, true); smooth([...other].reverse(), false); c.closePath();
+    c.save(); c.globalAlpha = 0.45 + 0.25 * sm((t - VT.drop + 1) / 2); c.beginPath(); smooth(side, true); smooth([...other].reverse(), false); c.closePath();
     const tg = c.createLinearGradient(side[2][0], side[2][1], other[2][0], other[2][1]); tg.addColorStop(0, K.rgba(K.mix([8, 10, 10], [30, 24, 20], lit))); tg.addColorStop(0.45, bark); tg.addColorStop(1, K.rgba(K.mix([6, 8, 8], [24, 20, 16], lit)));
     c.fillStyle = tg; c.fill(); c.strokeStyle = rim; c.lineWidth = Math.max(1, U * 0.015); c.stroke();
     // bark grain, and moss that greens with the taps played on each stretch
@@ -540,7 +541,9 @@ export class VerdWorld extends PlanetWorld {
     // the bough out to the branches (place 2), and the canopy's leaf masses (place 3), the crown's (place 4)
     // the two boughs of the branches (place 2), crossing: out from the trunk and curling back
     for (const [x0, y0, x1, y1, bw] of [[0.1, -5.9, 2.4, -8.2, 0.3], [0.1, -8.0, 2.3, -5.9, 0.24]] as Array<[number, number, number, number, number]>) {
-      const [a0, a1] = [P(x0, y0), P(x1, y1)]; c.strokeStyle = bark; c.lineCap = 'round'; c.lineWidth = U * bw; c.beginPath(); c.moveTo(a0[0], a0[1]); c.quadraticCurveTo((a0[0] + a1[0]) / 2 + U * 0.5, (a0[1] + a1[1]) / 2, a1[0], a1[1]); c.stroke(); c.strokeStyle = rim; c.lineWidth = Math.max(1, U * 0.02); c.stroke();
+      // (pushed back behind the course, 2026-11-26: dark, soft-edged, low in contrast; the course is always the sharpest)
+      const [a0, a1] = [P(x0, y0), P(x1, y1)]; c.save(); c.globalAlpha = 0.5; c.lineCap = 'round'; c.beginPath(); c.moveTo(a0[0], a0[1]); c.quadraticCurveTo((a0[0] + a1[0]) / 2 + U * 0.5, (a0[1] + a1[1]) / 2, a1[0], a1[1]);
+      c.strokeStyle = 'rgba(10,16,14,0.35)'; c.lineWidth = U * bw * 1.6; c.stroke(); c.strokeStyle = 'rgba(14,18,16,0.9)'; c.lineWidth = U * bw; c.stroke(); c.restore();
     }
     const leaves = (k: number, cx: number, cy: number, n: number, rr: number) => {
       const [x0, y0] = P(cx, cy), hk = h[k], g = Math.min(1, hk * 1.2 + lit * 0.3);

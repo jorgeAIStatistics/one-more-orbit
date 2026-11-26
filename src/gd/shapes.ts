@@ -68,6 +68,7 @@ function closed(shape: 'ellipse' | 'eight', a: number): [number, number, number,
 /** where the eight's two moons sit, in base-ring radii from its centre (before its turn) */
 export const EIGHT_LOBES: Array<[number, number]> = (() => { const t = table('eight', RAW.eight); let top = 0; for (let k = 0; k < N; k++) top = Math.max(top, Math.abs(t[k * 2 + 1])); return [[0, -top / 2], [0, top / 2]]; })();
 
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const sm = (x: number) => { const t = x < 0 ? 0 : x > 1 ? 1 : x; return t * t * (3 - 2 * t); };
 const turn = (x: number, y: number, r: number): [number, number] => [x * Math.cos(r) - y * Math.sin(r), x * Math.sin(r) + y * Math.cos(r)];
 
@@ -88,12 +89,16 @@ export function placePoint(d: PlaceDef, a: number, r: number, R: number, span: [
   if (d.shape === 'circle') {
     const cx = Math.cos(ap), cy = Math.sin(ap);
     const raw = win && d.spiral ? (a - win[0]) / (win[1] - win[0] || 1) : -1;
-    if (raw > 0 && raw <= 1) { // (before its window and after it, the ring is round again: after it, he is inside)
+    const k = d.size ?? 1, base = r + R * (k - 1);
+    if (raw > 0 && raw <= 1) { // (before its window the ring is round; it winds from the place's own ring, whatever its size)
       const q = sm(raw), m = 1 + ((d.grow ?? 0.18) - 1) * q, to = d.to ?? [0, -0.92];
-      return [to[0] * R * q + cx * r * m, to[1] * R * q + cy * r * m, cx, cy];
+      return [to[0] * R * q + cx * base * m, to[1] * R * q + cy * base * m, cx, cy];
     }
-    const k = d.size ?? 1;
-    return [cx * (r + R * (k - 1)), cy * (r + R * (k - 1)), cx, cy];
+    if (raw > 1 && raw < 1.15) { // after it he is inside, on a round ring again: it opens out to it, eased (it used to cut; 2026-11-26)
+      const q2 = sm((raw - 1) / 0.15), m = d.grow ?? 0.18, to = d.to ?? [0, -0.92];
+      return [lerp(to[0] * R + cx * base * m, cx * base, q2), lerp(to[1] * R + cy * base * m, cy * base, q2), cx, cy];
+    }
+    return [cx * base, cy * base, cx, cy];
   }
   const k = d.size ?? 1, [x0, y0, nx, ny] = closed(d.shape, ap / k), x = x0 * k, y = y0 * k;
   const [X, Y] = turn(x, y, rot), [NX, NY] = turn(nx, ny, rot), off = r - R;

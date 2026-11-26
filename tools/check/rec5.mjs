@@ -10,7 +10,7 @@ const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, deviceSc
 const page = await ctx.newPage();
 page.on('pageerror', (e) => console.log('ERR', String(e).slice(0, 300)));
 await page.addInitScript(() => { Storage.prototype.setItem = function () {}; });
-await page.goto(`http://localhost:5199/${which === 'cold' ? '?cold' : '?look=2'}`, { waitUntil: 'load' });
+await page.goto(`http://localhost:${process.env.OMO_PORT || 5199}/${which === 'cold' ? '?cold' : '?look=2'}`, { waitUntil: 'load' });
 await page.waitForTimeout(900);
 const cdp = await ctx.newCDPSession(page);
 const frames = []; let n = 0, on = false;

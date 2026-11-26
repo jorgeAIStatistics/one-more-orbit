@@ -29,6 +29,9 @@ export interface SceneState {
   /** the night side: the lights are down */
   dark: number;
   calm: boolean;
+  /** the camera (the journey levels): its centre in the world, in pixels, and one ring's radius; skies move with it a
+   * little (far things least: parallax) */
+  cam?: [number, number, number];
 }
 /** Who lives on each planet, and how they are painted lying banked and standing awake. */
 const SOULS: Record<string, { paint: (c: CanvasRenderingContext2D, x: number, y: number, s: number, lit: number, pose: 'lie' | 'stand') => void; glow: [number, number, number] }> = {

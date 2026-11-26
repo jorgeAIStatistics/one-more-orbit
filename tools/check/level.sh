@@ -10,7 +10,7 @@ npx vite-node tools/variety.ts $ID > "$OUT/audit.txt" 2>&1 || true
 npx vitest run tests/forgive.test.ts -t "$NAME" 2>&1 | grep -E "FORGIVE|SPAMBOT|PAIRS|✓|×|→|Tests" | sed 's/^ *//' > "$OUT/tests.txt" || true
 cd "$CK"
 node frame6.mjs $W > "$OUT/readability.txt" 2>&1 || true
-node hitch1.mjs 5199 x "$NAME" $W $END > "$OUT/frame-times.txt" 2>&1 || true
+node hitch1.mjs ${OMO_PORT:-5199} x "$NAME" $W $END > "$OUT/frame-times.txt" 2>&1 || true
 T=$(cd "$ROOT" && npx vite-node tools/check/moments.ts $ID 2>/dev/null | tail -1)
 echo "$T" > "$OUT/moments.json"
 TIMES=$(python3 -c "import json,sys; print(','.join(str(m['t']) for m in json.loads(sys.argv[1])))" "$T")

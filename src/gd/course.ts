@@ -69,7 +69,7 @@ export interface Press {
    * A leap (the journey, 2026-11-26): this press is the launch of a flight to the next place, or an ember tapped in the
    * air along it. b0..b1: the whole flight; p0: the place it leaves (it reaches p0 + 1 on landing).
    */
-  leap?: { b0: number; b1: number; p0: number; ember: boolean };
+  leap?: { b0: number; b1: number; p0: number; ember: boolean; s0?: number; s1?: number };
   /** the first press after a lens or a gate: a wider opening, and tapping early for it is never punished */
   wide: boolean;
 }
@@ -194,8 +194,18 @@ export const MIN_GAP = 1; // beats between generated survival presses: quarter n
 export const SLING_FLIGHT = 2; // beats a planet hop spends in the air
 /** after a leap lands, nothing is asked for this many beats (the camera settles on the new place) */
 export const LEAP_GRACE = 1;
-/** Where a leap's flight is between its two places at a beat (p0 .. p0 + 1, eased). */
-export function leapAt(l: { b0: number; b1: number; p0: number }, beat: number): number { return l.p0 + smoothstep(Math.max(0, Math.min(1, (beat - l.b0) / (l.b1 - l.b0)))); }
+/**
+ * Where a leap's flight is between its two places at a beat (p0 .. p0 + 1). With s0 and s1 (set by the renderer, from
+ * the flight's shape: the speed he leaves the ring at and lands at, as shares of the flight's own pace) the flight keeps
+ * his speed through the launch and the landing, like a thrown thing (a cubic Hermite in time, 2026-11-26: before, an
+ * ease-in that stopped him dead at the moment he touched the launch); without them, eased.
+ */
+export function leapAt(l: { b0: number; b1: number; p0: number; s0?: number; s1?: number }, beat: number): number {
+  const u = Math.max(0, Math.min(1, (beat - l.b0) / (l.b1 - l.b0)));
+  if (l.s0 === undefined || l.s1 === undefined) return l.p0 + smoothstep(u);
+  const u2 = u * u, u3 = u2 * u;
+  return l.p0 + Math.max(0, Math.min(1, (u3 - 2 * u2 + u) * l.s0 + (-2 * u3 + 3 * u2) + (u3 - u2) * l.s1));
+}
 export const COUNT_IN = 4; // beats at the very start of a level with no survival press: the 3, 2, 1
 export const LIFT = 0.42; // ring levels a held ball floats above its ring
 export const HOLD_MIN = 1; // beats: no hold is shorter

@@ -5,7 +5,7 @@ const b = await chromium.launch({ channel: 'chrome', headless: true, args: ['--m
 const page = await (await b.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 1 })).newPage();
 page.on('pageerror', (e) => console.log('ERR', String(e).slice(0, 300)));
 await page.addInitScript(() => { Storage.prototype.setItem = function () {}; });
-await page.goto('http://localhost:5199/?look=2', { waitUntil: 'load' }); await page.waitForTimeout(1500);
+await page.goto(`http://localhost:${process.env.OMO_PORT || 5199}/?look=2`, { waitUntil: 'load' }); await page.waitForTimeout(1500);
 await page.evaluate((w) => { const o = window.__omo; Object.assign(o.save, { music: 0, sfx: 0, hitVol: 0, tutorialDone: true, calibrated: true, unlockAll: true }); o.save.story.open = o.save.story.prologue = o.save.story.cold = true; o.opening.stop(); o.coldScene.stop(); o.show('levels'); if (w === 'first') o.first(true); else if (w === 'ambush') o.ambush(true); else { o.level(Number(w)); o.start(true); }
   const r = o.renderer, M = (window.__M = { cue: [], edge: [], ahead: [] });
   const f = () => { const run = o.run; if (run && run.state === 'playing' && run.time > 0.5) { const c = run.course, beat = run.time / c.spb, cx = r.w / 2, cy = r.h * 0.52;

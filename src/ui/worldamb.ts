@@ -16,7 +16,7 @@ import { mass, reachOut, skip } from '../art/stillness.js';
 import { askLevelSky, askPlanet, pairNow, type LayerName, type SkySpec } from '../art/paintcache';
 import { writeSays, type Said } from './skyplanet';
 import { save } from '../save';
-import { horizon, skyOf, type CourseView, type Pic, type World, type WorldSky, type WorldState } from './worlds';
+import { depthDust, horizon, skyDraw, skyOf, type CourseView, type Pic, type World, type WorldSky, type WorldState } from './worlds';
 import { EIGHT_LOBES } from '../gd/shapes';
 
 const TAU = Math.PI * 2;
@@ -82,7 +82,7 @@ export class AmbushWorld {
     reset: () => this.reset(),
     rewind: (to) => this.rewind(to),
     spark: (a, song) => this.spark(a, song),
-    onCourse: (c, v) => this.onCourse(c, v),
+    underCourse: (c, v) => this.onCourse(c, v), // (under the course: nothing covers it; 2026-11-26)
     // the Landing seen wide (it rises over it); the build pushes in; the drop wide; the escape pulls back over it all
     cam: (s) => this.camAt(s),
     pull: (s) => this.pullAt(s),
@@ -371,7 +371,8 @@ export class AmbushWorld {
     draw: (c, w, h, st) => {
       this.paint(w, h);
       const t = st.song ?? -10, time = st.time, u = Math.min(w / 390, h / 844);
-      if (this.skyPic) c.drawImage(this.skyPic, 0, 0, w, h);
+      if (this.skyPic) skyDraw(c, this.skyPic, w, h, st.cam);
+      depthDust(c, w, h, st.cam, time, [170, 160, 210], 0.14);
       // the stars go out as it swallows the places (a veil over the sky, deeper place by place); they come back at home
       const veil = Math.min(0.55, 0.12 * [1, 2, 3].filter((k) => t > LEFT[k] + 1).length + 0.15 * sm((t - AT.drop) / 2)) * (1 - 0.6 * sm((t - AT.pulse) / 1.5));
       if (veil > 0) { c.fillStyle = `rgba(2,1,6,${veil})`; c.fillRect(0, 0, w, h); }
